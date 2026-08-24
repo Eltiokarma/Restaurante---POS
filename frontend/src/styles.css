@@ -1,0 +1,844 @@
+/* ====== POS táctil — estilos globales ======
+   UX táctil primero: botones grandes (mínimo 80px de alto en la vista de
+   cliente), tipografía legible a 1 metro, sin dependencias de hover. */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: #faf7f2;
+  color: #2b2b2b;
+  user-select: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 14px;
+  touch-action: manipulation;
+}
+
+/* ---------- Botones ---------- */
+
+.boton-grande {
+  min-height: 80px;
+  padding: 0 32px;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.boton-primario {
+  background: #c62828;
+  color: #fff;
+}
+
+.boton-primario:disabled {
+  background: #c9c1b8;
+  cursor: default;
+}
+
+.boton-secundario {
+  background: #efe8de;
+  color: #2b2b2b;
+}
+
+.boton-confirmar {
+  background: #2e7d32;
+  color: #fff;
+}
+
+.boton-cancelar-rojo {
+  background: #d32f2f;
+  color: #fff;
+}
+
+/* ---------- Pantallas de cliente ---------- */
+
+.pantalla {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pantalla-inicio {
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+  text-align: center;
+  padding: 24px;
+}
+
+.logo-restaurante {
+  font-size: 4rem;
+  color: #c62828;
+}
+
+.boton-hacer-pedido {
+  min-height: 140px;
+  padding: 0 64px;
+  font-size: 2.6rem;
+  font-weight: 800;
+  background: #c62828;
+  color: #fff;
+  border-radius: 24px;
+  box-shadow: 0 8px 0 #8e1c1c;
+}
+
+.boton-hacer-pedido:active {
+  transform: translateY(4px);
+  box-shadow: 0 4px 0 #8e1c1c;
+}
+
+.texto-toca {
+  font-size: 1.3rem;
+  color: #8a8178;
+}
+
+.aviso-cancelado {
+  background: #fff3cd;
+  border: 2px solid #f9a825;
+  border-radius: 14px;
+  padding: 18px 32px;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+/* ---------- Menú ---------- */
+
+.pantalla-menu {
+  padding-bottom: 130px; /* espacio para la barra fija */
+}
+
+.cabecera-menu {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 20px;
+  background: #fff;
+  border-bottom: 2px solid #eee3d5;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.cabecera-menu h1 {
+  font-size: 2rem;
+}
+
+.boton-cancelar-todo {
+  min-height: 64px;
+  padding: 0 20px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  background: #efe8de;
+}
+
+.contenido-menu {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.menu-vacio {
+  font-size: 1.5rem;
+  text-align: center;
+  padding: 60px 20px;
+  color: #8a8178;
+}
+
+.titulo-categoria {
+  font-size: 1.5rem;
+  color: #7a4b21;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.grilla-platos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.tarjeta-plato {
+  background: #fff;
+  border: 3px solid #eee3d5;
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 110px;
+}
+
+.tarjeta-plato.con-items {
+  border-color: #2e7d32;
+  background: #f2fbf2;
+}
+
+.tarjeta-plato-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tarjeta-plato-nombre {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.tarjeta-plato-precio {
+  font-size: 1.4rem;
+  color: #c62828;
+  font-weight: 700;
+}
+
+.tarjeta-plato-controles {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.boton-cantidad {
+  width: 80px;
+  height: 80px;
+  font-size: 2.4rem;
+  font-weight: 800;
+  background: #efe8de;
+  border-radius: 16px;
+}
+
+.boton-cantidad:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.boton-mas {
+  background: #2e7d32;
+  color: #fff;
+}
+
+.tarjeta-plato-cantidad {
+  font-size: 2rem;
+  font-weight: 800;
+  min-width: 44px;
+  text-align: center;
+}
+
+/* Barra inferior fija */
+.barra-carrito {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-top: 3px solid #eee3d5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  z-index: 10;
+}
+
+.barra-carrito-resumen {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+/* ---------- Resumen ---------- */
+
+.pantalla-resumen {
+  padding: 32px 24px;
+  gap: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.pantalla-resumen h1 {
+  font-size: 2.4rem;
+}
+
+.lista-resumen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.linea-resumen {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  background: #fff;
+  border: 2px solid #eee3d5;
+  border-radius: 14px;
+  padding: 18px 22px;
+  font-size: 1.5rem;
+}
+
+.linea-resumen-precios {
+  white-space: nowrap;
+}
+
+.total-grande {
+  font-size: 2.6rem;
+  font-weight: 800;
+  color: #c62828;
+  text-align: right;
+}
+
+.botones-resumen {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.botones-resumen .boton-confirmar {
+  flex: 1;
+}
+
+/* ---------- Countdown de cancelación ---------- */
+
+.pantalla-countdown {
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px;
+  text-align: center;
+}
+
+.pantalla-countdown h1 {
+  font-size: 2.8rem;
+}
+
+.texto-countdown {
+  font-size: 1.5rem;
+}
+
+.countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(520px, 90%);
+}
+
+.countdown-numero {
+  font-size: 7rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.countdown-barra-fondo {
+  width: 100%;
+  height: 26px;
+  background: #eee3d5;
+  border-radius: 13px;
+  overflow: hidden;
+}
+
+.countdown-barra {
+  height: 100%;
+  transition: width 0.1s linear, background-color 0.4s;
+}
+
+.resumen-breve {
+  font-size: 1.3rem;
+  background: #fff;
+  border: 2px solid #eee3d5;
+  border-radius: 14px;
+  padding: 18px 32px;
+}
+
+.resumen-breve-total {
+  margin-top: 10px;
+  font-weight: 800;
+  font-size: 1.5rem;
+}
+
+/* ---------- Pantalla final ---------- */
+
+.pantalla-final {
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  text-align: center;
+  padding: 24px;
+}
+
+.numero-orden-gigante {
+  font-size: 6rem;
+  font-weight: 900;
+  color: #c62828;
+}
+
+.texto-final {
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+/* ---------- Modales ---------- */
+
+.modal-fondo {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 24px;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 22px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  text-align: center;
+  max-width: 640px;
+  width: 100%;
+}
+
+.modal h2 {
+  font-size: 2rem;
+}
+
+.modal-botones {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.modal-botones .boton-grande {
+  flex: 1;
+}
+
+/* ---------- Banners ---------- */
+
+.banner-error {
+  background: #ffebee;
+  border: 2px solid #d32f2f;
+  color: #b71c1c;
+  border-radius: 12px;
+  padding: 14px 20px;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.banner-ok {
+  background: #e8f5e9;
+  border: 2px solid #2e7d32;
+  color: #1b5e20;
+  border-radius: 12px;
+  padding: 14px 20px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 12px 0;
+}
+
+/* ---------- Cocina ---------- */
+
+.pantalla-cocina {
+  min-height: 100%;
+  background: #22262b;
+  color: #f2f2f2;
+  padding: 20px;
+}
+
+.cocina-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.cocina-cabecera h1 {
+  font-size: 2.2rem;
+}
+
+.cocina-contador {
+  font-size: 1.4rem;
+  color: #b7c0c9;
+}
+
+.cocina-vacia {
+  font-size: 1.8rem;
+  text-align: center;
+  padding: 80px 0;
+  color: #b7c0c9;
+}
+
+.grilla-cocina {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.tarjeta-orden {
+  background: #2e343b;
+  border-radius: 16px;
+  border-left: 10px solid #90a4ae;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tarjeta-orden.estado-pendiente { border-left-color: #f9a825; }
+.tarjeta-orden.estado-preparando { border-left-color: #42a5f5; }
+.tarjeta-orden.estado-listo { border-left-color: #66bb6a; }
+
+/* >10 min en pendiente */
+.tarjeta-orden.urgente {
+  background: #4a2a2a;
+  border-left-color: #ef5350;
+  animation: parpadeo 1.6s ease-in-out infinite;
+}
+
+@keyframes parpadeo {
+  50% { box-shadow: 0 0 0 4px rgba(239, 83, 80, 0.55); }
+}
+
+.tarjeta-orden-cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.tarjeta-orden-numero {
+  font-size: 2.2rem;
+  font-weight: 900;
+}
+
+.tarjeta-orden-hora {
+  font-size: 1.3rem;
+  color: #b7c0c9;
+}
+
+.tarjeta-orden-items {
+  list-style: none;
+  font-size: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.etiqueta-estado {
+  align-self: flex-start;
+  font-size: 0.95rem;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: 0.05em;
+}
+
+.etiqueta-pendiente { background: #f9a825; color: #3d2c00; }
+.etiqueta-preparando { background: #42a5f5; color: #06283f; }
+.etiqueta-listo { background: #66bb6a; color: #0c290e; }
+.etiqueta-entregado { background: #90a4ae; color: #263238; }
+
+.boton-avance {
+  background: #efe8de;
+  color: #2b2b2b;
+  min-height: 70px;
+  font-size: 1.3rem;
+}
+
+/* ---------- Admin ---------- */
+
+.pantalla-admin {
+  min-height: 100%;
+  background: #f4f2ee;
+  user-select: text;
+}
+
+.admin-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-caja {
+  background: #fff;
+  border-radius: 20px;
+  padding: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: min(440px, 92%);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+}
+
+.login-caja input {
+  font-size: 1.3rem;
+  padding: 16px;
+  border: 2px solid #ddd3c6;
+  border-radius: 12px;
+}
+
+.admin-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  background: #fff;
+  padding: 16px 24px;
+  border-bottom: 2px solid #e5ded3;
+}
+
+.admin-cabecera h1 {
+  font-size: 1.6rem;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-tabs button {
+  padding: 12px 18px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  background: #efe8de;
+  border-radius: 10px;
+}
+
+.admin-tabs button.activa {
+  background: #c62828;
+  color: #fff;
+}
+
+.boton-salir {
+  margin-left: auto;
+  padding: 12px 18px;
+  background: transparent;
+  border: 2px solid #c9c1b8;
+  border-radius: 10px;
+  font-size: 1rem;
+}
+
+.admin-contenido {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.admin-acciones {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.admin-acciones button {
+  padding: 14px 18px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  background: #efe8de;
+  border-radius: 10px;
+}
+
+.admin-acciones .boton-primario {
+  background: #c62828;
+  color: #fff;
+}
+
+.tabla-admin {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.tabla-admin th,
+.tabla-admin td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #efe8de;
+  font-size: 1.05rem;
+}
+
+.tabla-admin th {
+  background: #efe8de;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tabla-admin input,
+.tabla-admin select {
+  font-size: 1.05rem;
+  padding: 10px;
+  border: 2px solid #ddd3c6;
+  border-radius: 8px;
+  width: 100%;
+  min-width: 90px;
+}
+
+.tabla-admin input[type='checkbox'] {
+  width: 28px;
+  height: 28px;
+  min-width: 0;
+}
+
+.celda-centro {
+  text-align: center;
+}
+
+.boton-quitar {
+  background: #ffebee;
+  color: #b71c1c;
+  width: 40px;
+  height: 40px;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.nota-admin {
+  margin-top: 14px;
+  color: #77705f;
+  font-size: 1rem;
+}
+
+.total-dia {
+  font-size: 1.4rem;
+  margin-bottom: 16px;
+}
+
+.form-config {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 560px;
+}
+
+.form-config label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.form-config input {
+  font-size: 1.1rem;
+  padding: 14px;
+  border: 2px solid #ddd3c6;
+  border-radius: 10px;
+}
+
+/* ---------- Ticket (pantalla) ---------- */
+
+.ticket {
+  width: 300px; /* ~80mm */
+  background: #fff;
+  border: 1px dashed #bbb;
+  padding: 16px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #000;
+  text-align: center;
+  margin: 0 auto;
+}
+
+.ticket hr {
+  border: none;
+  border-top: 1px dashed #000;
+  margin: 8px 0;
+}
+
+.ticket-cabecera {
+  line-height: 1.4;
+}
+
+.ticket-local {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.ticket-orden {
+  font-size: 26px;
+  font-weight: 900;
+  margin: 10px 0 4px;
+}
+
+.ticket-fecha {
+  font-size: 12px;
+}
+
+.ticket-items {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.ticket-items td {
+  padding: 3px 0;
+  vertical-align: top;
+}
+
+.ticket-subtotal {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ticket-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.ticket-pie {
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+/* ---------- Impresión: solo se imprime el ticket ---------- */
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #ticket-print,
+  #ticket-print * {
+    visibility: visible;
+  }
+
+  #ticket-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    border: none;
+    margin: 0;
+  }
+
+  @page {
+    size: 80mm auto;
+    margin: 2mm;
+  }
+}
