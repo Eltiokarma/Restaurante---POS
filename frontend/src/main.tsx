@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { Cliente } from './pages/Cliente'
 import { Cocina } from './pages/Cocina'
 import { Admin } from './pages/Admin'
+import { Ticketera } from './pages/Ticketera'
 import './styles.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -13,6 +14,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<Cliente />} />
         <Route path="/cocina" element={<Cocina />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/ticketera" element={<Ticketera />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,

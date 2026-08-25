@@ -136,12 +136,14 @@ export function Cliente() {
 
   // Imprimir el ticket cuando ya está montado en el DOM. Con cleanup: si el
   // cliente toca la pantalla y sale antes de que dispare, no se imprime una
-  // hoja en blanco.
+  // hoja en blanco. En modo "estacion" no se imprime aquí: el ticket sale
+  // por la PC que tiene abierta /ticketera.
+  const imprimeAqui = config?.modo_impresion !== 'estacion'
   useEffect(() => {
-    if (pantalla !== 'final' || !ordenFinal) return
+    if (pantalla !== 'final' || !ordenFinal || !imprimeAqui) return
     const timer = window.setTimeout(() => window.print(), 200)
     return () => window.clearTimeout(timer)
-  }, [pantalla, ordenFinal])
+  }, [pantalla, ordenFinal, imprimeAqui])
 
   // Pantalla final: volver al inicio a los 10 segundos
   useEffect(() => {
@@ -180,7 +182,12 @@ export function Cliente() {
           className="boton-grande boton-secundario"
           onClick={(e) => {
             e.stopPropagation()
-            window.print()
+            if (imprimeAqui) {
+              window.print()
+            } else {
+              // Reencola el ticket para que /ticketera lo vuelva a imprimir
+              api.reimprimirOrden(ordenFinal.orden.id).catch(() => {})
+            }
           }}
         >
           🖨️ Imprimir de nuevo

@@ -742,11 +742,50 @@ button {
   font-weight: 600;
 }
 
-.form-config input {
+.form-config input,
+.form-config select {
   font-size: 1.1rem;
   padding: 14px;
   border: 2px solid #ddd3c6;
   border-radius: 10px;
+  background: #fff;
+}
+
+/* ---------- Estación de impresión ---------- */
+
+.pantalla-ticketera {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 32px;
+  text-align: center;
+}
+
+.pantalla-ticketera h1 {
+  font-size: 2.4rem;
+}
+
+.ticketera-estado {
+  font-size: 2rem;
+  font-weight: 700;
+  background: #e8f5e9;
+  border: 3px solid #2e7d32;
+  border-radius: 18px;
+  padding: 28px 48px;
+}
+
+.ticketera-estado.sin-conexion {
+  background: #ffebee;
+  border-color: #d32f2f;
+}
+
+.ticketera-datos {
+  display: flex;
+  gap: 40px;
+  font-size: 1.4rem;
 }
 
 /* ---------- Ticket (pantalla) ---------- */

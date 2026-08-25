@@ -1,8 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from .db import Base, engine
 from .routes import admin, cancellations, config, menu, orders
+
+
+def _migrar(engine_) -> None:
+    """Migraciones ligeras para bases creadas por versiones anteriores
+    (create_all no agrega columnas a tablas existentes)."""
+    with engine_.connect() as conn:
+        columnas = [fila[1] for fila in conn.execute(text("PRAGMA table_info(ordenes)"))]
+        if columnas and "impreso" not in columnas:
+            # Las órdenes previas ya fueron atendidas: no deben reimprimirse
+            conn.execute(text("ALTER TABLE ordenes ADD COLUMN impreso BOOLEAN NOT NULL DEFAULT 1"))
+            conn.commit()
 
 app = FastAPI(title="POS Auto-Atención", version="1.0.0")
 
@@ -15,6 +27,7 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(bind=engine)
+_migrar(engine)
 
 app.include_router(menu.router)
 app.include_router(orders.router)

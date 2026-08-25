@@ -5,8 +5,11 @@ from sqlalchemy.orm import Session, selectinload
 
 from datetime import datetime, time
 
+from sqlalchemy import update
+
 from ..db import get_db
 from ..models import LIMA, Config, Orden, ahora_lima, hoy_lima
+from ..routes.config import leer_config
 from ..services.orders import PlatoNoDisponible, crear_orden
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -70,6 +73,12 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+    # En modo "terminal" la propia pantalla del cliente imprime el ticket;
+    # en modo "estacion" la orden queda en cola para /ticketera.
+    if leer_config(db)["modo_impresion"] != "estacion":
+        orden.impreso = True
+        db.commit()
+
     config = {c.clave: c.valor for c in db.scalars(select(Config)).all()}
     return {
         "orden": _orden_a_dict(orden),
@@ -95,6 +104,62 @@ def ordenes_de_hoy(db: Session = Depends(get_db)):
         "ordenes": [_orden_a_dict(o) for o in ordenes],
         "total_vendido": total_vendido,
     }
+
+
+@router.get("/pending-print")
+def pendientes_de_impresion(db: Session = Depends(get_db)):
+    """Cola de la estación de impresión (/ticketera): órdenes de hoy que
+    todavía no tienen ticket impreso, más los datos del local."""
+    ordenes = db.scalars(
+        select(Orden)
+        .options(selectinload(Orden.items))
+        .where(Orden.fecha == hoy_lima(), Orden.impreso == False)  # noqa: E712
+        .order_by(Orden.numero_orden_dia)
+    ).all()
+    config = leer_config(db)
+    return {
+        "ordenes": [_orden_a_dict(o) for o in ordenes],
+        "local": {
+            "nombre": config["nombre_local"],
+            "direccion": config["direccion"],
+            "ruc": config["ruc"],
+        },
+    }
+
+
+@router.post("/pending-print/clear")
+def descartar_pendientes(db: Session = Depends(get_db)):
+    """Marca todo lo pendiente como impreso sin imprimir (p. ej. si la
+    ticketera estuvo apagada un rato y esos pedidos ya se atendieron)."""
+    resultado = db.execute(
+        update(Orden)
+        .where(Orden.fecha == hoy_lima(), Orden.impreso == False)  # noqa: E712
+        .values(impreso=True)
+    )
+    db.commit()
+    return {"descartadas": resultado.rowcount}
+
+
+@router.post("/{orden_id}/printed")
+def marcar_impreso(orden_id: int, db: Session = Depends(get_db)):
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    orden.impreso = True
+    db.commit()
+    return {"id": orden.id, "impreso": True}
+
+
+@router.post("/{orden_id}/reprint")
+def reimprimir(orden_id: int, db: Session = Depends(get_db)):
+    """Reencola la orden para que la estación de impresión la vuelva a
+    imprimir."""
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    orden.impreso = False
+    db.commit()
+    return {"id": orden.id, "impreso": False}
 
 
 @router.patch("/{orden_id}/status")

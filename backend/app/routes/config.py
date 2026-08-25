@@ -16,18 +16,21 @@ class ConfigIn(BaseModel):
     ruc: str | None = None
     ventana_cancelacion_seg: int | None = None
     timeout_inactividad_seg: int | None = None
+    modo_impresion: str | None = None  # "terminal" | "estacion"
 
 
 def leer_config(db: Session) -> dict:
     valores = dict(CONFIG_DEFAULTS)
     for c in db.scalars(select(Config)).all():
         valores[c.clave] = c.valor
+    modo = valores["modo_impresion"]
     return {
         "nombre_local": valores["nombre_local"],
         "direccion": valores["direccion"],
         "ruc": valores["ruc"],
         "ventana_cancelacion_seg": int(valores["ventana_cancelacion_seg"]),
         "timeout_inactividad_seg": int(valores["timeout_inactividad_seg"]),
+        "modo_impresion": modo if modo in ("terminal", "estacion") else "terminal",
     }
 
 

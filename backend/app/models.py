@@ -44,6 +44,9 @@ class Orden(Base):
     estado: Mapped[str] = mapped_column(
         String(20), default="pendiente", nullable=False
     )  # pendiente | preparando | listo | entregado
+    # False = en cola de la estación de impresión (/ticketera). En modo
+    # "terminal" se marca True al crearse porque la propia terminal imprime.
+    impreso: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
     items: Mapped[list["OrdenItem"]] = relationship(
@@ -88,4 +91,7 @@ CONFIG_DEFAULTS: dict[str, str] = {
     "ruc": "",
     "ventana_cancelacion_seg": "30",
     "timeout_inactividad_seg": "90",
+    # "terminal": la pantalla donde pide el cliente imprime (PC con impresora)
+    # "estacion": imprime la PC que tenga abierta /ticketera (tablets como terminal)
+    "modo_impresion": "terminal",
 }

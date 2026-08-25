@@ -43,6 +43,9 @@ export interface ConfigOut {
   ruc: string
   ventana_cancelacion_seg: number
   timeout_inactividad_seg: number
+  // "terminal": imprime la pantalla donde pide el cliente
+  // "estacion": imprime la PC que tenga abierta /ticketera
+  modo_impresion: 'terminal' | 'estacion'
 }
 
 const TOKEN_KEY = 'pos_admin_token'
@@ -96,6 +99,19 @@ export const api = {
     }),
 
   ordenesHoy: () => request<{ ordenes: OrdenOut[]; total_vendido: number }>('/api/orders/today'),
+
+  // --- Estación de impresión (/ticketera) ---
+  pendientesImpresion: () =>
+    request<{ ordenes: OrdenOut[]; local: DatosLocal }>('/api/orders/pending-print'),
+
+  marcarImpreso: (id: number) =>
+    request<{ id: number; impreso: boolean }>(`/api/orders/${id}/printed`, { method: 'POST' }),
+
+  reimprimirOrden: (id: number) =>
+    request<{ id: number; impreso: boolean }>(`/api/orders/${id}/reprint`, { method: 'POST' }),
+
+  descartarPendientes: () =>
+    request<{ descartadas: number }>('/api/orders/pending-print/clear', { method: 'POST' }),
 
   cambiarEstado: (id: number, estado: string) =>
     request<{ id: number; estado: string }>(`/api/orders/${id}/status`, {

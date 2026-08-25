@@ -277,11 +277,22 @@ function TabOrdenes() {
     return () => window.clearInterval(intervalo)
   }, [])
 
+  const [avisoReimpresion, setAvisoReimpresion] = useState('')
+
   // Reimpresión: útil cuando el ticket original no salió (papel, impresora
-  // apagada, etc.). Se imprime cuando el ticket ya está montado.
+  // apagada, etc.). En modo "estacion" se reencola para /ticketera; en modo
+  // "terminal" se imprime desde esta misma pantalla.
   const reimprimir = async (orden: OrdenOut) => {
+    setAvisoReimpresion('')
     try {
       const cfg = await api.config()
+      if (cfg.modo_impresion === 'estacion') {
+        await api.reimprimirOrden(orden.id)
+        setAvisoReimpresion(
+          `Ticket #${String(orden.numero_orden_dia).padStart(3, '0')} enviado a la estación de impresión.`,
+        )
+        return
+      }
       setTicket({
         orden,
         local: { nombre: cfg.nombre_local, direccion: cfg.direccion, ruc: cfg.ruc },
@@ -303,6 +314,7 @@ function TabOrdenes() {
   return (
     <div>
       <div className="total-dia">Total vendido hoy: <strong>{soles(totalVendido)}</strong> ({ordenes.length} órdenes)</div>
+      {avisoReimpresion && <div className="banner-ok">{avisoReimpresion}</div>}
       <table className="tabla-admin">
         <thead>
           <tr>
@@ -446,6 +458,24 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
           onChange={(e) => setConfig({ ...config, timeout_inactividad_seg: parseInt(e.target.value) || 90 })}
         />
       </label>
+      <label>
+        ¿Dónde se imprimen los tickets?
+        <select
+          value={config.modo_impresion}
+          onChange={(e) =>
+            setConfig({ ...config, modo_impresion: e.target.value as 'terminal' | 'estacion' })
+          }
+        >
+          <option value="terminal">En la terminal del cliente (PC con impresora conectada)</option>
+          <option value="estacion">Estación de impresión (/ticketera en la PC de la impresora)</option>
+        </select>
+      </label>
+      {config.modo_impresion === 'estacion' && (
+        <p className="nota-admin">
+          Modo para terminales tablet: abre <strong>/ticketera</strong> en la computadora que tiene
+          la impresora conectada y déjala abierta. Los tickets de todas las terminales salen por ahí.
+        </p>
+      )}
       {mensaje && <div className="banner-ok">{mensaje}</div>}
       {error && <div className="banner-error">{error}</div>}
       <button className="boton-grande boton-primario" onClick={guardar}>💾 Guardar configuración</button>

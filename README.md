@@ -88,9 +88,40 @@ Luego abre en el navegador:
 | Terminal de cliente | http://localhost:5173/ |
 | Pantalla de cocina | http://localhost:5173/cocina |
 | Administración | http://localhost:5173/admin |
+| Estación de impresión | http://localhost:5173/ticketera |
 
-Si la pantalla de cocina es otra computadora/tablet en la misma red, usa la IP de la máquina
-que corre el sistema, por ejemplo `http://192.168.1.50:5173/cocina`.
+Si la pantalla de cocina o la terminal es otra computadora/tablet en la misma red, usa la IP
+de la máquina que corre el sistema, por ejemplo `http://192.168.1.50:5173/cocina`.
+
+## Terminal en tablet (y cualquier impresora)
+
+La terminal del cliente puede ser **cualquier dispositivo con navegador**: laptop, PC o
+tablet (Android/iPad). La tablet solo abre la URL del sistema; no se instala nada en ella.
+La impresión tiene dos modos (se elige en **/admin → Configuración → "¿Dónde se imprimen
+los tickets?"**):
+
+- **"En la terminal del cliente"** (default): la pantalla donde pide el cliente imprime.
+  Úsalo cuando la terminal es la misma PC/laptop que tiene la impresora conectada.
+- **"Estación de impresión"**: para terminales tablet. Los tickets NO se imprimen en la
+  tablet: quedan en una cola y los imprime la computadora que tenga abierta la página
+  **/ticketera** (la misma laptop que corre el sistema, con la impresora conectada).
+
+Montaje típico con tablet:
+
+1. La laptop corre backend + frontend y tiene la impresora conectada (cualquier impresora
+   con driver del sistema: térmica, láser o de tinta).
+2. En la laptop abre Chrome con impresión silenciosa apuntando a la ticketera:
+   ```
+   chrome --kiosk-printing http://localhost:5173/ticketera
+   ```
+   y déjala abierta (muestra "Esperando pedidos…", la cola y cuántos lleva impresos).
+3. En `/admin → Configuración` elige "Estación de impresión" y guarda.
+4. En la tablet abre `http://IP-DE-LA-LAPTOP:5173/` a pantalla completa. Listo: la tablet
+   toma pedidos y los tickets salen solos por la impresora de la laptop.
+
+Si la ticketera estuvo cerrada un rato, al abrirla imprime lo pendiente; también tiene un
+botón para descartar la cola sin imprimir. Las reimpresiones (botón de la pantalla final y
+🖨️ en admin) también salen por la estación cuando ese modo está activo.
 
 ## Cómo cargar el primer menú del día
 
