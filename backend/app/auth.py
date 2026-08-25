@@ -38,7 +38,9 @@ def requiere_admin(x_admin_token: str = Header(default="")) -> None:
         ts, firma = x_admin_token.split(".", 1)
         valido = hmac.compare_digest(firma, _firmar(ts))
         vigente = (time.time() - int(ts)) < TOKEN_TTL_SECONDS
-    except (ValueError, HTTPException):
+    except ValueError:
+        # Token ausente o malformado. Una ADMIN_PASSWORD sin configurar
+        # sí debe propagarse como error 500, no como credencial inválida.
         raise HTTPException(status_code=401, detail="Sesión de admin inválida")
     if not (valido and vigente):
         raise HTTPException(status_code=401, detail="Sesión de admin expirada o inválida")

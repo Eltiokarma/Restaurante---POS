@@ -3,10 +3,17 @@
 Punto clave: el número de orden es un correlativo POR DÍA (la orden #1, #2...
 de hoy) y se calcula dentro de la misma transacción que inserta la orden.
 """
+import threading
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..models import Orden, OrdenItem, Plato, ahora_lima
+
+# Serializa la asignación del correlativo del día: sin esto, dos
+# confirmaciones simultáneas (p. ej. dos terminales) podrían leer el mismo
+# máximo y crear dos órdenes con el mismo número.
+_lock_creacion = threading.Lock()
 
 
 class PlatoNoDisponible(Exception):
@@ -22,6 +29,11 @@ def crear_orden(db: Session, items: list[dict]) -> Orden:
     Nombre y precio se toman de la BD en el momento de crear la orden
     (snapshot), no del payload del cliente.
     """
+    with _lock_creacion:
+        return _crear_orden(db, items)
+
+
+def _crear_orden(db: Session, items: list[dict]) -> Orden:
     ahora = ahora_lima()
     hoy = ahora.date()
 

@@ -816,9 +816,33 @@ button {
   font-size: 12px;
 }
 
+.boton-reimprimir {
+  background: #efe8de;
+  width: 44px;
+  height: 44px;
+  font-size: 1.2rem;
+}
+
+/* Contenedor para tickets que solo existen para imprimirse (reimpresión
+   desde admin): fuera de la vista en pantalla, restaurado al imprimir */
+.solo-impresion {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+}
+
 /* ---------- Impresión: solo se imprime el ticket ---------- */
 
 @media print {
+  body {
+    background: #fff;
+  }
+
+  /* Si estuviera posicionado, el ticket absoluto se anclaría a -9999px */
+  .solo-impresion {
+    position: static;
+  }
+
   body * {
     visibility: hidden;
   }

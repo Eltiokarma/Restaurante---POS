@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, NOMBRE_CATEGORIA } from '../api'
-import type { ConfigOut, OrdenOut, Plato } from '../api'
+import type { ConfigOut, DatosLocal, OrdenOut, Plato } from '../api'
+import { Ticket } from '../components/Ticket'
 
 type Tab = 'menu' | 'ordenes' | 'cancelaciones' | 'config'
 
@@ -166,6 +167,13 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
   const guardar = async () => {
     setError('')
     setMensaje('')
+    // Un plato con nombre pero precio inválido no debe descartarse en
+    // silencio (se desactivaría sin que el dueño se entere)
+    const sinPrecio = platos.filter((p) => p.nombre.trim() !== '' && !(parseFloat(p.precio) > 0))
+    if (sinPrecio.length > 0) {
+      setError(`Falta el precio de: ${sinPrecio.map((p) => p.nombre.trim()).join(', ')}`)
+      return
+    }
     const validos = platos.filter((p) => p.nombre.trim() !== '' && parseFloat(p.precio) > 0)
     try {
       const data = await api.guardarMenu(
@@ -256,6 +264,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
 function TabOrdenes() {
   const [ordenes, setOrdenes] = useState<OrdenOut[]>([])
   const [totalVendido, setTotalVendido] = useState(0)
+  const [ticket, setTicket] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
 
   useEffect(() => {
     const cargar = () =>
@@ -268,6 +277,29 @@ function TabOrdenes() {
     return () => window.clearInterval(intervalo)
   }, [])
 
+  // Reimpresión: útil cuando el ticket original no salió (papel, impresora
+  // apagada, etc.). Se imprime cuando el ticket ya está montado.
+  const reimprimir = async (orden: OrdenOut) => {
+    try {
+      const cfg = await api.config()
+      setTicket({
+        orden,
+        local: { nombre: cfg.nombre_local, direccion: cfg.direccion, ruc: cfg.ruc },
+      })
+    } catch {
+      setTicket({ orden, local: { nombre: '', direccion: '', ruc: '' } })
+    }
+  }
+
+  useEffect(() => {
+    if (!ticket) return
+    const timer = window.setTimeout(() => {
+      window.print()
+      setTicket(null)
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [ticket])
+
   return (
     <div>
       <div className="total-dia">Total vendido hoy: <strong>{soles(totalVendido)}</strong> ({ordenes.length} órdenes)</div>
@@ -279,6 +311,7 @@ function TabOrdenes() {
             <th>Items</th>
             <th>Total</th>
             <th>Estado</th>
+            <th>Ticket</th>
           </tr>
         </thead>
         <tbody>
@@ -289,11 +322,21 @@ function TabOrdenes() {
               <td>{o.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(', ')}</td>
               <td>{soles(o.total)}</td>
               <td><span className={`etiqueta-estado etiqueta-${o.estado}`}>{o.estado}</span></td>
+              <td>
+                <button className="boton-reimprimir" onClick={() => reimprimir(o)} title="Reimprimir ticket">
+                  🖨️
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
       {ordenes.length === 0 && <p className="nota-admin">Todavía no hay órdenes hoy.</p>}
+      {ticket && (
+        <div className="solo-impresion">
+          <Ticket orden={ticket.orden} local={ticket.local} />
+        </div>
+      )}
     </div>
   )
 }

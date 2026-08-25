@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, NOMBRE_CATEGORIA, soles } from '../api'
+import { api, ApiError, NOMBRE_CATEGORIA, soles } from '../api'
 import type { ConfigOut, DatosLocal, OrdenOut, Plato } from '../api'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
@@ -22,14 +22,18 @@ export function Cliente() {
   const [guardando, setGuardando] = useState(false)
   const [ordenFinal, setOrdenFinal] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
 
+  const { sincronizarConMenu, vaciar } = carrito
   const cargarMenu = useCallback(async () => {
     try {
       const data = await api.menuHoy()
       setPlatos(data.platos)
+      // Si el admin cambió un precio a mitad de pedido, el carrito se
+      // actualiza para que el total mostrado coincida con lo que se cobra.
+      sincronizarConMenu(data.platos)
     } catch {
       // Si el polling falla se mantiene el último menú conocido
     }
-  }, [])
+  }, [sincronizarConMenu])
 
   useEffect(() => {
     api.config().then(setConfig).catch(() => {})
@@ -46,13 +50,13 @@ export function Cliente() {
 
   const volverAlInicio = useCallback(
     (mensaje = '') => {
-      carrito.vaciar()
+      vaciar()
       setConfirmandoCancelarTodo(false)
       setErrorConexion('')
       setMensajeInicio(mensaje)
       setPantalla('inicio')
     },
-    [carrito],
+    [vaciar],
   )
 
   // Timeout de inactividad solo mientras se arma el pedido
@@ -99,17 +103,45 @@ export function Cliente() {
       setOrdenFinal(resultado)
       carrito.vaciar()
       setPantalla('final')
-      // Imprimir cuando el ticket ya está en el DOM
-      window.setTimeout(() => window.print(), 300)
-    } catch {
-      // Robustez offline parcial: no se pierde el carrito
-      setErrorConexion('Error de conexión, intenta de nuevo')
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        // Un plato se agotó entre que lo agregó y confirmó: lo quitamos del
+        // carrito para que el pedido no quede atascado.
+        try {
+          const menu = await api.menuHoy()
+          setPlatos(menu.platos)
+          const disponibles = new Set(menu.platos.map((p) => p.id))
+          const agotados = carrito.items
+            .filter((i) => !disponibles.has(i.plato.id))
+            .map((i) => i.plato.nombre)
+          carrito.eliminarNoDisponibles(disponibles)
+          setErrorConexion(
+            agotados.length > 0
+              ? `Se agotó: ${agotados.join(', ')}. Lo quitamos de tu pedido; revisa y confirma de nuevo.`
+              : e.message,
+          )
+        } catch {
+          setErrorConexion(e.message)
+        }
+      } else {
+        // Robustez offline parcial: no se pierde el carrito
+        setErrorConexion('Error de conexión, intenta de nuevo')
+      }
       setPantalla('resumen')
     } finally {
       guardandoRef.current = false
       setGuardando(false)
     }
   }
+
+  // Imprimir el ticket cuando ya está montado en el DOM. Con cleanup: si el
+  // cliente toca la pantalla y sale antes de que dispare, no se imprime una
+  // hoja en blanco.
+  useEffect(() => {
+    if (pantalla !== 'final' || !ordenFinal) return
+    const timer = window.setTimeout(() => window.print(), 200)
+    return () => window.clearTimeout(timer)
+  }, [pantalla, ordenFinal])
 
   // Pantalla final: volver al inicio a los 10 segundos
   useEffect(() => {
@@ -124,8 +156,9 @@ export function Cliente() {
   // ---------- Pantallas ----------
 
   if (pantalla === 'inicio') {
+    // "Toca la pantalla para empezar": cualquier toque inicia el pedido
     return (
-      <div className="pantalla pantalla-inicio" onClick={mensajeInicio ? () => setMensajeInicio('') : undefined}>
+      <div className="pantalla pantalla-inicio" onClick={empezarPedido}>
         {mensajeInicio && <div className="aviso-cancelado">{mensajeInicio}</div>}
         <h1 className="logo-restaurante">{config?.nombre_local || 'Restaurante'}</h1>
         <button className="boton-hacer-pedido" onClick={empezarPedido}>
@@ -143,6 +176,15 @@ export function Cliente() {
           ORDEN #{String(ordenFinal.orden.numero_orden_dia).padStart(3, '0')}
         </div>
         <p className="texto-final">Paga en caja mostrando este ticket. ¡Gracias!</p>
+        <button
+          className="boton-grande boton-secundario"
+          onClick={(e) => {
+            e.stopPropagation()
+            window.print()
+          }}
+        >
+          🖨️ Imprimir de nuevo
+        </button>
         <p className="texto-toca">Volviendo al inicio…</p>
         <Ticket orden={ordenFinal.orden} local={ordenFinal.local} />
       </div>

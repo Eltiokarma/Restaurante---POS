@@ -25,11 +25,36 @@ export function useCarrito() {
 
   const vaciar = useCallback(() => setItems([]), [])
 
+  // Quita del carrito los platos que ya no están disponibles (agotados)
+  const eliminarNoDisponibles = useCallback((idsDisponibles: Set<number>) => {
+    setItems((prev) => prev.filter((i) => idsDisponibles.has(i.plato.id)))
+  }, [])
+
+  // Refresca nombre/precio de los items con los datos más recientes del menú
+  const sincronizarConMenu = useCallback((platos: Plato[]) => {
+    const porId = new Map(platos.map((p) => [p.id, p]))
+    setItems((prev) =>
+      prev.map((i) => {
+        const nuevo = porId.get(i.plato.id)
+        return nuevo ? { ...i, plato: nuevo } : i
+      }),
+    )
+  }, [])
+
   const totalItems = useMemo(() => items.reduce((s, i) => s + i.cantidad, 0), [items])
   const totalSoles = useMemo(
     () => items.reduce((s, i) => s + i.plato.precio * i.cantidad, 0),
     [items],
   )
 
-  return { items, cambiarCantidad, cantidadDe, vaciar, totalItems, totalSoles }
+  return {
+    items,
+    cambiarCantidad,
+    cantidadDe,
+    vaciar,
+    eliminarNoDisponibles,
+    sincronizarConMenu,
+    totalItems,
+    totalSoles,
+  }
 }

@@ -145,6 +145,13 @@ defecto), vía el diálogo de impresión del navegador:
 "C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk --kiosk-printing --incognito http://localhost:5173/
 ```
 
+### Reimprimir un ticket
+
+Si un ticket no salió (papel atascado, impresora apagada):
+
+- **En la terminal**: mientras se muestra la pantalla "ORDEN #XXX" hay un botón **"🖨️ Imprimir de nuevo"**.
+- **Después**: en **/admin → Órdenes de hoy**, cada orden tiene un botón **🖨️** que vuelve a imprimir su ticket.
+
 ---
 
 ## Estructura del proyecto
