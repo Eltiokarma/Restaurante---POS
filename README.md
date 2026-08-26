@@ -64,7 +64,27 @@ npm install
 
 ## Cómo correr el sistema
 
-Necesitas **dos terminales abiertas** (o dos servicios si lo dejas fijo):
+### Modo producción (recomendado para el local): un solo comando
+
+Compila el frontend y levanta todo en el puerto 8000:
+
+```bash
+./scripts/iniciar.sh      # Linux / macOS
+scripts\iniciar.bat       # Windows (también funciona con doble clic)
+```
+
+| Pantalla | URL |
+|---|---|
+| Terminal de cliente | http://localhost:8000/ |
+| Cocina | http://localhost:8000/cocina |
+| Administración | http://localhost:8000/admin |
+| Estación de impresión | http://localhost:8000/ticketera |
+
+Desde otras máquinas de la red: `http://IP-DE-LA-LAPTOP:8000/...`
+
+### Modo desarrollo (para trabajar en el código)
+
+Necesitas **dos terminales abiertas**:
 
 **Terminal 1 — backend (API):**
 
@@ -225,6 +245,31 @@ Si un ticket no salió (papel atascado, impresora apagada):
 | GET | `/api/cancellations/today` | Log de cancelaciones (admin) |
 | GET / PUT | `/api/config` | Configuración del local |
 | POST | `/api/admin/login` | Login de admin |
+
+## Tests y CI
+
+El backend tiene una suite de tests (correlativo diario, snapshot de precios, cola de
+impresión, auth, menú, cancelaciones, configuración):
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest tests/ -q
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) corre los tests y el build del frontend en cada
+push a `main` y en cada pull request.
+
+## Copia de seguridad
+
+La base de datos (`backend/pos.db`) guarda todas las ventas. Al cierre del día:
+
+```bash
+cd backend
+python backup.py    # crea backups/pos-AAAA-MM-DD.db (conserva los últimos 60)
+```
+
+Se puede programar en el Programador de tareas de Windows o cron para que corra solo.
 
 ## Detalles de comportamiento importantes
 
