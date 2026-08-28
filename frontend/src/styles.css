@@ -532,8 +532,27 @@ button {
 }
 
 .tarjeta-orden-hora {
-  font-size: 1.3rem;
+  font-size: 1rem;
   color: #b7c0c9;
+}
+
+.tarjeta-orden-fila-estado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Temporizador de espera: corre en vivo, segundo a segundo */
+.tarjeta-orden-timer {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #e6edf3;
+  font-variant-numeric: tabular-nums;
+}
+
+.tarjeta-orden-timer.timer-urgente {
+  color: #ef5350;
 }
 
 .tarjeta-orden-items {

@@ -12,6 +12,12 @@ backend/backups/
 node_modules/
 frontend/dist/
 
+# Laboratorio de voz (datos locales, nunca al repo)
+voz-lab/.env
+voz-lab/audios/
+voz-lab/transcripciones/
+voz-lab/resultados.csv
+
 # Editor / SO
 .DS_Store
 *.log

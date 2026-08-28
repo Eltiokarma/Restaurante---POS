@@ -1,0 +1,16 @@
+{
+  "platos": [
+    {"id": "lomo", "nombre": "Lomo saltado", "precio": 12.0,
+     "sinonimos": ["lomo", "lomito", "saltado"]},
+    {"id": "seco", "nombre": "Seco de res", "precio": 11.0,
+     "sinonimos": ["seco", "sequito"]},
+    {"id": "aji", "nombre": "Ají de gallina", "precio": 11.0,
+     "sinonimos": ["ají", "aji", "gallina", "ají de gallina"]},
+    {"id": "sopa", "nombre": "Sopa criolla", "precio": 5.0,
+     "sinonimos": ["sopa", "sopita", "criolla"]},
+    {"id": "chicha", "nombre": "Chicha morada", "precio": 2.5,
+     "sinonimos": ["chicha", "chichita", "morada"]},
+    {"id": "refresco", "nombre": "Refresco del día", "precio": 2.0,
+     "sinonimos": ["refresco", "agüita", "agua del día", "refresquito"]}
+  ]
+}

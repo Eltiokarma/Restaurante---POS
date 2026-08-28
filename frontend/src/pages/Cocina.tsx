@@ -14,14 +14,26 @@ const TEXTO_AVANCE: Record<string, string> = {
   listo: '📤 Entregado',
 }
 
+// Formatea el tiempo de espera como temporizador: "4:37" o "1 h 12 m"
+function formatearEspera(segundos: number): string {
+  const s = Math.max(0, Math.floor(segundos))
+  if (s >= 3600) return `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} m`
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
 export function Cocina() {
   const [ordenes, setOrdenes] = useState<OrdenOut[]>([])
   const [error, setError] = useState(false)
+  // Momento del último dato del servidor: el temporizador avanza en vivo
+  // sumando el tiempo local transcurrido desde entonces
+  const [traidoEn, setTraidoEn] = useState(Date.now())
+  const [, setTick] = useState(0)
 
   const cargar = useCallback(async () => {
     try {
       const data = await api.ordenesHoy()
       setOrdenes(data.ordenes)
+      setTraidoEn(Date.now())
       setError(false)
     } catch {
       setError(true)
@@ -34,6 +46,15 @@ export function Cocina() {
     const intervalo = window.setInterval(cargar, 10_000)
     return () => window.clearInterval(intervalo)
   }, [cargar])
+
+  // Tic de 1 segundo para que los temporizadores corran entre polls
+  useEffect(() => {
+    const intervalo = window.setInterval(() => setTick((t) => t + 1), 1_000)
+    return () => window.clearInterval(intervalo)
+  }, [])
+
+  const esperaSegundos = (orden: OrdenOut) =>
+    orden.minutos_espera * 60 + (Date.now() - traidoEn) / 1000
 
   const avanzar = async (orden: OrdenOut) => {
     const siguiente = SIGUIENTE_ESTADO[orden.estado]
@@ -62,14 +83,20 @@ export function Cocina() {
 
       <div className="grilla-cocina">
         {activas.map((orden) => {
-          const urgente = orden.estado === 'pendiente' && orden.minutos_espera > 10
+          const segundos = esperaSegundos(orden)
+          const urgente = orden.estado === 'pendiente' && segundos > 600
           return (
             <div key={orden.id} className={`tarjeta-orden estado-${orden.estado} ${urgente ? 'urgente' : ''}`}>
               <div className="tarjeta-orden-cabecera">
                 <span className="tarjeta-orden-numero">#{String(orden.numero_orden_dia).padStart(3, '0')}</span>
-                <span className="tarjeta-orden-hora">{orden.hora.slice(0, 5)}</span>
+                <span className={`tarjeta-orden-timer ${urgente ? 'timer-urgente' : ''}`}>
+                  ⏱ {formatearEspera(segundos)}
+                </span>
               </div>
-              <span className={`etiqueta-estado etiqueta-${orden.estado}`}>{orden.estado.toUpperCase()}</span>
+              <div className="tarjeta-orden-fila-estado">
+                <span className={`etiqueta-estado etiqueta-${orden.estado}`}>{orden.estado.toUpperCase()}</span>
+                <span className="tarjeta-orden-hora">pedido a las {orden.hora.slice(0, 5)}</span>
+              </div>
               <ul className="tarjeta-orden-items">
                 {orden.items.map((item, i) => (
                   <li key={i}>
