@@ -576,12 +576,172 @@ button {
 .etiqueta-preparando { background: #42a5f5; color: #06283f; }
 .etiqueta-listo { background: #66bb6a; color: #0c290e; }
 .etiqueta-entregado { background: #90a4ae; color: #263238; }
+.etiqueta-anulada { background: #d32f2f; color: #fff; }
 
 .boton-avance {
   background: #efe8de;
   color: #2b2b2b;
   min-height: 70px;
   font-size: 1.3rem;
+}
+
+/* ---------- Caja ---------- */
+
+.pantalla-caja {
+  min-height: 100%;
+  background: #f4f2ee;
+  padding-bottom: 24px;
+}
+
+.caja-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  background: #fff;
+  padding: 14px 22px;
+  border-bottom: 2px solid #e5ded3;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.caja-cabecera h1 {
+  font-size: 1.6rem;
+}
+
+.caja-total-dia {
+  font-size: 1.15rem;
+}
+
+.caja-banner {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 1rem;
+}
+
+.caja-columnas {
+  display: grid;
+  grid-template-columns: minmax(380px, 3fr) minmax(320px, 2fr);
+  gap: 22px;
+  padding: 20px 22px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .caja-columnas {
+    grid-template-columns: 1fr;
+  }
+}
+
+.caja-nuevo h2,
+.caja-ordenes h2 {
+  font-size: 1.3rem;
+  margin-bottom: 12px;
+}
+
+.grilla-caja {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  margin-bottom: 14px;
+}
+
+.grilla-caja .tarjeta-plato {
+  min-height: 88px;
+  padding: 12px 16px;
+}
+
+.grilla-caja .boton-cantidad {
+  width: 64px;
+  height: 64px;
+  font-size: 1.9rem;
+}
+
+.grilla-caja .tarjeta-plato-nombre {
+  font-size: 1.2rem;
+}
+
+.grilla-caja .tarjeta-plato-precio {
+  font-size: 1.1rem;
+}
+
+.caja-acciones {
+  display: flex;
+  gap: 12px;
+  position: sticky;
+  bottom: 12px;
+}
+
+.caja-registrar {
+  flex: 1;
+}
+
+.caja-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+}
+
+.caja-orden {
+  background: #fff;
+  border: 2px solid #e5ded3;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.caja-orden-anulada {
+  opacity: 0.55;
+}
+
+.caja-orden-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.caja-orden-numero {
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.caja-orden-hora {
+  color: #77705f;
+}
+
+.caja-orden-total {
+  margin-left: auto;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.caja-orden-items {
+  font-size: 1rem;
+  color: #4a443b;
+}
+
+.caja-orden-botones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.caja-orden-botones button {
+  padding: 12px 16px;
+  font-size: 1rem;
+  font-weight: 700;
+  background: #efe8de;
+  border-radius: 10px;
+  min-height: 48px;
+}
+
+.boton-anular {
+  background: #ffebee !important;
+  color: #b71c1c;
 }
 
 /* ---------- Admin ---------- */

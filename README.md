@@ -6,8 +6,11 @@ cancelación de 30 segundos, imprime el ticket con el número de orden y lo env�
 cocina. **El pago se hace en la caja física**, mostrando el ticket.
 
 - **Vista de cliente** (`/`): pantalla táctil para armar el pedido, sin login.
-- **Vista de cocina** (`/cocina`): cola de órdenes con estados (pendiente → preparando → listo → entregado).
-- **Vista de admin** (`/admin`): menú del día, órdenes, log de cancelaciones y configuración (con contraseña).
+- **Vista de caja** (`/caja`): el cajero registra pedidos de quienes no usan la terminal
+  (sin ventana de cancelación) y gestiona los del día: avanzar estado, reimprimir ticket y
+  **anular** (la orden queda registrada pero no cuenta como venta).
+- **Vista de cocina** (`/cocina`): cola de órdenes con estados (pendiente → preparando → listo → entregado) y temporizador de espera en vivo.
+- **Vista de admin** (`/admin`): resumen de ventas, menú del día, órdenes, log de cancelaciones y configuración (con contraseña).
 
 > **Preparado para voz (Fase 3):** la voz será solo "otra manera de llenar el carrito". El módulo
 > `backend/app/services/voice.py` es un stub vacío donde se enchufará Whisper + Claude API. El
@@ -78,6 +81,7 @@ scripts\iniciar.bat       # Windows (también funciona con doble clic)
 | Terminal de cliente | http://localhost:8000/ |
 | Cocina | http://localhost:8000/cocina |
 | Administración | http://localhost:8000/admin |
+| Caja | http://localhost:8000/caja |
 | Estación de impresión | http://localhost:8000/ticketera |
 
 Desde otras máquinas de la red: `http://IP-DE-LA-LAPTOP:8000/...`
@@ -120,6 +124,7 @@ Luego abre en el navegador:
 | Terminal de cliente | http://localhost:5173/ |
 | Pantalla de cocina | http://localhost:5173/cocina |
 | Administración | http://localhost:5173/admin |
+| Caja | http://localhost:5173/caja |
 | Estación de impresión | http://localhost:5173/ticketera |
 
 Si la pantalla de cocina o la terminal es otra computadora/tablet en la misma red, usa la IP

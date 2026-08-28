@@ -9,9 +9,9 @@ decisiones tomadas.
 
 - **`backend/`** — FastAPI + SQLite (SQLAlchemy 2.x). Rutas en `app/routes/` (una por
   dominio: menu, orders, cancellations, config, admin), lógica de negocio en `app/services/`.
-- **`frontend/`** — React + Vite + TypeScript. Páginas en `src/pages/` (Cliente, Cocina,
-  Admin, Ticketera), componentes reutilizables en `src/components/`, hooks en `src/hooks/`,
-  cliente HTTP único en `src/api.ts`.
+- **`frontend/`** — React + Vite + TypeScript. Páginas en `src/pages/` (Cliente, Caja,
+  Cocina, Admin, Ticketera), componentes reutilizables en `src/components/`, hooks en
+  `src/hooks/`, cliente HTTP único en `src/api.ts`.
 - **Comunicación**: polling simple (menú 30s, cocina 10s, ticketera 3s). Sin WebSockets por
   decisión de fase 1; si el polling queda corto al escalar, migrar con cuidado.
 - **Impresión**: HTML + `window.print()` con dos modos (config `modo_impresion`):
