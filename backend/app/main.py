@@ -1,3 +1,6 @@
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -6,6 +9,7 @@ from sqlalchemy import text
 
 from .db import BACKEND_DIR, Base, engine
 from .routes import admin, cancellations, config, menu, orders, stats
+from .services.backup import ciclo_backup_automatico
 
 
 def _migrar(engine_) -> None:
@@ -21,7 +25,16 @@ def _migrar(engine_) -> None:
             conn.execute(text("ALTER TABLE ordenes ADD COLUMN duracion_seg INTEGER"))
             conn.commit()
 
-app = FastAPI(title="POS Auto-Atención", version="1.0.0")
+@asynccontextmanager
+async def _ciclo_de_vida(app_: FastAPI):
+    # Backup automático mientras el servidor corre (ver services/backup.py).
+    # El retraso inicial de 60s hace que no interfiera con tests ni arranques.
+    tarea_backup = asyncio.create_task(ciclo_backup_automatico())
+    yield
+    tarea_backup.cancel()
+
+
+app = FastAPI(title="POS Auto-Atención", version="1.0.0", lifespan=_ciclo_de_vida)
 
 # La terminal corre el frontend de Vite en otro puerto durante desarrollo
 app.add_middleware(

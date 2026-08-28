@@ -262,14 +262,16 @@ push a `main` y en cada pull request.
 
 ## Copia de seguridad
 
-La base de datos (`backend/pos.db`) guarda todas las ventas. Al cierre del día:
+La base de datos (`backend/pos.db`) guarda todas las ventas. **Mientras el servidor corre,
+se respalda solo**: refresca `backend/backups/pos-AAAA-MM-DD.db` cada 30 minutos (una copia
+por día, conserva las últimas 60). Ante una falla del disco se pierde como máximo media hora.
+
+Para forzar una copia manual (por ejemplo al cierre, o hacia un USB):
 
 ```bash
 cd backend
-python backup.py    # crea backups/pos-AAAA-MM-DD.db (conserva los últimos 60)
+python backup.py
 ```
-
-Se puede programar en el Programador de tareas de Windows o cron para que corra solo.
 
 ## Detalles de comportamiento importantes
 

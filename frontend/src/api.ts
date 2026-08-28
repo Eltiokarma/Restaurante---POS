@@ -152,10 +152,14 @@ export const api = {
 
   statsHoy: () => request<StatsOut>('/api/stats/today', {}, true),
 
-  // Descarga el CSV de ventas del día (necesita el token, así que va por
-  // fetch + blob en vez de un <a href> directo)
-  descargarVentasCsv: async () => {
-    const res = await fetch('/api/stats/export', { headers: { 'X-Admin-Token': getAdminToken() } })
+  statsRango: (desde: string, hasta: string) =>
+    request<StatsOut>(`/api/stats/range?desde=${desde}&hasta=${hasta}`, {}, true),
+
+  // Descarga el CSV de ventas (necesita el token, así que va por
+  // fetch + blob en vez de un <a href> directo). Sin fechas: hoy.
+  descargarVentasCsv: async (desde?: string, hasta?: string) => {
+    const params = desde && hasta ? `?desde=${desde}&hasta=${hasta}` : ''
+    const res = await fetch(`/api/stats/export${params}`, { headers: { 'X-Admin-Token': getAdminToken() } })
     if (!res.ok) throw new ApiError(res.status, `Error ${res.status}`)
     const blob = await res.blob()
     const nombre = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'ventas.csv'
@@ -169,11 +173,13 @@ export const api = {
 }
 
 export interface StatsOut {
-  fecha: string
+  desde: string
+  hasta: string
   num_ordenes: number
   total_vendido: number
   duracion_promedio_seg: number | null
   ventas_por_plato: { nombre: string; cantidad: number; total: number }[]
+  ventas_por_dia: { fecha: string; ordenes: number; total: number }[]
   ordenes_por_hora: { hora: string; cantidad: number }[]
   num_cancelaciones: number
   total_cancelado: number

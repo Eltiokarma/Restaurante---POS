@@ -104,35 +104,69 @@ function formatearDuracion(seg: number | null): string {
   return `${Math.floor(seg / 60)} min ${seg % 60} s`
 }
 
+type Periodo = 'hoy' | '7' | '30'
+
+const NOMBRE_PERIODO: Record<Periodo, string> = {
+  hoy: 'hoy',
+  '7': 'últimos 7 días',
+  '30': 'últimos 30 días',
+}
+
+function fechaLocalISO(diasAtras: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - diasAtras)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function rangoDe(periodo: Periodo): { desde: string; hasta: string } {
+  const hasta = fechaLocalISO(0)
+  return { desde: periodo === 'hoy' ? hasta : fechaLocalISO(parseInt(periodo) - 1), hasta }
+}
+
 function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [periodo, setPeriodo] = useState<Periodo>('hoy')
   const [stats, setStats] = useState<StatsOut | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const cargar = () =>
-      api.statsHoy().then(setStats).catch((e) => setError(manejarError(e, onSesionVencida)))
+    const cargar = () => {
+      const consulta =
+        periodo === 'hoy'
+          ? api.statsHoy()
+          : api.statsRango(rangoDe(periodo).desde, rangoDe(periodo).hasta)
+      consulta.then(setStats).catch((e) => setError(manejarError(e, onSesionVencida)))
+    }
     cargar()
     const intervalo = window.setInterval(cargar, 30_000)
     return () => window.clearInterval(intervalo)
-  }, [onSesionVencida])
+  }, [periodo, onSesionVencida])
 
   if (error) return <div className="banner-error">{error}</div>
   if (!stats) return <p>Cargando…</p>
 
   const maxCantidad = Math.max(1, ...stats.ventas_por_plato.map((v) => v.cantidad))
   const maxHora = Math.max(1, ...stats.ordenes_por_hora.map((h) => h.cantidad))
+  const maxDia = Math.max(1, ...stats.ventas_por_dia.map((d) => d.total))
+
+  const descargar = () => {
+    const { desde, hasta } = rangoDe(periodo)
+    api.descargarVentasCsv(desde, hasta).catch(() => setError('No se pudo descargar el CSV'))
+  }
 
   return (
     <div>
       <div className="admin-acciones">
-        <button className="boton-primario" onClick={() => api.descargarVentasCsv().catch(() => setError('No se pudo descargar el CSV'))}>
-          ⬇️ Descargar ventas del día (CSV)
-        </button>
+        {(['hoy', '7', '30'] as Periodo[]).map((p) => (
+          <button key={p} className={periodo === p ? 'boton-primario' : ''} onClick={() => setPeriodo(p)}>
+            {p === 'hoy' ? 'Hoy' : `Últimos ${p} días`}
+          </button>
+        ))}
+        <button onClick={descargar}>⬇️ Descargar CSV ({NOMBRE_PERIODO[periodo]})</button>
       </div>
 
       <div className="tiles-resumen">
         <div className="tile">
-          <span className="tile-etiqueta">Total vendido hoy</span>
+          <span className="tile-etiqueta">Total vendido ({NOMBRE_PERIODO[periodo]})</span>
           <span className="tile-valor">{soles(stats.total_vendido)}</span>
         </div>
         <div className="tile">
@@ -183,9 +217,28 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
         </table>
       )}
 
+      {periodo !== 'hoy' && stats.ventas_por_dia.length > 0 && (
+        <>
+          <h3 className="subtitulo-resumen">Ventas por día</h3>
+          <div className="barras-horas">
+            {stats.ventas_por_dia.map((d) => (
+              <div
+                className="barra-hora barra-dia"
+                key={d.fecha}
+                title={`${d.fecha}: ${d.ordenes} órdenes — ${soles(d.total)}`}
+              >
+                <span className="barra-hora-valor">{soles(d.total)}</span>
+                <div className="barra-hora-relleno" style={{ height: `${(d.total / maxDia) * 100}%` }} />
+                <span className="barra-hora-etiqueta">{d.fecha.slice(5)}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {stats.ordenes_por_hora.length > 0 && (
         <>
-          <h3 className="subtitulo-resumen">Órdenes por hora</h3>
+          <h3 className="subtitulo-resumen">Órdenes por hora{periodo !== 'hoy' ? ' (acumulado del período)' : ''}</h3>
           <div className="barras-horas">
             {stats.ordenes_por_hora.map((h) => (
               <div className="barra-hora" key={h.hora} title={`${h.cantidad} órdenes entre ${h.hora}:00 y ${h.hora}:59`}>

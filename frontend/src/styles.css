@@ -800,6 +800,7 @@ button {
   border: 2px solid #e5ded3;
   border-radius: 14px;
   padding: 18px 20px 12px;
+  overflow-x: auto; /* 30 días no entran en pantalla: scroll horizontal */
 }
 
 .barra-hora {
@@ -810,6 +811,7 @@ button {
   gap: 4px;
   width: 56px;
   height: 140px;
+  flex-shrink: 0;
 }
 
 .barra-hora-relleno {
@@ -829,6 +831,14 @@ button {
 .barra-hora-etiqueta {
   font-size: 0.85rem;
   color: #77705f;
+}
+
+.barra-dia {
+  width: 76px;
+}
+
+.barra-dia .barra-hora-valor {
+  font-size: 0.85rem;
 }
 
 .form-config {
