@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,14 +13,13 @@ CATEGORIAS = ["entrada", "fondo", "bebida", "postre"]
 
 
 class PlatoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     nombre: str
     categoria: str
     precio: float
     activo_hoy: bool
-
-    class Config:
-        from_attributes = True
 
 
 class PlatoIn(BaseModel):

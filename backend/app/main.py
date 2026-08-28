@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
-from .db import Base, engine
+from .db import BACKEND_DIR, Base, engine
 from .routes import admin, cancellations, config, menu, orders
 
 
@@ -39,3 +41,24 @@ app.include_router(admin.router)
 @app.get("/api/health")
 def health():
     return {"ok": True}
+
+
+# --- Modo producción: servir el frontend compilado desde este mismo puerto ---
+# Si existe frontend/dist (npm run build), el sistema completo corre solo con
+# uvicorn en el puerto 8000: /, /cocina, /admin y /ticketera salen de aquí.
+# En desarrollo (sin dist o usando Vite en 5173) nada de esto interfiere:
+# las rutas /api se registran antes y siempre tienen prioridad.
+FRONTEND_DIST = BACKEND_DIR.parent / "frontend" / "dist"
+
+if FRONTEND_DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+
+    @app.get("/{ruta:path}", include_in_schema=False)
+    def spa(ruta: str):
+        # Archivos sueltos del build (favicon, etc.); todo lo demás es una
+        # ruta del SPA y devuelve index.html (React Router resuelve).
+        # resolve() + is_relative_to impiden escapar de dist/ con "..".
+        archivo = (FRONTEND_DIST / ruta).resolve()
+        if ruta and archivo.is_file() and archivo.is_relative_to(FRONTEND_DIST.resolve()):
+            return FileResponse(archivo)
+        return FileResponse(FRONTEND_DIST / "index.html")
