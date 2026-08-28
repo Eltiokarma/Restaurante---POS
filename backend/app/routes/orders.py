@@ -24,6 +24,9 @@ class ItemIn(BaseModel):
 
 class OrdenIn(BaseModel):
     items: list[ItemIn] = Field(min_length=1)
+    # Medido por la terminal: segundos desde que empezó el pedido hasta
+    # confirmar. Opcional; se ignora fuera de un rango razonable.
+    duracion_seg: int | None = Field(default=None, ge=0, le=3600)
 
 
 class EstadoIn(BaseModel):
@@ -67,7 +70,7 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     el ticket.
     """
     try:
-        orden = crear_orden(db, [i.model_dump() for i in payload.items])
+        orden = crear_orden(db, [i.model_dump() for i in payload.items], payload.duracion_seg)
     except PlatoNoDisponible as e:
         raise HTTPException(status_code=409, detail=f"'{e.nombre}' ya no está disponible")
     except ValueError as e:

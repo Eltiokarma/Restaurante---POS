@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, NOMBRE_CATEGORIA } from '../api'
-import type { ConfigOut, DatosLocal, OrdenOut, Plato } from '../api'
+import type { ConfigOut, DatosLocal, OrdenOut, Plato, StatsOut } from '../api'
 import { Ticket } from '../components/Ticket'
 
-type Tab = 'menu' | 'ordenes' | 'cancelaciones' | 'config'
+type Tab = 'resumen' | 'menu' | 'ordenes' | 'cancelaciones' | 'config'
 
 interface PlatoEditable {
   id?: number
@@ -15,7 +15,7 @@ interface PlatoEditable {
 
 export function Admin() {
   const [logueado, setLogueado] = useState(() => getAdminToken() !== '')
-  const [tab, setTab] = useState<Tab>('menu')
+  const [tab, setTab] = useState<Tab>('resumen')
 
   if (!logueado) {
     return <AdminLogin onOk={() => setLogueado(true)} />
@@ -26,6 +26,7 @@ export function Admin() {
       <header className="admin-cabecera">
         <h1>⚙️ Administración</h1>
         <nav className="admin-tabs">
+          <button className={tab === 'resumen' ? 'activa' : ''} onClick={() => setTab('resumen')}>Resumen</button>
           <button className={tab === 'menu' ? 'activa' : ''} onClick={() => setTab('menu')}>Menú del día</button>
           <button className={tab === 'ordenes' ? 'activa' : ''} onClick={() => setTab('ordenes')}>Órdenes de hoy</button>
           <button className={tab === 'cancelaciones' ? 'activa' : ''} onClick={() => setTab('cancelaciones')}>Cancelaciones</button>
@@ -42,6 +43,7 @@ export function Admin() {
         </button>
       </header>
       <main className="admin-contenido">
+        {tab === 'resumen' && <TabResumen onSesionVencida={() => setLogueado(false)} />}
         {tab === 'menu' && <TabMenu onSesionVencida={() => setLogueado(false)} />}
         {tab === 'ordenes' && <TabOrdenes />}
         {tab === 'cancelaciones' && <TabCancelaciones onSesionVencida={() => setLogueado(false)} />}
@@ -90,6 +92,111 @@ function AdminLogin({ onOk }: { onOk: () => void }) {
         {error && <div className="banner-error">{error}</div>}
         <button type="submit" className="boton-grande boton-primario">Entrar</button>
       </form>
+    </div>
+  )
+}
+
+// ---------- Resumen del día ----------
+
+function formatearDuracion(seg: number | null): string {
+  if (seg === null) return '—'
+  if (seg < 60) return `${seg} s`
+  return `${Math.floor(seg / 60)} min ${seg % 60} s`
+}
+
+function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [stats, setStats] = useState<StatsOut | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const cargar = () =>
+      api.statsHoy().then(setStats).catch((e) => setError(manejarError(e, onSesionVencida)))
+    cargar()
+    const intervalo = window.setInterval(cargar, 30_000)
+    return () => window.clearInterval(intervalo)
+  }, [onSesionVencida])
+
+  if (error) return <div className="banner-error">{error}</div>
+  if (!stats) return <p>Cargando…</p>
+
+  const maxCantidad = Math.max(1, ...stats.ventas_por_plato.map((v) => v.cantidad))
+  const maxHora = Math.max(1, ...stats.ordenes_por_hora.map((h) => h.cantidad))
+
+  return (
+    <div>
+      <div className="admin-acciones">
+        <button className="boton-primario" onClick={() => api.descargarVentasCsv().catch(() => setError('No se pudo descargar el CSV'))}>
+          ⬇️ Descargar ventas del día (CSV)
+        </button>
+      </div>
+
+      <div className="tiles-resumen">
+        <div className="tile">
+          <span className="tile-etiqueta">Total vendido hoy</span>
+          <span className="tile-valor">{soles(stats.total_vendido)}</span>
+        </div>
+        <div className="tile">
+          <span className="tile-etiqueta">Órdenes</span>
+          <span className="tile-valor">{stats.num_ordenes}</span>
+        </div>
+        <div className="tile">
+          <span className="tile-etiqueta">Tiempo promedio por pedido</span>
+          <span className="tile-valor">{formatearDuracion(stats.duracion_promedio_seg)}</span>
+          <span className="tile-detalle">de tocar la pantalla a confirmar</span>
+        </div>
+        <div className="tile">
+          <span className="tile-etiqueta">Cancelaciones en la ventana</span>
+          <span className="tile-valor">{stats.num_cancelaciones}</span>
+          <span className="tile-detalle">
+            {stats.num_cancelaciones > 0
+              ? `${(stats.tasa_cancelacion * 100).toFixed(1)}% de los intentos — ${soles(stats.total_cancelado)}`
+              : 'ninguna hoy 🎉'}
+          </span>
+        </div>
+      </div>
+
+      <h3 className="subtitulo-resumen">Ventas por plato</h3>
+      {stats.ventas_por_plato.length === 0 ? (
+        <p className="nota-admin">Todavía no hay ventas hoy.</p>
+      ) : (
+        <table className="tabla-admin tabla-resumen">
+          <thead>
+            <tr>
+              <th>Plato</th>
+              <th className="col-cantidad">Cantidad</th>
+              <th></th>
+              <th className="col-total">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.ventas_por_plato.map((v) => (
+              <tr key={v.nombre}>
+                <td>{v.nombre}</td>
+                <td className="col-cantidad">{v.cantidad}</td>
+                <td className="celda-barra">
+                  <div className="barra-proporcion" style={{ width: `${(v.cantidad / maxCantidad) * 100}%` }} />
+                </td>
+                <td className="col-total">{soles(v.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {stats.ordenes_por_hora.length > 0 && (
+        <>
+          <h3 className="subtitulo-resumen">Órdenes por hora</h3>
+          <div className="barras-horas">
+            {stats.ordenes_por_hora.map((h) => (
+              <div className="barra-hora" key={h.hora} title={`${h.cantidad} órdenes entre ${h.hora}:00 y ${h.hora}:59`}>
+                <span className="barra-hora-valor">{h.cantidad}</span>
+                <div className="barra-hora-relleno" style={{ height: `${(h.cantidad / maxHora) * 100}%` }} />
+                <span className="barra-hora-etiqueta">{h.hora}:00</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

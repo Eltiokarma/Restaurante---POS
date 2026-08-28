@@ -22,18 +22,19 @@ class PlatoNoDisponible(Exception):
         super().__init__(f"Plato no disponible: {nombre}")
 
 
-def crear_orden(db: Session, items: list[dict]) -> Orden:
+def crear_orden(db: Session, items: list[dict], duracion_seg: int | None = None) -> Orden:
     """Crea una orden confirmada (tras la ventana de cancelación).
 
     ``items`` es una lista de {"plato_id": int, "cantidad": int}.
     Nombre y precio se toman de la BD en el momento de crear la orden
-    (snapshot), no del payload del cliente.
+    (snapshot), no del payload del cliente. ``duracion_seg`` es cuánto
+    demoró el cliente en armar y confirmar (lo mide la terminal).
     """
     with _lock_creacion:
-        return _crear_orden(db, items)
+        return _crear_orden(db, items, duracion_seg)
 
 
-def _crear_orden(db: Session, items: list[dict]) -> Orden:
+def _crear_orden(db: Session, items: list[dict], duracion_seg: int | None) -> Orden:
     ahora = ahora_lima()
     hoy = ahora.date()
 
@@ -48,6 +49,7 @@ def _crear_orden(db: Session, items: list[dict]) -> Orden:
         hora=ahora.strftime("%H:%M:%S"),
         total=0.0,
         estado="pendiente",
+        duracion_seg=duracion_seg,
     )
 
     total = 0.0

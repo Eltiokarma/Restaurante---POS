@@ -728,6 +728,109 @@ button {
   margin-bottom: 16px;
 }
 
+/* ---------- Resumen del día ---------- */
+
+.tiles-resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.tile {
+  background: #fff;
+  border: 2px solid #e5ded3;
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tile-etiqueta {
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #77705f;
+}
+
+.tile-valor {
+  font-size: 2.1rem;
+  font-weight: 800;
+  color: #2b2b2b;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-detalle {
+  font-size: 0.9rem;
+  color: #77705f;
+}
+
+.subtitulo-resumen {
+  font-size: 1.2rem;
+  margin: 24px 0 10px;
+}
+
+.tabla-resumen .col-cantidad,
+.tabla-resumen .col-total {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabla-resumen .celda-barra {
+  width: 40%;
+}
+
+/* Barra de proporción: un solo matiz (magnitud), extremo redondeado,
+   decorativa — el valor real siempre está como texto en la fila */
+.barra-proporcion {
+  height: 12px;
+  min-width: 4px;
+  background: #c62828;
+  border-radius: 0 4px 4px 0;
+}
+
+.barras-horas {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  background: #fff;
+  border: 2px solid #e5ded3;
+  border-radius: 14px;
+  padding: 18px 20px 12px;
+}
+
+.barra-hora {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  width: 56px;
+  height: 140px;
+}
+
+.barra-hora-relleno {
+  width: 22px;
+  min-height: 4px;
+  background: #c62828;
+  border-radius: 4px 4px 0 0;
+}
+
+.barra-hora-valor {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #2b2b2b;
+  font-variant-numeric: tabular-nums;
+}
+
+.barra-hora-etiqueta {
+  font-size: 0.85rem;
+  color: #77705f;
+}
+
 .form-config {
   display: flex;
   flex-direction: column;
