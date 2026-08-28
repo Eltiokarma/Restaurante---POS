@@ -82,6 +82,18 @@ scripts\iniciar.bat       # Windows (también funciona con doble clic)
 
 Desde otras máquinas de la red: `http://IP-DE-LA-LAPTOP:8000/...`
 
+### Cómo actualizar a la última versión
+
+Con el servidor detenido (cierra su ventana), doble clic o:
+
+```bash
+scripts\actualizar.bat     # Windows
+./scripts/actualizar.sh    # Linux / macOS
+```
+
+Descarga los cambios, actualiza dependencias y arranca el sistema. **No toca tu base de
+datos ni tu configuración** (`pos.db` y `.env` son tuyos, no viajan con el código).
+
 ### Modo desarrollo (para trabajar en el código)
 
 Necesitas **dos terminales abiertas**:
