@@ -5,6 +5,7 @@ import { Cliente } from './pages/Cliente'
 import { Cocina } from './pages/Cocina'
 import { Admin } from './pages/Admin'
 import { Ticketera } from './pages/Ticketera'
+import { Caja } from './pages/Caja'
 import './styles.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -15,6 +16,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/cocina" element={<Cocina />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/ticketera" element={<Ticketera />} />
+        <Route path="/caja" element={<Caja />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,

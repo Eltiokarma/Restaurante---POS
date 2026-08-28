@@ -27,9 +27,12 @@ def _validar_rango(desde: date, hasta: date) -> None:
 
 
 def _resumen(db: Session, desde: date, hasta: date) -> dict:
-    ordenes = db.scalars(
+    todas = db.scalars(
         select(Orden).where(Orden.fecha >= desde, Orden.fecha <= hasta)
     ).all()
+    # Las anuladas (caja) no cuentan como venta
+    ordenes = [o for o in todas if o.estado != "anulada"]
+    num_anuladas = len(todas) - len(ordenes)
     num_ordenes = len(ordenes)
     total_vendido = round(sum(o.total for o in ordenes), 2)
 
@@ -44,7 +47,7 @@ def _resumen(db: Session, desde: date, hasta: date) -> dict:
             func.sum(OrdenItem.cantidad * OrdenItem.precio_snapshot),
         )
         .join(Orden, OrdenItem.orden_id == Orden.id)
-        .where(Orden.fecha >= desde, Orden.fecha <= hasta)
+        .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada")
         .group_by(OrdenItem.nombre_snapshot)
         .order_by(func.sum(OrdenItem.cantidad).desc())
     ).all()
@@ -91,6 +94,7 @@ def _resumen(db: Session, desde: date, hasta: date) -> dict:
         "num_cancelaciones": num_cancelaciones,
         "total_cancelado": total_cancelado,
         "tasa_cancelacion": tasa_cancelacion,
+        "num_anuladas": num_anuladas,
     }
 
 

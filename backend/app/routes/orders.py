@@ -14,7 +14,9 @@ from ..services.orders import PlatoNoDisponible, crear_orden
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
-ESTADOS = ["pendiente", "preparando", "listo", "entregado"]
+# "anulada" existe para la caja: un pedido registrado que al final no se
+# atendió (cliente se fue, error). No cuenta en las ventas.
+ESTADOS = ["pendiente", "preparando", "listo", "entregado", "anulada"]
 
 
 class ItemIn(BaseModel):
@@ -102,7 +104,7 @@ def ordenes_de_hoy(db: Session = Depends(get_db)):
         .where(Orden.fecha == hoy_lima())
         .order_by(Orden.numero_orden_dia)
     ).all()
-    total_vendido = round(sum(o.total for o in ordenes), 2)
+    total_vendido = round(sum(o.total for o in ordenes if o.estado != "anulada"), 2)
     return {
         "ordenes": [_orden_a_dict(o) for o in ordenes],
         "total_vendido": total_vendido,
@@ -116,7 +118,11 @@ def pendientes_de_impresion(db: Session = Depends(get_db)):
     ordenes = db.scalars(
         select(Orden)
         .options(selectinload(Orden.items))
-        .where(Orden.fecha == hoy_lima(), Orden.impreso == False)  # noqa: E712
+        .where(
+            Orden.fecha == hoy_lima(),
+            Orden.impreso == False,  # noqa: E712
+            Orden.estado != "anulada",  # una anulada en cola ya no se imprime
+        )
         .order_by(Orden.numero_orden_dia)
     ).all()
     config = leer_config(db)

@@ -39,6 +39,10 @@
 
 - [x] Temporizador en los pedidos de cocina: cada tarjeta muestra el tiempo de espera
       corriendo en vivo (mm:ss), en rojo cuando supera los 10 minutos en pendiente.
+- [x] Vista de caja (`/caja`): el cajero registra pedidos sin ventana de cancelación
+      (confirma en persona) y gestiona los del día — avanzar estado, reimprimir y anular.
+      Estado nuevo `anulada`: la orden queda en BD pero no cuenta en ventas, sale de la
+      cola de impresión y no aparece en cocina.
 
 ## Fase 2 de voz — laboratorio (`voz-lab/`, independiente del POS)
 

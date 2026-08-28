@@ -68,8 +68,8 @@ export function Cocina() {
     }
   }
 
-  // Las entregadas desaparecen de la vista (quedan en BD); orden por antigüedad
-  const activas = ordenes.filter((o) => o.estado !== 'entregado')
+  // Entregadas y anuladas desaparecen de la vista (quedan en BD)
+  const activas = ordenes.filter((o) => o.estado !== 'entregado' && o.estado !== 'anulada')
 
   return (
     <div className="pantalla-cocina">
