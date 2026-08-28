@@ -60,3 +60,4 @@ Pagos integrados (Yape/tarjeta), control de stock y mermas, app nativa, multi-lo
 | 5 | Correlativo diario calculado en BD con lock, zona `America/Lima` | Números cortos para cantar en caja; independiente del reloj de los dispositivos. |
 | 6 | Auth admin: token HMAC stateless de 12h | Suficiente para un local con una laptop; sin tabla de sesiones ni dependencias extra. |
 | 7 | Frontend compilado servido por FastAPI en producción | Un solo proceso y un solo puerto (8000) en la laptop del local; Vite queda solo para desarrollo. |
+| 8 | Operación LAN-first; nube (Railway) solo para demo/monitoreo | Si se cae el internet del local, el POS debe seguir tomando pedidos. Hay `Dockerfile` listo, pero operar en nube requiere primero autenticación en cocina/terminal/ticketera (hoy son de LAN privada por diseño). |

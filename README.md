@@ -246,6 +246,33 @@ Si un ticket no salió (papel atascado, impresora apagada):
 | GET / PUT | `/api/config` | Configuración del local |
 | POST | `/api/admin/login` | Login de admin |
 
+## Desplegar en la nube (Railway) — opcional
+
+El proyecto incluye un `Dockerfile` listo para Railway (o cualquier plataforma que corra
+contenedores). Pasos en Railway:
+
+1. **New Project → Deploy from GitHub repo** → elige este repositorio. Railway detecta el
+   `Dockerfile` y construye solo.
+2. En el servicio, pestaña **Variables**: agrega `ADMIN_PASSWORD` con tu contraseña.
+3. Pestaña **Settings → Volumes**: agrega un volumen montado en **`/data`** (ahí vive la
+   base de datos SQLite; sin volumen, se borra en cada despliegue).
+4. **Settings → Networking → Generate Domain** para obtener la URL pública.
+5. El menú inicial se carga desde `/admin` (el seed es opcional; las tablas se crean solas).
+
+**Piénsalo dos veces antes de operar el local desde la nube:**
+
+- **Si se cae el internet del restaurante, el POS se detiene.** Corriendo en la laptop del
+  local (modo LAN), sigue funcionando aunque no haya internet.
+- **Cocina, terminal y ticketera no tienen contraseña por diseño** (son pantallas de una red
+  local privada). En una URL pública, cualquiera que la conozca puede ver la cola de cocina o
+  crear órdenes. Si algún día se opera en nube en serio, hay que agregar autenticación a esas
+  vistas primero (está anotado en el roadmap).
+- La impresión no cambia: la ticketera o la terminal imprimen desde el navegador del local
+  igual que siempre, apuntando a la URL de Railway.
+
+Para lo que sí sirve hoy: **demos** (mostrarle el sistema a alguien sin instalar nada) y
+**monitoreo remoto** (ver el Resumen de ventas desde tu casa).
+
 ## Tests y CI
 
 El backend tiene una suite de tests (correlativo diario, snapshot de precios, cola de
