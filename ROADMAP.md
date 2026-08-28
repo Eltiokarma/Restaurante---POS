@@ -26,13 +26,16 @@
 - [x] Métricas para el dueño: pestaña "Resumen" en admin con total vendido, tiempo promedio
       por pedido (instrumentado inicio→confirmación, campo `duracion_seg`), tasa de
       cancelación, ventas por plato, órdenes por hora y export CSV para Excel.
-- [ ] Resumen semanal/histórico (hoy solo muestra el día en curso; los datos ya quedan en BD).
+- [x] Resumen semanal/histórico: selector Hoy / Últimos 7 días / Últimos 30 días en el
+      Resumen, con ventas por día y export CSV del período (`GET /api/stats/range`).
 - [ ] Ajustes de UX táctil que surjan de observar clientes reales.
 - [ ] Impresión ESC/POS directa desde el backend (corte automático, gaveta, doble copia) si
       la impresión por driver + `--kiosk-printing` queda corta en la práctica.
 - [ ] Endurecer multi-terminal si se agrega una segunda tablet (hoy ya es seguro a nivel de
       datos; revisar UX de números de orden y capacidad de la ticketera).
-- [ ] Backup automático programado (hoy es manual/cron) y export CSV de ventas.
+- [x] Backup automático: el servidor refresca la copia del día cada 30 minutos mientras
+      corre (`app/services/backup.py`); `python backup.py` queda para copias manuales.
+- [x] Export CSV de ventas (por día o por rango, desde el Resumen del admin).
 
 ## Fase 3 — pedido por voz
 
