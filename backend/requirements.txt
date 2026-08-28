@@ -3,3 +3,6 @@ uvicorn[standard]>=0.29
 sqlalchemy>=2.0
 python-dotenv>=1.0
 pydantic>=2.6
+# Base de datos de zonas horarias: en Windows, Python no la trae del
+# sistema y sin esto ZoneInfo("America/Lima") falla
+tzdata>=2024.1
