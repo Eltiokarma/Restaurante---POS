@@ -37,9 +37,22 @@
       corre (`app/services/backup.py`); `python backup.py` queda para copias manuales.
 - [x] Export CSV de ventas (por día o por rango, desde el Resumen del admin).
 
-## Fase 3 — pedido por voz
+- [x] Temporizador en los pedidos de cocina: cada tarjeta muestra el tiempo de espera
+      corriendo en vivo (mm:ss), en rojo cuando supera los 10 minutos en pendiente.
 
-- [ ] Whisper (transcripción) + Claude API (interpretación) en
+## Fase 2 de voz — laboratorio (`voz-lab/`, independiente del POS)
+
+- [x] Banco de pruebas Whisper + Claude: grabadora de audios, pipeline de evaluación con
+      `resultados.csv`, y modo `--solo-interpretacion` para iterar el prompt sin volver a
+      pagar transcripción. El intérprete (`voz-lab/services/interpreter.py`) usa el MISMO
+      contrato que consumirá el POS: `{"items": [{"plato_id", "cantidad"}],
+      "no_encontrados": [], "notas": ""}`.
+- [ ] Capturar mínimo 30 audios reales (protocolo en `voz-lab/README.md`) y afinar el
+      prompt hasta que la interpretación sea confiable.
+
+## Fase 3 — pedido por voz (integración al POS)
+
+- [ ] Conectar el intérprete validado del laboratorio en
       `backend/app/services/voice.py`. Contrato ya definido en el stub: la voz devuelve
       items para el carrito y NADA MÁS cambia (el flujo posterior es agnóstico al origen).
 
