@@ -58,18 +58,26 @@ def grabar(destino: Path) -> float:
     return frames_totales / FRECUENCIA
 
 
-def anotar_metadata(archivo: Path, esperado_texto: str, esperado_items: str) -> None:
+def anotar_metadata(
+    archivo: Path, duracion: float, ground_truth: str, esperado: str, notas: str
+) -> None:
+    """Mismo formato que la grabadora web (audios/metadata.csv)."""
     ruta_csv = AUDIOS_DIR / "metadata.csv"
     nuevo = not ruta_csv.exists()
     with open(ruta_csv, "a", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f, delimiter=";")
         if nuevo:
-            writer.writerow(["archivo", "fecha_hora", "esperado_texto", "esperado_items"])
+            writer.writerow([
+                "archivo", "fecha_hora", "duracion_seg",
+                "ground_truth_texto", "pedido_esperado", "notas",
+            ])
         writer.writerow([
             archivo.name,
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            esperado_texto,
-            esperado_items,
+            f"{duracion:.1f}",
+            ground_truth,
+            esperado,
+            notas,
         ])
 
 
@@ -84,11 +92,10 @@ def main() -> None:
         duracion = grabar(destino)
         print(f"   Guardado {destino.name} ({duracion:.1f} s)")
 
-        esperado_texto = input("   ¿Qué dijo el cliente? (opcional, Enter para saltar): ").strip()
-        esperado_items = input(
-            "   Pedido esperado, ej. 2xlomo,1xchicha (opcional): "
-        ).strip()
-        anotar_metadata(destino, esperado_texto, esperado_items)
+        ground_truth = input("   ¿Qué dijo realmente el cliente? (ground truth): ").strip()
+        esperado = input("   Pedido correcto esperado, ej. 2x lomo saltado, 1x chicha: ").strip()
+        notas = input("   Notas de contexto (ruido, tipo de cliente — opcional): ").strip()
+        anotar_metadata(destino, duracion, ground_truth, esperado, notas)
         print()
 
 
