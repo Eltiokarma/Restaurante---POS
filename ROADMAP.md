@@ -23,8 +23,10 @@
 
 ## Fase 2 — según resultados de la prueba en sala (por priorizar)
 
-- [ ] Métricas para el dueño: duración del pedido en terminal (instrumentar inicio→confirmación),
-      resumen diario/semanal de ventas por plato, tasa de cancelación.
+- [x] Métricas para el dueño: pestaña "Resumen" en admin con total vendido, tiempo promedio
+      por pedido (instrumentado inicio→confirmación, campo `duracion_seg`), tasa de
+      cancelación, ventas por plato, órdenes por hora y export CSV para Excel.
+- [ ] Resumen semanal/histórico (hoy solo muestra el día en curso; los datos ya quedan en BD).
 - [ ] Ajustes de UX táctil que surjan de observar clientes reales.
 - [ ] Impresión ESC/POS directa desde el backend (corte automático, gaveta, doble copia) si
       la impresión por driver + `--kiosk-printing` queda corta en la práctica.

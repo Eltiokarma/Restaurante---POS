@@ -47,6 +47,9 @@ class Orden(Base):
     # False = en cola de la estación de impresión (/ticketera). En modo
     # "terminal" se marca True al crearse porque la propia terminal imprime.
     impreso: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Segundos desde que el cliente empezó el pedido hasta que lo confirmó
+    # (lo mide y envía la terminal; None en órdenes antiguas o si no llegó)
+    duracion_seg: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
     items: Mapped[list["OrdenItem"]] = relationship(

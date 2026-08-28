@@ -92,10 +92,10 @@ export const api = {
 
   config: () => request<ConfigOut>('/api/config'),
 
-  crearOrden: (items: { plato_id: number; cantidad: number }[]) =>
+  crearOrden: (items: { plato_id: number; cantidad: number }[], duracionSeg?: number) =>
     request<{ orden: OrdenOut; local: DatosLocal }>('/api/orders', {
       method: 'POST',
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({ items, duracion_seg: duracionSeg }),
     }),
 
   ordenesHoy: () => request<{ ordenes: OrdenOut[]; total_vendido: number }>('/api/orders/today'),
@@ -149,6 +149,35 @@ export const api = {
 
   guardarConfig: (config: Partial<ConfigOut>) =>
     request<ConfigOut>('/api/config', { method: 'PUT', body: JSON.stringify(config) }, true),
+
+  statsHoy: () => request<StatsOut>('/api/stats/today', {}, true),
+
+  // Descarga el CSV de ventas del día (necesita el token, así que va por
+  // fetch + blob en vez de un <a href> directo)
+  descargarVentasCsv: async () => {
+    const res = await fetch('/api/stats/export', { headers: { 'X-Admin-Token': getAdminToken() } })
+    if (!res.ok) throw new ApiError(res.status, `Error ${res.status}`)
+    const blob = await res.blob()
+    const nombre = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'ventas.csv'
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombre
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+}
+
+export interface StatsOut {
+  fecha: string
+  num_ordenes: number
+  total_vendido: number
+  duracion_promedio_seg: number | null
+  ventas_por_plato: { nombre: string; cantidad: number; total: number }[]
+  ordenes_por_hora: { hora: string; cantidad: number }[]
+  num_cancelaciones: number
+  total_cancelado: number
+  tasa_cancelacion: number
 }
 
 export function soles(monto: number): string {

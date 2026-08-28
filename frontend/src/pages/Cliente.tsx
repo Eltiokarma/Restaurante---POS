@@ -68,8 +68,12 @@ export function Cliente() {
     () => volverAlInicio(),
   )
 
+  // Para medir cuánto demora un cliente de punta a punta (métrica del admin)
+  const inicioPedidoTs = useRef<number | null>(null)
+
   const empezarPedido = () => {
     setMensajeInicio('')
+    inicioPedidoTs.current = Date.now()
     cargarMenu() // refresco al iniciar un pedido nuevo
     setPantalla('menu')
   }
@@ -97,8 +101,12 @@ export function Cliente() {
     setGuardando(true)
     setErrorConexion('')
     try {
+      const duracion = inicioPedidoTs.current
+        ? Math.min(3600, Math.round((Date.now() - inicioPedidoTs.current) / 1000))
+        : undefined
       const resultado = await api.crearOrden(
         carrito.items.map((i) => ({ plato_id: i.plato.id, cantidad: i.cantidad })),
+        duracion,
       )
       setOrdenFinal(resultado)
       carrito.vaciar()

@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from .db import BACKEND_DIR, Base, engine
-from .routes import admin, cancellations, config, menu, orders
+from .routes import admin, cancellations, config, menu, orders, stats
 
 
 def _migrar(engine_) -> None:
@@ -16,6 +16,9 @@ def _migrar(engine_) -> None:
         if columnas and "impreso" not in columnas:
             # Las órdenes previas ya fueron atendidas: no deben reimprimirse
             conn.execute(text("ALTER TABLE ordenes ADD COLUMN impreso BOOLEAN NOT NULL DEFAULT 1"))
+            conn.commit()
+        if columnas and "duracion_seg" not in columnas:
+            conn.execute(text("ALTER TABLE ordenes ADD COLUMN duracion_seg INTEGER"))
             conn.commit()
 
 app = FastAPI(title="POS Auto-Atención", version="1.0.0")
@@ -36,6 +39,7 @@ app.include_router(orders.router)
 app.include_router(cancellations.router)
 app.include_router(config.router)
 app.include_router(admin.router)
+app.include_router(stats.router)
 
 
 @app.get("/api/health")
