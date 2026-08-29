@@ -1757,6 +1757,13 @@ button {
   color: #77705f;
 }
 
+.panel-mesas-vacio {
+  background: #fff6e0;
+  border-color: #b98a1f;
+  color: #6e5312;
+  font-size: 1rem;
+}
+
 .chip-mesa {
   padding: 10px 16px;
   font-size: 1rem;

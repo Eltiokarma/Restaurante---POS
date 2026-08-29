@@ -371,6 +371,12 @@ export function Caja() {
         </div>
       )}
 
+      {mesas.filter((m) => m.activa).length === 0 && (
+        <div className="panel-mesas panel-mesas-vacio">
+          🪑 Todavía no hay mesas configuradas. Créalas en <strong>Admin → Configuración →
+          "Mesas del local"</strong> para poder asignarlas a los tickets.
+        </div>
+      )}
       {mesas.length > 0 && (
         <div className="panel-mesas">
           <span className="panel-mesas-titulo">Mesas:</span>
@@ -540,6 +546,11 @@ export function Caja() {
                     <button className="boton-anular" onClick={() => anular(o)}>✖ Anular</button>
                   )}
                 </div>
+                {asignandoMesa === o.id && mesas.filter((m) => m.activa).length === 0 && (
+                  <p className="nota-admin">
+                    No hay mesas creadas todavía: ve a Admin → Configuración → "Mesas del local".
+                  </p>
+                )}
                 {asignandoMesa === o.id && (
                   <div className="empaques-linea">
                     {mesas.filter((m) => m.activa).map((m) => (
