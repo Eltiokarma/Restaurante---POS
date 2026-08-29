@@ -29,6 +29,11 @@ export function Ticket({ orden, local }: Props) {
       {orden.mesas.length > 0 && (
         <div className="ticket-servicio">🪑 MESA: {orden.mesas.join(' + ')}</div>
       )}
+      {orden.items.length >= 2 && (
+        <div className="ticket-servicio">
+          {orden.entrega === 'separado' ? 'ENTREGA: POR TIEMPOS' : 'ENTREGA: TODO JUNTO'}
+        </div>
+      )}
       <div className="ticket-fecha">
         {orden.fecha} — {orden.hora}
       </div>

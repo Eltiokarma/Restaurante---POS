@@ -22,6 +22,7 @@ class PlatoOut(BaseModel):
     categoria: str
     precio: float
     activo_hoy: bool
+    sale_al_momento: bool = False
     sinonimos: list[str] = []
 
     @field_validator("sinonimos", mode="before")
@@ -42,6 +43,7 @@ class PlatoIn(BaseModel):
     categoria: str
     precio: float = Field(gt=0)
     activo_hoy: bool = True
+    sale_al_momento: bool = False
     sinonimos: list[str] = Field(default_factory=list, max_length=30)
 
 
@@ -84,6 +86,7 @@ def actualizar_menu(payload: MenuUpdate, db: Session = Depends(get_db)):
             plato.categoria = p.categoria
             plato.precio = round(p.precio, 2)
             plato.activo_hoy = p.activo_hoy
+            plato.sale_al_momento = p.sale_al_momento
             plato.sinonimos = sinonimos_json
         else:
             plato = Plato(
@@ -92,6 +95,7 @@ def actualizar_menu(payload: MenuUpdate, db: Session = Depends(get_db)):
                 precio=round(p.precio, 2),
                 activo_hoy=p.activo_hoy,
                 en_catalogo=True,
+                sale_al_momento=p.sale_al_momento,
                 sinonimos=sinonimos_json,
             )
             db.add(plato)

@@ -32,6 +32,9 @@ class Plato(Base):
     # Sinónimos para el pedido por voz (JSON: ["lomito", "saltado"]).
     # Se editan en admin; son la herramienta de mejora continua de la voz.
     sinonimos: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    # True = se prepara al momento (bistec frito): no puede salir "todo
+    # junto" con el resto del pedido
+    sale_al_momento: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
 
@@ -60,6 +63,9 @@ class Orden(Base):
     # efectivo | tarjeta | yape — lo registra la caja al cobrar.
     # None = sin registrar (el cierre lo asume efectivo, comportamiento histórico)
     metodo_pago: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # junto | separado — cómo sale el pedido: todo en una entrega, o por
+    # tiempos (la sopa primero, el segundo cuando esté)
+    entrega: Mapped[str] = mapped_column(String(10), default="junto", nullable=False)
     # Mesas asignadas al ticket (JSON de ids). Varias = mesas combinadas.
     mesa_ids: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     # True cuando la caja liberó las mesas de este ticket (clientes se fueron)

@@ -11,6 +11,7 @@ interface PlatoEditable {
   categoria: string
   precio: string // como texto mientras se edita
   activo_hoy: boolean
+  sale_al_momento: boolean
   sinonimos: string[]
 }
 
@@ -325,6 +326,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
     categoria: p.categoria,
     precio: p.precio.toFixed(2),
     activo_hoy: p.activo_hoy,
+    sale_al_momento: p.sale_al_momento ?? false,
     sinonimos: p.sinonimos ?? [],
   })
 
@@ -348,7 +350,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
   const agregar = () => {
     setPlatos((prev) => [
       ...prev,
-      { nombre: '', categoria: 'fondo', precio: '', activo_hoy: true, sinonimos: [] },
+      { nombre: '', categoria: 'fondo', precio: '', activo_hoy: true, sale_al_momento: false, sinonimos: [] },
     ])
   }
 
@@ -405,6 +407,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
           categoria: p.categoria,
           precio: parseFloat(p.precio),
           activo_hoy: p.activo_hoy,
+          sale_al_momento: p.sale_al_momento,
           sinonimos: p.sinonimos,
         })),
       )
@@ -432,6 +435,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
             <th>Categoría</th>
             <th>Precio S/</th>
             <th>Sinónimos (para la voz)</th>
+            <th title="Se prepara al pedido (bistec frito): obliga entrega por tiempos">Al momento</th>
             <th>Disponible hoy</th>
             <th></th>
           </tr>
@@ -463,6 +467,13 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
                 <ChipsSinonimos
                   sinonimos={p.sinonimos}
                   onCambiar={(sinonimos) => editar(idx, { sinonimos })}
+                />
+              </td>
+              <td className="celda-centro">
+                <input
+                  type="checkbox"
+                  checked={p.sale_al_momento}
+                  onChange={(e) => editar(idx, { sale_al_momento: e.target.checked })}
                 />
               </td>
               <td className="celda-centro">
