@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, NOMBRE_CATEGORIA } from '../api'
-import type { ConfigOut, DatosLocal, Insumo, MovimientoKardex, OrdenOut, Plato, StatsOut, VozPanel } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
 type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'cancelaciones' | 'voz' | 'config'
@@ -241,6 +241,8 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
         </>
       )}
 
+      <HistorialCierres onSesionVencida={onSesionVencida} />
+
       {stats.ordenes_por_hora.length > 0 && (
         <>
           <h3 className="subtitulo-resumen">Órdenes por hora{periodo !== 'hoy' ? ' (acumulado del período)' : ''}</h3>
@@ -256,6 +258,57 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
         </>
       )}
     </div>
+  )
+}
+
+// Movimiento de caja de todos los días (últimos 30 cierres)
+function HistorialCierres({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [cierres, setCierres] = useState<CajaEstado[]>([])
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.cierresHistorial()
+      .then((d) => setCierres(d.cierres))
+      .catch((e) => setError(manejarError(e, onSesionVencida)))
+  }, [onSesionVencida])
+
+  if (error) return <div className="banner-error">{error}</div>
+  if (cierres.length === 0) return null
+
+  return (
+    <>
+      <h3 className="subtitulo-resumen">Cierres de caja (últimos 30 días)</h3>
+      <table className="tabla-admin">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th className="col-cantidad">Fondo</th>
+            <th className="col-cantidad">💵 Efectivo</th>
+            <th className="col-cantidad">💳 Tarjeta</th>
+            <th className="col-cantidad">📱 Yape</th>
+            <th className="col-cantidad">Contado</th>
+            <th className="col-total">Diferencia</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cierres.map((c) => (
+            <tr key={c.fecha}>
+              <td>{c.fecha}{!c.cerrada && ' (sin cerrar)'}</td>
+              <td className="col-cantidad">{soles(c.monto_apertura ?? 0)}</td>
+              <td className="col-cantidad">{soles(c.ventas_efectivo)}</td>
+              <td className="col-cantidad">{soles(c.ventas_tarjeta)}</td>
+              <td className="col-cantidad">{soles(c.ventas_yape)}</td>
+              <td className="col-cantidad">{c.monto_contado != null ? soles(c.monto_contado) : '—'}</td>
+              <td className={`col-total ${(c.diferencia ?? 0) < 0 ? 'stock-negativo' : ''}`}>
+                {c.diferencia != null
+                  ? c.diferencia === 0 ? '🎯 exacto' : soles(c.diferencia)
+                  : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   )
 }
 
@@ -564,21 +617,32 @@ function TabVoz({ onSesionVencida }: { onSesionVencida: () => void }) {
 
 // ---------- Órdenes de hoy ----------
 
+function fechaHoyISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function TabOrdenes() {
   const [ordenes, setOrdenes] = useState<OrdenOut[]>([])
   const [totalVendido, setTotalVendido] = useState(0)
   const [ticket, setTicket] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
+  // Movimiento de cualquier día, no solo hoy
+  const [fecha, setFecha] = useState(fechaHoyISO())
 
   useEffect(() => {
+    const esHoy = fecha === fechaHoyISO()
     const cargar = () =>
-      api.ordenesHoy().then((data) => {
-        setOrdenes(data.ordenes)
-        setTotalVendido(data.total_vendido)
-      }).catch(() => {})
+      (esHoy ? api.ordenesHoy() : api.ordenesDeDia(fecha))
+        .then((data) => {
+          setOrdenes(data.ordenes)
+          setTotalVendido(data.total_vendido)
+        })
+        .catch(() => {})
     cargar()
+    if (!esHoy) return
     const intervalo = window.setInterval(cargar, 15_000)
     return () => window.clearInterval(intervalo)
-  }, [])
+  }, [fecha])
 
   const [avisoReimpresion, setAvisoReimpresion] = useState('')
 
@@ -616,7 +680,13 @@ function TabOrdenes() {
 
   return (
     <div>
-      <div className="total-dia">Total vendido hoy: <strong>{soles(totalVendido)}</strong> ({ordenes.length} órdenes)</div>
+      <div className="total-dia">
+        <label className="selector-fecha">
+          Día:{' '}
+          <input type="date" value={fecha} max={fechaHoyISO()} onChange={(e) => setFecha(e.target.value)} />
+        </label>
+        {' '}Total vendido: <strong>{soles(totalVendido)}</strong> ({ordenes.length} órdenes)
+      </div>
       {avisoReimpresion && <div className="banner-ok">{avisoReimpresion}</div>}
       <table className="tabla-admin">
         <thead>
@@ -1035,6 +1105,14 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
       <label className="config-toggle">
         <input
           type="checkbox"
+          checked={config.exigir_caja_abierta}
+          onChange={(e) => setConfig({ ...config, exigir_caja_abierta: e.target.checked })}
+        />
+        🔒 No permitir ventas hasta abrir la caja (fondo inicial)
+      </label>
+      <label className="config-toggle">
+        <input
+          type="checkbox"
           checked={config.voz_habilitada}
           onChange={(e) => setConfig({ ...config, voz_habilitada: e.target.checked })}
         />
@@ -1050,6 +1128,86 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
       {mensaje && <div className="banner-ok">{mensaje}</div>}
       {error && <div className="banner-error">{error}</div>}
       <button className="boton-grande boton-primario" onClick={guardar}>💾 Guardar configuración</button>
+
+      <GestorMesas onSesionVencida={onSesionVencida} />
+    </div>
+  )
+}
+
+// ---------- Configuración de mesas ----------
+
+function GestorMesas({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [mesas, setMesas] = useState<MesaEstado[]>([])
+  const [nombreNueva, setNombreNueva] = useState('')
+  const [error, setError] = useState('')
+
+  const cargar = useCallback(() => {
+    api.mesas().then((d) => setMesas(d.mesas)).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    cargar()
+  }, [cargar])
+
+  const crear = async () => {
+    if (!nombreNueva.trim()) return
+    try {
+      await api.crearMesa(nombreNueva.trim())
+      setNombreNueva('')
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const actualizar = async (id: number, cambios: { nombre?: string; activa?: boolean }) => {
+    try {
+      await api.actualizarMesa(id, cambios)
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  return (
+    <div className="gestor-mesas">
+      <h3 className="subtitulo-resumen">🪑 Mesas del local</h3>
+      <p className="nota-admin">
+        La caja asigna tickets a estas mesas (varias juntas = combinadas) y las libera cuando
+        el grupo se va. Desactiva una mesa para retirarla sin perder su historial.
+      </p>
+      {error && <div className="banner-error">{error}</div>}
+      <div className="mesas-lista">
+        {mesas.map((m) => (
+          <div className="mesa-fila" key={m.id}>
+            <input
+              defaultValue={m.nombre}
+              onBlur={(e) => {
+                const nombre = e.target.value.trim()
+                if (nombre && nombre !== m.nombre) actualizar(m.id, { nombre })
+              }}
+            />
+            <label className="config-toggle mesa-activa">
+              <input
+                type="checkbox"
+                checked={m.activa}
+                onChange={(e) => actualizar(m.id, { activa: e.target.checked })}
+              />
+              activa
+            </label>
+            {m.ocupada && <span className="badge-mesa">ocupada #{m.ordenes.join(' #')}</span>}
+          </div>
+        ))}
+      </div>
+      <div className="mesa-fila">
+        <input
+          placeholder="Nombre de la mesa nueva (Mesa 5, Barra…)"
+          value={nombreNueva}
+          onChange={(e) => setNombreNueva(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && crear()}
+        />
+        <button className="boton-primario boton-crear-mesa" onClick={crear}>+ Agregar mesa</button>
+      </div>
     </div>
   )
 }

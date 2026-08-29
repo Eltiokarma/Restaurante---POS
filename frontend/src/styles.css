@@ -1738,6 +1738,116 @@ button {
   font-weight: 800;
 }
 
+/* ---------- Mesas ---------- */
+
+.panel-mesas {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 22px 0;
+  background: #fff;
+  border: 2px solid #e5ded3;
+  border-radius: 12px;
+  padding: 10px 16px;
+}
+
+.panel-mesas-titulo {
+  font-weight: 700;
+  color: #77705f;
+}
+
+.chip-mesa {
+  padding: 10px 16px;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 999px;
+  border: 2px solid;
+  min-height: 48px;
+}
+
+.chip-mesa.mesa-libre {
+  background: #edf7ee;
+  border-color: #2e7d32;
+  color: #1e5622;
+  cursor: default;
+}
+
+.chip-mesa.mesa-ocupada {
+  background: #ffebee;
+  border-color: #d32f2f;
+  color: #b71c1c;
+}
+
+.chip-mesa-tickets {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.badge-mesa {
+  background: #e3f2fd;
+  border: 2px solid #1565c0;
+  color: #0d47a1;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.mesa-chip-ocupada {
+  opacity: 0.6;
+}
+
+.caja-mesas-nuevo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.gestor-mesas {
+  margin-top: 28px;
+  border-top: 2px solid #e5ded3;
+  padding-top: 16px;
+}
+
+.mesas-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mesa-fila {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mesa-fila input[type='text'],
+.mesa-fila input:not([type]) {
+  flex: 0 1 280px;
+}
+
+.mesa-activa {
+  font-size: 0.95rem !important;
+}
+
+.boton-crear-mesa {
+  padding: 12px 18px;
+  font-weight: 700;
+  border-radius: 10px;
+  background: #c62828;
+  color: #fff;
+}
+
+.selector-fecha input {
+  font-size: 1rem;
+  padding: 8px 10px;
+  border: 2px solid #ddd3c6;
+  border-radius: 8px;
+}
+
 .nota-advertencia {
   color: #8a5a00;
   background: #fff6e0;

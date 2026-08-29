@@ -18,6 +18,7 @@ class ConfigIn(BaseModel):
     timeout_inactividad_seg: int | None = None
     modo_impresion: str | None = None  # "terminal" | "estacion"
     voz_habilitada: bool | None = None  # kill switch del pedido por voz
+    exigir_caja_abierta: bool | None = None  # bloquear ventas sin apertura de caja
 
 
 def leer_config(db: Session) -> dict:
@@ -39,6 +40,7 @@ def leer_config(db: Session) -> dict:
         # (toggle encendido + API keys presentes) para la terminal
         "voz_habilitada": voz_habilitada,
         "voz_disponible": voz_habilitada and claves_configuradas(),
+        "exigir_caja_abierta": valores["exigir_caja_abierta"] in ("1", "true", "True"),
     }
 
 
@@ -52,7 +54,7 @@ def obtener(db: Session = Depends(get_db)):
 @router.put("", dependencies=[Depends(requiere_admin)])
 def actualizar(payload: ConfigIn, db: Session = Depends(get_db)):
     for clave, valor in payload.model_dump(exclude_none=True).items():
-        if clave == "voz_habilitada":
+        if clave in ("voz_habilitada", "exigir_caja_abierta"):
             valor = "1" if valor else "0"
         registro = db.get(Config, clave)
         if registro is None:

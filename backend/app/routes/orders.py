@@ -3,12 +3,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from datetime import datetime, time
+import json
+from datetime import date, datetime, time
 
 from sqlalchemy import update
 
 from ..db import get_db
-from ..models import LIMA, Config, Orden, ahora_lima, hoy_lima
+from ..models import LIMA, CierreCaja, Config, Mesa, Orden, ahora_lima, hoy_lima
 from ..routes.config import leer_config
 from ..services.orders import PlatoNoDisponible, crear_orden
 
@@ -37,6 +38,9 @@ class OrdenIn(BaseModel):
     duracion_seg: int | None = Field(default=None, ge=0, le=3600)
     # tactil (default) | voz | mixto — cómo se llenó el carrito
     origen: str = "tactil"
+    # Mesas asignadas al crear (la caja las manda; la terminal no).
+    # Varias = mesas combinadas para un grupo.
+    mesa_ids: list[int] = Field(default_factory=list, max_length=10)
 
 
 class EstadoIn(BaseModel):
@@ -51,7 +55,20 @@ def _minutos_espera(orden: Orden) -> float:
     return max(0.0, (ahora_lima() - creada).total_seconds() / 60)
 
 
-def _orden_a_dict(orden: Orden) -> dict:
+def _validar_mesas(db: Session, mesa_ids: list[int]) -> None:
+    for mesa_id in mesa_ids:
+        mesa = db.get(Mesa, mesa_id)
+        if mesa is None or not mesa.activa:
+            raise HTTPException(status_code=422, detail=f"Mesa inválida: {mesa_id}")
+
+
+def _mapa_mesas(db: Session) -> dict[int, str]:
+    return {m.id: m.nombre for m in db.scalars(select(Mesa)).all()}
+
+
+def _orden_a_dict(orden: Orden, mapa_mesas: dict[int, str] | None = None) -> dict:
+    mapa_mesas = mapa_mesas or {}
+    ids_mesa = json.loads(orden.mesa_ids or "[]")
     return {
         "id": orden.id,
         "numero_orden_dia": orden.numero_orden_dia,
@@ -62,6 +79,9 @@ def _orden_a_dict(orden: Orden) -> dict:
         "tipo_servicio": orden.tipo_servicio,
         "origen": orden.origen,
         "metodo_pago": orden.metodo_pago,
+        "mesa_ids": ids_mesa,
+        "mesas": [mapa_mesas.get(i, f"#{i}") for i in ids_mesa],
+        "mesa_liberada": orden.mesa_liberada,
         "minutos_espera": round(_minutos_espera(orden), 1),
         "items": [
             {
@@ -88,6 +108,17 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
             raise HTTPException(status_code=422, detail=f"Empaque inválido: {item.empaque}")
     if payload.origen not in ("tactil", "voz", "mixto"):
         raise HTTPException(status_code=422, detail=f"Origen inválido: {payload.origen}")
+    _validar_mesas(db, payload.mesa_ids)
+
+    # Candado: sin apertura de caja (fondo inicial) no se vende
+    config = leer_config(db)
+    if config["exigir_caja_abierta"]:
+        apertura = db.scalar(select(CierreCaja).where(CierreCaja.fecha == hoy_lima()))
+        if apertura is None:
+            raise HTTPException(
+                status_code=409,
+                detail="La caja aún no se abre. Registra el fondo inicial en la pantalla de Caja.",
+            )
     try:
         orden = crear_orden(
             db, [i.model_dump() for i in payload.items],
@@ -98,19 +129,22 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+    # Mesas asignadas al crear (la caja las manda al sentar al grupo)
+    if payload.mesa_ids:
+        orden.mesa_ids = json.dumps(payload.mesa_ids)
+
     # En modo "terminal" la propia pantalla del cliente imprime el ticket;
     # en modo "estacion" la orden queda en cola para /ticketera.
-    if leer_config(db)["modo_impresion"] != "estacion":
+    if config["modo_impresion"] != "estacion":
         orden.impreso = True
-        db.commit()
+    db.commit()
 
-    config = {c.clave: c.valor for c in db.scalars(select(Config)).all()}
     return {
-        "orden": _orden_a_dict(orden),
+        "orden": _orden_a_dict(orden, _mapa_mesas(db)),
         "local": {
-            "nombre": config.get("nombre_local", ""),
-            "direccion": config.get("direccion", ""),
-            "ruc": config.get("ruc", ""),
+            "nombre": config["nombre_local"],
+            "direccion": config["direccion"],
+            "ruc": config["ruc"],
         },
     }
 
@@ -118,15 +152,27 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
 @router.get("/today")
 def ordenes_de_hoy(db: Session = Depends(get_db)):
     """Órdenes de hoy, para la vista de cocina y el admin."""
+    return _ordenes_del_dia(db, hoy_lima())
+
+
+@router.get("/of-day")
+def ordenes_de_un_dia(fecha: date, db: Session = Depends(get_db)):
+    """Órdenes de cualquier fecha (historial de movimiento en el admin)."""
+    return _ordenes_del_dia(db, fecha)
+
+
+def _ordenes_del_dia(db: Session, fecha: date) -> dict:
     ordenes = db.scalars(
         select(Orden)
         .options(selectinload(Orden.items))
-        .where(Orden.fecha == hoy_lima())
+        .where(Orden.fecha == fecha)
         .order_by(Orden.numero_orden_dia)
     ).all()
+    mapa = _mapa_mesas(db)
     total_vendido = round(sum(o.total for o in ordenes if o.estado != "anulada"), 2)
     return {
-        "ordenes": [_orden_a_dict(o) for o in ordenes],
+        "fecha": fecha.isoformat(),
+        "ordenes": [_orden_a_dict(o, mapa) for o in ordenes],
         "total_vendido": total_vendido,
     }
 
@@ -147,7 +193,7 @@ def pendientes_de_impresion(db: Session = Depends(get_db)):
     ).all()
     config = leer_config(db)
     return {
-        "ordenes": [_orden_a_dict(o) for o in ordenes],
+        "ordenes": [_orden_a_dict(o, _mapa_mesas(db)) for o in ordenes],
         "local": {
             "nombre": config["nombre_local"],
             "direccion": config["direccion"],
@@ -210,6 +256,31 @@ def cambiar_estado(orden_id: int, payload: EstadoIn, db: Session = Depends(get_d
     orden.estado = payload.estado
     db.commit()
     return {"id": orden.id, "estado": orden.estado}
+
+
+class MesasIn(BaseModel):
+    mesa_ids: list[int] = Field(default_factory=list, max_length=10)
+
+
+@router.patch("/{orden_id}/mesas")
+def asignar_mesas(orden_id: int, payload: MesasIn, db: Session = Depends(get_db)):
+    """Asigna (o cambia) las mesas de un ticket. Varias = combinadas.
+    Lista vacía = quitar la asignación."""
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if orden.estado == "anulada":
+        raise HTTPException(status_code=409, detail="Una orden anulada no lleva mesa")
+    _validar_mesas(db, payload.mesa_ids)
+    orden.mesa_ids = json.dumps(payload.mesa_ids)
+    orden.mesa_liberada = False  # re-asignar re-ocupa
+    db.commit()
+    mapa = _mapa_mesas(db)
+    return {
+        "id": orden.id,
+        "mesa_ids": payload.mesa_ids,
+        "mesas": [mapa.get(i, f"#{i}") for i in payload.mesa_ids],
+    }
 
 
 METODOS_PAGO = ["efectivo", "tarjeta", "yape"]

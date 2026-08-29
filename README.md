@@ -12,6 +12,13 @@ cocina. **El pago se hace en la caja física**, mostrando el ticket.
   cierre de caja**: fondo inicial al abrir, conteo al cerrar, y la diferencia se cuadra
   SOLO contra el efectivo esperado (tarjeta y Yape se reportan aparte). Una orden sin
   método registrado se asume efectivo.
+- **Mesas**: se configuran en Admin → Configuración; la caja asigna tickets a mesas (varias
+  juntas = **combinadas**), ve la ocupación en vivo y las **libera** cuando el grupo se va.
+  La mesa sale en el ticket y en la tarjeta de cocina.
+- **Candado de apertura**: por defecto no se registran ventas hasta abrir la caja con su
+  fondo inicial (la terminal avisa y se habilita sola; se puede desactivar en Configuración).
+- **Historial**: en Admin → Órdenes eliges cualquier fecha, y el Resumen muestra los
+  cierres de caja de los últimos 30 días.
 - **Insumos y kardex** (Admin → Insumos): catálogo de insumos con stock y costo promedio,
   recetas por plato (con costo por porción y margen), compras, mermas, ajustes por conteo
   y **consumo automático por venta**: cada orden descuenta insumos según la receta, y

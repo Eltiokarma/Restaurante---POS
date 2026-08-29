@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from .db import BACKEND_DIR, Base, engine
-from .routes import admin, caja, cancellations, config, insumos, menu, orders, stats, voice
+from .routes import admin, caja, cancellations, config, insumos, menu, mesas, orders, stats, voice
 from .services.backup import ciclo_backup_automatico
 
 
@@ -57,6 +57,14 @@ def _migrar(engine_) -> None:
         columnas_movs = [fila[1] for fila in conn.execute(text("PRAGMA table_info(movimientos_insumo)"))]
         if columnas_movs and "orden_id" not in columnas_movs:
             conn.execute(text("ALTER TABLE movimientos_insumo ADD COLUMN orden_id INTEGER"))
+            conn.commit()
+        if columnas and "mesa_ids" not in columnas:
+            conn.execute(text("ALTER TABLE ordenes ADD COLUMN mesa_ids TEXT NOT NULL DEFAULT '[]'"))
+            conn.commit()
+        if columnas and "mesa_liberada" not in columnas:
+            conn.execute(text(
+                "ALTER TABLE ordenes ADD COLUMN mesa_liberada BOOLEAN NOT NULL DEFAULT 0"
+            ))
             conn.commit()
 
 @asynccontextmanager
@@ -133,6 +141,7 @@ app.include_router(stats.router)
 app.include_router(caja.router)
 app.include_router(voice.router)
 app.include_router(insumos.router)
+app.include_router(mesas.router)
 
 
 @app.get("/api/health")

@@ -70,6 +70,17 @@
 - [x] **Kardex**: compras (recalculan costo promedio), mermas, ajustes por conteo físico y
       **consumo automático por venta** según la receta (anular una orden devuelve el
       stock). Stock negativo visible en rojo = vendiste más de lo que el kardex tenía.
+- [x] **Mesas**: configuración en admin (crear/renombrar/desactivar), asignación de tickets
+      a mesas desde caja (al crear o después), **combinar** mesas (un ticket con varias),
+      **liberar** (libera el ticket completo, combinadas juntas), panel de ocupación en
+      caja, insignia en cocina y línea "MESA" en el ticket. Ocupación calculada desde las
+      órdenes del día (anular desocupa).
+- [x] **Candado de apertura**: con `exigir_caja_abierta` (default encendido, toggle en
+      Configuración) no se registran ventas hasta abrir la caja con su fondo — la terminal
+      muestra "aún estamos abriendo la caja" y se habilita sola; el backend rechaza con 409
+      como red de seguridad.
+- [x] **Movimiento de todos los días**: selector de fecha en Admin → Órdenes
+      (`GET /api/orders/of-day`) e historial de cierres de caja (últimos 30) en el Resumen.
 - [ ] **Despliegue en Railway** (guía lista en el README): crear el proyecto con la cuenta
       del dueño, variables (`ADMIN_PASSWORD`, `PIN_LOCAL`), volumen en `/data` y dominio.
 - [ ] Kardex fase 2 (cuando se use en serio): reporte de consumo semanal, alertas de stock
