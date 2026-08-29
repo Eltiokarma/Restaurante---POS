@@ -77,6 +77,18 @@ class EstadoIn(BaseModel):
     estado: str
 
 
+def _segundos_desde_anulacion(orden: Orden) -> float | None:
+    """Segundos desde que se anuló, calculados en el servidor (cocina
+    muestra el cintillo "no preparar" los primeros 60 s). None si no está
+    anulada o si es una anulación vieja sin timestamp."""
+    if orden.estado != "anulada" or orden.anulada_en is None:
+        return None
+    momento = orden.anulada_en
+    if momento.tzinfo is None:  # SQLite guarda naive: es hora de Lima
+        momento = momento.replace(tzinfo=LIMA)
+    return max(0.0, (ahora_lima() - momento).total_seconds())
+
+
 def _minutos_espera(orden: Orden) -> float:
     """Minutos desde que se creó la orden, calculados en el servidor para no
     depender del reloj ni la zona horaria del dispositivo de cocina."""
@@ -138,6 +150,7 @@ def _orden_a_dict(orden: Orden, mapa_mesas: dict[int, str] | None = None) -> dic
         "mesas": [mapa_mesas.get(i, f"#{i}") for i in ids_mesa],
         "mesa_liberada": orden.mesa_liberada,
         "minutos_espera": round(_minutos_espera(orden), 1),
+        "anulada_hace_seg": _segundos_desde_anulacion(orden),
         # Solo la venta a la carta: los platos de un menú van agrupados en
         # "menus" (cocina y ticket muestran el menú como UN bloque)
         "items": [
@@ -355,8 +368,10 @@ def cambiar_estado(orden_id: int, payload: EstadoIn, db: Session = Depends(get_d
 
     if payload.estado == "anulada" and orden.estado != "anulada":
         revertir_por_orden(db, orden)
+        orden.anulada_en = ahora_lima()  # cocina muestra "no preparar" 60 s
     elif payload.estado != "anulada" and orden.estado == "anulada":
         consumir_por_orden(db, orden)
+        orden.anulada_en = None
 
     orden.estado = payload.estado
     # Avanzar la orden completa arrastra todos sus ítems (el estado de la

@@ -75,6 +75,19 @@ def _a_dict(registro: CierreCaja | None, ventas: dict) -> dict:
             != round(registro.total_sistema or 0.0, 2),
         })
 
+    # Descuadre con signo y magnitud SEPARADOS (§4): el cliente lo muestra
+    # como cifra grande sin reconstruir el signo
+    descuadre = None
+    if registro.diferencia is not None:
+        descuadre = {
+            "tipo": (
+                "exacta" if registro.diferencia == 0
+                else "sobra" if registro.diferencia > 0
+                else "falta"
+            ),
+            "monto": round(abs(registro.diferencia), 2),
+        }
+
     return {
         **base,
         "abierta": not cerrada,
@@ -86,6 +99,7 @@ def _a_dict(registro: CierreCaja | None, ventas: dict) -> dict:
         "monto_contado": registro.monto_contado,
         "total_sistema": registro.total_sistema,
         "diferencia": registro.diferencia,
+        "descuadre": descuadre,
         "notas": registro.notas,
     }
 

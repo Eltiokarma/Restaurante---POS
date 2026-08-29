@@ -2896,6 +2896,124 @@ select:focus-visible {
   padding-left: 12px;
 }
 
+/* ---------- Menores §4: cintillo, descuadre grande, fotos ---------- */
+
+/* Orden anulada: 60 segundos en cocina con "no preparar" */
+.tarjeta-anulada {
+  border-left-color: var(--aji);
+  opacity: 0.92;
+}
+
+.cintillo-anulada {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--aji) 0 14px,
+    var(--aji-hondo) 14px 28px
+  );
+  border-radius: var(--r-chico);
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+
+/* Descuadre del cierre como cifra grande (signo por texto y forma) */
+.descuadre-grande {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 16px;
+  border-radius: var(--r-chico);
+  flex-shrink: 0;
+}
+
+.descuadre-etiqueta {
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.descuadre-cifra {
+  font-family: var(--fuente-display);
+  font-size: 2.1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.descuadre-exacta {
+  background: var(--culantro-tenue);
+  color: var(--culantro-hondo);
+  box-shadow: inset 0 0 0 2px var(--culantro);
+}
+
+.descuadre-sobra {
+  background: var(--papel-hondo);
+  color: var(--tinta);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+}
+
+.descuadre-falta {
+  background: var(--aji-tenue);
+  color: var(--aji-hondo);
+  box-shadow: inset 0 0 0 2px var(--aji);
+}
+
+/* Foto del plato en la tarjeta de la terminal/caja: banda superior a
+   sangre completa; nombre y botones quedan debajo como siempre */
+.tarjeta-plato.con-foto {
+  flex-wrap: wrap;
+  overflow: hidden;
+}
+
+.tarjeta-plato-foto {
+  /* Compensa el padding de la tarjeta (18px 20px) para ir de borde a borde */
+  flex: 1 1 100%;
+  width: calc(100% + 40px);
+  margin: -18px -20px 4px;
+  height: 132px;
+  object-fit: cover;
+  display: block;
+}
+
+/* Celda de foto en Admin → Menú del día */
+.celda-foto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-foto {
+  width: 52px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--linea-fuerte);
+}
+
+.boton-subir-foto {
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--papel-hondo);
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+  white-space: nowrap;
+}
+
+.nota-foto {
+  font-size: 0.82rem;
+  color: var(--tinta-suave);
+}
+
 /* ---------- Cocina por bulks (§3): tachar desde "Por salir" ---------- */
 
 /* El chip de "Por salir" ahora es un botón tachable */

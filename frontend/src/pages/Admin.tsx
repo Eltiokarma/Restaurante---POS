@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, NOMBRE_CATEGORIA } from '../api'
+import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA } from '../api'
+import { IconoEngranaje } from '../components/Iconos'
 import type { CajaEstado, ConfigOut, DatosLocal, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
@@ -12,6 +13,7 @@ interface PlatoEditable {
   precio: string // como texto mientras se edita
   activo_hoy: boolean
   sale_al_momento: boolean
+  foto: string | null
   sinonimos: string[]
 }
 
@@ -26,7 +28,7 @@ export function Admin() {
   return (
     <div className="pantalla-admin">
       <header className="admin-cabecera">
-        <h1>⚙️ Administración</h1>
+        <h1><IconoEngranaje tam={26} /> Administración</h1>
         <nav className="admin-tabs">
           <button className={tab === 'resumen' ? 'activa' : ''} onClick={() => setTab('resumen')}>Resumen</button>
           <button className={tab === 'menu' ? 'activa' : ''} onClick={() => setTab('menu')}>Menú del día</button>
@@ -87,7 +89,7 @@ function AdminLogin({ onOk }: { onOk: () => void }) {
   return (
     <div className="pantalla-admin admin-login">
       <form onSubmit={entrar} className="login-caja">
-        <h1>⚙️ Administración</h1>
+        <h1><IconoEngranaje tam={26} /> Administración</h1>
         <input
           type="password"
           placeholder="Contraseña"
@@ -327,6 +329,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
     precio: p.precio.toFixed(2),
     activo_hoy: p.activo_hoy,
     sale_al_momento: p.sale_al_momento ?? false,
+    foto: p.foto ?? null,
     sinonimos: p.sinonimos ?? [],
   })
 
@@ -350,7 +353,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
   const agregar = () => {
     setPlatos((prev) => [
       ...prev,
-      { nombre: '', categoria: 'fondo', precio: '', activo_hoy: true, sale_al_momento: false, sinonimos: [] },
+      { nombre: '', categoria: 'fondo', precio: '', activo_hoy: true, sale_al_momento: false, foto: null, sinonimos: [] },
     ])
   }
 
@@ -432,6 +435,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
         <thead>
           <tr>
             <th>Plato</th>
+            <th title="Se ve en la tarjeta de la terminal: sube la conversión del kiosko">Foto</th>
             <th>Categoría</th>
             <th>Precio S/</th>
             <th>Sinónimos (para la voz)</th>
@@ -445,6 +449,13 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
             <tr key={p.id ?? `nuevo-${idx}`}>
               <td>
                 <input value={p.nombre} onChange={(e) => editar(idx, { nombre: e.target.value })} placeholder="Nombre del plato" />
+              </td>
+              <td>
+                <CeldaFoto
+                  plato={p}
+                  onCambio={(foto) => editar(idx, { foto })}
+                  onError={(e) => setError(manejarError(e, onSesionVencida))}
+                />
               </td>
               <td>
                 <select value={p.categoria} onChange={(e) => editar(idx, { categoria: e.target.value })}>
@@ -831,6 +842,70 @@ function ChipsSinonimos({
         }}
         onBlur={agregar}
       />
+    </div>
+  )
+}
+
+// Subir/cambiar/quitar la foto de un plato. La foto se guarda al instante
+// (no espera al botón "Guardar menú"): vive en el backend, no en la tabla.
+function CeldaFoto({
+  plato,
+  onCambio,
+  onError,
+}: {
+  plato: PlatoEditable
+  onCambio: (foto: string | null) => void
+  onError: (e: unknown) => void
+}) {
+  const [subiendo, setSubiendo] = useState(false)
+
+  if (plato.id === undefined) {
+    return <span className="nota-foto">guarda primero</span>
+  }
+  const platoId = plato.id
+
+  return (
+    <div className="celda-foto">
+      {plato.foto && <img className="mini-foto" src={urlFotoPlato(plato.foto)} alt="" />}
+      <label className="boton-subir-foto">
+        {subiendo ? 'Subiendo…' : plato.foto ? 'Cambiar' : '📷 Subir'}
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          hidden
+          disabled={subiendo}
+          onChange={async (e) => {
+            const archivo = e.target.files?.[0]
+            e.target.value = ''
+            if (!archivo) return
+            setSubiendo(true)
+            try {
+              const r = await api.subirFotoPlato(platoId, archivo)
+              onCambio(r.foto)
+            } catch (err) {
+              onError(err)
+            } finally {
+              setSubiendo(false)
+            }
+          }}
+        />
+      </label>
+      {plato.foto && (
+        <button
+          className="boton-quitar"
+          title="Quitar la foto"
+          onClick={async () => {
+            try {
+              await api.quitarFotoPlato(platoId)
+              onCambio(null)
+            } catch (err) {
+              onError(err)
+            }
+          }}
+        >
+          ✕
+        </button>
+      )}
     </div>
   )
 }
