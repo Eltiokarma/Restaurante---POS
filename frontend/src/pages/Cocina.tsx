@@ -101,10 +101,12 @@ export function Cocina() {
   const activas = ordenes.filter((o) => o.estado !== 'entregado' && o.estado !== 'anulada')
 
   // Resumen para cocinar por tandas: total por plato de lo que falta salir,
-  // con desglose por empaque (5× Lomo: 3 mesa · 2 táper)
+  // con desglose por empaque (5× Lomo: 3 mesa · 2 táper). Los menús suman
+  // sus platos ELEGIDOS (y extras), no el menú como bloque.
   const porSalir = new Map<string, { total: number; empaques: Map<string, number> }>()
   for (const o of activas) {
-    for (const item of o.items) {
+    const lineas = [...o.items, ...o.menus.flatMap((m) => m.items)]
+    for (const item of lineas) {
       const acumulado = porSalir.get(item.nombre) ?? { total: 0, empaques: new Map() }
       acumulado.total += item.cantidad
       acumulado.empaques.set(item.empaque, (acumulado.empaques.get(item.empaque) ?? 0) + item.cantidad)
@@ -176,14 +178,33 @@ export function Cocina() {
                 {orden.mesas.length > 0 && !orden.mesa_liberada && (
                   <span className="badge-mesa badge-servicio-cocina">🪑 {orden.mesas.join(' + ')}</span>
                 )}
-                {orden.items.length >= 2 && (
+                {orden.items.length + orden.menus.length >= 2 || orden.menus.length > 0 ? (
                   <span className="badge-servicio badge-servicio-cocina">
                     {orden.entrega === 'separado' ? '⏱ POR TIEMPOS' : '🍽 TODO JUNTO'}
                   </span>
-                )}
+                ) : null}
                 <span className="tarjeta-orden-hora">pedido a las {orden.hora.slice(0, 5)}</span>
               </div>
               <ul className="tarjeta-orden-items">
+                {orden.menus.map((menu, m) => (
+                  <li key={`menu-${m}`} className="item-menu-bloque">
+                    <span className="item-menu-titulo">
+                      <strong>{menu.cantidad} ×</strong> {menu.nombre}
+                    </span>
+                    <ul>
+                      {menu.items.map((item, i) => (
+                        <li key={i}>
+                          {item.cantidad} × {item.nombre}
+                          {item.es_extra && <span className="item-extra-tag">extra</span>}
+                          {item.empaque !== 'mesa' && (
+                            <span className="item-empaque">{NOMBRE_EMPAQUE[item.empaque]}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    {menu.nota && <div className="nota-cocina">⚠ {menu.nota}</div>}
+                  </li>
+                ))}
                 {orden.items.map((item, i) => (
                   <li key={i}>
                     <strong>{item.cantidad} ×</strong> {item.nombre}

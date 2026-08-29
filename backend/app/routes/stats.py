@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import requiere_admin
 from ..db import get_db
-from ..models import Cancelacion, Orden, OrdenItem, hoy_lima
+from ..models import Cancelacion, Orden, OrdenItem, OrdenMenu, hoy_lima
 
 router = APIRouter(
     prefix="/api/stats", tags=["stats"], dependencies=[Depends(requiere_admin)]
@@ -55,6 +55,24 @@ def _resumen(db: Session, desde: date, hasta: date) -> dict:
         {"nombre": nombre, "cantidad": int(cantidad), "total": round(total, 2)}
         for nombre, cantidad, total in filas
     ]
+
+    # Los menús encadenados también son ventas (su precio no está en los
+    # items: vive en orden_menus). Van a la misma lista, por nombre.
+    filas_menus = db.execute(
+        select(
+            OrdenMenu.nombre_snapshot,
+            func.sum(OrdenMenu.cantidad),
+            func.sum(OrdenMenu.cantidad * OrdenMenu.precio_snapshot),
+        )
+        .join(Orden, OrdenMenu.orden_id == Orden.id)
+        .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada")
+        .group_by(OrdenMenu.nombre_snapshot)
+    ).all()
+    ventas_por_plato += [
+        {"nombre": nombre, "cantidad": int(cantidad), "total": round(total, 2)}
+        for nombre, cantidad, total in filas_menus
+    ]
+    ventas_por_plato.sort(key=lambda v: v["cantidad"], reverse=True)
 
     # Ventas por día (para el resumen semanal/histórico)
     por_dia: dict[str, dict] = {}
@@ -131,9 +149,11 @@ def exportar_csv(
     hasta = hasta or desde
     _validar_rango(desde, hasta)
 
-    filas = db.execute(
-        select(Orden, OrdenItem)
-        .join(OrdenItem, OrdenItem.orden_id == Orden.id)
+    from sqlalchemy.orm import selectinload
+
+    ordenes = db.scalars(
+        select(Orden)
+        .options(selectinload(Orden.items), selectinload(Orden.menus))
         .where(Orden.fecha >= desde, Orden.fecha <= hasta)
         .order_by(Orden.fecha, Orden.numero_orden_dia)
     ).all()
@@ -143,10 +163,11 @@ def exportar_csv(
     writer = csv.writer(buffer, delimiter=";")
     writer.writerow([
         "fecha", "orden", "hora", "estado", "servicio", "entrega", "origen", "pago",
-        "plato", "empaque", "nota", "cantidad", "precio_unitario", "subtotal",
+        "plato", "menu", "empaque", "nota", "cantidad", "precio_unitario", "subtotal",
         "total_orden", "duracion_seg",
     ])
-    for orden, item in filas:
+
+    def fila(orden, plato, menu, empaque, nota, cantidad, precio):
         writer.writerow([
             orden.fecha.isoformat(),
             orden.numero_orden_dia,
@@ -156,15 +177,34 @@ def exportar_csv(
             orden.entrega,
             orden.origen,
             orden.metodo_pago or "",
-            item.nombre_snapshot,
-            item.empaque,
-            item.nota,
-            item.cantidad,
-            f"{item.precio_snapshot:.2f}",
-            f"{item.precio_snapshot * item.cantidad:.2f}",
+            plato,
+            menu,
+            empaque,
+            nota,
+            cantidad,
+            f"{precio:.2f}",
+            f"{precio * cantidad:.2f}",
             f"{orden.total:.2f}",
             orden.duracion_seg if orden.duracion_seg is not None else "",
         ])
+
+    for orden in ordenes:
+        # Cada menú vendido: su línea (donde vive el precio) y debajo sus
+        # platos elegidos y extras, con la columna "menu" que los agrupa
+        for om in orden.menus:
+            fila(orden, om.nombre_snapshot, om.nombre_snapshot, "", om.nota,
+                 om.cantidad, om.precio_snapshot)
+            items_menu = [i for i in orden.items if i.orden_menu_id == om.id]
+            items_menu.sort(key=lambda i: (i.es_extra, i.tiempo_orden or 0))
+            for item in items_menu:
+                nombre = item.nombre_snapshot + (" (extra)" if item.es_extra else "")
+                fila(orden, nombre, om.nombre_snapshot, item.empaque, item.nota,
+                     item.cantidad, item.precio_snapshot)
+        for item in orden.items:
+            if item.orden_menu_id is not None:
+                continue
+            fila(orden, item.nombre_snapshot, "", item.empaque, item.nota,
+                 item.cantidad, item.precio_snapshot)
 
     nombre = (
         f"ventas-{desde.isoformat()}.csv"

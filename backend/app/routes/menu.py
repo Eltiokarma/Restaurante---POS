@@ -5,9 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from sqlalchemy.orm import selectinload
+
 from ..auth import requiere_admin
 from ..db import get_db
-from ..models import Plato, hoy_lima
+from ..models import MenuAlternativa, MenuPlantilla, MenuTiempo, Plato, hoy_lima
 
 router = APIRouter(prefix="/api/menu", tags=["menu"])
 
@@ -51,6 +53,56 @@ class MenuUpdate(BaseModel):
     platos: list[PlatoIn]
 
 
+def _menus_activos(db: Session) -> list[dict]:
+    """Menús encadenados vendibles hoy, con solo alternativas disponibles.
+
+    Un tiempo con UNA alternativa se informa como incluido (la terminal no
+    dibuja selector); un menú cuyo tiempo obligatorio quedó sin alternativas
+    (todo agotado) no se ofrece.
+    """
+    plantillas = db.scalars(
+        select(MenuPlantilla)
+        .options(selectinload(MenuPlantilla.tiempos).selectinload(MenuTiempo.alternativas))
+        .where(MenuPlantilla.activo_hoy == True)  # noqa: E712
+        .order_by(MenuPlantilla.precio, MenuPlantilla.nombre)
+    ).all()
+    platos = {p.id: p for p in db.scalars(select(Plato)).all()}
+    menus = []
+    for plantilla in plantillas:
+        tiempos = []
+        vendible = True
+        for tiempo in plantilla.tiempos:
+            alternativas = [
+                {
+                    "plato_id": a.plato_id,
+                    "nombre": platos[a.plato_id].nombre,
+                    "precio": platos[a.plato_id].precio,
+                    "recargo": a.recargo,
+                    "sale_al_momento": platos[a.plato_id].sale_al_momento,
+                }
+                for a in tiempo.alternativas
+                if a.plato_id in platos and platos[a.plato_id].activo_hoy
+            ]
+            if not alternativas and tiempo.obligatorio:
+                vendible = False
+                break
+            tiempos.append({
+                "orden": tiempo.orden,
+                "rotulo": tiempo.rotulo,
+                "obligatorio": tiempo.obligatorio,
+                "precio_extra": tiempo.precio_extra,
+                "alternativas": alternativas,
+            })
+        if vendible:
+            menus.append({
+                "id": plantilla.id,
+                "nombre": plantilla.nombre,
+                "precio": plantilla.precio,
+                "tiempos": tiempos,
+            })
+    return menus
+
+
 @router.get("/today")
 def menu_de_hoy(db: Session = Depends(get_db)):
     platos = db.scalars(
@@ -59,6 +111,7 @@ def menu_de_hoy(db: Session = Depends(get_db)):
     return {
         "categorias": CATEGORIAS,
         "platos": [PlatoOut.model_validate(p).model_dump() for p in platos],
+        "menus": _menus_activos(db),
     }
 
 
@@ -141,3 +194,121 @@ def menu_anterior(db: Session = Depends(get_db)):
         "fecha": ultima_fecha.isoformat(),
         "platos": [PlatoOut.model_validate(p).model_dump() for p in platos],
     }
+
+
+# ---------- Menús encadenados (plantillas) — admin ----------
+
+
+class AlternativaIn(BaseModel):
+    plato_id: int
+    recargo: float = Field(default=0.0, ge=0)
+
+
+class TiempoIn(BaseModel):
+    rotulo: str = Field(min_length=1, max_length=60)
+    obligatorio: bool = True
+    # Precio de UNA porción adicional pedida con el menú (0 = no se ofrece)
+    precio_extra: float = Field(default=0.0, ge=0)
+    alternativas: list[AlternativaIn] = Field(default_factory=list, max_length=30)
+
+
+class PlantillaIn(BaseModel):
+    id: int | None = None
+    nombre: str = Field(min_length=1, max_length=120)
+    precio: float = Field(gt=0)
+    activo_hoy: bool = True
+    tiempos: list[TiempoIn] = Field(min_length=1, max_length=6)
+
+
+class PlantillasUpdate(BaseModel):
+    plantillas: list[PlantillaIn]
+
+
+def _plantilla_a_dict(plantilla: MenuPlantilla, platos: dict[int, Plato]) -> dict:
+    return {
+        "id": plantilla.id,
+        "nombre": plantilla.nombre,
+        "precio": plantilla.precio,
+        "activo_hoy": plantilla.activo_hoy,
+        "tiempos": [
+            {
+                "orden": t.orden,
+                "rotulo": t.rotulo,
+                "obligatorio": t.obligatorio,
+                "precio_extra": t.precio_extra,
+                "alternativas": [
+                    {
+                        "plato_id": a.plato_id,
+                        "nombre": platos[a.plato_id].nombre if a.plato_id in platos else f"#{a.plato_id}",
+                        "recargo": a.recargo,
+                    }
+                    for a in t.alternativas
+                ],
+            }
+            for t in plantilla.tiempos
+        ],
+    }
+
+
+@router.get("/plantillas", dependencies=[Depends(requiere_admin)])
+def plantillas(db: Session = Depends(get_db)):
+    """Todas las plantillas del catálogo (activas o no), para el admin."""
+    lista = db.scalars(
+        select(MenuPlantilla)
+        .options(selectinload(MenuPlantilla.tiempos).selectinload(MenuTiempo.alternativas))
+        .where(MenuPlantilla.en_catalogo == True)  # noqa: E712
+        .order_by(MenuPlantilla.precio, MenuPlantilla.nombre)
+    ).all()
+    platos = {p.id: p for p in db.scalars(select(Plato)).all()}
+    return {"plantillas": [_plantilla_a_dict(p, platos) for p in lista]}
+
+
+@router.put("/plantillas", dependencies=[Depends(requiere_admin)])
+def guardar_plantillas(payload: PlantillasUpdate, db: Session = Depends(get_db)):
+    """Reemplaza las plantillas de menú (mismo criterio que el menú del día).
+
+    Con id se actualiza (los tiempos se reemplazan enteros: el histórico
+    vive en snapshots, no aquí); sin id se crea. Una plantilla del
+    catálogo que no venga en la lista se retira (en_catalogo = False).
+    """
+    ids_enviados: set[int] = set()
+    for p in payload.plantillas:
+        if p.id is not None:
+            plantilla = db.get(MenuPlantilla, p.id)
+            if plantilla is None:
+                continue
+            plantilla.nombre = p.nombre
+            plantilla.precio = round(p.precio, 2)
+            plantilla.activo_hoy = p.activo_hoy
+            plantilla.en_catalogo = True
+            plantilla.tiempos.clear()
+        else:
+            plantilla = MenuPlantilla(
+                nombre=p.nombre, precio=round(p.precio, 2),
+                activo_hoy=p.activo_hoy, en_catalogo=True,
+            )
+            db.add(plantilla)
+        for numero, t in enumerate(p.tiempos, start=1):
+            tiempo = MenuTiempo(
+                orden=numero,
+                rotulo=t.rotulo.strip(),
+                obligatorio=t.obligatorio,
+                precio_extra=round(t.precio_extra, 2),
+            )
+            for a in t.alternativas:
+                tiempo.alternativas.append(
+                    MenuAlternativa(plato_id=a.plato_id, recargo=round(a.recargo, 2))
+                )
+            plantilla.tiempos.append(tiempo)
+        db.flush()
+        ids_enviados.add(plantilla.id)
+
+    for plantilla in db.scalars(
+        select(MenuPlantilla).where(MenuPlantilla.en_catalogo == True)  # noqa: E712
+    ).all():
+        if plantilla.id not in ids_enviados:
+            plantilla.en_catalogo = False
+            plantilla.activo_hoy = False
+
+    db.commit()
+    return plantillas(db)

@@ -79,6 +79,16 @@ def _migrar(engine_) -> None:
                 "ALTER TABLE ordenes ADD COLUMN entrega TEXT NOT NULL DEFAULT 'junto'"
             ))
             conn.commit()
+        # Menú encadenado (§1): las tablas nuevas las crea create_all; aquí
+        # solo las columnas de orden_items. NULL = a la carta, que es
+        # exactamente lo que eran las órdenes históricas.
+        if columnas_items and "orden_menu_id" not in columnas_items:
+            conn.execute(text("ALTER TABLE orden_items ADD COLUMN orden_menu_id INTEGER"))
+            conn.execute(text("ALTER TABLE orden_items ADD COLUMN tiempo_orden INTEGER"))
+            conn.execute(text(
+                "ALTER TABLE orden_items ADD COLUMN es_extra BOOLEAN NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
 
 @asynccontextmanager
 async def _ciclo_de_vida(app_: FastAPI):

@@ -11,7 +11,12 @@ from sqlalchemy import update
 from ..db import get_db
 from ..models import LIMA, CierreCaja, Config, Mesa, Orden, ahora_lima, hoy_lima
 from ..routes.config import leer_config
-from ..services.orders import PlatoNoDisponible, crear_orden
+from ..services.orders import (
+    EleccionInvalida,
+    EntregaObligadaSeparado,
+    PlatoNoDisponible,
+    crear_orden,
+)
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -33,8 +38,29 @@ TIPOS_SERVICIO = ["sala", "llevar", "mixto"]
 EMPAQUES = ["mesa", "taper", "bolsa", "lonchera"]
 
 
+class MenuExtraIn(BaseModel):
+    """Porción adicional de un tiempo pedida junto al menú ("una entrada
+    más"): se cobra al precio_extra configurado en el tiempo."""
+
+    tiempo_orden: int
+    plato_id: int
+    cantidad: int = Field(gt=0, le=50)
+
+
+class MenuIn(BaseModel):
+    menu_id: int
+    cantidad: int = Field(gt=0, le=50)
+    # {tiempo_orden: plato_id}; un tiempo con una sola alternativa se
+    # completa solo en el backend (viene incluido, no se elige)
+    elecciones: dict[int, int] = Field(default_factory=dict)
+    extras: list[MenuExtraIn] = Field(default_factory=list, max_length=10)
+    empaque: str = "mesa"
+    nota: str = Field(default="", max_length=150)
+
+
 class OrdenIn(BaseModel):
-    items: list[ItemIn] = Field(min_length=1)
+    items: list[ItemIn] = Field(default_factory=list)
+    menus: list[MenuIn] = Field(default_factory=list, max_length=20)
     # Medido por la terminal: segundos desde que empezó el pedido hasta
     # confirmar. Opcional; se ignora fuera de un rango razonable.
     duracion_seg: int | None = Field(default=None, ge=0, le=3600)
@@ -112,17 +138,45 @@ def _orden_a_dict(orden: Orden, mapa_mesas: dict[int, str] | None = None) -> dic
         "mesas": [mapa_mesas.get(i, f"#{i}") for i in ids_mesa],
         "mesa_liberada": orden.mesa_liberada,
         "minutos_espera": round(_minutos_espera(orden), 1),
+        # Solo la venta a la carta: los platos de un menú van agrupados en
+        # "menus" (cocina y ticket muestran el menú como UN bloque)
         "items": [
-            {
-                "nombre": i.nombre_snapshot,
-                "precio": i.precio_snapshot,
-                "cantidad": i.cantidad,
-                "empaque": i.empaque,
-                "nota": i.nota,
-                "subtotal": round(i.precio_snapshot * i.cantidad, 2),
-            }
-            for i in orden.items
+            _item_a_dict(i) for i in orden.items if i.orden_menu_id is None
         ],
+        "menus": [_orden_menu_a_dict(orden, om) for om in orden.menus],
+    }
+
+
+def _item_a_dict(item) -> dict:
+    return {
+        "nombre": item.nombre_snapshot,
+        "precio": item.precio_snapshot,
+        "cantidad": item.cantidad,
+        "empaque": item.empaque,
+        "nota": item.nota,
+        "subtotal": round(item.precio_snapshot * item.cantidad, 2),
+    }
+
+
+def _orden_menu_a_dict(orden: Orden, om) -> dict:
+    """Un menú vendido con sus platos (elegidos y extras) indentados."""
+    items_menu = [i for i in orden.items if i.orden_menu_id == om.id]
+    items_menu.sort(key=lambda i: (i.es_extra, i.tiempo_orden or 0))
+    return {
+        "nombre": om.nombre_snapshot,
+        "precio": om.precio_snapshot,
+        "cantidad": om.cantidad,
+        "nota": om.nota,
+        "items": [
+            {**_item_a_dict(i), "tiempo_orden": i.tiempo_orden, "es_extra": i.es_extra}
+            for i in items_menu
+        ],
+        # Precio del menú × cantidad + recargos y porciones extra
+        "subtotal": round(
+            om.precio_snapshot * om.cantidad
+            + sum(i.precio_snapshot * i.cantidad for i in items_menu),
+            2,
+        ),
     }
 
 
@@ -133,12 +187,19 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     Devuelve el número de orden del día y los datos del local para imprimir
     el ticket.
     """
+    if not payload.items and not payload.menus:
+        raise HTTPException(status_code=422, detail="La orden no tiene items")
     for item in payload.items:
         if item.empaque not in EMPAQUES:
             raise HTTPException(status_code=422, detail=f"Empaque inválido: {item.empaque}")
+    for menu in payload.menus:
+        if menu.empaque not in EMPAQUES:
+            raise HTTPException(status_code=422, detail=f"Empaque inválido: {menu.empaque}")
     if payload.origen not in ("tactil", "voz", "mixto"):
         raise HTTPException(status_code=422, detail=f"Origen inválido: {payload.origen}")
     _validar_mesas(db, payload.mesa_ids)
+    # Los platos elegidos del menú los valida crear_orden (ahí recién se
+    # resuelven las elecciones); aquí solo la venta a la carta
     _validar_entrega(db, payload.entrega, [i.plato_id for i in payload.items])
 
     # Candado: sin apertura de caja (fondo inicial) no se vende
@@ -154,16 +215,27 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
         orden = crear_orden(
             db, [i.model_dump() for i in payload.items],
             payload.duracion_seg, payload.origen,
+            menus=[m.model_dump() for m in payload.menus],
+            entrega=payload.entrega,
         )
     except PlatoNoDisponible as e:
         raise HTTPException(status_code=409, detail=f"'{e.nombre}' ya no está disponible")
+    except EntregaObligadaSeparado as e:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{e.nombre} se prepara al momento y no puede salir todo junto: "
+                "elige entrega \"Separado por tiempos\"."
+            ),
+        )
+    except EleccionInvalida as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
     # Mesas asignadas al crear (la caja las manda al sentar al grupo)
     if payload.mesa_ids:
         orden.mesa_ids = json.dumps(payload.mesa_ids)
-    orden.entrega = payload.entrega
 
     # En modo "terminal" la propia pantalla del cliente imprime el ticket;
     # en modo "estacion" la orden queda en cola para /ticketera.
@@ -196,7 +268,7 @@ def ordenes_de_un_dia(fecha: date, db: Session = Depends(get_db)):
 def _ordenes_del_dia(db: Session, fecha: date) -> dict:
     ordenes = db.scalars(
         select(Orden)
-        .options(selectinload(Orden.items))
+        .options(selectinload(Orden.items), selectinload(Orden.menus))
         .where(Orden.fecha == fecha)
         .order_by(Orden.numero_orden_dia)
     ).all()
@@ -215,7 +287,7 @@ def pendientes_de_impresion(db: Session = Depends(get_db)):
     todavía no tienen ticket impreso, más los datos del local."""
     ordenes = db.scalars(
         select(Orden)
-        .options(selectinload(Orden.items))
+        .options(selectinload(Orden.items), selectinload(Orden.menus))
         .where(
             Orden.fecha == hoy_lima(),
             Orden.impreso == False,  # noqa: E712

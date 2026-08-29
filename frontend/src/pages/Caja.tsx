@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles } from '../api'
-import type { CajaEstado, ConfigOut, DatosLocal, Entrega, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
+import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, subtotalMenu } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, Entrega, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
+import { ArmadoMenu, describirMenu } from '../components/ArmadoMenu'
 import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket } from '../components/Ticket'
 import { useCarrito } from '../hooks/useCarrito'
@@ -20,6 +21,8 @@ const SIGUIENTE_ESTADO: Record<string, string> = {
  */
 export function Caja() {
   const [platos, setPlatos] = useState<Plato[]>([])
+  const [menusHoy, setMenusHoy] = useState<MenuHoy[]>([])
+  const [armandoMenu, setArmandoMenu] = useState<MenuHoy | null>(null)
   const [config, setConfig] = useState<ConfigOut | null>(null)
   const [ordenes, setOrdenes] = useState<OrdenOut[]>([])
   const [totalVendido, setTotalVendido] = useState(0)
@@ -57,7 +60,8 @@ export function Caja() {
     try {
       const data = await api.menuHoy()
       setPlatos(data.platos)
-      sincronizarConMenu(data.platos)
+      setMenusHoy(data.menus)
+      sincronizarConMenu(data.platos, data.menus)
     } catch {
       /* mantiene el último menú conocido */
     }
@@ -192,6 +196,21 @@ export function Caja() {
 
   const imprimeAqui = config?.modo_impresion !== 'estacion'
 
+  // Igual que en la terminal: un plato al momento (también dentro de un
+  // menú) obliga a registrar con entrega separada; la caja puede corregirla
+  const hayAlMomento =
+    carrito.items.some((i) => i.plato.sale_al_momento) ||
+    carrito.menus.some((m) =>
+      m.menu.tiempos
+        .flatMap((t) => t.alternativas)
+        .some(
+          (a) =>
+            a.sale_al_momento &&
+            (Object.values(m.elecciones).includes(a.plato_id) ||
+              m.extras.some((e) => e.plato_id === a.plato_id)),
+        ),
+    )
+
   const registrandoRef = useRef(false)
   const registrar = async () => {
     if (registrandoRef.current || carrito.totalItems === 0) return
@@ -207,6 +226,11 @@ export function Caja() {
         undefined,
         'tactil',
         mesasNuevoPedido,
+        hayAlMomento ? 'separado' : 'junto',
+        carrito.menus.map((m) => ({
+          menu_id: m.menu.id, cantidad: m.cantidad, elecciones: m.elecciones,
+          extras: m.extras, empaque: m.empaque, nota: m.nota.trim(),
+        })),
       )
       carrito.vaciar()
       setMesasNuevoPedido([])
@@ -406,7 +430,27 @@ export function Caja() {
       <div className="caja-columnas">
         <section className="caja-nuevo">
           <h2>Nuevo pedido</h2>
-          {platos.length === 0 && <p className="nota-admin">No hay menú cargado (Admin → Menú del día).</p>}
+          {platos.length === 0 && menusHoy.length === 0 && (
+            <p className="nota-admin">No hay menú cargado (Admin → Menú del día).</p>
+          )}
+          {menusHoy.length > 0 && (
+            <div>
+              <h3 className="titulo-categoria">Menús</h3>
+              <div className="combo-lista">
+                {menusHoy.map((m) => (
+                  <div className="combo" key={m.id}>
+                    <div className="combo-cabecera">
+                      <span className="combo-titulo">{m.nombre}</span>
+                      <span className="combo-precio">{soles(m.precio)}</span>
+                    </div>
+                    <button className="boton-armar" onClick={() => setArmandoMenu(m)}>
+                      🍽 ARMAR MENÚ
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {categorias.map((cat) => (
             <div key={cat}>
               <h3 className="titulo-categoria">{NOMBRE_CATEGORIA[cat] ?? cat}</h3>
@@ -424,9 +468,47 @@ export function Caja() {
               </div>
             </div>
           ))}
-          {carrito.items.length > 0 && (
+          {(carrito.items.length > 0 || carrito.menus.length > 0) && (
             <div className="caja-carrito">
               <h3 className="titulo-categoria">Pedido en armado</h3>
+              {carrito.menus.map((m, idx) => (
+                <div className="caja-carrito-item" key={`menu-${idx}`}>
+                  <span className="caja-carrito-nombre">
+                    {m.cantidad} × {m.menu.nombre} — {soles(subtotalMenu(m))}
+                  </span>
+                  <div className="linea-menu-detalle">{describirMenu(m)}</div>
+                  <div className="empaques-linea">
+                    <button
+                      className="boton-servicio boton-empaque boton-empaque-caja"
+                      onClick={() => carrito.cambiarCantidadMenu(idx, -1)}
+                    >
+                      −1
+                    </button>
+                    <button
+                      className="boton-servicio boton-empaque boton-empaque-caja"
+                      onClick={() => carrito.cambiarCantidadMenu(idx, 1)}
+                    >
+                      +1
+                    </button>
+                    {EMPAQUES.map((e) => (
+                      <button
+                        key={e}
+                        className={`boton-servicio boton-empaque boton-empaque-caja ${m.empaque === e ? 'servicio-activo' : ''}`}
+                        onClick={() => carrito.cambiarEmpaqueMenu(idx, e)}
+                      >
+                        {NOMBRE_EMPAQUE[e]}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    className="input-nota-plato input-nota-caja"
+                    placeholder="📝 sin frijoles, con huevo frito…"
+                    maxLength={150}
+                    value={m.nota}
+                    onChange={(e) => carrito.cambiarNotaMenu(idx, e.target.value)}
+                  />
+                </div>
+              ))}
               {carrito.items.map((i) => (
                 <div className="caja-carrito-item" key={i.plato.id}>
                   <span className="caja-carrito-nombre">
@@ -514,6 +596,19 @@ export function Caja() {
                   <span className="caja-orden-total">{soles(o.total)}</span>
                 </div>
                 <div className="caja-orden-items">
+                  {o.menus.length > 0 && (
+                    <span>
+                      {o.menus
+                        .map(
+                          (m) =>
+                            `${m.cantidad}× ${m.nombre} (${m.items
+                              .map((i) => (i.es_extra ? `+${i.cantidad} ${i.nombre} extra` : i.nombre))
+                              .join(' + ')})`,
+                        )
+                        .join(', ')}
+                      {o.items.length > 0 && ', '}
+                    </span>
+                  )}
                   {o.items.map((i, idx) => (
                     <span key={idx}>
                       {idx > 0 && ', '}
@@ -522,7 +617,7 @@ export function Caja() {
                     </span>
                   ))}
                 </div>
-                {o.estado !== 'anulada' && o.items.length >= 2 && (
+                {o.estado !== 'anulada' && (o.items.length + o.menus.length >= 2 || o.menus.length > 0) && (
                   <div className="caja-orden-cobro">
                     <span className="cobro-etiqueta">Sale:</span>
                     {(['junto', 'separado'] as Entrega[]).map((e) => (
@@ -599,6 +694,17 @@ export function Caja() {
           </div>
         </section>
       </div>
+
+      {armandoMenu && (
+        <ArmadoMenu
+          menu={armandoMenu}
+          onAgregar={(linea) => {
+            carrito.agregarMenu(linea)
+            setArmandoMenu(null)
+          }}
+          onCerrar={() => setArmandoMenu(null)}
+        />
+      )}
 
       {ticket && (
         <div className="solo-impresion">

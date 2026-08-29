@@ -38,6 +38,58 @@ class Plato(Base):
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
 
+class MenuPlantilla(Base):
+    """El menú como unidad de venta: "Menú del día S/ 11". El precio vive
+    AQUÍ, no en los platos que lo componen (ver docs/ESPEC-FONDA-BACKEND.md §1)."""
+
+    __tablename__ = "menu_plantillas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(120), nullable=False)
+    precio: Mapped[float] = mapped_column(Float, nullable=False)
+    activo_hoy: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    en_catalogo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
+
+    tiempos: Mapped[list["MenuTiempo"]] = relationship(
+        back_populates="menu", cascade="all, delete-orphan", order_by="MenuTiempo.orden"
+    )
+
+
+class MenuTiempo(Base):
+    """Un eslabón de la cadena del menú: entrada/sopa → segundo → refresco."""
+
+    __tablename__ = "menu_tiempos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    menu_id: Mapped[int] = mapped_column(ForeignKey("menu_plantillas.id"), nullable=False)
+    orden: Mapped[int] = mapped_column(Integer, nullable=False)  # 1 entrada, 2 segundo, 3 refresco…
+    rotulo: Mapped[str] = mapped_column(String(60), nullable=False)  # "Entrada o sopa"
+    obligatorio: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Precio de UNA porción ADICIONAL de este tiempo pedida junto con el
+    # menú ("una entrada más" a S/ 3 aunque dentro del menú vaya a S/ 1).
+    # 0 = no se ofrecen porciones extra de este tiempo.
+    precio_extra: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
+    menu: Mapped[MenuPlantilla] = relationship(back_populates="tiempos")
+    alternativas: Mapped[list["MenuAlternativa"]] = relationship(
+        back_populates="tiempo", cascade="all, delete-orphan"
+    )
+
+
+class MenuAlternativa(Base):
+    """Un plato que puede ocupar un tiempo del menú (con recargo opcional)."""
+
+    __tablename__ = "menu_alternativas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tiempo_id: Mapped[int] = mapped_column(ForeignKey("menu_tiempos.id"), nullable=False)
+    plato_id: Mapped[int] = mapped_column(ForeignKey("platos.id"), nullable=False)
+    recargo: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # 0 = sin costo extra
+
+    tiempo: Mapped[MenuTiempo] = relationship(back_populates="alternativas")
+
+
 class Orden(Base):
     __tablename__ = "ordenes"
 
@@ -75,6 +127,29 @@ class Orden(Base):
     items: Mapped[list["OrdenItem"]] = relationship(
         back_populates="orden", cascade="all, delete-orphan"
     )
+    menus: Mapped[list["OrdenMenu"]] = relationship(
+        back_populates="orden", cascade="all, delete-orphan"
+    )
+
+
+class OrdenMenu(Base):
+    """Un menú vendido dentro de una orden. El precio cobrado es el del
+    MENÚ (snapshot); los platos elegidos son OrdenItems ligados a este
+    registro con precio 0 (o el recargo/extra), para no cobrar dos veces."""
+
+    __tablename__ = "orden_menus"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    orden_id: Mapped[int] = mapped_column(ForeignKey("ordenes.id"), nullable=False)
+    # Nullable: si la plantilla se borra, el histórico queda con el snapshot
+    menu_id: Mapped[int | None] = mapped_column(ForeignKey("menu_plantillas.id"), nullable=True)
+    nombre_snapshot: Mapped[str] = mapped_column(String(120), nullable=False)
+    precio_snapshot: Mapped[float] = mapped_column(Float, nullable=False)
+    cantidad: Mapped[int] = mapped_column(Integer, nullable=False)
+    nota: Mapped[str] = mapped_column(String(150), default="", nullable=False)
+
+    orden: Mapped[Orden] = relationship(back_populates="menus")
+    items: Mapped[list["OrdenItem"]] = relationship(back_populates="orden_menu")
 
 
 class OrdenItem(Base):
@@ -92,8 +167,17 @@ class OrdenItem(Base):
     empaque: Mapped[str] = mapped_column(String(10), default="mesa", nullable=False)
     # Pedido especial del cliente: "sin frijoles", "con un huevo frito"…
     nota: Mapped[str] = mapped_column(String(150), default="", nullable=False)
+    # NULL = venta a la carta (comportamiento histórico). Presente = el ítem
+    # es el plato elegido (o una porción extra) de ese menú vendido: su
+    # precio_snapshot es 0.0, el recargo o el precio de la porción extra —
+    # nunca el precio de carta, porque el precio ya está en el menú.
+    orden_menu_id: Mapped[int | None] = mapped_column(ForeignKey("orden_menus.id"), nullable=True)
+    tiempo_orden: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # True = porción adicional pedida junto al menú ("una entrada más")
+    es_extra: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     orden: Mapped[Orden] = relationship(back_populates="items")
+    orden_menu: Mapped[OrdenMenu | None] = relationship(back_populates="items")
 
 
 class Cancelacion(Base):
