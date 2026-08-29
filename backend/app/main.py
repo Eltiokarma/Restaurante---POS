@@ -54,6 +54,10 @@ def _migrar(engine_) -> None:
             if columnas_cierres and col not in columnas_cierres:
                 conn.execute(text(f"ALTER TABLE cierres_caja ADD COLUMN {col} FLOAT"))
                 conn.commit()
+        columnas_movs = [fila[1] for fila in conn.execute(text("PRAGMA table_info(movimientos_insumo)"))]
+        if columnas_movs and "orden_id" not in columnas_movs:
+            conn.execute(text("ALTER TABLE movimientos_insumo ADD COLUMN orden_id INTEGER"))
+            conn.commit()
 
 @asynccontextmanager
 async def _ciclo_de_vida(app_: FastAPI):

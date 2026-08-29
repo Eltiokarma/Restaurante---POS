@@ -179,6 +179,9 @@ class MovimientoInsumo(Base):
     cantidad: Mapped[float] = mapped_column(Float, nullable=False)
     costo_total: Mapped[float | None] = mapped_column(Float, nullable=True)  # solo compras
     referencia: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    # Orden que originó el movimiento (consumo/reversión). Permite anular
+    # devolviendo EXACTAMENTE lo consumido, aunque la receta haya cambiado.
+    orden_id: Mapped[int | None] = mapped_column(ForeignKey("ordenes.id"), nullable=True)
 
 
 class Config(Base):

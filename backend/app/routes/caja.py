@@ -51,13 +51,34 @@ def _ventas_de_hoy(db: Session) -> dict:
 
 
 def _a_dict(registro: CierreCaja | None, ventas: dict) -> dict:
-    base = {"abierta": False, "cerrada": False, **ventas}
+    base = {"abierta": False, "cerrada": False, "ventas_despues_del_cierre": False, **ventas}
     if registro is None:
         return base
+
+    cerrada = registro.hora_cierre is not None
+    if cerrada:
+        # Con la caja cerrada se muestra el SNAPSHOT del cierre (lo que se
+        # cuadró), no las ventas vivas: así los números son consistentes
+        # con la diferencia guardada. Si llegaron ventas después, se avisa
+        # para que el cajero corrija el conteo (re-cerrar).
+        base.update({
+            "total_vendido": registro.total_sistema or 0.0,
+            # Cierres anteriores a la migración: todo su total fue efectivo
+            "ventas_efectivo": (
+                registro.ventas_efectivo
+                if registro.ventas_efectivo is not None
+                else (registro.total_sistema or 0.0)
+            ),
+            "ventas_tarjeta": registro.ventas_tarjeta or 0.0,
+            "ventas_yape": registro.ventas_yape or 0.0,
+            "ventas_despues_del_cierre": round(ventas["total_vendido"], 2)
+            != round(registro.total_sistema or 0.0, 2),
+        })
+
     return {
         **base,
-        "abierta": registro.hora_cierre is None,
-        "cerrada": registro.hora_cierre is not None,
+        "abierta": not cerrada,
+        "cerrada": cerrada,
         "fecha": registro.fecha.isoformat(),
         "hora_apertura": registro.hora_apertura,
         "monto_apertura": registro.monto_apertura,
@@ -127,7 +148,11 @@ def historial(db: Session = Depends(get_db)):
     return {"cierres": [
         _a_dict(r, {
             "total_vendido": r.total_sistema or 0.0,
-            "ventas_efectivo": r.ventas_efectivo or 0.0,
+            # Cierres previos a la migración (columnas NULL): por la
+            # semántica histórica, todo su total fue efectivo
+            "ventas_efectivo": (
+                r.ventas_efectivo if r.ventas_efectivo is not None else (r.total_sistema or 0.0)
+            ),
             "ventas_tarjeta": r.ventas_tarjeta or 0.0,
             "ventas_yape": r.ventas_yape or 0.0,
             "sin_registrar": 0,

@@ -98,6 +98,7 @@ export interface CajaEstado {
   ventas_tarjeta: number
   ventas_yape: number
   sin_registrar: number
+  ventas_despues_del_cierre: boolean
   fecha?: string
   hora_apertura?: string
   monto_apertura?: number

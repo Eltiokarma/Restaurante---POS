@@ -88,8 +88,12 @@ def registrar_movimiento(insumo_id: int, payload: MovimientoIn, db: Session = De
         raise HTTPException(status_code=404, detail="Insumo no encontrado")
 
     if payload.tipo == "compra":
-        if payload.cantidad <= 0 or payload.costo_total is None:
-            raise HTTPException(status_code=422, detail="Una compra necesita cantidad > 0 y costo_total")
+        # costo_total = 0 corrompería el costo promedio en silencio
+        if payload.cantidad <= 0 or payload.costo_total is None or payload.costo_total <= 0:
+            raise HTTPException(
+                status_code=422,
+                detail="Una compra necesita cantidad > 0 y el costo total pagado (> 0)",
+            )
         registrar_compra(db, insumo, payload.cantidad, payload.costo_total, payload.nota)
     elif payload.tipo == "merma":
         if payload.cantidad <= 0:
@@ -144,8 +148,13 @@ def kardex(
 
 # ---------- Recetas ----------
 
+class RecetaItemIn(BaseModel):
+    insumo_id: int
+    cantidad: float = Field(gt=0, le=10_000)
+
+
 class RecetaIn(BaseModel):
-    items: list[dict] = Field(default_factory=list)  # [{insumo_id, cantidad}]
+    items: list[RecetaItemIn] = Field(default_factory=list)
 
 
 @router.get("/recetas/{plato_id}")
@@ -175,13 +184,15 @@ def guardar_receta(plato_id: int, payload: RecetaIn, db: Session = Depends(get_d
     if db.get(Plato, plato_id) is None:
         raise HTTPException(status_code=404, detail="Plato no encontrado")
 
+    desconocidos = [
+        item.insumo_id for item in payload.items if db.get(Insumo, item.insumo_id) is None
+    ]
+    if desconocidos:
+        raise HTTPException(status_code=422, detail=f"Insumos inexistentes: {desconocidos}")
+
     for ri in db.scalars(select(RecetaItem).where(RecetaItem.plato_id == plato_id)).all():
         db.delete(ri)
     for item in payload.items:
-        insumo = db.get(Insumo, int(item.get("insumo_id", 0)))
-        cantidad = float(item.get("cantidad", 0))
-        if insumo is None or cantidad <= 0:
-            continue
-        db.add(RecetaItem(plato_id=plato_id, insumo_id=insumo.id, cantidad=cantidad))
+        db.add(RecetaItem(plato_id=plato_id, insumo_id=item.insumo_id, cantidad=item.cantidad))
     db.commit()
     return receta_de(plato_id, db)
