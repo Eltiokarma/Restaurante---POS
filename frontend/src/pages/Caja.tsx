@@ -4,6 +4,7 @@ import type { CajaEstado, ConfigOut, DatosLocal, Entrega, MenuHoy, MesaEstado, M
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
 import { ArmadoMenu, describirMenu } from '../components/ArmadoMenu'
+import { IconoBillete, IconoSilla } from '../components/Iconos'
 import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket } from '../components/Ticket'
 import { useCarrito } from '../hooks/useCarrito'
@@ -315,7 +316,7 @@ export function Caja() {
   return (
     <div className="pantalla-caja">
       <header className="caja-cabecera">
-        <h1>💵 Caja</h1>
+        <h1><IconoBillete tam={30} /> Caja</h1>
         <span className="caja-total-dia">Vendido hoy: <strong>{soles(totalVendido)}</strong></span>
         {mensaje && <span className="banner-ok caja-banner">{mensaje}</span>}
         {error && <span className="banner-error caja-banner">{error}</span>}
@@ -370,16 +371,29 @@ export function Caja() {
 
       {estadoCaja?.cerrada && (
         <div className={`caja-panel ${estadoCaja.diferencia ? 'caja-panel-descuadre' : ''}`}>
+          {/* El descuadre es LA cifra del cierre: grande y sin reconstruir signos */}
+          {estadoCaja.descuadre && (
+            <div className={`descuadre-grande descuadre-${estadoCaja.descuadre.tipo}`}>
+              {estadoCaja.descuadre.tipo === 'exacta' ? (
+                <>
+                  <span className="descuadre-etiqueta">Cuadró</span>
+                  <span className="descuadre-cifra">exacto 🎯</span>
+                </>
+              ) : (
+                <>
+                  <span className="descuadre-etiqueta">
+                    {estadoCaja.descuadre.tipo === 'sobra' ? 'Sobran' : 'Faltan'}
+                  </span>
+                  <span className="descuadre-cifra">{soles(estadoCaja.descuadre.monto)}</span>
+                </>
+              )}
+            </div>
+          )}
           <span>
             🔒 Caja cerrada a las {estadoCaja.hora_cierre?.slice(0, 5)} — efectivo esperado:{' '}
             <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo)}</strong>{' '}
             · contado: <strong>{soles(estadoCaja.monto_contado ?? 0)}</strong>{' '}
-            · 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)} ·{' '}
-            {estadoCaja.diferencia === 0
-              ? 'cuadró exacto 🎯'
-              : (estadoCaja.diferencia ?? 0) > 0
-                ? `sobran ${soles(estadoCaja.diferencia ?? 0)}`
-                : `faltan ${soles(-(estadoCaja.diferencia ?? 0))}`}
+            · 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)}
             {estadoCaja.ventas_despues_del_cierre && (
               <strong> · ⚠ hubo ventas o cambios después del cierre: corrige el conteo</strong>
             )}
@@ -590,7 +604,7 @@ export function Caja() {
                     <span className="badge-servicio">{NOMBRE_SERVICIO[o.tipo_servicio]}</span>
                   )}
                   {o.mesas.length > 0 && !o.mesa_liberada && (
-                    <span className="badge-mesa">🪑 {o.mesas.join(' + ')}</span>
+                    <span className="badge-mesa"><IconoSilla tam={15} /> {o.mesas.join(' + ')}</span>
                   )}
                   <span className="caja-orden-hora">{o.hora.slice(0, 5)}</span>
                   <span className="caja-orden-total">{soles(o.total)}</span>

@@ -92,6 +92,13 @@ def _migrar(engine_) -> None:
         # Estado por ítem (§3): los ítems históricos heredan el estado de su
         # orden (una anulada no es estado de cocina: sus ítems quedan
         # 'pendiente', igual da porque cocina no la muestra)
+        # §4: cintillo de anulada en cocina y fotos de plato
+        if columnas and "anulada_en" not in columnas:
+            conn.execute(text("ALTER TABLE ordenes ADD COLUMN anulada_en DATETIME"))
+            conn.commit()
+        if columnas_platos and "foto" not in columnas_platos:
+            conn.execute(text("ALTER TABLE platos ADD COLUMN foto VARCHAR(80)"))
+            conn.commit()
         if columnas_items and "estado" not in columnas_items:
             conn.execute(text(
                 "ALTER TABLE orden_items ADD COLUMN estado VARCHAR(20) NOT NULL DEFAULT 'pendiente'"
@@ -153,6 +160,9 @@ _migrar(engine)
 # valor. El frontend lo pide una sola vez por dispositivo. En la LAN del
 # local (sin PIN_LOCAL) nada cambia.
 RUTAS_SIN_PIN = ("/api/health", "/api/admin/login")
+# Las fotos de plato se cargan con <img>, que no puede mandar el header
+# del PIN. Una foto del menú no es información sensible.
+PREFIJOS_SIN_PIN = ("/api/menu/fotos/",)
 
 
 @app.middleware("http")
@@ -162,6 +172,7 @@ async def _candado_pin(request: Request, call_next):
         pin
         and request.url.path.startswith("/api")
         and request.url.path not in RUTAS_SIN_PIN
+        and not request.url.path.startswith(PREFIJOS_SIN_PIN)
         and request.method != "OPTIONS"
         and not hmac.compare_digest(request.headers.get("X-Pin-Local", ""), pin)
     ):

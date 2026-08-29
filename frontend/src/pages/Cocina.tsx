@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, NOMBRE_EMPAQUE, NOMBRE_SERVICIO } from '../api'
 import type { EstadoItem, OrdenOut } from '../api'
+import { IconoProhibido, IconoReloj, IconoSarten, IconoSilla } from '../components/Iconos'
 
 const SIGUIENTE_ESTADO: Record<string, string> = {
   pendiente: 'preparando',
@@ -109,6 +110,16 @@ export function Cocina() {
   // Entregadas y anuladas desaparecen de la vista (quedan en BD)
   const activas = ordenes.filter((o) => o.estado !== 'entregado' && o.estado !== 'anulada')
 
+  // Cintillo de anulada (§4): una orden recién anulada se queda 60 s en
+  // pantalla con "NO PREPARAR", para que la cocina no la siga cocinando.
+  // El reloj corre con los segundos del servidor + lo transcurrido local.
+  const anuladasRecientes = ordenes.filter(
+    (o) =>
+      o.estado === 'anulada' &&
+      o.anulada_hace_seg !== null &&
+      o.anulada_hace_seg + (Date.now() - traidoEn) / 1000 < 60,
+  )
+
   // ---------- "Por salir": tachar bulks (§3) ----------
 
   // Total por plato de lo que AÚN NO ESTÁ LISTO, con desglose por empaque
@@ -185,7 +196,7 @@ export function Cocina() {
   return (
     <div className="pantalla-cocina">
       <header className="cocina-cabecera">
-        <h1>🍳 Cocina</h1>
+        <h1><IconoSarten tam={30} /> Cocina</h1>
         <span className="cocina-contador">{activas.length} órdenes activas</span>
         {error && <span className="banner-error">Sin conexión con el sistema</span>}
       </header>
@@ -216,9 +227,36 @@ export function Cocina() {
         </div>
       )}
 
-      {activas.length === 0 && !error && <p className="cocina-vacia">Sin órdenes pendientes 🎉</p>}
+      {activas.length === 0 && anuladasRecientes.length === 0 && !error && (
+        <p className="cocina-vacia">Sin órdenes pendientes 🎉</p>
+      )}
 
       <div className="grilla-cocina">
+        {anuladasRecientes.map((orden) => (
+          <div key={`anulada-${orden.id}`} className="tarjeta-orden tarjeta-anulada">
+            <div className="cintillo-anulada">
+              <IconoProhibido tam={22} /> ANULADA — NO PREPARAR
+            </div>
+            <div className="tarjeta-orden-cabecera">
+              <span className="tarjeta-orden-numero">
+                #{String(orden.numero_orden_dia).padStart(3, '0')}
+              </span>
+              <span className="tarjeta-orden-hora">pedido a las {orden.hora.slice(0, 5)}</span>
+            </div>
+            <ul className="tarjeta-orden-items">
+              {orden.menus.map((menu, m) => (
+                <li key={`menu-${m}`} className="item-tachado">
+                  <strong>{menu.cantidad} ×</strong> {menu.nombre}
+                </li>
+              ))}
+              {orden.items.map((item, i) => (
+                <li key={i} className="item-tachado">
+                  <strong>{item.cantidad} ×</strong> {item.nombre}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
         {activas.map((orden) => {
           const segundos = esperaSegundos(orden)
           const urgente = orden.estado === 'pendiente' && segundos > 600
@@ -238,7 +276,7 @@ export function Cocina() {
                 </button>
                 <span className="tarjeta-orden-numero">#{String(orden.numero_orden_dia).padStart(3, '0')}</span>
                 <span className={`tarjeta-orden-timer ${urgente ? 'timer-urgente' : ''}`}>
-                  ⏱ {formatearEspera(segundos)}
+                  <IconoReloj tam={18} /> {formatearEspera(segundos)}
                 </span>
               </div>
               <div className="tarjeta-orden-fila-estado">
@@ -249,7 +287,9 @@ export function Cocina() {
                   </span>
                 )}
                 {orden.mesas.length > 0 && !orden.mesa_liberada && (
-                  <span className="badge-mesa badge-servicio-cocina">🪑 {orden.mesas.join(' + ')}</span>
+                  <span className="badge-mesa badge-servicio-cocina">
+                    <IconoSilla tam={16} /> {orden.mesas.join(' + ')}
+                  </span>
                 )}
                 {orden.items.length + orden.menus.length >= 2 || orden.menus.length > 0 ? (
                   <span className="badge-servicio badge-servicio-cocina">

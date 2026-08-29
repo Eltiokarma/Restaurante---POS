@@ -120,8 +120,14 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       apagado) y sugiere esa cantidad al tachar.
 - [ ] Pantalla de cocina POR ESTACIÓN (plancha / entradas): filtrar la tira y las
       tarjetas por categoría o estación. Decidido dejarlo para más adelante.
-- [ ] §4 Menores: cintillo de anulada en cocina (60 s), descuadre como cifra grande,
-      fotos de plato, emoji → SVG.
+- [x] §4 Menores: cintillo "ANULADA — NO PREPARAR" 60 s en cocina (timestamp
+      `anulada_en`, segundos calculados en el servidor), descuadre del cierre como
+      cifra grande (signo y magnitud separados en la API: `descuadre {tipo, monto}`),
+      fotos de plato (subida en Admin → Menú del día, servidas por el backend desde
+      `<carpeta de la BD>/fotos` — en Railway el volumen `/data`; el GET de fotos va
+      sin PIN porque un `<img>` no manda headers), y arranque de emoji → SVG con
+      `components/Iconos.tsx` (cabeceras y badges: sartén, billete, silla, reloj,
+      engranaje, prohibido); el resto de emojis migra gradualmente.
 - [ ] Kardex fase 2 (cuando se use en serio): reporte de consumo semanal, alertas de stock
       mínimo por insumo, export CSV del kardex.
 

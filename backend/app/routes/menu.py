@@ -1,6 +1,10 @@
 import json
+import re
+import time
+from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,6 +29,7 @@ class PlatoOut(BaseModel):
     precio: float
     activo_hoy: bool
     sale_al_momento: bool = False
+    foto: str | None = None
     sinonimos: list[str] = []
 
     @field_validator("sinonimos", mode="before")
@@ -194,6 +199,79 @@ def menu_anterior(db: Session = Depends(get_db)):
         "fecha": ultima_fecha.isoformat(),
         "platos": [PlatoOut.model_validate(p).model_dump() for p in platos],
     }
+
+
+# ---------- Fotos de plato (§4) ----------
+#
+# Las fotos viven junto a la base de datos (<carpeta de la BD>/fotos): en
+# Railway eso es el volumen /data y sobreviven los despliegues. El nombre
+# lleva un timestamp para que el navegador no sirva una foto vieja de caché.
+
+EXTENSION_POR_TIPO = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+MAX_FOTO_BYTES = 5 * 1024 * 1024  # 5 MB de sobra para una foto de celular
+PATRON_FOTO = re.compile(r"^plato-\d+-\d+\.(jpg|png|webp)$")
+
+
+def _fotos_dir() -> Path:
+    from ..db import DATABASE_PATH
+
+    carpeta = Path(DATABASE_PATH).parent / "fotos"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    return carpeta
+
+
+def _borrar_foto_anterior(plato: Plato) -> None:
+    if plato.foto and PATRON_FOTO.match(plato.foto):
+        anterior = _fotos_dir() / plato.foto
+        if anterior.is_file():
+            anterior.unlink()
+
+
+@router.post("/platos/{plato_id}/foto", dependencies=[Depends(requiere_admin)])
+async def subir_foto(plato_id: int, archivo: UploadFile = File(...), db: Session = Depends(get_db)):
+    plato = db.get(Plato, plato_id)
+    if plato is None:
+        raise HTTPException(status_code=404, detail="Plato no encontrado")
+    extension = EXTENSION_POR_TIPO.get(archivo.content_type or "")
+    if extension is None:
+        raise HTTPException(status_code=422, detail="La foto debe ser JPG, PNG o WebP")
+    contenido = await archivo.read()
+    if len(contenido) > MAX_FOTO_BYTES:
+        raise HTTPException(status_code=422, detail="La foto pesa más de 5 MB: achícala un poco")
+    if not contenido:
+        raise HTTPException(status_code=422, detail="El archivo llegó vacío")
+
+    _borrar_foto_anterior(plato)
+    nombre = f"plato-{plato.id}-{time.time_ns()}.{extension}"
+    (_fotos_dir() / nombre).write_bytes(contenido)
+    plato.foto = nombre
+    db.commit()
+    return {"plato_id": plato.id, "foto": nombre}
+
+
+@router.delete("/platos/{plato_id}/foto", dependencies=[Depends(requiere_admin)])
+def quitar_foto(plato_id: int, db: Session = Depends(get_db)):
+    plato = db.get(Plato, plato_id)
+    if plato is None:
+        raise HTTPException(status_code=404, detail="Plato no encontrado")
+    _borrar_foto_anterior(plato)
+    plato.foto = None
+    db.commit()
+    return {"plato_id": plato.id, "foto": None}
+
+
+@router.get("/fotos/{archivo}")
+def servir_foto(archivo: str):
+    """Sirve la foto de un plato. Sin auth ni PIN: la usa el <img> de la
+    terminal (una etiqueta img no puede mandar headers) y una foto del
+    menú no es información sensible."""
+    if not PATRON_FOTO.match(archivo):
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    ruta = _fotos_dir() / archivo
+    if not ruta.is_file():
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    # El nombre cambia con cada subida: cachear fuerte es seguro
+    return FileResponse(ruta, headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ---------- Menús encadenados (plantillas) — admin ----------

@@ -7,7 +7,13 @@ export interface Plato {
   precio: number
   activo_hoy: boolean
   sale_al_momento: boolean
+  // Nombre de archivo de la foto (servida por el backend); null = sin foto
+  foto: string | null
   sinonimos: string[]
+}
+
+export function urlFotoPlato(foto: string): string {
+  return `/api/menu/fotos/${foto}`
 }
 
 export type Entrega = 'junto' | 'separado'
@@ -118,6 +124,8 @@ export interface OrdenOut {
   mesas: string[]
   mesa_liberada: boolean
   minutos_espera: number
+  // Segundos desde que se anuló (cintillo "no preparar" en cocina); null si no aplica
+  anulada_hace_seg: number | null
   // Solo la venta a la carta; los platos de menú van agrupados en "menus"
   items: OrdenItemOut[]
   menus: OrdenMenuOut[]
@@ -182,6 +190,8 @@ export interface CajaEstado {
   monto_contado?: number | null
   total_sistema?: number | null
   diferencia?: number | null
+  // Signo y magnitud separados, para mostrar el descuadre como cifra grande
+  descuadre?: { tipo: 'exacta' | 'sobra' | 'falta'; monto: number } | null
   notas?: string
   total_vendido: number
 }
@@ -506,6 +516,31 @@ export const api = {
     }),
 
   catalogo: () => request<{ platos: Plato[] }>('/api/menu/catalog', {}, true),
+
+  // --- Fotos de plato (admin) ---
+  subirFotoPlato: async (platoId: number, archivo: File): Promise<{ plato_id: number; foto: string }> => {
+    const datos = new FormData()
+    datos.append('archivo', archivo)
+    const cabeceras: Record<string, string> = { 'X-Admin-Token': getAdminToken() }
+    if (getPinLocal()) cabeceras['X-Pin-Local'] = getPinLocal()
+    const res = await fetch(`/api/menu/platos/${platoId}/foto`, {
+      method: 'POST', body: datos, headers: cabeceras,
+    })
+    if (!res.ok) {
+      let detail = `Error ${res.status}`
+      try {
+        const body = await res.json()
+        if (body.detail) detail = body.detail
+      } catch { /* sin JSON */ }
+      throw new ApiError(res.status, detail)
+    }
+    return res.json()
+  },
+
+  quitarFotoPlato: (platoId: number) =>
+    request<{ plato_id: number; foto: null }>(`/api/menu/platos/${platoId}/foto`, {
+      method: 'DELETE',
+    }, true),
 
   // --- Plantillas de menú encadenado (admin) ---
   plantillas: () => request<{ plantillas: PlantillaMenu[] }>('/api/menu/plantillas', {}, true),

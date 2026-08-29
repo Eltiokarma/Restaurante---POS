@@ -32,6 +32,9 @@ class Plato(Base):
     # Sinónimos para el pedido por voz (JSON: ["lomito", "saltado"]).
     # Se editan en admin; son la herramienta de mejora continua de la voz.
     sinonimos: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    # Nombre de archivo de la foto del plato (vive en <carpeta de la BD>/fotos;
+    # en Railway eso es el volumen /data). None = sin foto.
+    foto: Mapped[str | None] = mapped_column(String(80), nullable=True)
     # True = se prepara al momento (bistec frito): no puede salir "todo
     # junto" con el resto del pedido
     sale_al_momento: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -122,6 +125,9 @@ class Orden(Base):
     mesa_ids: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     # True cuando la caja liberó las mesas de este ticket (clientes se fueron)
     mesa_liberada: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Cuándo se anuló (cintillo "no preparar" en cocina los primeros 60 s).
+    # Des-anular la limpia.
+    anulada_en: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
     items: Mapped[list["OrdenItem"]] = relationship(
