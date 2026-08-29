@@ -1509,10 +1509,12 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
       {config.modo_impresion === 'puente' && (
         <div className="panel-impresora">
           <p className="nota-admin">
-            El <strong>puente</strong> es un programita que corre en una PC del local y manda los
-            tickets DIRECTO a la impresora de red (como hacen las apps de POS): sin diálogos y con
-            corte automático. Inícialo con <code>scripts\puente.bat</code> (pide la URL del POS y el
-            PIN la primera vez) y déjalo abierto durante el servicio.
+            En este modo los tickets van DIRECTO a la impresora de red (como hacen las apps de
+            POS): sin diálogos y con corte automático. Quién los manda, tú eliges:
+            <strong> sin PC</strong> — abre <strong>/ticketera</strong> en una tablet con la app
+            gratuita <strong>RawBT</strong> instalada y toca "Activar impresión en esta tablet";
+            o <strong>con PC</strong> — corre <code>scripts\puente.bat</code> y déjalo abierto.
+            Usa una de las dos, no ambas a la vez.
           </p>
           <label>
             IP de la impresora en la red del local (ej. 192.168.1.77)
