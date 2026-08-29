@@ -16,7 +16,10 @@ class ConfigIn(BaseModel):
     ruc: str | None = None
     ventana_cancelacion_seg: int | None = None
     timeout_inactividad_seg: int | None = None
-    modo_impresion: str | None = None  # "terminal" | "estacion"
+    modo_impresion: str | None = None  # "terminal" | "estacion" | "puente"
+    impresora_ip: str | None = None  # impresora térmica de red (modo puente)
+    impresora_puerto: int | None = None
+    impresora_columnas: int | None = None
     voz_habilitada: bool | None = None  # kill switch del pedido por voz
     exigir_caja_abierta: bool | None = None  # bloquear ventas sin apertura de caja
     cocina_bulk_min: int | None = None  # ventana de la tanda en cocina (0 = apagado)
@@ -36,7 +39,10 @@ def leer_config(db: Session) -> dict:
         "ruc": valores["ruc"],
         "ventana_cancelacion_seg": int(valores["ventana_cancelacion_seg"]),
         "timeout_inactividad_seg": int(valores["timeout_inactividad_seg"]),
-        "modo_impresion": modo if modo in ("terminal", "estacion") else "terminal",
+        "modo_impresion": modo if modo in ("terminal", "estacion", "puente") else "terminal",
+        "impresora_ip": valores["impresora_ip"].strip(),
+        "impresora_puerto": int(valores["impresora_puerto"] or 9100),
+        "impresora_columnas": max(24, min(64, int(valores["impresora_columnas"] or 42))),
         # El toggle guardado (para el admin) y la disponibilidad efectiva
         # (toggle encendido + API keys presentes) para la terminal
         "voz_habilitada": voz_habilitada,

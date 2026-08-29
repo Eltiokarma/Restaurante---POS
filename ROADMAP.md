@@ -29,8 +29,13 @@
 - [x] Resumen semanal/histórico: selector Hoy / Últimos 7 días / Últimos 30 días en el
       Resumen, con ventas por día y export CSV del período (`GET /api/stats/range`).
 - [ ] Ajustes de UX táctil que surjan de observar clientes reales.
-- [ ] Impresión ESC/POS directa desde el backend (corte automático, gaveta, doble copia) si
-      la impresión por driver + `--kiosk-printing` queda corta en la práctica.
+- [x] Impresión ESC/POS directa (corte automático, tildes CP850): quedó corta en la
+      práctica la impresión por driver al pasar a tablets + Railway. Modo de impresión
+      nuevo "puente": el backend genera los bytes del ticket y
+      `scripts/puente_impresion.py` (PC del local, solo Python estándar) los manda a la
+      impresora de red por IP:9100 usando la cola existente. Config de impresora en
+      Admin → Configuración con ticket de prueba. Gaveta y doble copia quedan como
+      mejoras futuras.
 - [ ] Endurecer multi-terminal si se agrega una segunda tablet (hoy ya es seguro a nivel de
       datos; revisar UX de números de orden y capacidad de la ticketera).
 - [x] Backup automático: el servidor refresca la copia del día cada 30 minutos mientras
@@ -177,3 +182,4 @@ Pagos integrados (Yape/tarjeta), control de stock y mermas, app nativa, multi-lo
 | 10 | Porciones extra con el menú: `precio_extra` configurable POR TIEMPO en la plantilla (+ recargo de la alternativa) | "Una entrada más" no se cobra ni al precio de carta (S/ 6) ni al implícito del combo (S/ 1), sino al precio que el dueño fija (S/ 3). Vacío/0 = ese tiempo no ofrece extras. |
 | 11 | `ordenes.estado` queda como CACHÉ recalculada = el estado MÍNIMO de sus ítems (no un campo derivado en consultas) | Media docena de sitios lo leen (cocina, caja, admin, stats, ticketera): mantenerlo materializado no rompe a nadie. Se recalcula en cada despacho de bulk; avanzar la orden completa arrastra todos sus ítems al mismo estado. Anulada sigue siendo estado solo de la orden. |
 | 12 | Despacho parcial parte el ítem en dos filas (mismas snapshots, estados distintos) | Es la única forma de tachar "3 de 5" sin perder de qué orden salió cada porción; el total de la orden y el kardex no se alteran (la anulación devuelve por movimientos, no por filas). |
+| 13 | Impresión con impresora de red: el backend renderiza ESC/POS y un PUENTE en el local lo manda a IP:9100 (modo "puente") | Una página web no puede hablarle directo a una impresora, y el backend en Railway no alcanza la red del local. El puente (stdlib de Python, cero instalaciones) reusa la cola `impreso=False` que ya existía para /ticketera; si la impresora falla, el ticket queda en cola y se reintenta. |

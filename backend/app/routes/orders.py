@@ -252,8 +252,9 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
         orden.mesa_ids = json.dumps(payload.mesa_ids)
 
     # En modo "terminal" la propia pantalla del cliente imprime el ticket;
-    # en modo "estacion" la orden queda en cola para /ticketera.
-    if config["modo_impresion"] != "estacion":
+    # en "estacion" la orden queda en cola para /ticketera y en "puente"
+    # para el puente de impresión del local (ESC/POS directo).
+    if config["modo_impresion"] == "terminal":
         orden.impreso = True
     db.commit()
 

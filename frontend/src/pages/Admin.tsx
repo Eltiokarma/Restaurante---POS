@@ -1492,11 +1492,12 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
         <select
           value={config.modo_impresion}
           onChange={(e) =>
-            setConfig({ ...config, modo_impresion: e.target.value as 'terminal' | 'estacion' })
+            setConfig({ ...config, modo_impresion: e.target.value as 'terminal' | 'estacion' | 'puente' })
           }
         >
           <option value="terminal">En la terminal del cliente (PC con impresora conectada)</option>
           <option value="estacion">Estación de impresión (/ticketera en la PC de la impresora)</option>
+          <option value="puente">Puente del local → impresora de red (recomendado con tablets)</option>
         </select>
       </label>
       {config.modo_impresion === 'estacion' && (
@@ -1504,6 +1505,61 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
           Modo para terminales tablet: abre <strong>/ticketera</strong> en la computadora que tiene
           la impresora conectada y déjala abierta. Los tickets de todas las terminales salen por ahí.
         </p>
+      )}
+      {config.modo_impresion === 'puente' && (
+        <div className="panel-impresora">
+          <p className="nota-admin">
+            El <strong>puente</strong> es un programita que corre en una PC del local y manda los
+            tickets DIRECTO a la impresora de red (como hacen las apps de POS): sin diálogos y con
+            corte automático. Inícialo con <code>scripts\puente.bat</code> (pide la URL del POS y el
+            PIN la primera vez) y déjalo abierto durante el servicio.
+          </p>
+          <label>
+            IP de la impresora en la red del local (ej. 192.168.1.77)
+            <input
+              value={config.impresora_ip}
+              placeholder="192.168.1.77"
+              onChange={(e) => setConfig({ ...config, impresora_ip: e.target.value.trim() })}
+            />
+          </label>
+          <label>
+            Puerto (casi siempre 9100)
+            <input
+              type="number" min="1" max="65535"
+              value={config.impresora_puerto}
+              onChange={(e) => setConfig({ ...config, impresora_puerto: parseInt(e.target.value) || 9100 })}
+            />
+          </label>
+          <label>
+            Ancho del ticket en caracteres (48 o 42, según el modelo de 80 mm)
+            <input
+              type="number" min="24" max="64"
+              value={config.impresora_columnas}
+              onChange={(e) => setConfig({ ...config, impresora_columnas: parseInt(e.target.value) || 42 })}
+            />
+          </label>
+          <button
+            onClick={async () => {
+              setMensaje('')
+              setError('')
+              try {
+                // Guarda primero (para que el puente use la IP recién puesta)
+                setConfig(await api.guardarConfig(config))
+                await api.imprimirPrueba()
+                setMensaje('Ticket de prueba encolado ✔ — debe salir en unos segundos si el puente está corriendo')
+              } catch (e) {
+                setError(manejarError(e, onSesionVencida))
+              }
+            }}
+          >
+            🖨 Imprimir ticket de prueba
+          </button>
+          <p className="nota-admin">
+            ¿Dónde veo la IP de la impresora? Casi todas imprimen su configuración al prenderlas
+            manteniendo el botón FEED apretado, o revisa la lista de equipos en tu router. Es la
+            misma IP que usabas en Loyverse.
+          </p>
+        </div>
       )}
       <label className="config-toggle">
         <input
