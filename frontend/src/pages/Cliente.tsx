@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, soles } from '../api'
-import type { ConfigOut, DatosLocal, OrdenOut, Plato, VozItemResuelto } from '../api'
+import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, soles } from '../api'
+import type { ConfigOut, DatosLocal, Entrega, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
 import { PedidoPorVoz } from '../components/PedidoPorVoz'
@@ -23,6 +23,7 @@ export function Cliente() {
   const [guardando, setGuardando] = useState(false)
   const [ordenFinal, setOrdenFinal] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
   const [vozAbierta, setVozAbierta] = useState(false)
+  const [entrega, setEntrega] = useState<Entrega>('junto')
   // Para el campo origen de la orden: qué canales llenaron el carrito
   const usoVoz = useRef(false)
   const usoTactil = useRef(false)
@@ -77,6 +78,7 @@ export function Cliente() {
       setErrorConexion('')
       setMensajeInicio(mensaje)
       setVozAbierta(false)
+      setEntrega('junto')
       usoVoz.current = false
       usoTactil.current = false
       setPantalla('inicio')
@@ -119,6 +121,10 @@ export function Cliente() {
     }
   }
 
+  // Un plato "al momento" (bistec frito) obliga a entrega separada
+  const hayAlMomento = carrito.items.some((i) => i.plato.sale_al_momento)
+  const entregaEfectiva: Entrega = hayAlMomento ? 'separado' : entrega
+
   const guardandoRef = useRef(false)
   const confirmarDefinitivo = async () => {
     if (guardandoRef.current) return
@@ -136,6 +142,8 @@ export function Cliente() {
         })),
         duracion,
         origen,
+        [],
+        entregaEfectiva,
       )
       setOrdenFinal(resultado)
       carrito.vaciar()
@@ -319,6 +327,30 @@ export function Cliente() {
             </div>
           ))}
         </div>
+        {(carrito.items.length >= 2 || hayAlMomento) && (
+          <div className="selector-servicio">
+            <span className="selector-servicio-titulo">¿Cómo sale tu pedido?</span>
+            <div className="selector-entrega">
+              {(['junto', 'separado'] as Entrega[]).map((e) => (
+                <button
+                  key={e}
+                  className={`boton-entrega ${entregaEfectiva === e ? 'entrega-activa' : ''}`}
+                  disabled={e === 'junto' && hayAlMomento}
+                  onClick={() => setEntrega(e)}
+                >
+                  {NOMBRE_ENTREGA[e].titulo}
+                  <small>{NOMBRE_ENTREGA[e].detalle}</small>
+                </button>
+              ))}
+            </div>
+            {hayAlMomento && (
+              <p className="aviso-entrega">
+                {carrito.items.find((i) => i.plato.sale_al_momento)?.plato.nombre} se prepara
+                al momento, así que tu pedido saldrá por tiempos: lo demás llega primero.
+              </p>
+            )}
+          </div>
+        )}
         <div className="total-grande">TOTAL: {soles(carrito.totalSoles)}</div>
         <div className="botones-resumen">
           <button className="boton-grande boton-secundario" onClick={() => setPantalla('menu')}>

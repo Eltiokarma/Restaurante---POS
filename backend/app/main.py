@@ -69,6 +69,16 @@ def _migrar(engine_) -> None:
         if columnas_items and "nota" not in columnas_items:
             conn.execute(text("ALTER TABLE orden_items ADD COLUMN nota TEXT NOT NULL DEFAULT ''"))
             conn.commit()
+        if columnas_platos and "sale_al_momento" not in columnas_platos:
+            conn.execute(text(
+                "ALTER TABLE platos ADD COLUMN sale_al_momento BOOLEAN NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
+        if columnas and "entrega" not in columnas:
+            conn.execute(text(
+                "ALTER TABLE ordenes ADD COLUMN entrega TEXT NOT NULL DEFAULT 'junto'"
+            ))
+            conn.commit()
 
 @asynccontextmanager
 async def _ciclo_de_vida(app_: FastAPI):

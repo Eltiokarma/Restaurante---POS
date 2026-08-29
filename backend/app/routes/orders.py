@@ -43,6 +43,8 @@ class OrdenIn(BaseModel):
     # Mesas asignadas al crear (la caja las manda; la terminal no).
     # Varias = mesas combinadas para un grupo.
     mesa_ids: list[int] = Field(default_factory=list, max_length=10)
+    # junto (default) | separado — cómo sale el pedido
+    entrega: str = "junto"
 
 
 class EstadoIn(BaseModel):
@@ -55,6 +57,30 @@ def _minutos_espera(orden: Orden) -> float:
     h, m, s = (int(x) for x in orden.hora.split(":"))
     creada = datetime.combine(orden.fecha, time(h, m, s), tzinfo=LIMA)
     return max(0.0, (ahora_lima() - creada).total_seconds() / 60)
+
+
+ENTREGAS = ["junto", "separado"]
+
+
+def _validar_entrega(db: Session, entrega: str, plato_ids: list[int]) -> None:
+    """Un plato que se prepara al momento (bistec frito) no puede salir
+    'todo junto' con el resto: obliga entrega separada."""
+    if entrega not in ENTREGAS:
+        raise HTTPException(status_code=422, detail=f"Entrega inválida: {entrega}")
+    if entrega != "junto":
+        return
+    from ..models import Plato
+
+    for plato_id in plato_ids:
+        plato = db.get(Plato, plato_id)
+        if plato is not None and plato.sale_al_momento:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"{plato.nombre} se prepara al momento y no puede salir todo junto: "
+                    "elige entrega \"Separado por tiempos\"."
+                ),
+            )
 
 
 def _validar_mesas(db: Session, mesa_ids: list[int]) -> None:
@@ -81,6 +107,7 @@ def _orden_a_dict(orden: Orden, mapa_mesas: dict[int, str] | None = None) -> dic
         "tipo_servicio": orden.tipo_servicio,
         "origen": orden.origen,
         "metodo_pago": orden.metodo_pago,
+        "entrega": orden.entrega,
         "mesa_ids": ids_mesa,
         "mesas": [mapa_mesas.get(i, f"#{i}") for i in ids_mesa],
         "mesa_liberada": orden.mesa_liberada,
@@ -112,6 +139,7 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     if payload.origen not in ("tactil", "voz", "mixto"):
         raise HTTPException(status_code=422, detail=f"Origen inválido: {payload.origen}")
     _validar_mesas(db, payload.mesa_ids)
+    _validar_entrega(db, payload.entrega, [i.plato_id for i in payload.items])
 
     # Candado: sin apertura de caja (fondo inicial) no se vende
     config = leer_config(db)
@@ -135,6 +163,7 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     # Mesas asignadas al crear (la caja las manda al sentar al grupo)
     if payload.mesa_ids:
         orden.mesa_ids = json.dumps(payload.mesa_ids)
+    orden.entrega = payload.entrega
 
     # En modo "terminal" la propia pantalla del cliente imprime el ticket;
     # en modo "estacion" la orden queda en cola para /ticketera.
@@ -284,6 +313,22 @@ def asignar_mesas(orden_id: int, payload: MesasIn, db: Session = Depends(get_db)
         "mesa_ids": payload.mesa_ids,
         "mesas": [mapa.get(i, f"#{i}") for i in payload.mesa_ids],
     }
+
+
+class EntregaIn(BaseModel):
+    entrega: str
+
+
+@router.patch("/{orden_id}/entrega")
+def corregir_entrega(orden_id: int, payload: EntregaIn, db: Session = Depends(get_db)):
+    """La caja corrige cómo sale el pedido (igual que el método de pago)."""
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    _validar_entrega(db, payload.entrega, [i.plato_id for i in orden.items if i.plato_id])
+    orden.entrega = payload.entrega
+    db.commit()
+    return {"id": orden.id, "entrega": orden.entrega}
 
 
 @router.post("/{orden_id}/liberar-mesa")

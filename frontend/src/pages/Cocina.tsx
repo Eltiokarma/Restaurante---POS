@@ -176,6 +176,11 @@ export function Cocina() {
                 {orden.mesas.length > 0 && !orden.mesa_liberada && (
                   <span className="badge-mesa badge-servicio-cocina">🪑 {orden.mesas.join(' + ')}</span>
                 )}
+                {orden.items.length >= 2 && (
+                  <span className="badge-servicio badge-servicio-cocina">
+                    {orden.entrega === 'separado' ? '⏱ POR TIEMPOS' : '🍽 TODO JUNTO'}
+                  </span>
+                )}
                 <span className="tarjeta-orden-hora">pedido a las {orden.hora.slice(0, 5)}</span>
               </div>
               <ul className="tarjeta-orden-items">

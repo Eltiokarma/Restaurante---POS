@@ -99,8 +99,10 @@
 
 Especificación completa entregada junto al rediseño. Orden acordado:
 
-- [ ] §2 `sale_al_momento` por plato + entrega "Todo junto" / "Separado por tiempos" con
-      validación (un bistec al momento no puede salir junto con la sopa).
+- [x] §2 `sale_al_momento` por plato (checkbox en el menú del admin) + entrega "Todo
+      junto" / "Separado por tiempos": selector en el resumen del cliente (con "junto"
+      bloqueado y aviso cuando hay un plato al momento), corregible en caja, badge en
+      cocina, línea ENTREGA en el ticket, columna en el CSV y validación 422 en backend.
 - [ ] §1 Menú encadenado: plantillas de menú con tiempos y alternativas, precio en el
       menú (no en los platos), tiempos de una sola opción se informan como incluidos.
       El diseño ya trae las clases `.combo-*` listas.

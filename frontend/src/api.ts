@@ -6,7 +6,15 @@ export interface Plato {
   categoria: string
   precio: number
   activo_hoy: boolean
+  sale_al_momento: boolean
   sinonimos: string[]
+}
+
+export type Entrega = 'junto' | 'separado'
+
+export const NOMBRE_ENTREGA: Record<Entrega, { titulo: string; detalle: string }> = {
+  junto: { titulo: '🍽 Todo junto', detalle: 'una sola entrega' },
+  separado: { titulo: '⏱ Separado', detalle: 'por tiempos, según salga' },
 }
 
 export type Empaque = 'mesa' | 'taper' | 'bolsa' | 'lonchera'
@@ -45,6 +53,7 @@ export interface OrdenOut {
   estado: string
   tipo_servicio: TipoServicio
   metodo_pago: MetodoPago | null
+  entrega: Entrega
   mesa_ids: number[]
   mesas: string[]
   mesa_liberada: boolean
@@ -247,10 +256,19 @@ export const api = {
     duracionSeg?: number,
     origen: OrigenPedido = 'tactil',
     mesaIds: number[] = [],
+    entrega: Entrega = 'junto',
   ) =>
     request<{ orden: OrdenOut; local: DatosLocal }>('/api/orders', {
       method: 'POST',
-      body: JSON.stringify({ items, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds }),
+      body: JSON.stringify({
+        items, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega,
+      }),
+    }),
+
+  corregirEntrega: (ordenId: number, entrega: Entrega) =>
+    request<{ id: number; entrega: Entrega }>(`/api/orders/${ordenId}/entrega`, {
+      method: 'PATCH',
+      body: JSON.stringify({ entrega }),
     }),
 
   ordenesDeDia: (fecha: string) =>
@@ -408,7 +426,7 @@ export const api = {
 
   menuAnterior: () => request<{ fecha: string | null; platos: Plato[] }>('/api/menu/previous', {}, true),
 
-  guardarMenu: (platos: { id?: number; nombre: string; categoria: string; precio: number; activo_hoy: boolean; sinonimos?: string[] }[]) =>
+  guardarMenu: (platos: { id?: number; nombre: string; categoria: string; precio: number; activo_hoy: boolean; sale_al_momento?: boolean; sinonimos?: string[] }[]) =>
     request<{ categorias: string[]; platos: Plato[] }>('/api/menu/today', {
       method: 'PUT',
       body: JSON.stringify({ platos }),

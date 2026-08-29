@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles } from '../api'
-import type { CajaEstado, ConfigOut, DatosLocal, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, Entrega, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
 import { TarjetaPlato } from '../components/TarjetaPlato'
@@ -104,6 +104,15 @@ export function Caja() {
       cargarOrdenes()
     } catch {
       setError('No se pudo liberar la mesa')
+    }
+  }
+
+  const corregirEntrega = async (orden: OrdenOut, entrega: Entrega) => {
+    try {
+      await api.corregirEntrega(orden.id, entrega)
+      cargarOrdenes()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo cambiar la entrega')
     }
   }
 
@@ -513,6 +522,20 @@ export function Caja() {
                     </span>
                   ))}
                 </div>
+                {o.estado !== 'anulada' && o.items.length >= 2 && (
+                  <div className="caja-orden-cobro">
+                    <span className="cobro-etiqueta">Sale:</span>
+                    {(['junto', 'separado'] as Entrega[]).map((e) => (
+                      <button
+                        key={e}
+                        className={`boton-cobro ${o.entrega === e ? 'cobro-activo' : ''}`}
+                        onClick={() => corregirEntrega(o, e)}
+                      >
+                        {e === 'junto' ? '🍽 Junto' : '⏱ Por tiempos'}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {o.estado !== 'anulada' && (
                   <div className="caja-orden-cobro">
                     {o.metodo_pago === null && <span className="cobro-etiqueta">Cobrar:</span>}
