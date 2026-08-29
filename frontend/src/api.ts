@@ -210,7 +210,11 @@ export interface ConfigOut {
   timeout_inactividad_seg: number
   // "terminal": imprime la pantalla donde pide el cliente
   // "estacion": imprime la PC que tenga abierta /ticketera
-  modo_impresion: 'terminal' | 'estacion'
+  // "puente": el puente del local manda ESC/POS a la impresora de red
+  modo_impresion: 'terminal' | 'estacion' | 'puente'
+  impresora_ip: string
+  impresora_puerto: number
+  impresora_columnas: number
   // Toggle guardado (admin) y disponibilidad efectiva (toggle + API keys)
   voz_habilitada: boolean
   voz_disponible: boolean
@@ -563,6 +567,10 @@ export const api = {
     request<{
       cancelaciones: { id: number; fecha: string; hora: string; total: number; items: { nombre: string; cantidad: number; precio: number }[] }[]
     }>('/api/cancellations/today', {}, true),
+
+  // Encola un ticket de prueba para el puente de impresión
+  imprimirPrueba: () =>
+    request<{ encolada: boolean }>('/api/print/prueba', { method: 'POST' }, true),
 
   guardarConfig: (config: Partial<ConfigOut>) =>
     request<ConfigOut>('/api/config', { method: 'PUT', body: JSON.stringify(config) }, true),

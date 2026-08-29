@@ -318,7 +318,16 @@ CONFIG_DEFAULTS: dict[str, str] = {
     "timeout_inactividad_seg": "90",
     # "terminal": la pantalla donde pide el cliente imprime (PC con impresora)
     # "estacion": imprime la PC que tenga abierta /ticketera (tablets como terminal)
+    # "puente": el puente de impresión del local (scripts/puente_impresion.py)
+    #           manda ESC/POS directo a la impresora de red — para tablets +
+    #           servidor en la nube (Railway), sin drivers ni diálogos
     "modo_impresion": "terminal",
+    # Impresora térmica de red (modo "puente"): IP en la red del local,
+    # puerto RAW (9100 en casi todas) y ancho en columnas (48 u 42 según
+    # el modelo de 80 mm)
+    "impresora_ip": "",
+    "impresora_puerto": "9100",
+    "impresora_columnas": "42",
     # Kill switch del pedido por voz: apagado por defecto hasta validar la
     # Fase 2 (además requiere OPENAI_API_KEY y ANTHROPIC_API_KEY en .env)
     "voz_habilitada": "0",

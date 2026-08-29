@@ -195,7 +195,7 @@ export function Caja() {
     return () => window.clearTimeout(timer)
   }, [ticket])
 
-  const imprimeAqui = config?.modo_impresion !== 'estacion'
+  const imprimeAqui = (config?.modo_impresion ?? 'terminal') === 'terminal'
 
   // Igual que en la terminal: un plato al momento (también dentro de un
   // menú) obliga a registrar con entrega separada; la caja puede corregirla
@@ -293,9 +293,10 @@ export function Caja() {
   const reimprimir = async (orden: OrdenOut) => {
     try {
       const cfg = config ?? (await api.config())
-      if (cfg.modo_impresion === 'estacion') {
+      if (cfg.modo_impresion !== 'terminal') {
+        // Reencolar: lo imprime la ticketera o el puente, según el modo
         await api.reimprimirOrden(orden.id)
-        setMensaje(`Ticket #${String(orden.numero_orden_dia).padStart(3, '0')} enviado a la ticketera`)
+        setMensaje(`Ticket #${String(orden.numero_orden_dia).padStart(3, '0')} enviado a imprimir`)
       } else {
         setTicket({
           orden,

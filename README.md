@@ -182,6 +182,26 @@ Si la ticketera estuvo cerrada un rato, al abrirla imprime lo pendiente; tambié
 botón para descartar la cola sin imprimir. Las reimpresiones (botón de la pantalla final y
 🖨️ en admin) también salen por la estación cuando ese modo está activo.
 
+### Modo "puente": impresora térmica de red + tablets (y/o POS en la nube)
+
+Si tu impresora está conectada al **router** (tiene su propia IP, como con Loyverse) y no
+hay una PC con el driver instalado — o el POS corre en Railway y no puede alcanzar la red
+del local — usa el **puente de impresión**: un programita que corre en cualquier PC del
+local y manda los tickets **directo** a la impresora en comandos ESC/POS (sin diálogos,
+con tildes y corte automático).
+
+1. En `/admin → Configuración` elige el modo **"Puente del local → impresora de red"**,
+   pon la **IP de la impresora** (la misma que usabas en Loyverse; casi todas la imprimen
+   manteniendo apretado el botón FEED al prenderlas), el puerto (9100) y el ancho en
+   caracteres (48 o 42 según el modelo). Guarda.
+2. En una PC del local (solo necesita Python 3 y estar prendida durante el servicio):
+   `scripts\puente.bat` — la primera vez pide la URL del POS y el PIN, y los recuerda.
+   En Linux/Mac: `python scripts/puente_impresion.py --url https://TU-POS --pin 1234`.
+3. Prueba con el botón **"🖨 Imprimir ticket de prueba"** de esa misma pantalla.
+
+El puente revisa la cola cada 3 segundos; si la impresora está apagada, el ticket espera
+en cola y se reintenta solo. Las reimpresiones también salen por el puente.
+
 ## Cómo cargar el primer menú del día
 
 1. `python seed.py` ya deja un menú de ejemplo cargado (sopa criolla, lomo saltado, ají de

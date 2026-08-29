@@ -15,12 +15,19 @@ export function Ticketera() {
   const [enCola, setEnCola] = useState(0)
   const [impresos, setImpresos] = useState(0)
   const [conectado, setConectado] = useState(true)
+  // En modo "puente" la cola la atiende el puente del local (ESC/POS
+  // directo): esta página no debe pelearle los tickets
+  const [modoPuente, setModoPuente] = useState(false)
   const procesando = useRef(false)
+
+  useEffect(() => {
+    api.config().then((c) => setModoPuente(c.modo_impresion === 'puente')).catch(() => {})
+  }, [])
 
   // Polling cada 3 segundos: toma la orden más antigua sin imprimir
   useEffect(() => {
     const revisar = async () => {
-      if (procesando.current) return
+      if (procesando.current || modoPuente) return
       try {
         const data = await api.pendientesImpresion()
         setConectado(true)
@@ -36,7 +43,7 @@ export function Ticketera() {
     revisar()
     const intervalo = window.setInterval(revisar, 3_000)
     return () => window.clearInterval(intervalo)
-  }, [])
+  }, [modoPuente])
 
   // Imprime cuando el ticket ya está montado y lo saca de la cola
   useEffect(() => {
@@ -69,6 +76,13 @@ export function Ticketera() {
   return (
     <div className="pantalla-ticketera">
       <h1>🖨️ Estación de impresión</h1>
+      {modoPuente && (
+        <p className="nota-advertencia">
+          El sistema está en modo <strong>puente</strong>: los tickets los imprime el puente
+          del local directo en la impresora de red, no esta página. Si quieres imprimir desde
+          aquí, cambia el modo en Admin → Configuración.
+        </p>
+      )}
       <div className={`ticketera-estado ${conectado ? '' : 'sin-conexion'}`}>
         {!conectado
           ? 'Sin conexión con el sistema…'

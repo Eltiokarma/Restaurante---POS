@@ -221,9 +221,9 @@ export function Cliente() {
 
   // Imprimir el ticket cuando ya está montado en el DOM. Con cleanup: si el
   // cliente toca la pantalla y sale antes de que dispare, no se imprime una
-  // hoja en blanco. En modo "estacion" no se imprime aquí: el ticket sale
-  // por la PC que tiene abierta /ticketera.
-  const imprimeAqui = config?.modo_impresion !== 'estacion'
+  // hoja en blanco. En "estacion" imprime la PC con /ticketera; en "puente"
+  // el puente del local manda ESC/POS directo a la impresora de red.
+  const imprimeAqui = (config?.modo_impresion ?? 'terminal') === 'terminal'
   useEffect(() => {
     if (pantalla !== 'final' || !ordenFinal || !imprimeAqui) return
     const timer = window.setTimeout(() => window.print(), 200)

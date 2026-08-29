@@ -2896,6 +2896,22 @@ select:focus-visible {
   padding-left: 12px;
 }
 
+/* Configuración de la impresora (modo puente) */
+.panel-impresora {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--papel-alto);
+  border: 2px solid var(--linea);
+  border-left: 10px solid var(--mayolica, var(--achiote));
+  border-radius: var(--r);
+  padding: 14px 16px;
+}
+
+.panel-impresora button {
+  align-self: flex-start;
+}
+
 /* ---------- Menores §4: cintillo, descuadre grande, fotos ---------- */
 
 /* Orden anulada: 60 segundos en cocina con "no preparar" */
