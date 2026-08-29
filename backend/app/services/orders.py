@@ -26,22 +26,33 @@ def crear_orden(
     db: Session,
     items: list[dict],
     duracion_seg: int | None = None,
-    tipo_servicio: str = "sala",
     origen: str = "tactil",
 ) -> Orden:
     """Crea una orden confirmada (tras la ventana de cancelación).
 
-    ``items`` es una lista de {"plato_id": int, "cantidad": int}.
+    ``items`` es una lista de {"plato_id", "cantidad", "empaque"?}.
     Nombre y precio se toman de la BD en el momento de crear la orden
     (snapshot), no del payload del cliente. ``duracion_seg`` es cuánto
     demoró el cliente en armar y confirmar (lo mide la terminal).
+
+    El tipo de servicio de la orden se deriva de los empaques: todo
+    "mesa" = sala; nada "mesa" = llevar; mezcla = mixto.
     """
     with _lock_creacion:
-        return _crear_orden(db, items, duracion_seg, tipo_servicio, origen)
+        return _crear_orden(db, items, duracion_seg, origen)
+
+
+def _tipo_servicio_de(empaques: list[str]) -> str:
+    en_mesa = [e == "mesa" for e in empaques]
+    if all(en_mesa):
+        return "sala"
+    if not any(en_mesa):
+        return "llevar"
+    return "mixto"
 
 
 def _crear_orden(
-    db: Session, items: list[dict], duracion_seg: int | None, tipo_servicio: str, origen: str
+    db: Session, items: list[dict], duracion_seg: int | None, origen: str
 ) -> Orden:
     ahora = ahora_lima()
     hoy = ahora.date()
@@ -58,7 +69,7 @@ def _crear_orden(
         total=0.0,
         estado="pendiente",
         duracion_seg=duracion_seg,
-        tipo_servicio=tipo_servicio,
+        tipo_servicio=_tipo_servicio_de([i.get("empaque", "mesa") for i in items]),
         origen=origen,
     )
 
@@ -77,6 +88,7 @@ def _crear_orden(
                 nombre_snapshot=plato.nombre,
                 precio_snapshot=plato.precio,
                 cantidad=cantidad,
+                empaque=item.get("empaque", "mesa"),
             )
         )
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, NOMBRE_SERVICIO } from '../api'
+import { api, NOMBRE_EMPAQUE, NOMBRE_SERVICIO } from '../api'
 import type { OrdenOut } from '../api'
 
 const SIGUIENTE_ESTADO: Record<string, string> = {
@@ -100,12 +100,15 @@ export function Cocina() {
   // Entregadas y anuladas desaparecen de la vista (quedan en BD)
   const activas = ordenes.filter((o) => o.estado !== 'entregado' && o.estado !== 'anulada')
 
-  // Resumen para cocinar por tandas: total por plato de lo que falta salir
-  const porSalir = new Map<string, number>()
+  // Resumen para cocinar por tandas: total por plato de lo que falta salir,
+  // con desglose por empaque (5× Lomo: 3 mesa · 2 táper)
+  const porSalir = new Map<string, { total: number; empaques: Map<string, number> }>()
   for (const o of activas) {
-    if (o.estado === 'entregado') continue
     for (const item of o.items) {
-      porSalir.set(item.nombre, (porSalir.get(item.nombre) ?? 0) + item.cantidad)
+      const acumulado = porSalir.get(item.nombre) ?? { total: 0, empaques: new Map() }
+      acumulado.total += item.cantidad
+      acumulado.empaques.set(item.empaque, (acumulado.empaques.get(item.empaque) ?? 0) + item.cantidad)
+      porSalir.set(item.nombre, acumulado)
     }
   }
   const seleccionadasAvanzables = activas.filter(
@@ -124,10 +127,15 @@ export function Cocina() {
         <div className="cocina-resumen-cola">
           <span className="cocina-resumen-titulo">Por salir:</span>
           {[...porSalir.entries()]
-            .sort((a, b) => b[1] - a[1])
-            .map(([nombre, cantidad]) => (
+            .sort((a, b) => b[1].total - a[1].total)
+            .map(([nombre, info]) => (
               <span key={nombre} className="cocina-resumen-item">
-                <strong>{cantidad}×</strong> {nombre}
+                <strong>{info.total}×</strong> {nombre}
+                {(info.empaques.size > 1 || !info.empaques.has('mesa')) && (
+                  <span className="cocina-resumen-empaques">
+                    {' '}({[...info.empaques.entries()].map(([e, n]) => `${n} ${e}`).join(' · ')})
+                  </span>
+                )}
               </span>
             ))}
         </div>
@@ -171,6 +179,9 @@ export function Cocina() {
                 {orden.items.map((item, i) => (
                   <li key={i}>
                     <strong>{item.cantidad} ×</strong> {item.nombre}
+                    {item.empaque !== 'mesa' && (
+                      <span className="item-empaque">{NOMBRE_EMPAQUE[item.empaque]}</span>
+                    )}
                   </li>
                 ))}
               </ul>

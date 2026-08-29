@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { ItemCarrito, Plato } from '../api'
+import type { Empaque, ItemCarrito, Plato } from '../api'
 
 // El carrito vive SOLO en el estado del frontend hasta que termina la
 // ventana de cancelación; recién ahí se persiste en el backend.
@@ -10,12 +10,21 @@ export function useCarrito() {
     setItems((prev) => {
       const existente = prev.find((i) => i.plato.id === plato.id)
       if (!existente) {
-        return delta > 0 ? [...prev, { plato, cantidad: delta }] : prev
+        return delta > 0 ? [...prev, { plato, cantidad: delta, empaque: 'mesa' as Empaque }] : prev
       }
       const nueva = existente.cantidad + delta
       if (nueva <= 0) return prev.filter((i) => i.plato.id !== plato.id)
       return prev.map((i) => (i.plato.id === plato.id ? { ...i, cantidad: nueva } : i))
     })
+  }, [])
+
+  // Empaque POR PLATO: mesa, táper, bolsa o lonchera
+  const cambiarEmpaque = useCallback((platoId: number, empaque: Empaque) => {
+    setItems((prev) => prev.map((i) => (i.plato.id === platoId ? { ...i, empaque } : i)))
+  }, [])
+
+  const empaqueParaTodos = useCallback((empaque: Empaque) => {
+    setItems((prev) => prev.map((i) => ({ ...i, empaque })))
   }, [])
 
   const cantidadDe = useCallback(
@@ -50,6 +59,8 @@ export function useCarrito() {
   return {
     items,
     cambiarCantidad,
+    cambiarEmpaque,
+    empaqueParaTodos,
     cantidadDe,
     vaciar,
     eliminarNoDisponibles,

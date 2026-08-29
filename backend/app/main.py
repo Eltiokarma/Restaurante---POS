@@ -1,9 +1,11 @@
 import asyncio
+import hmac
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -37,6 +39,12 @@ def _migrar(engine_) -> None:
         columnas_platos = [fila[1] for fila in conn.execute(text("PRAGMA table_info(platos)"))]
         if columnas_platos and "sinonimos" not in columnas_platos:
             conn.execute(text("ALTER TABLE platos ADD COLUMN sinonimos TEXT NOT NULL DEFAULT '[]'"))
+            conn.commit()
+        columnas_items = [fila[1] for fila in conn.execute(text("PRAGMA table_info(orden_items)"))]
+        if columnas_items and "empaque" not in columnas_items:
+            conn.execute(text(
+                "ALTER TABLE orden_items ADD COLUMN empaque TEXT NOT NULL DEFAULT 'mesa'"
+            ))
             conn.commit()
 
 @asynccontextmanager
@@ -82,6 +90,27 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 _migrar(engine)
+
+# --- Candado del local (para despliegues en internet, ej. Railway) ---
+# Si la variable de entorno PIN_LOCAL está definida, TODA la API (salvo
+# /api/health y /api/admin/login) exige el header X-Pin-Local con ese
+# valor. El frontend lo pide una sola vez por dispositivo. En la LAN del
+# local (sin PIN_LOCAL) nada cambia.
+RUTAS_SIN_PIN = ("/api/health", "/api/admin/login")
+
+
+@app.middleware("http")
+async def _candado_pin(request: Request, call_next):
+    pin = os.getenv("PIN_LOCAL", "")
+    if (
+        pin
+        and request.url.path.startswith("/api")
+        and request.url.path not in RUTAS_SIN_PIN
+        and request.method != "OPTIONS"
+        and not hmac.compare_digest(request.headers.get("X-Pin-Local", ""), pin)
+    ):
+        return JSONResponse(status_code=401, content={"detail": "PIN requerido"})
+    return await call_next(request)
 
 app.include_router(menu.router)
 app.include_router(orders.router)

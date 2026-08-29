@@ -36,6 +36,9 @@ export function Ticket({ orden, local }: Props) {
             <tr key={i}>
               <td>
                 {item.cantidad} × {item.nombre}
+                {item.empaque !== 'mesa' && (
+                  <span className="ticket-item-empaque"> [{item.empaque.toUpperCase()}]</span>
+                )}
               </td>
               <td className="ticket-subtotal">{soles(item.subtotal)}</td>
             </tr>

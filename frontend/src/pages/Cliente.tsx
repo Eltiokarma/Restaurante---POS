@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, NOMBRE_CATEGORIA, NOMBRE_SERVICIO, soles } from '../api'
-import type { ConfigOut, DatosLocal, OrdenOut, Plato, TipoServicio, VozItemResuelto } from '../api'
+import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, soles } from '../api'
+import type { ConfigOut, DatosLocal, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
 import { PedidoPorVoz } from '../components/PedidoPorVoz'
@@ -22,7 +22,6 @@ export function Cliente() {
   const [errorConexion, setErrorConexion] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [ordenFinal, setOrdenFinal] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
-  const [tipoServicio, setTipoServicio] = useState<TipoServicio>('sala')
   const [vozAbierta, setVozAbierta] = useState(false)
   // Para el campo origen de la orden: qué canales llenaron el carrito
   const usoVoz = useRef(false)
@@ -60,7 +59,6 @@ export function Cliente() {
       setConfirmandoCancelarTodo(false)
       setErrorConexion('')
       setMensajeInicio(mensaje)
-      setTipoServicio('sala')
       setVozAbierta(false)
       usoVoz.current = false
       usoTactil.current = false
@@ -116,9 +114,8 @@ export function Cliente() {
         : undefined
       const origen = usoVoz.current && usoTactil.current ? 'mixto' : usoVoz.current ? 'voz' : 'tactil'
       const resultado = await api.crearOrden(
-        carrito.items.map((i) => ({ plato_id: i.plato.id, cantidad: i.cantidad })),
+        carrito.items.map((i) => ({ plato_id: i.plato.id, cantidad: i.cantidad, empaque: i.empaque })),
         duracion,
-        tipoServicio,
         origen,
       )
       setOrdenFinal(resultado)
@@ -251,33 +248,43 @@ export function Cliente() {
       <div className="pantalla pantalla-resumen">
         <h1>Tu pedido</h1>
         {errorConexion && <div className="banner-error">{errorConexion}</div>}
-        <div className="lista-resumen">
-          {carrito.items.map((i) => (
-            <div className="linea-resumen" key={i.plato.id}>
-              <span>
-                {i.cantidad} × {i.plato.nombre}
-              </span>
-              <span className="linea-resumen-precios">
-                {soles(i.plato.precio)} c/u — <strong>{soles(i.plato.precio * i.cantidad)}</strong>
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="total-grande">TOTAL: {soles(carrito.totalSoles)}</div>
         <div className="selector-servicio">
-          <span className="selector-servicio-titulo">¿Cómo lo quieres?</span>
-          <div className="selector-servicio-botones">
-            {(['sala', 'llevar', 'mixto'] as TipoServicio[]).map((t) => (
-              <button
-                key={t}
-                className={`boton-servicio ${tipoServicio === t ? 'servicio-activo' : ''}`}
-                onClick={() => setTipoServicio(t)}
-              >
-                {NOMBRE_SERVICIO[t]}
+          <span className="selector-servicio-titulo">¿Cómo va cada plato?</span>
+          <div className="selector-servicio-botones fila-todos">
+            <span className="etiqueta-todos">Todos:</span>
+            {EMPAQUES.map((e) => (
+              <button key={e} className="boton-servicio boton-empaque" onClick={() => carrito.empaqueParaTodos(e)}>
+                {NOMBRE_EMPAQUE[e]}
               </button>
             ))}
           </div>
         </div>
+        <div className="lista-resumen">
+          {carrito.items.map((i) => (
+            <div className="linea-resumen linea-con-empaque" key={i.plato.id}>
+              <div className="linea-resumen-fila">
+                <span>
+                  {i.cantidad} × {i.plato.nombre}
+                </span>
+                <span className="linea-resumen-precios">
+                  {soles(i.plato.precio)} c/u — <strong>{soles(i.plato.precio * i.cantidad)}</strong>
+                </span>
+              </div>
+              <div className="empaques-linea">
+                {EMPAQUES.map((e) => (
+                  <button
+                    key={e}
+                    className={`boton-servicio boton-empaque ${i.empaque === e ? 'servicio-activo' : ''}`}
+                    onClick={() => carrito.cambiarEmpaque(i.plato.id, e)}
+                  >
+                    {NOMBRE_EMPAQUE[e]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="total-grande">TOTAL: {soles(carrito.totalSoles)}</div>
         <div className="botones-resumen">
           <button className="boton-grande boton-secundario" onClick={() => setPantalla('menu')}>
             ← Modificar
