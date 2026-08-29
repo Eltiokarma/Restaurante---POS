@@ -60,6 +60,10 @@ class Orden(Base):
     # efectivo | tarjeta | yape — lo registra la caja al cobrar.
     # None = sin registrar (el cierre lo asume efectivo, comportamiento histórico)
     metodo_pago: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Mesas asignadas al ticket (JSON de ids). Varias = mesas combinadas.
+    mesa_ids: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    # True cuando la caja liberó las mesas de este ticket (clientes se fueron)
+    mesa_liberada: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
     items: Mapped[list["OrdenItem"]] = relationship(
@@ -137,6 +141,17 @@ class CierreCaja(Base):
     notas: Mapped[str] = mapped_column(Text, default="", nullable=False)
 
 
+class Mesa(Base):
+    """Mesa del local. La ocupación se calcula desde las órdenes del día."""
+
+    __tablename__ = "mesas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(40), nullable=False)
+    activa: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
+
+
 class Insumo(Base):
     """Insumo de cocina (papa, arroz, carne…) con stock y costo promedio."""
 
@@ -203,4 +218,7 @@ CONFIG_DEFAULTS: dict[str, str] = {
     # Kill switch del pedido por voz: apagado por defecto hasta validar la
     # Fase 2 (además requiere OPENAI_API_KEY y ANTHROPIC_API_KEY en .env)
     "voz_habilitada": "0",
+    # Si está en 1, no se pueden registrar ventas hasta abrir la caja del
+    # día con su fondo inicial
+    "exigir_caja_abierta": "1",
 }

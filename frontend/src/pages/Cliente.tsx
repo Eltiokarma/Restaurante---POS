@@ -26,6 +26,23 @@ export function Cliente() {
   // Para el campo origen de la orden: qué canales llenaron el carrito
   const usoVoz = useRef(false)
   const usoTactil = useRef(false)
+  // Candado: si el local exige apertura de caja, la terminal no vende
+  // hasta que el cajero registre el fondo inicial
+  const [cajaLista, setCajaLista] = useState(true)
+
+  useEffect(() => {
+    if (pantalla !== 'inicio' || !config?.exigir_caja_abierta) {
+      setCajaLista(true)
+      return
+    }
+    const revisar = () =>
+      api.cajaHoy()
+        .then((c) => setCajaLista(c.abierta || c.cerrada))
+        .catch(() => setCajaLista(true)) // sin conexión: no bloquear de más
+    revisar()
+    const intervalo = window.setInterval(revisar, 15_000)
+    return () => window.clearInterval(intervalo)
+  }, [pantalla, config?.exigir_caja_abierta])
 
   const { sincronizarConMenu, vaciar } = carrito
   const cargarMenu = useCallback(async () => {
@@ -176,6 +193,15 @@ export function Cliente() {
   // ---------- Pantallas ----------
 
   if (pantalla === 'inicio') {
+    if (!cajaLista) {
+      return (
+        <div className="pantalla pantalla-inicio">
+          <h1 className="logo-restaurante">{config?.nombre_local || 'Restaurante'}</h1>
+          <div className="aviso-cancelado">🕐 Un momentito, aún estamos abriendo la caja…</div>
+          <p className="texto-toca">La terminal se habilita sola cuando la caja abra</p>
+        </div>
+      )
+    }
     // "Toca la pantalla para empezar": cualquier toque inicia el pedido
     return (
       <div className="pantalla pantalla-inicio" onClick={empezarPedido}>

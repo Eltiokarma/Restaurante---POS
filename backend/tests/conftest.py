@@ -24,6 +24,14 @@ PASSWORD = "testpass"
 def base_limpia():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    # El candado de apertura de caja (default de producción: encendido) se
+    # apaga para los tests; los del candado lo encienden explícitamente
+    from app.models import Config
+
+    db = SessionLocal()
+    db.add(Config(clave="exigir_caja_abierta", valor="0"))
+    db.commit()
+    db.close()
     yield
 
 

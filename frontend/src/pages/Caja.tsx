@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles } from '../api'
-import type { CajaEstado, ConfigOut, DatosLocal, MetodoPago, OrdenOut, Plato } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
 import { TarjetaPlato } from '../components/TarjetaPlato'
@@ -30,6 +30,18 @@ export function Caja() {
   const [estadoCaja, setEstadoCaja] = useState<CajaEstado | null>(null)
   const [montoCaja, setMontoCaja] = useState('')
   const [cerrandoCaja, setCerrandoCaja] = useState(false)
+  const [mesas, setMesas] = useState<MesaEstado[]>([])
+  const [mesasNuevoPedido, setMesasNuevoPedido] = useState<number[]>([])
+  // Orden a la que se le está eligiendo mesa (muestra los chips inline)
+  const [asignandoMesa, setAsignandoMesa] = useState<number | null>(null)
+
+  const cargarMesas = useCallback(async () => {
+    try {
+      setMesas((await api.mesas()).mesas)
+    } catch {
+      /* sin conexión: se mantiene lo último */
+    }
+  }, [])
   const carrito = useCarrito()
   const { sincronizarConMenu } = carrito
 
@@ -67,13 +79,39 @@ export function Caja() {
     cargarMenu()
     cargarOrdenes()
     cargarCaja()
+    cargarMesas()
     const iMenu = window.setInterval(cargarMenu, 30_000)
     const iOrdenes = window.setInterval(cargarOrdenes, 10_000)
+    const iMesas = window.setInterval(cargarMesas, 10_000)
     return () => {
       window.clearInterval(iMenu)
       window.clearInterval(iOrdenes)
+      window.clearInterval(iMesas)
     }
-  }, [cargarMenu, cargarOrdenes, cargarCaja])
+  }, [cargarMenu, cargarOrdenes, cargarCaja, cargarMesas])
+
+  const liberarMesa = async (mesa: MesaEstado) => {
+    if (!window.confirm(`¿Liberar la ${mesa.nombre}? (tickets #${mesa.ordenes.join(', #')})`)) return
+    try {
+      await api.liberarMesa(mesa.id)
+      setMensaje(`${mesa.nombre} liberada`)
+      cargarMesas()
+      cargarOrdenes()
+    } catch {
+      setError('No se pudo liberar la mesa')
+    }
+  }
+
+  const asignarMesasAOrden = async (orden: OrdenOut, mesaIds: number[]) => {
+    try {
+      await api.asignarMesas(orden.id, mesaIds)
+      setAsignandoMesa(null)
+      cargarOrdenes()
+      cargarMesas()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo asignar la mesa')
+    }
+  }
 
   const abrirCaja = async () => {
     const monto = parseFloat(montoCaja)
@@ -139,10 +177,15 @@ export function Caja() {
     try {
       const resultado = await api.crearOrden(
         carrito.items.map((i) => ({ plato_id: i.plato.id, cantidad: i.cantidad, empaque: i.empaque })),
+        undefined,
+        'tactil',
+        mesasNuevoPedido,
       )
       carrito.vaciar()
+      setMesasNuevoPedido([])
       cargarOrdenes()
       cargarCaja()
+      cargarMesas()
       const numero = String(resultado.orden.numero_orden_dia).padStart(3, '0')
       if (imprimeAqui) {
         setTicket(resultado)
@@ -310,6 +353,23 @@ export function Caja() {
         </div>
       )}
 
+      {mesas.length > 0 && (
+        <div className="panel-mesas">
+          <span className="panel-mesas-titulo">Mesas:</span>
+          {mesas.filter((m) => m.activa).map((m) => (
+            <button
+              key={m.id}
+              className={`chip-mesa ${m.ocupada ? 'mesa-ocupada' : 'mesa-libre'}`}
+              onClick={() => (m.ocupada ? liberarMesa(m) : undefined)}
+              title={m.ocupada ? `Ocupada por #${m.ordenes.join(', #')} — toca para liberar` : 'Libre'}
+            >
+              🪑 {m.nombre}
+              {m.ocupada && <span className="chip-mesa-tickets"> #{m.ordenes.join(' #')}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="caja-columnas">
         <section className="caja-nuevo">
           <h2>Nuevo pedido</h2>
@@ -354,6 +414,26 @@ export function Caja() {
               ))}
             </div>
           )}
+          {mesas.some((m) => m.activa) && carrito.totalItems > 0 && (
+            <div className="caja-mesas-nuevo">
+              <span className="cobro-etiqueta">Mesa (elige varias para combinar):</span>
+              <div className="empaques-linea">
+                {mesas.filter((m) => m.activa).map((m) => (
+                  <button
+                    key={m.id}
+                    className={`boton-servicio boton-empaque boton-empaque-caja ${mesasNuevoPedido.includes(m.id) ? 'servicio-activo' : ''} ${m.ocupada && !mesasNuevoPedido.includes(m.id) ? 'mesa-chip-ocupada' : ''}`}
+                    onClick={() =>
+                      setMesasNuevoPedido((prev) =>
+                        prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id],
+                      )
+                    }
+                  >
+                    {m.nombre}{m.ocupada ? ' •' : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="caja-acciones">
             <button
               className="boton-grande boton-secundario"
@@ -387,6 +467,9 @@ export function Caja() {
                   {o.tipo_servicio !== 'sala' && (
                     <span className="badge-servicio">{NOMBRE_SERVICIO[o.tipo_servicio]}</span>
                   )}
+                  {o.mesas.length > 0 && !o.mesa_liberada && (
+                    <span className="badge-mesa">🪑 {o.mesas.join(' + ')}</span>
+                  )}
                   <span className="caja-orden-hora">{o.hora.slice(0, 5)}</span>
                   <span className="caja-orden-total">{soles(o.total)}</span>
                 </div>
@@ -412,10 +495,34 @@ export function Caja() {
                     <button onClick={() => avanzar(o)}>▶ {SIGUIENTE_ESTADO[o.estado]}</button>
                   )}
                   <button onClick={() => reimprimir(o)}>🖨️ Ticket</button>
+                  {o.estado !== 'anulada' && (
+                    <button onClick={() => setAsignandoMesa(asignandoMesa === o.id ? null : o.id)}>
+                      🪑 Mesa
+                    </button>
+                  )}
                   {o.estado !== 'anulada' && o.estado !== 'entregado' && (
                     <button className="boton-anular" onClick={() => anular(o)}>✖ Anular</button>
                   )}
                 </div>
+                {asignandoMesa === o.id && (
+                  <div className="empaques-linea">
+                    {mesas.filter((m) => m.activa).map((m) => (
+                      <button
+                        key={m.id}
+                        className={`boton-servicio boton-empaque boton-empaque-caja ${o.mesa_ids.includes(m.id) && !o.mesa_liberada ? 'servicio-activo' : ''}`}
+                        onClick={() => {
+                          const actuales = o.mesa_liberada ? [] : o.mesa_ids
+                          const nuevas = actuales.includes(m.id)
+                            ? actuales.filter((x) => x !== m.id)
+                            : [...actuales, m.id]
+                          asignarMesasAOrden(o, nuevas)
+                        }}
+                      >
+                        {m.nombre}{m.ocupada && !o.mesa_ids.includes(m.id) ? ' •' : ''}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             {ordenes.length === 0 && <p className="nota-admin">Todavía no hay pedidos hoy.</p>}

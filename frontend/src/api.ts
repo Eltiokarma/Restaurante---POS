@@ -43,6 +43,9 @@ export interface OrdenOut {
   estado: string
   tipo_servicio: TipoServicio
   metodo_pago: MetodoPago | null
+  mesa_ids: number[]
+  mesas: string[]
+  mesa_liberada: boolean
   minutos_espera: number
   items: OrdenItemOut[]
 }
@@ -128,6 +131,15 @@ export interface ConfigOut {
   // Toggle guardado (admin) y disponibilidad efectiva (toggle + API keys)
   voz_habilitada: boolean
   voz_disponible: boolean
+  exigir_caja_abierta: boolean
+}
+
+export interface MesaEstado {
+  id: number
+  nombre: string
+  activa: boolean
+  ocupada: boolean
+  ordenes: number[]
 }
 
 export type OrigenPedido = 'tactil' | 'voz' | 'mixto'
@@ -232,11 +244,39 @@ export const api = {
     items: { plato_id: number; cantidad: number; empaque: Empaque }[],
     duracionSeg?: number,
     origen: OrigenPedido = 'tactil',
+    mesaIds: number[] = [],
   ) =>
     request<{ orden: OrdenOut; local: DatosLocal }>('/api/orders', {
       method: 'POST',
-      body: JSON.stringify({ items, duracion_seg: duracionSeg, origen }),
+      body: JSON.stringify({ items, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds }),
     }),
+
+  ordenesDeDia: (fecha: string) =>
+    request<{ fecha: string; ordenes: OrdenOut[]; total_vendido: number }>(
+      `/api/orders/of-day?fecha=${fecha}`),
+
+  // --- Mesas ---
+  mesas: () => request<{ mesas: MesaEstado[] }>('/api/mesas'),
+
+  crearMesa: (nombre: string) =>
+    request<MesaEstado>('/api/mesas', { method: 'POST', body: JSON.stringify({ nombre }) }, true),
+
+  actualizarMesa: (id: number, cambios: { nombre?: string; activa?: boolean }) =>
+    request<MesaEstado>(`/api/mesas/${id}`, { method: 'PUT', body: JSON.stringify(cambios) }, true),
+
+  liberarMesa: (id: number) =>
+    request<{ mesa_id: number; tickets_liberados: number }>(`/api/mesas/${id}/liberar`, {
+      method: 'POST',
+    }),
+
+  asignarMesas: (ordenId: number, mesaIds: number[]) =>
+    request<{ id: number; mesa_ids: number[]; mesas: string[] }>(`/api/orders/${ordenId}/mesas`, {
+      method: 'PATCH',
+      body: JSON.stringify({ mesa_ids: mesaIds }),
+    }),
+
+  cierresHistorial: () =>
+    request<{ cierres: CajaEstado[] }>('/api/caja/historial', {}, true),
 
   // --- Pedido por voz ---
   vozOrden: async (audio: Blob, duracionSeg: number): Promise<VozRespuesta> => {

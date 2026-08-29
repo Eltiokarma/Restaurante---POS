@@ -173,6 +173,9 @@ export function Cocina() {
                     {NOMBRE_SERVICIO[orden.tipo_servicio]}
                   </span>
                 )}
+                {orden.mesas.length > 0 && !orden.mesa_liberada && (
+                  <span className="badge-mesa badge-servicio-cocina">🪑 {orden.mesas.join(' + ')}</span>
+                )}
                 <span className="tarjeta-orden-hora">pedido a las {orden.hora.slice(0, 5)}</span>
               </div>
               <ul className="tarjeta-orden-items">
