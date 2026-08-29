@@ -286,6 +286,9 @@ export function Caja() {
               : (estadoCaja.diferencia ?? 0) > 0
                 ? `sobran ${soles(estadoCaja.diferencia ?? 0)}`
                 : `faltan ${soles(-(estadoCaja.diferencia ?? 0))}`}
+            {estadoCaja.ventas_despues_del_cierre && (
+              <strong> · ⚠ hubo ventas o cambios después del cierre: corrige el conteo</strong>
+            )}
           </span>
           {!cerrandoCaja ? (
             <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(true)}>

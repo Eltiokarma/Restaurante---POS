@@ -709,8 +709,18 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   const registrarMovimiento = async () => {
     const insumoId = parseInt(mov.insumoId)
     const cantidad = parseFloat(mov.cantidad)
-    if (!insumoId || !(cantidad >= 0)) {
-      setError('Elige el insumo y pon la cantidad')
+    const costo = parseFloat(mov.costo)
+    if (!insumoId) {
+      setError('Elige el insumo')
+      return
+    }
+    // Ajuste = conteo físico (0 es válido); compra y merma necesitan cantidad > 0
+    if (mov.tipo === 'ajuste' ? !(cantidad >= 0) : !(cantidad > 0)) {
+      setError(mov.tipo === 'ajuste' ? 'Pon el stock contado (puede ser 0)' : 'Pon una cantidad mayor a 0')
+      return
+    }
+    if (mov.tipo === 'compra' && !(costo > 0)) {
+      setError('Pon el costo total pagado por la compra (mayor a 0)')
       return
     }
     try {
@@ -718,7 +728,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
         insumoId,
         mov.tipo as 'compra' | 'merma' | 'ajuste',
         cantidad,
-        mov.tipo === 'compra' ? parseFloat(mov.costo) || 0 : undefined,
+        mov.tipo === 'compra' ? costo : undefined,
         mov.nota,
       )
       setMov({ insumoId: '', tipo: 'compra', cantidad: '', costo: '', nota: '' })

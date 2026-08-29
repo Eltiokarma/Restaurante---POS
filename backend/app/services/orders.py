@@ -97,6 +97,7 @@ def _crear_orden(
 
     orden.total = round(total, 2)
     db.add(orden)
+    db.flush()  # asigna orden.id ANTES de ligar los movimientos del kardex
 
     # Kardex: descuenta insumos según las recetas (si los platos las tienen)
     from .inventario import consumir_por_orden
