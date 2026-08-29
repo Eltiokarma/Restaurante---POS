@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from .db import BACKEND_DIR, Base, engine
-from .routes import admin, caja, cancellations, config, menu, orders, stats, voice
+from .routes import admin, caja, cancellations, config, insumos, menu, orders, stats, voice
 from .services.backup import ciclo_backup_automatico
 
 
@@ -46,6 +46,14 @@ def _migrar(engine_) -> None:
                 "ALTER TABLE orden_items ADD COLUMN empaque TEXT NOT NULL DEFAULT 'mesa'"
             ))
             conn.commit()
+        if columnas and "metodo_pago" not in columnas:
+            conn.execute(text("ALTER TABLE ordenes ADD COLUMN metodo_pago TEXT"))
+            conn.commit()
+        columnas_cierres = [fila[1] for fila in conn.execute(text("PRAGMA table_info(cierres_caja)"))]
+        for col in ("ventas_efectivo", "ventas_tarjeta", "ventas_yape"):
+            if columnas_cierres and col not in columnas_cierres:
+                conn.execute(text(f"ALTER TABLE cierres_caja ADD COLUMN {col} FLOAT"))
+                conn.commit()
 
 @asynccontextmanager
 async def _ciclo_de_vida(app_: FastAPI):
@@ -120,6 +128,7 @@ app.include_router(admin.router)
 app.include_router(stats.router)
 app.include_router(caja.router)
 app.include_router(voice.router)
+app.include_router(insumos.router)
 
 
 @app.get("/api/health")

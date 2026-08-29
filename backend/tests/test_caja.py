@@ -48,7 +48,8 @@ def test_empaque_en_csv(client, admin_headers, menu_ejemplo):
 
 def test_estado_inicial_sin_abrir(client):
     data = client.get("/api/caja/hoy").json()
-    assert data == {"abierta": False, "cerrada": False, "total_vendido": 0}
+    assert data["abierta"] is False and data["cerrada"] is False
+    assert data["total_vendido"] == 0 and data["ventas_efectivo"] == 0
 
 
 def test_flujo_apertura_y_cierre(client, menu_ejemplo):

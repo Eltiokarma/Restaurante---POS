@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, NOMBRE_CATEGORIA } from '../api'
-import type { ConfigOut, DatosLocal, OrdenOut, Plato, StatsOut, VozPanel } from '../api'
+import type { ConfigOut, DatosLocal, Insumo, MovimientoKardex, OrdenOut, Plato, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
-type Tab = 'resumen' | 'menu' | 'ordenes' | 'cancelaciones' | 'voz' | 'config'
+type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'cancelaciones' | 'voz' | 'config'
 
 interface PlatoEditable {
   id?: number
@@ -30,6 +30,7 @@ export function Admin() {
           <button className={tab === 'resumen' ? 'activa' : ''} onClick={() => setTab('resumen')}>Resumen</button>
           <button className={tab === 'menu' ? 'activa' : ''} onClick={() => setTab('menu')}>Menú del día</button>
           <button className={tab === 'ordenes' ? 'activa' : ''} onClick={() => setTab('ordenes')}>Órdenes de hoy</button>
+          <button className={tab === 'insumos' ? 'activa' : ''} onClick={() => setTab('insumos')}>Insumos</button>
           <button className={tab === 'cancelaciones' ? 'activa' : ''} onClick={() => setTab('cancelaciones')}>Cancelaciones</button>
           <button className={tab === 'voz' ? 'activa' : ''} onClick={() => setTab('voz')}>Voz</button>
           <button className={tab === 'config' ? 'activa' : ''} onClick={() => setTab('config')}>Configuración</button>
@@ -48,6 +49,7 @@ export function Admin() {
         {tab === 'resumen' && <TabResumen onSesionVencida={() => setLogueado(false)} />}
         {tab === 'menu' && <TabMenu onSesionVencida={() => setLogueado(false)} />}
         {tab === 'ordenes' && <TabOrdenes />}
+        {tab === 'insumos' && <TabInsumos onSesionVencida={() => setLogueado(false)} />}
         {tab === 'cancelaciones' && <TabCancelaciones onSesionVencida={() => setLogueado(false)} />}
         {tab === 'voz' && <TabVoz onSesionVencida={() => setLogueado(false)} />}
         {tab === 'config' && <TabConfig onSesionVencida={() => setLogueado(false)} />}
@@ -650,6 +652,249 @@ function TabOrdenes() {
           <Ticket orden={ticket.orden} local={ticket.local} />
         </div>
       )}
+    </div>
+  )
+}
+
+// ---------- Insumos, recetas y kardex ----------
+
+function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [insumos, setInsumos] = useState<Insumo[]>([])
+  const [valorInventario, setValorInventario] = useState(0)
+  const [movimientos, setMovimientos] = useState<MovimientoKardex[]>([])
+  const [catalogo, setCatalogo] = useState<Plato[]>([])
+  const [mensaje, setMensaje] = useState('')
+  const [error, setError] = useState('')
+
+  // Formularios
+  const [nuevo, setNuevo] = useState({ nombre: '', unidad: 'kg', costo: '' })
+  const [mov, setMov] = useState({ insumoId: '', tipo: 'compra', cantidad: '', costo: '', nota: '' })
+  const [recetaPlato, setRecetaPlato] = useState('')
+  const [recetaItems, setRecetaItems] = useState<{ insumo_id: number; cantidad: string }[]>([])
+  const [costoPorcion, setCostoPorcion] = useState<number | null>(null)
+
+  const cargar = useCallback(async () => {
+    try {
+      const [datos, kardex, cat] = await Promise.all([
+        api.insumos(),
+        api.kardex(),
+        api.catalogo(),
+      ])
+      setInsumos(datos.insumos)
+      setValorInventario(datos.valor_inventario)
+      setMovimientos(kardex.movimientos)
+      setCatalogo(cat.platos)
+      setError('')
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }, [onSesionVencida])
+
+  useEffect(() => {
+    cargar()
+  }, [cargar])
+
+  const crearInsumo = async () => {
+    if (!nuevo.nombre.trim()) return
+    try {
+      await api.crearInsumo(nuevo.nombre.trim(), nuevo.unidad.trim() || 'unidad', parseFloat(nuevo.costo) || 0)
+      setNuevo({ nombre: '', unidad: 'kg', costo: '' })
+      setMensaje('Insumo creado ✔')
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const registrarMovimiento = async () => {
+    const insumoId = parseInt(mov.insumoId)
+    const cantidad = parseFloat(mov.cantidad)
+    if (!insumoId || !(cantidad >= 0)) {
+      setError('Elige el insumo y pon la cantidad')
+      return
+    }
+    try {
+      await api.movimientoInsumo(
+        insumoId,
+        mov.tipo as 'compra' | 'merma' | 'ajuste',
+        cantidad,
+        mov.tipo === 'compra' ? parseFloat(mov.costo) || 0 : undefined,
+        mov.nota,
+      )
+      setMov({ insumoId: '', tipo: 'compra', cantidad: '', costo: '', nota: '' })
+      setMensaje('Movimiento registrado ✔')
+      setError('')
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const cargarReceta = async (platoId: string) => {
+    setRecetaPlato(platoId)
+    setCostoPorcion(null)
+    if (!platoId) {
+      setRecetaItems([])
+      return
+    }
+    try {
+      const receta = await api.receta(parseInt(platoId))
+      setRecetaItems(receta.items.map((i) => ({ insumo_id: i.insumo_id, cantidad: String(i.cantidad) })))
+      setCostoPorcion(receta.costo_porcion)
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const guardarReceta = async () => {
+    if (!recetaPlato) return
+    try {
+      const receta = await api.guardarReceta(
+        parseInt(recetaPlato),
+        recetaItems
+          .map((i) => ({ insumo_id: i.insumo_id, cantidad: parseFloat(i.cantidad) || 0 }))
+          .filter((i) => i.cantidad > 0),
+      )
+      setCostoPorcion(receta.costo_porcion)
+      setMensaje('Receta guardada ✔ (las ventas descontarán estos insumos)')
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const precioPlato = catalogo.find((p) => p.id === parseInt(recetaPlato))?.precio
+
+  return (
+    <div>
+      {mensaje && <div className="banner-ok">{mensaje}</div>}
+      {error && <div className="banner-error">{error}</div>}
+
+      <h3 className="subtitulo-resumen">Inventario (valor: {soles(valorInventario)})</h3>
+      <table className="tabla-admin">
+        <thead>
+          <tr><th>Insumo</th><th>Unidad</th><th className="col-cantidad">Stock</th><th className="col-cantidad">Costo unit.</th><th className="col-total">Valor</th></tr>
+        </thead>
+        <tbody>
+          {insumos.map((i) => (
+            <tr key={i.id}>
+              <td>{i.nombre}</td>
+              <td>{i.unidad}</td>
+              <td className={`col-cantidad ${i.stock_actual < 0 ? 'stock-negativo' : ''}`}>{i.stock_actual}</td>
+              <td className="col-cantidad">{soles(i.costo_unitario)}</td>
+              <td className="col-total">{soles(i.valor)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {insumos.length === 0 && <p className="nota-admin">Todavía no hay insumos. Crea el primero abajo.</p>}
+
+      <div className="formularios-insumos">
+        <div className="form-insumo">
+          <h3 className="subtitulo-resumen">+ Nuevo insumo</h3>
+          <input placeholder="Nombre (Papa, Arroz…)" value={nuevo.nombre}
+                 onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
+          <input placeholder="Unidad (kg, l, unidad)" value={nuevo.unidad}
+                 onChange={(e) => setNuevo({ ...nuevo, unidad: e.target.value })} />
+          <input type="number" step="0.1" min="0" placeholder="Costo por unidad (opcional)"
+                 value={nuevo.costo} onChange={(e) => setNuevo({ ...nuevo, costo: e.target.value })} />
+          <button className="boton-primario" onClick={crearInsumo}>Crear</button>
+        </div>
+
+        <div className="form-insumo">
+          <h3 className="subtitulo-resumen">Registrar movimiento</h3>
+          <select value={mov.insumoId} onChange={(e) => setMov({ ...mov, insumoId: e.target.value })}>
+            <option value="">— Insumo —</option>
+            {insumos.map((i) => <option key={i.id} value={i.id}>{i.nombre} ({i.unidad})</option>)}
+          </select>
+          <select value={mov.tipo} onChange={(e) => setMov({ ...mov, tipo: e.target.value })}>
+            <option value="compra">🛒 Compra (entra stock)</option>
+            <option value="merma">🗑 Merma (se perdió)</option>
+            <option value="ajuste">📋 Ajuste (conteo físico)</option>
+          </select>
+          <input type="number" step="0.01" min="0"
+                 placeholder={mov.tipo === 'ajuste' ? 'Stock contado' : 'Cantidad'}
+                 value={mov.cantidad} onChange={(e) => setMov({ ...mov, cantidad: e.target.value })} />
+          {mov.tipo === 'compra' && (
+            <input type="number" step="0.1" min="0" placeholder="Costo total S/ de la compra"
+                   value={mov.costo} onChange={(e) => setMov({ ...mov, costo: e.target.value })} />
+          )}
+          <input placeholder="Nota (opcional)" value={mov.nota}
+                 onChange={(e) => setMov({ ...mov, nota: e.target.value })} />
+          <button className="boton-primario" onClick={registrarMovimiento}>Registrar</button>
+        </div>
+
+        <div className="form-insumo">
+          <h3 className="subtitulo-resumen">Receta por plato</h3>
+          <select value={recetaPlato} onChange={(e) => cargarReceta(e.target.value)}>
+            <option value="">— Plato —</option>
+            {catalogo.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+          {recetaPlato && (
+            <>
+              {recetaItems.map((item, idx) => (
+                <div className="receta-fila" key={idx}>
+                  <select
+                    value={item.insumo_id}
+                    onChange={(e) => setRecetaItems((prev) =>
+                      prev.map((x, i) => (i === idx ? { ...x, insumo_id: parseInt(e.target.value) } : x)))}
+                  >
+                    {insumos.map((i) => <option key={i.id} value={i.id}>{i.nombre}</option>)}
+                  </select>
+                  <input type="number" step="0.01" min="0" placeholder="Cant./porción"
+                         value={item.cantidad}
+                         onChange={(e) => setRecetaItems((prev) =>
+                           prev.map((x, i) => (i === idx ? { ...x, cantidad: e.target.value } : x)))} />
+                  <button className="boton-quitar"
+                          onClick={() => setRecetaItems((prev) => prev.filter((_, i) => i !== idx))}>✕</button>
+                </div>
+              ))}
+              <button
+                disabled={insumos.length === 0}
+                onClick={() => setRecetaItems((prev) => [...prev, { insumo_id: insumos[0]?.id ?? 0, cantidad: '' }])}
+              >
+                + Agregar insumo a la receta
+              </button>
+              <button className="boton-primario" onClick={guardarReceta}>💾 Guardar receta</button>
+              {costoPorcion !== null && (
+                <p className="nota-admin">
+                  Costo por porción: <strong>{soles(costoPorcion)}</strong>
+                  {precioPlato !== undefined && costoPorcion > 0 && (
+                    <> · margen: <strong>{soles(precioPlato - costoPorcion)}</strong> ({Math.round((1 - costoPorcion / precioPlato) * 100)}%)</>
+                  )}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      <h3 className="subtitulo-resumen">Kardex (últimos 7 días)</h3>
+      <table className="tabla-admin">
+        <thead>
+          <tr><th>Fecha</th><th>Hora</th><th>Insumo</th><th>Tipo</th><th className="col-cantidad">Cantidad</th><th>Referencia</th></tr>
+        </thead>
+        <tbody>
+          {movimientos.map((m) => (
+            <tr key={m.id}>
+              <td>{m.fecha}</td>
+              <td>{m.hora}</td>
+              <td>{m.insumo}</td>
+              <td>{m.tipo}{m.costo_total != null ? ` (${soles(m.costo_total)})` : ''}</td>
+              <td className={`col-cantidad ${m.cantidad < 0 ? 'stock-negativo' : ''}`}>
+                {m.cantidad > 0 ? '+' : ''}{m.cantidad} {m.unidad}
+              </td>
+              <td>{m.referencia}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {movimientos.length === 0 && <p className="nota-admin">Sin movimientos en los últimos 7 días.</p>}
+      <p className="nota-admin">
+        Las ventas descuentan insumos SOLO en los platos que tienen receta. Un stock en rojo
+        significa que se vendió más de lo que el kardex tenía: corrígelo con un ajuste de
+        conteo físico.
+      </p>
     </div>
   )
 }

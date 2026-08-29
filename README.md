@@ -7,10 +7,15 @@ cocina. **El pago se hace en la caja física**, mostrando el ticket.
 
 - **Vista de cliente** (`/`): pantalla táctil para armar el pedido, sin login.
 - **Vista de caja** (`/caja`): el cajero registra pedidos de quienes no usan la terminal
-  (sin ventana de cancelación) y gestiona los del día: avanzar estado, reimprimir ticket y
-  **anular** (la orden queda registrada pero no cuenta como venta). Incluye **apertura y
-  cierre de caja**: fondo inicial al abrir, conteo al cerrar y diferencia contra lo que el
-  sistema dice que se vendió (historial de cierres en el admin vía API).
+  (sin ventana de cancelación) y gestiona los del día: avanzar estado, reimprimir ticket,
+  **cobrar** (💵 efectivo / 💳 tarjeta / 📱 Yape) y **anular**. Incluye **apertura y
+  cierre de caja**: fondo inicial al abrir, conteo al cerrar, y la diferencia se cuadra
+  SOLO contra el efectivo esperado (tarjeta y Yape se reportan aparte). Una orden sin
+  método registrado se asume efectivo.
+- **Insumos y kardex** (Admin → Insumos): catálogo de insumos con stock y costo promedio,
+  recetas por plato (con costo por porción y margen), compras, mermas, ajustes por conteo
+  y **consumo automático por venta**: cada orden descuenta insumos según la receta, y
+  anularla los devuelve. Stock en rojo = vendiste más de lo que el kardex tenía.
 - **Tipo de servicio por pedido**: en sala, para llevar (lonchera/táper/bolsa) o mixto —
   se elige en la terminal o en caja, sale resaltado en el ticket y en cocina, y queda en el
   CSV de ventas.

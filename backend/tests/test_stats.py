@@ -66,7 +66,7 @@ def test_export_csv(client, admin_headers, menu_ejemplo):
     assert "ventas-" in r.headers["content-disposition"]
 
     lineas = r.text.lstrip("﻿").strip().split("\n")
-    assert lineas[0].startswith("fecha;orden;hora;estado;servicio;origen;plato")
+    assert lineas[0].startswith("fecha;orden;hora;estado;servicio;origen;pago;plato")
     assert len(lineas) == 4  # cabecera + 3 items (2+1 órdenes con 1 y 2 items)
     assert "Lomo saltado" in r.text
 
