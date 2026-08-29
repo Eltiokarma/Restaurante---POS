@@ -81,6 +81,12 @@
       como red de seguridad.
 - [x] **Movimiento de todos los días**: selector de fecha en Admin → Órdenes
       (`GET /api/orders/of-day`) e historial de cierres de caja (últimos 30) en el Resumen.
+- [x] **Mesas compartidas**: varios tickets pueden ocupar la misma mesa (local lleno).
+      "🪑✔ Se fue" libera solo la mesa de ESE ticket; la mesa queda libre cuando el último
+      grupo se va. Liberar la mesa completa desde el panel sigue disponible (con aviso).
+- [x] **Notas por plato**: pedidos especiales ("sin frijoles", "con un huevo frito") por
+      item — se escriben en terminal o caja, salen resaltadas en la tarjeta de cocina y en
+      el ticket impreso, y quedan en el CSV.
 - [ ] **Despliegue en Railway** (guía lista en el README): crear el proyecto con la cuenta
       del dueño, variables (`ADMIN_PASSWORD`, `PIN_LOCAL`), volumen en `/data` y dominio.
 - [ ] Kardex fase 2 (cuando se use en serio): reporte de consumo semanal, alertas de stock

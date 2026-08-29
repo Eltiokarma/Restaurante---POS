@@ -91,7 +91,12 @@ export function Caja() {
   }, [cargarMenu, cargarOrdenes, cargarCaja, cargarMesas])
 
   const liberarMesa = async (mesa: MesaEstado) => {
-    if (!window.confirm(`¿Liberar la ${mesa.nombre}? (tickets #${mesa.ordenes.join(', #')})`)) return
+    const aviso =
+      mesa.ordenes.length > 1
+        ? `¿Liberar la ${mesa.nombre} COMPLETA? Se liberan TODOS sus tickets (#${mesa.ordenes.join(', #')}). ` +
+          'Si solo se fue un grupo, usa "🪑 Se fue" en su ticket.'
+        : `¿Liberar la ${mesa.nombre}? (ticket #${mesa.ordenes.join(', #')})`
+    if (!window.confirm(aviso)) return
     try {
       await api.liberarMesa(mesa.id)
       setMensaje(`${mesa.nombre} liberada`)
@@ -99,6 +104,17 @@ export function Caja() {
       cargarOrdenes()
     } catch {
       setError('No se pudo liberar la mesa')
+    }
+  }
+
+  const seFue = async (orden: OrdenOut) => {
+    try {
+      await api.liberarMesaDeTicket(orden.id)
+      setMensaje(`Mesa del ticket #${String(orden.numero_orden_dia).padStart(3, '0')} liberada`)
+      cargarOrdenes()
+      cargarMesas()
+    } catch {
+      setError('No se pudo liberar la mesa del ticket')
     }
   }
 
@@ -176,7 +192,9 @@ export function Caja() {
     setMensaje('')
     try {
       const resultado = await api.crearOrden(
-        carrito.items.map((i) => ({ plato_id: i.plato.id, cantidad: i.cantidad, empaque: i.empaque })),
+        carrito.items.map((i) => ({
+          plato_id: i.plato.id, cantidad: i.cantidad, empaque: i.empaque, nota: i.nota.trim(),
+        })),
         undefined,
         'tactil',
         mesasNuevoPedido,
@@ -399,6 +417,13 @@ export function Caja() {
                   <span className="caja-carrito-nombre">
                     {i.cantidad} × {i.plato.nombre}
                   </span>
+                  <input
+                    className="input-nota-plato input-nota-caja"
+                    placeholder="📝 sin frijoles, con huevo frito…"
+                    maxLength={150}
+                    value={i.nota}
+                    onChange={(e) => carrito.cambiarNota(i.plato.id, e.target.value)}
+                  />
                   <div className="empaques-linea">
                     {EMPAQUES.map((e) => (
                       <button
@@ -474,7 +499,13 @@ export function Caja() {
                   <span className="caja-orden-total">{soles(o.total)}</span>
                 </div>
                 <div className="caja-orden-items">
-                  {o.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(', ')}
+                  {o.items.map((i, idx) => (
+                    <span key={idx}>
+                      {idx > 0 && ', '}
+                      {i.cantidad}× {i.nombre}
+                      {i.nota && <em className="nota-item"> ({i.nota})</em>}
+                    </span>
+                  ))}
                 </div>
                 {o.estado !== 'anulada' && (
                   <div className="caja-orden-cobro">
@@ -498,6 +529,11 @@ export function Caja() {
                   {o.estado !== 'anulada' && (
                     <button onClick={() => setAsignandoMesa(asignandoMesa === o.id ? null : o.id)}>
                       🪑 Mesa
+                    </button>
+                  )}
+                  {o.estado !== 'anulada' && o.mesas.length > 0 && !o.mesa_liberada && (
+                    <button onClick={() => seFue(o)} title="Libera solo la mesa de este ticket">
+                      🪑✔ Se fue
                     </button>
                   )}
                   {o.estado !== 'anulada' && o.estado !== 'entregado' && (

@@ -1841,6 +1841,47 @@ button {
   color: #fff;
 }
 
+/* Notas por plato (pedidos especiales) */
+.input-nota-plato {
+  font-family: inherit;
+  font-size: 1.05rem;
+  padding: 12px 14px;
+  border: 2px dashed #ddd3c6;
+  border-radius: 10px;
+  width: 100%;
+}
+
+.input-nota-plato:focus {
+  border-style: solid;
+  border-color: #b98a1f;
+  outline: none;
+}
+
+.input-nota-caja {
+  font-size: 0.95rem;
+  padding: 8px 12px;
+}
+
+.nota-item {
+  color: #8a5a00;
+  font-weight: 600;
+}
+
+.nota-cocina {
+  background: #f9a825;
+  color: #3d2c00;
+  font-weight: 800;
+  border-radius: 8px;
+  padding: 4px 10px;
+  margin-top: 4px;
+  font-size: 1.15rem;
+}
+
+.ticket-item-nota {
+  font-weight: 900;
+  padding-left: 12px;
+}
+
 .selector-fecha input {
   font-size: 1rem;
   padding: 8px 10px;

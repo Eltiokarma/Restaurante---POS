@@ -66,6 +66,9 @@ def _migrar(engine_) -> None:
                 "ALTER TABLE ordenes ADD COLUMN mesa_liberada BOOLEAN NOT NULL DEFAULT 0"
             ))
             conn.commit()
+        if columnas_items and "nota" not in columnas_items:
+            conn.execute(text("ALTER TABLE orden_items ADD COLUMN nota TEXT NOT NULL DEFAULT ''"))
+            conn.commit()
 
 @asynccontextmanager
 async def _ciclo_de_vida(app_: FastAPI):

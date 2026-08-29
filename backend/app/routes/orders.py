@@ -25,6 +25,8 @@ class ItemIn(BaseModel):
     cantidad: int = Field(gt=0, le=50)
     # mesa (default) | taper | bolsa | lonchera — por plato, no por orden
     empaque: str = "mesa"
+    # Pedido especial: "sin frijoles", "con un huevo frito"…
+    nota: str = Field(default="", max_length=150)
 
 
 TIPOS_SERVICIO = ["sala", "llevar", "mixto"]
@@ -89,6 +91,7 @@ def _orden_a_dict(orden: Orden, mapa_mesas: dict[int, str] | None = None) -> dic
                 "precio": i.precio_snapshot,
                 "cantidad": i.cantidad,
                 "empaque": i.empaque,
+                "nota": i.nota,
                 "subtotal": round(i.precio_snapshot * i.cantidad, 2),
             }
             for i in orden.items
@@ -281,6 +284,19 @@ def asignar_mesas(orden_id: int, payload: MesasIn, db: Session = Depends(get_db)
         "mesa_ids": payload.mesa_ids,
         "mesas": [mapa.get(i, f"#{i}") for i in payload.mesa_ids],
     }
+
+
+@router.post("/{orden_id}/liberar-mesa")
+def liberar_mesa_del_ticket(orden_id: int, db: Session = Depends(get_db)):
+    """Libera SOLO la mesa de este ticket (mesas compartidas: un grupo se
+    va, el otro sigue comiendo en la misma mesa). La mesa queda libre
+    únicamente cuando ya no la ocupa ningún ticket."""
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    orden.mesa_liberada = True
+    db.commit()
+    return {"id": orden.id, "mesa_liberada": True}
 
 
 METODOS_PAGO = ["efectivo", "tarjeta", "yape"]

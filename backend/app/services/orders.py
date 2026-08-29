@@ -89,6 +89,7 @@ def _crear_orden(
                 precio_snapshot=plato.precio,
                 cantidad=cantidad,
                 empaque=item.get("empaque", "mesa"),
+                nota=item.get("nota", "").strip(),
             )
         )
 

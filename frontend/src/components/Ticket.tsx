@@ -42,6 +42,7 @@ export function Ticket({ orden, local }: Props) {
                 {item.empaque !== 'mesa' && (
                   <span className="ticket-item-empaque"> [{item.empaque.toUpperCase()}]</span>
                 )}
+                {item.nota && <div className="ticket-item-nota">→ {item.nota}</div>}
               </td>
               <td className="ticket-subtotal">{soles(item.subtotal)}</td>
             </tr>
