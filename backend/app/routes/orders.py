@@ -22,9 +22,12 @@ ESTADOS = ["pendiente", "preparando", "listo", "entregado", "anulada"]
 class ItemIn(BaseModel):
     plato_id: int
     cantidad: int = Field(gt=0, le=50)
+    # mesa (default) | taper | bolsa | lonchera — por plato, no por orden
+    empaque: str = "mesa"
 
 
 TIPOS_SERVICIO = ["sala", "llevar", "mixto"]
+EMPAQUES = ["mesa", "taper", "bolsa", "lonchera"]
 
 
 class OrdenIn(BaseModel):
@@ -32,8 +35,6 @@ class OrdenIn(BaseModel):
     # Medido por la terminal: segundos desde que empezó el pedido hasta
     # confirmar. Opcional; se ignora fuera de un rango razonable.
     duracion_seg: int | None = Field(default=None, ge=0, le=3600)
-    # sala (default) | llevar | mixto
-    tipo_servicio: str = "sala"
     # tactil (default) | voz | mixto — cómo se llenó el carrito
     origen: str = "tactil"
 
@@ -66,6 +67,7 @@ def _orden_a_dict(orden: Orden) -> dict:
                 "nombre": i.nombre_snapshot,
                 "precio": i.precio_snapshot,
                 "cantidad": i.cantidad,
+                "empaque": i.empaque,
                 "subtotal": round(i.precio_snapshot * i.cantidad, 2),
             }
             for i in orden.items
@@ -80,14 +82,15 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     Devuelve el número de orden del día y los datos del local para imprimir
     el ticket.
     """
-    if payload.tipo_servicio not in TIPOS_SERVICIO:
-        raise HTTPException(status_code=422, detail=f"Tipo de servicio inválido: {payload.tipo_servicio}")
+    for item in payload.items:
+        if item.empaque not in EMPAQUES:
+            raise HTTPException(status_code=422, detail=f"Empaque inválido: {item.empaque}")
     if payload.origen not in ("tactil", "voz", "mixto"):
         raise HTTPException(status_code=422, detail=f"Origen inválido: {payload.origen}")
     try:
         orden = crear_orden(
             db, [i.model_dump() for i in payload.items],
-            payload.duracion_seg, payload.tipo_servicio, payload.origen,
+            payload.duracion_seg, payload.origen,
         )
     except PlatoNoDisponible as e:
         raise HTTPException(status_code=409, detail=f"'{e.nombre}' ya no está disponible")

@@ -1,34 +1,47 @@
 """Apertura/cierre de caja y tipo de servicio de las órdenes."""
 
 
-def crear_orden(client, menu_ejemplo, tipo_servicio=None, cantidad=1):
-    payload = {"items": [{"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": cantidad}]}
-    if tipo_servicio is not None:
-        payload["tipo_servicio"] = tipo_servicio
-    return client.post("/api/orders", json=payload)
+def crear_orden(client, menu_ejemplo, cantidad=1, empaque=None):
+    item = {"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": cantidad}
+    if empaque is not None:
+        item["empaque"] = empaque
+    return client.post("/api/orders", json={"items": [item]})
 
 
-# ---------- Tipo de servicio ----------
+# ---------- Empaque por plato y tipo de servicio derivado ----------
 
-def test_tipo_servicio_default_sala(client, menu_ejemplo):
-    r = crear_orden(client, menu_ejemplo)
-    assert r.json()["orden"]["tipo_servicio"] == "sala"
-
-
-def test_tipo_servicio_llevar_y_mixto(client, menu_ejemplo):
-    assert crear_orden(client, menu_ejemplo, "llevar").json()["orden"]["tipo_servicio"] == "llevar"
-    assert crear_orden(client, menu_ejemplo, "mixto").json()["orden"]["tipo_servicio"] == "mixto"
+def test_empaque_default_mesa_y_servicio_sala(client, menu_ejemplo):
+    orden = crear_orden(client, menu_ejemplo).json()["orden"]
+    assert orden["items"][0]["empaque"] == "mesa"
+    assert orden["tipo_servicio"] == "sala"
 
 
-def test_tipo_servicio_invalido_es_422(client, menu_ejemplo):
-    assert crear_orden(client, menu_ejemplo, "delivery").status_code == 422
+def test_empaque_taper_deriva_llevar(client, menu_ejemplo):
+    orden = crear_orden(client, menu_ejemplo, empaque="taper").json()["orden"]
+    assert orden["items"][0]["empaque"] == "taper"
+    assert orden["tipo_servicio"] == "llevar"
 
 
-def test_tipo_servicio_en_csv(client, admin_headers, menu_ejemplo):
-    crear_orden(client, menu_ejemplo, "llevar")
+def test_mezcla_de_empaques_deriva_mixto(client, menu_ejemplo):
+    r = client.post("/api/orders", json={"items": [
+        {"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 1, "empaque": "mesa"},
+        {"plato_id": menu_ejemplo["Chicha morada"], "cantidad": 1, "empaque": "bolsa"},
+    ]})
+    orden = r.json()["orden"]
+    assert orden["tipo_servicio"] == "mixto"
+    empaques = {i["nombre"]: i["empaque"] for i in orden["items"]}
+    assert empaques == {"Lomo saltado": "mesa", "Chicha morada": "bolsa"}
+
+
+def test_empaque_invalido_es_422(client, menu_ejemplo):
+    assert crear_orden(client, menu_ejemplo, empaque="caja-china").status_code == 422
+
+
+def test_empaque_en_csv(client, admin_headers, menu_ejemplo):
+    crear_orden(client, menu_ejemplo, empaque="lonchera")
     r = client.get("/api/stats/export", headers=admin_headers)
-    assert "servicio" in r.text.splitlines()[0]
-    assert ";llevar;" in r.text
+    assert "empaque" in r.text.splitlines()[0]
+    assert ";lonchera;" in r.text
 
 
 # ---------- Apertura y cierre de caja ----------

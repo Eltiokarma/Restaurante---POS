@@ -74,6 +74,9 @@ class OrdenItem(Base):
     nombre_snapshot: Mapped[str] = mapped_column(String(120), nullable=False)
     precio_snapshot: Mapped[float] = mapped_column(Float, nullable=False)
     cantidad: Mapped[int] = mapped_column(Integer, nullable=False)
+    # mesa | taper | bolsa | lonchera — en qué se sirve ESTE plato
+    # (cocina necesita saberlo por plato, no por orden)
+    empaque: Mapped[str] = mapped_column(String(10), default="mesa", nullable=False)
 
     orden: Mapped[Orden] = relationship(back_populates="items")
 

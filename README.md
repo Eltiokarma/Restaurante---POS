@@ -277,25 +277,27 @@ contenedores). Pasos en Railway:
 
 1. **New Project → Deploy from GitHub repo** → elige este repositorio. Railway detecta el
    `Dockerfile` y construye solo.
-2. En el servicio, pestaña **Variables**: agrega `ADMIN_PASSWORD` con tu contraseña.
+2. En el servicio, pestaña **Variables**, agrega:
+   - `ADMIN_PASSWORD` — tu contraseña de administración.
+   - `PIN_LOCAL` — un PIN (ej. 4-6 dígitos). **Obligatorio en internet**: con él, todas las
+     pantallas (terminal, caja, cocina, ticketera) piden el PIN una sola vez por
+     dispositivo; sin él, cualquiera con la URL podría ver tu cocina o meter órdenes.
+   - (Opcional, para la voz) `OPENAI_API_KEY` y `ANTHROPIC_API_KEY`.
 3. Pestaña **Settings → Volumes**: agrega un volumen montado en **`/data`** (ahí vive la
    base de datos SQLite; sin volumen, se borra en cada despliegue).
-4. **Settings → Networking → Generate Domain** para obtener la URL pública.
+4. **Settings → Networking → Generate Domain** para obtener la URL pública (con HTTPS —
+   bonus: el micrófono de la voz funciona desde cualquier aparato, no solo localhost).
 5. El menú inicial se carga desde `/admin` (el seed es opcional; las tablas se crean solas).
+6. En cada aparato del local abre la URL, pon el PIN una vez, y listo.
 
-**Piénsalo dos veces antes de operar el local desde la nube:**
+**El único riesgo real que queda: si se cae el internet del restaurante, el POS en la nube
+se detiene.** La jugada segura es tener ambos: Railway para el día a día y la laptop con
+`iniciar.bat` como plan B — es la misma base de código, y si la nube falla cambias las
+pantallas a la IP local en un minuto (los datos del día quedarían en la BD local, eso sí:
+son dos bases separadas).
 
-- **Si se cae el internet del restaurante, el POS se detiene.** Corriendo en la laptop del
-  local (modo LAN), sigue funcionando aunque no haya internet.
-- **Cocina, terminal y ticketera no tienen contraseña por diseño** (son pantallas de una red
-  local privada). En una URL pública, cualquiera que la conozca puede ver la cola de cocina o
-  crear órdenes. Si algún día se opera en nube en serio, hay que agregar autenticación a esas
-  vistas primero (está anotado en el roadmap).
-- La impresión no cambia: la ticketera o la terminal imprimen desde el navegador del local
-  igual que siempre, apuntando a la URL de Railway.
-
-Para lo que sí sirve hoy: **demos** (mostrarle el sistema a alguien sin instalar nada) y
-**monitoreo remoto** (ver el Resumen de ventas desde tu casa).
+La impresión no cambia: la ticketera o la terminal imprimen desde el navegador del local
+igual que siempre, apuntando a la URL de Railway.
 
 ## Pedido por voz (Fase 3) — integrado, apagado por defecto
 

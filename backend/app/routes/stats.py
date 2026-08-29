@@ -142,8 +142,8 @@ def exportar_csv(
     # Separador ";" y BOM: así Excel en español lo abre en columnas directamente
     writer = csv.writer(buffer, delimiter=";")
     writer.writerow([
-        "fecha", "orden", "hora", "estado", "servicio", "origen", "plato", "cantidad",
-        "precio_unitario", "subtotal", "total_orden", "duracion_seg",
+        "fecha", "orden", "hora", "estado", "servicio", "origen", "plato", "empaque",
+        "cantidad", "precio_unitario", "subtotal", "total_orden", "duracion_seg",
     ])
     for orden, item in filas:
         writer.writerow([
@@ -154,6 +154,7 @@ def exportar_csv(
             orden.tipo_servicio,
             orden.origen,
             item.nombre_snapshot,
+            item.empaque,
             item.cantidad,
             f"{item.precio_snapshot:.2f}",
             f"{item.precio_snapshot * item.cantidad:.2f}",

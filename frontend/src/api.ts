@@ -9,15 +9,28 @@ export interface Plato {
   sinonimos: string[]
 }
 
+export type Empaque = 'mesa' | 'taper' | 'bolsa' | 'lonchera'
+
+export const EMPAQUES: Empaque[] = ['mesa', 'taper', 'bolsa', 'lonchera']
+
+export const NOMBRE_EMPAQUE: Record<Empaque, string> = {
+  mesa: '🍽 Mesa',
+  taper: '🥡 Táper',
+  bolsa: '🛍 Bolsa',
+  lonchera: '🍱 Lonchera',
+}
+
 export interface ItemCarrito {
   plato: Plato
   cantidad: number
+  empaque: Empaque
 }
 
 export interface OrdenItemOut {
   nombre: string
   precio: number
   cantidad: number
+  empaque: Empaque
   subtotal: number
 }
 
@@ -129,9 +142,23 @@ export function clearAdminToken() {
   localStorage.removeItem(TOKEN_KEY)
 }
 
+// PIN del local: solo aplica en despliegues en internet (Railway). El
+// backend lo exige cuando la variable PIN_LOCAL está definida.
+const PIN_KEY = 'pos_pin_local'
+
+export function getPinLocal(): string {
+  return localStorage.getItem(PIN_KEY) ?? ''
+}
+
+export function setPinLocal(pin: string) {
+  localStorage.setItem(PIN_KEY, pin)
+}
+
 async function request<T>(path: string, options: RequestInit = {}, admin = false): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (admin) headers['X-Admin-Token'] = getAdminToken()
+  const pin = getPinLocal()
+  if (pin) headers['X-Pin-Local'] = pin
   const res = await fetch(path, { ...options, headers })
   if (!res.ok) {
     let detail = `Error ${res.status}`
@@ -160,16 +187,13 @@ export const api = {
   config: () => request<ConfigOut>('/api/config'),
 
   crearOrden: (
-    items: { plato_id: number; cantidad: number }[],
+    items: { plato_id: number; cantidad: number; empaque: Empaque }[],
     duracionSeg?: number,
-    tipoServicio: TipoServicio = 'sala',
     origen: OrigenPedido = 'tactil',
   ) =>
     request<{ orden: OrdenOut; local: DatosLocal }>('/api/orders', {
       method: 'POST',
-      body: JSON.stringify({
-        items, duracion_seg: duracionSeg, tipo_servicio: tipoServicio, origen,
-      }),
+      body: JSON.stringify({ items, duracion_seg: duracionSeg, origen }),
     }),
 
   // --- Pedido por voz ---
@@ -177,7 +201,12 @@ export const api = {
     const datos = new FormData()
     datos.append('audio', audio, 'pedido.webm')
     datos.append('duracion_seg', duracionSeg.toFixed(1))
-    const res = await fetch('/api/voice/order', { method: 'POST', body: datos })
+    const pin = getPinLocal()
+    const res = await fetch('/api/voice/order', {
+      method: 'POST',
+      body: datos,
+      headers: pin ? { 'X-Pin-Local': pin } : undefined,
+    })
     if (!res.ok) {
       let detail = `Error ${res.status}`
       try {
@@ -273,7 +302,9 @@ export const api = {
   // fetch + blob en vez de un <a href> directo). Sin fechas: hoy.
   descargarVentasCsv: async (desde?: string, hasta?: string) => {
     const params = desde && hasta ? `?desde=${desde}&hasta=${hasta}` : ''
-    const res = await fetch(`/api/stats/export${params}`, { headers: { 'X-Admin-Token': getAdminToken() } })
+    const cabeceras: Record<string, string> = { 'X-Admin-Token': getAdminToken() }
+    if (getPinLocal()) cabeceras['X-Pin-Local'] = getPinLocal()
+    const res = await fetch(`/api/stats/export${params}`, { headers: cabeceras })
     if (!res.ok) throw new ApiError(res.status, `Error ${res.status}`)
     const blob = await res.blob()
     const nombre = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'ventas.csv'

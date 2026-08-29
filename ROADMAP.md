@@ -49,6 +49,25 @@
       resaltado en ticket y cocina, columna en el CSV de ventas.
 - [x] Cocina por tandas: tira "Por salir" con totales por plato y selección múltiple para
       avanzar 2-3 pedidos de una vez.
+- [x] Empaque POR PLATO (mesa / táper / bolsa / lonchera): chips por línea en el resumen
+      del cliente y en la caja; visible en la tarjeta de cocina, en el desglose de la tira
+      "Por salir" (5× lomo: 3 mesa · 2 táper), en el ticket ([TAPER]) y en el CSV. El tipo
+      de servicio de la orden ahora se deriva de los empaques.
+- [x] Candado `PIN_LOCAL` para despliegues en internet (Railway): con la variable definida,
+      toda la API exige el PIN (se pide una vez por dispositivo); sin ella, la LAN funciona
+      igual que siempre.
+
+## Fase 4 — operación avanzada (siguiente, por lotes)
+
+- [ ] **Métodos de pago**: registrar en caja cómo se pagó cada orden (efectivo / tarjeta /
+      Yape-Plin). El cierre de caja debe cuadrar solo el EFECTIVO esperado y reportar
+      tarjeta/Yape aparte. (Primer lote: es prerequisito del cierre exacto.)
+- [ ] **Insumos y recetas**: catálogo de insumos (papa, arroz, carne…) y receta por plato
+      (cuánto insumo consume una porción).
+- [ ] **Kardex**: entradas (compras) y salidas (consumo calculado por ventas + mermas
+      manuales), stock actual y costo. Reporte de consumo del día/semana.
+- [ ] **Despliegue en Railway** (guía lista en el README): crear el proyecto con la cuenta
+      del dueño, variables (`ADMIN_PASSWORD`, `PIN_LOCAL`), volumen en `/data` y dominio.
 
 ## Fase 2 de voz — laboratorio (`voz-lab/`, independiente del POS)
 
@@ -91,4 +110,4 @@ Pagos integrados (Yape/tarjeta), control de stock y mermas, app nativa, multi-lo
 | 5 | Correlativo diario calculado en BD con lock, zona `America/Lima` | Números cortos para cantar en caja; independiente del reloj de los dispositivos. |
 | 6 | Auth admin: token HMAC stateless de 12h | Suficiente para un local con una laptop; sin tabla de sesiones ni dependencias extra. |
 | 7 | Frontend compilado servido por FastAPI en producción | Un solo proceso y un solo puerto (8000) en la laptop del local; Vite queda solo para desarrollo. |
-| 8 | Operación LAN-first; nube (Railway) solo para demo/monitoreo | Si se cae el internet del local, el POS debe seguir tomando pedidos. Hay `Dockerfile` listo, pero operar en nube requiere primero autenticación en cocina/terminal/ticketera (hoy son de LAN privada por diseño). |
+| 8 | Nube (Railway) habilitada con candado `PIN_LOCAL`; la laptop queda como plan B ante cortes de internet | El dueño decidió operar en nube. El PIN protege todas las pantallas en la URL pública; la misma base de código corre local con `iniciar.bat` si el internet del local falla (bases de datos separadas). |

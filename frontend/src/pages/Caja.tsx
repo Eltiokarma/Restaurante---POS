@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, NOMBRE_CATEGORIA, NOMBRE_SERVICIO, soles } from '../api'
-import type { CajaEstado, ConfigOut, DatosLocal, OrdenOut, Plato, TipoServicio } from '../api'
+import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_SERVICIO, soles } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, OrdenOut, Plato } from '../api'
 import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket } from '../components/Ticket'
 import { useCarrito } from '../hooks/useCarrito'
@@ -25,7 +25,6 @@ export function Caja() {
   const [error, setError] = useState('')
   const [registrando, setRegistrando] = useState(false)
   const [ticket, setTicket] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
-  const [tipoServicio, setTipoServicio] = useState<TipoServicio>('sala')
   const [estadoCaja, setEstadoCaja] = useState<CajaEstado | null>(null)
   const [montoCaja, setMontoCaja] = useState('')
   const [cerrandoCaja, setCerrandoCaja] = useState(false)
@@ -137,12 +136,9 @@ export function Caja() {
     setMensaje('')
     try {
       const resultado = await api.crearOrden(
-        carrito.items.map((i) => ({ plato_id: i.plato.id, cantidad: i.cantidad })),
-        undefined,
-        tipoServicio,
+        carrito.items.map((i) => ({ plato_id: i.plato.id, cantidad: i.cantidad, empaque: i.empaque })),
       )
       carrito.vaciar()
-      setTipoServicio('sala')
       cargarOrdenes()
       cargarCaja()
       const numero = String(resultado.orden.numero_orden_dia).padStart(3, '0')
@@ -314,17 +310,29 @@ export function Caja() {
               </div>
             </div>
           ))}
-          <div className="selector-servicio selector-servicio-caja">
-            {(['sala', 'llevar', 'mixto'] as TipoServicio[]).map((t) => (
-              <button
-                key={t}
-                className={`boton-servicio ${tipoServicio === t ? 'servicio-activo' : ''}`}
-                onClick={() => setTipoServicio(t)}
-              >
-                {NOMBRE_SERVICIO[t]}
-              </button>
-            ))}
-          </div>
+          {carrito.items.length > 0 && (
+            <div className="caja-carrito">
+              <h3 className="titulo-categoria">Pedido en armado</h3>
+              {carrito.items.map((i) => (
+                <div className="caja-carrito-item" key={i.plato.id}>
+                  <span className="caja-carrito-nombre">
+                    {i.cantidad} × {i.plato.nombre}
+                  </span>
+                  <div className="empaques-linea">
+                    {EMPAQUES.map((e) => (
+                      <button
+                        key={e}
+                        className={`boton-servicio boton-empaque boton-empaque-caja ${i.empaque === e ? 'servicio-activo' : ''}`}
+                        onClick={() => carrito.cambiarEmpaque(i.plato.id, e)}
+                      >
+                        {NOMBRE_EMPAQUE[e]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="caja-acciones">
             <button
               className="boton-grande boton-secundario"
