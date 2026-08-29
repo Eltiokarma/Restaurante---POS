@@ -185,6 +185,7 @@ export function Cocina() {
                     {item.empaque !== 'mesa' && (
                       <span className="item-empaque">{NOMBRE_EMPAQUE[item.empaque]}</span>
                     )}
+                    {item.nota && <div className="nota-cocina">⚠ {item.nota}</div>}
                   </li>
                 ))}
               </ul>

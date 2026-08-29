@@ -84,6 +84,8 @@ class OrdenItem(Base):
     # mesa | taper | bolsa | lonchera — en qué se sirve ESTE plato
     # (cocina necesita saberlo por plato, no por orden)
     empaque: Mapped[str] = mapped_column(String(10), default="mesa", nullable=False)
+    # Pedido especial del cliente: "sin frijoles", "con un huevo frito"…
+    nota: Mapped[str] = mapped_column(String(150), default="", nullable=False)
 
     orden: Mapped[Orden] = relationship(back_populates="items")
 

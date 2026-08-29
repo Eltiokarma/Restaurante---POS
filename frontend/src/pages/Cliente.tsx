@@ -131,7 +131,9 @@ export function Cliente() {
         : undefined
       const origen = usoVoz.current && usoTactil.current ? 'mixto' : usoVoz.current ? 'voz' : 'tactil'
       const resultado = await api.crearOrden(
-        carrito.items.map((i) => ({ plato_id: i.plato.id, cantidad: i.cantidad, empaque: i.empaque })),
+        carrito.items.map((i) => ({
+          plato_id: i.plato.id, cantidad: i.cantidad, empaque: i.empaque, nota: i.nota.trim(),
+        })),
         duracion,
         origen,
       )
@@ -307,6 +309,13 @@ export function Cliente() {
                   </button>
                 ))}
               </div>
+              <input
+                className="input-nota-plato"
+                placeholder="📝 Algún cambio: sin arroz, sin frijoles, con huevo frito…"
+                maxLength={150}
+                value={i.nota}
+                onChange={(e) => carrito.cambiarNota(i.plato.id, e.target.value)}
+              />
             </div>
           ))}
         </div>

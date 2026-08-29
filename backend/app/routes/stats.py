@@ -143,7 +143,8 @@ def exportar_csv(
     writer = csv.writer(buffer, delimiter=";")
     writer.writerow([
         "fecha", "orden", "hora", "estado", "servicio", "origen", "pago", "plato",
-        "empaque", "cantidad", "precio_unitario", "subtotal", "total_orden", "duracion_seg",
+        "empaque", "nota", "cantidad", "precio_unitario", "subtotal", "total_orden",
+        "duracion_seg",
     ])
     for orden, item in filas:
         writer.writerow([
@@ -156,6 +157,7 @@ def exportar_csv(
             orden.metodo_pago or "",
             item.nombre_snapshot,
             item.empaque,
+            item.nota,
             item.cantidad,
             f"{item.precio_snapshot:.2f}",
             f"{item.precio_snapshot * item.cantidad:.2f}",

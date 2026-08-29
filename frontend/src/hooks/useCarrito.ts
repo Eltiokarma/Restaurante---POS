@@ -10,7 +10,9 @@ export function useCarrito() {
     setItems((prev) => {
       const existente = prev.find((i) => i.plato.id === plato.id)
       if (!existente) {
-        return delta > 0 ? [...prev, { plato, cantidad: delta, empaque: 'mesa' as Empaque }] : prev
+        return delta > 0
+          ? [...prev, { plato, cantidad: delta, empaque: 'mesa' as Empaque, nota: '' }]
+          : prev
       }
       const nueva = existente.cantidad + delta
       if (nueva <= 0) return prev.filter((i) => i.plato.id !== plato.id)
@@ -25,6 +27,11 @@ export function useCarrito() {
 
   const empaqueParaTodos = useCallback((empaque: Empaque) => {
     setItems((prev) => prev.map((i) => ({ ...i, empaque })))
+  }, [])
+
+  // Pedido especial por plato: "sin frijoles", "con un huevo frito"…
+  const cambiarNota = useCallback((platoId: number, nota: string) => {
+    setItems((prev) => prev.map((i) => (i.plato.id === platoId ? { ...i, nota } : i)))
   }, [])
 
   const cantidadDe = useCallback(
@@ -61,6 +68,7 @@ export function useCarrito() {
     cambiarCantidad,
     cambiarEmpaque,
     empaqueParaTodos,
+    cambiarNota,
     cantidadDe,
     vaciar,
     eliminarNoDisponibles,

@@ -24,6 +24,7 @@ export interface ItemCarrito {
   plato: Plato
   cantidad: number
   empaque: Empaque
+  nota: string
 }
 
 export interface OrdenItemOut {
@@ -31,6 +32,7 @@ export interface OrdenItemOut {
   precio: number
   cantidad: number
   empaque: Empaque
+  nota: string
   subtotal: number
 }
 
@@ -241,7 +243,7 @@ export const api = {
   config: () => request<ConfigOut>('/api/config'),
 
   crearOrden: (
-    items: { plato_id: number; cantidad: number; empaque: Empaque }[],
+    items: { plato_id: number; cantidad: number; empaque: Empaque; nota?: string }[],
     duracionSeg?: number,
     origen: OrigenPedido = 'tactil',
     mesaIds: number[] = [],
@@ -266,6 +268,12 @@ export const api = {
 
   liberarMesa: (id: number) =>
     request<{ mesa_id: number; tickets_liberados: number }>(`/api/mesas/${id}/liberar`, {
+      method: 'POST',
+    }),
+
+  // Mesas compartidas: libera SOLO la mesa de este ticket
+  liberarMesaDeTicket: (ordenId: number) =>
+    request<{ id: number; mesa_liberada: boolean }>(`/api/orders/${ordenId}/liberar-mesa`, {
       method: 'POST',
     }),
 

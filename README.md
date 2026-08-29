@@ -13,8 +13,11 @@ cocina. **El pago se hace en la caja física**, mostrando el ticket.
   SOLO contra el efectivo esperado (tarjeta y Yape se reportan aparte). Una orden sin
   método registrado se asume efectivo.
 - **Mesas**: se configuran en Admin → Configuración; la caja asigna tickets a mesas (varias
-  juntas = **combinadas**), ve la ocupación en vivo y las **libera** cuando el grupo se va.
-  La mesa sale en el ticket y en la tarjeta de cocina.
+  juntas = **combinadas**), ve la ocupación en vivo y las libera. Las mesas se pueden
+  **compartir** (local lleno: dos grupos en la misma mesa) — "🪑✔ Se fue" libera solo el
+  ticket del grupo que terminó. La mesa sale en el ticket y en la tarjeta de cocina.
+- **Notas por plato**: pedidos especiales ("sin frijoles", "con un huevo frito") por item,
+  desde la terminal o la caja; cocina las ve resaltadas y el ticket las imprime.
 - **Candado de apertura**: por defecto no se registran ventas hasta abrir la caja con su
   fondo inicial (la terminal avisa y se habilita sola; se puede desactivar en Configuración).
 - **Historial**: en Admin → Órdenes eliges cualquier fecha, y el Resumen muestra los
