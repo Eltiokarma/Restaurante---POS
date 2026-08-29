@@ -5,7 +5,7 @@ Uso (desde la carpeta backend/, con el entorno virtual activado):
     python seed.py
 """
 from app.db import Base, SessionLocal, engine
-from app.models import CONFIG_DEFAULTS, Config, Plato, hoy_lima
+from app.models import CONFIG_DEFAULTS, Config, Mesa, Plato, hoy_lima
 
 MENU_EJEMPLO = [
     # (nombre, categoria, precio S/)
@@ -41,6 +41,11 @@ def main() -> None:
             print(f"Menú de ejemplo cargado ({len(MENU_EJEMPLO)} platos).")
         else:
             print("Ya existen platos; no se cargó el menú de ejemplo.")
+
+        if db.query(Mesa).count() == 0:
+            for n in range(1, 5):
+                db.add(Mesa(nombre=f"Mesa {n}"))
+            print("4 mesas de ejemplo creadas (renómbralas en Admin → Configuración).")
 
         db.commit()
         print("Base de datos lista.")
