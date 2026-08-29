@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, NOMBRE_CATEGORIA, soles } from '../api'
-import type { ConfigOut, DatosLocal, OrdenOut, Plato } from '../api'
+import { api, ApiError, NOMBRE_CATEGORIA, NOMBRE_SERVICIO, soles } from '../api'
+import type { ConfigOut, DatosLocal, OrdenOut, Plato, TipoServicio } from '../api'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
 import { TarjetaPlato } from '../components/TarjetaPlato'
@@ -21,6 +21,7 @@ export function Cliente() {
   const [errorConexion, setErrorConexion] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [ordenFinal, setOrdenFinal] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
+  const [tipoServicio, setTipoServicio] = useState<TipoServicio>('sala')
 
   const { sincronizarConMenu, vaciar } = carrito
   const cargarMenu = useCallback(async () => {
@@ -54,6 +55,7 @@ export function Cliente() {
       setConfirmandoCancelarTodo(false)
       setErrorConexion('')
       setMensajeInicio(mensaje)
+      setTipoServicio('sala')
       setPantalla('inicio')
     },
     [vaciar],
@@ -107,6 +109,7 @@ export function Cliente() {
       const resultado = await api.crearOrden(
         carrito.items.map((i) => ({ plato_id: i.plato.id, cantidad: i.cantidad })),
         duracion,
+        tipoServicio,
       )
       setOrdenFinal(resultado)
       carrito.vaciar()
@@ -251,6 +254,20 @@ export function Cliente() {
           ))}
         </div>
         <div className="total-grande">TOTAL: {soles(carrito.totalSoles)}</div>
+        <div className="selector-servicio">
+          <span className="selector-servicio-titulo">¿Cómo lo quieres?</span>
+          <div className="selector-servicio-botones">
+            {(['sala', 'llevar', 'mixto'] as TipoServicio[]).map((t) => (
+              <button
+                key={t}
+                className={`boton-servicio ${tipoServicio === t ? 'servicio-activo' : ''}`}
+                onClick={() => setTipoServicio(t)}
+              >
+                {NOMBRE_SERVICIO[t]}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="botones-resumen">
           <button className="boton-grande boton-secundario" onClick={() => setPantalla('menu')}>
             ← Modificar

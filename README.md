@@ -8,8 +8,15 @@ cocina. **El pago se hace en la caja física**, mostrando el ticket.
 - **Vista de cliente** (`/`): pantalla táctil para armar el pedido, sin login.
 - **Vista de caja** (`/caja`): el cajero registra pedidos de quienes no usan la terminal
   (sin ventana de cancelación) y gestiona los del día: avanzar estado, reimprimir ticket y
-  **anular** (la orden queda registrada pero no cuenta como venta).
-- **Vista de cocina** (`/cocina`): cola de órdenes con estados (pendiente → preparando → listo → entregado) y temporizador de espera en vivo.
+  **anular** (la orden queda registrada pero no cuenta como venta). Incluye **apertura y
+  cierre de caja**: fondo inicial al abrir, conteo al cerrar y diferencia contra lo que el
+  sistema dice que se vendió (historial de cierres en el admin vía API).
+- **Tipo de servicio por pedido**: en sala, para llevar (lonchera/táper/bolsa) o mixto —
+  se elige en la terminal o en caja, sale resaltado en el ticket y en cocina, y queda en el
+  CSV de ventas.
+- **Vista de cocina** (`/cocina`): cola de órdenes con estados (pendiente → preparando → listo → entregado),
+  temporizador de espera en vivo, tira **"Por salir"** con el total por plato (para cocinar
+  por tandas) y **selección múltiple** para avanzar 2-3 pedidos de una vez.
 - **Vista de admin** (`/admin`): resumen de ventas, menú del día, órdenes, log de cancelaciones y configuración (con contraseña).
 
 > **Preparado para voz (Fase 3):** la voz será solo "otra manera de llenar el carrito". El módulo

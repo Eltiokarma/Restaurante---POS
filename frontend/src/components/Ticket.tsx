@@ -21,6 +21,11 @@ export function Ticket({ orden, local }: Props) {
         {local.ruc && <div>RUC: {local.ruc}</div>}
       </div>
       <div className="ticket-orden">ORDEN #{numero}</div>
+      {orden.tipo_servicio !== 'sala' && (
+        <div className="ticket-servicio">
+          {orden.tipo_servicio === 'llevar' ? '🛍 PARA LLEVAR' : '🥡 MIXTO — parte para llevar'}
+        </div>
+      )}
       <div className="ticket-fecha">
         {orden.fecha} — {orden.hora}
       </div>

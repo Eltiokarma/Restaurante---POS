@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from .db import BACKEND_DIR, Base, engine
-from .routes import admin, cancellations, config, menu, orders, stats
+from .routes import admin, caja, cancellations, config, menu, orders, stats
 from .services.backup import ciclo_backup_automatico
 
 
@@ -23,6 +23,11 @@ def _migrar(engine_) -> None:
             conn.commit()
         if columnas and "duracion_seg" not in columnas:
             conn.execute(text("ALTER TABLE ordenes ADD COLUMN duracion_seg INTEGER"))
+            conn.commit()
+        if columnas and "tipo_servicio" not in columnas:
+            conn.execute(text(
+                "ALTER TABLE ordenes ADD COLUMN tipo_servicio TEXT NOT NULL DEFAULT 'sala'"
+            ))
             conn.commit()
 
 @asynccontextmanager
@@ -53,6 +58,7 @@ app.include_router(cancellations.router)
 app.include_router(config.router)
 app.include_router(admin.router)
 app.include_router(stats.router)
+app.include_router(caja.router)
 
 
 @app.get("/api/health")
