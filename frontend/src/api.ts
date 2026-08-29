@@ -572,6 +572,14 @@ export const api = {
   imprimirPrueba: () =>
     request<{ encolada: boolean }>('/api/print/prueba', { method: 'POST' }, true),
 
+  // Cola de tickets en bytes ESC/POS (base64): la consume el puente del
+  // local o la ticketera-tablet con RawBT
+  colaImpresion: () =>
+    request<{
+      impresora: { ip: string; puerto: number }
+      trabajos: { tipo: 'orden' | 'prueba'; orden_id: number | null; numero: string; datos_b64: string }[]
+    }>('/api/print/cola'),
+
   guardarConfig: (config: Partial<ConfigOut>) =>
     request<ConfigOut>('/api/config', { method: 'PUT', body: JSON.stringify(config) }, true),
 

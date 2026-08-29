@@ -194,13 +194,20 @@ con tildes y corte automático).
    pon la **IP de la impresora** (la misma que usabas en Loyverse; casi todas la imprimen
    manteniendo apretado el botón FEED al prenderlas), el puerto (9100) y el ancho en
    caracteres (48 o 42 según el modelo). Guarda.
-2. En una PC del local (solo necesita Python 3 y estar prendida durante el servicio):
-   `scripts\puente.bat` — la primera vez pide la URL del POS y el PIN, y los recuerda.
-   En Linux/Mac: `python scripts/puente_impresion.py --url https://TU-POS --pin 1234`.
-3. Prueba con el botón **"🖨 Imprimir ticket de prueba"** de esa misma pantalla.
+2. Elige QUIÉN atiende la cola (una de las dos, no ambas):
+   - **Sin PC (recomendado con tablets):** en una tablet Android instala la app gratuita
+     **RawBT** (Play Store), configúrale la impresora (Ajustes → Conexión → Ethernet/Wi-Fi
+     → IP) y prueba desde la propia app. Luego abre **`/ticketera`** en esa tablet y toca
+     **"Activar impresión en esta tablet"**; deja la pestaña abierta. Si el navegador
+     pregunta con qué abrir, elige RawBT y marca "recordar"; si pide un toque por ticket,
+     aparece un botón grande para sacarlo.
+   - **Con PC:** `scripts\puente.bat` (solo necesita Python 3) — la primera vez pide la
+     URL del POS y el PIN, y los recuerda. En Linux/Mac:
+     `python scripts/puente_impresion.py --url https://TU-POS --pin 1234`.
+3. Prueba con el botón **"🖨 Imprimir ticket de prueba"** de la pantalla de Configuración.
 
-El puente revisa la cola cada 3 segundos; si la impresora está apagada, el ticket espera
-en cola y se reintenta solo. Las reimpresiones también salen por el puente.
+La cola se revisa cada 3 segundos; si la impresora está apagada, el ticket espera y se
+reintenta solo. Las reimpresiones también salen por esta vía.
 
 ## Cómo cargar el primer menú del día
 
