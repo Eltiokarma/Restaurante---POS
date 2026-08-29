@@ -29,6 +29,9 @@ class Plato(Base):
     # Última fecha en la que el plato formó parte del menú del día.
     # Permite el botón "Cargar menú de ayer" en el admin.
     ultima_vez_activo: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Sinónimos para el pedido por voz (JSON: ["lomito", "saltado"]).
+    # Se editan en admin; son la herramienta de mejora continua de la voz.
+    sinonimos: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
 
@@ -52,6 +55,8 @@ class Orden(Base):
     duracion_seg: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # sala | llevar | mixto — cómo se sirve el pedido (sale en ticket y cocina)
     tipo_servicio: Mapped[str] = mapped_column(String(10), default="sala", nullable=False)
+    # tactil | voz | mixto — cómo se armó el carrito (para comparar canales)
+    origen: Mapped[str] = mapped_column(String(10), default="tactil", nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
     items: Mapped[list["OrdenItem"]] = relationship(
@@ -81,6 +86,27 @@ class Cancelacion(Base):
     hora: Mapped[str] = mapped_column(String(8), nullable=False)
     items_json: Mapped[str] = mapped_column(Text, nullable=False)
     total: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class VozLog(Base):
+    """Log de cada intento de pedido por voz (solo texto, nunca el audio).
+
+    Es el tablero de decisión de la voz: % aceptado sin corrección,
+    % corregido, % descartado, latencias y costo del día.
+    """
+
+    __tablename__ = "voz_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fecha: Mapped[date] = mapped_column(Date, nullable=False)
+    hora: Mapped[str] = mapped_column(String(8), nullable=False)
+    transcripcion: Mapped[str] = mapped_column(Text, nullable=False)
+    interpretacion_json: Mapped[str] = mapped_column(Text, nullable=False)
+    # pendiente (recién interpretado) | aceptado | corregido | descartado
+    resultado: Mapped[str] = mapped_column(String(12), default="pendiente", nullable=False)
+    latencia_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    audio_duracion_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    costo_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class CierreCaja(Base):
@@ -116,4 +142,7 @@ CONFIG_DEFAULTS: dict[str, str] = {
     # "terminal": la pantalla donde pide el cliente imprime (PC con impresora)
     # "estacion": imprime la PC que tenga abierta /ticketera (tablets como terminal)
     "modo_impresion": "terminal",
+    # Kill switch del pedido por voz: apagado por defecto hasta validar la
+    # Fase 2 (además requiere OPENAI_API_KEY y ANTHROPIC_API_KEY en .env)
+    "voz_habilitada": "0",
 }

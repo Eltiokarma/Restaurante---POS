@@ -27,6 +27,7 @@ def crear_orden(
     items: list[dict],
     duracion_seg: int | None = None,
     tipo_servicio: str = "sala",
+    origen: str = "tactil",
 ) -> Orden:
     """Crea una orden confirmada (tras la ventana de cancelación).
 
@@ -36,11 +37,11 @@ def crear_orden(
     demoró el cliente en armar y confirmar (lo mide la terminal).
     """
     with _lock_creacion:
-        return _crear_orden(db, items, duracion_seg, tipo_servicio)
+        return _crear_orden(db, items, duracion_seg, tipo_servicio, origen)
 
 
 def _crear_orden(
-    db: Session, items: list[dict], duracion_seg: int | None, tipo_servicio: str
+    db: Session, items: list[dict], duracion_seg: int | None, tipo_servicio: str, origen: str
 ) -> Orden:
     ahora = ahora_lima()
     hoy = ahora.date()
@@ -58,6 +59,7 @@ def _crear_orden(
         estado="pendiente",
         duracion_seg=duracion_seg,
         tipo_servicio=tipo_servicio,
+        origen=origen,
     )
 
     total = 0.0

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, NOMBRE_CATEGORIA, NOMBRE_SERVICIO, soles } from '../api'
-import type { ConfigOut, DatosLocal, OrdenOut, Plato, TipoServicio } from '../api'
+import type { ConfigOut, DatosLocal, OrdenOut, Plato, TipoServicio, VozItemResuelto } from '../api'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
+import { PedidoPorVoz } from '../components/PedidoPorVoz'
 import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket } from '../components/Ticket'
 import { useCarrito } from '../hooks/useCarrito'
@@ -22,6 +23,10 @@ export function Cliente() {
   const [guardando, setGuardando] = useState(false)
   const [ordenFinal, setOrdenFinal] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
   const [tipoServicio, setTipoServicio] = useState<TipoServicio>('sala')
+  const [vozAbierta, setVozAbierta] = useState(false)
+  // Para el campo origen de la orden: qué canales llenaron el carrito
+  const usoVoz = useRef(false)
+  const usoTactil = useRef(false)
 
   const { sincronizarConMenu, vaciar } = carrito
   const cargarMenu = useCallback(async () => {
@@ -56,6 +61,9 @@ export function Cliente() {
       setErrorConexion('')
       setMensajeInicio(mensaje)
       setTipoServicio('sala')
+      setVozAbierta(false)
+      usoVoz.current = false
+      usoTactil.current = false
       setPantalla('inicio')
     },
     [vaciar],
@@ -106,10 +114,12 @@ export function Cliente() {
       const duracion = inicioPedidoTs.current
         ? Math.min(3600, Math.round((Date.now() - inicioPedidoTs.current) / 1000))
         : undefined
+      const origen = usoVoz.current && usoTactil.current ? 'mixto' : usoVoz.current ? 'voz' : 'tactil'
       const resultado = await api.crearOrden(
         carrito.items.map((i) => ({ plato_id: i.plato.id, cantidad: i.cantidad })),
         duracion,
         tipoServicio,
+        origen,
       )
       setOrdenFinal(resultado)
       carrito.vaciar()
@@ -290,6 +300,20 @@ export function Cliente() {
     platos.some((p) => p.categoria === c),
   )
 
+  // La voz solo SUMA items al carrito; todo lo demás es el flujo de siempre
+  const agregarItemsVoz = (items: VozItemResuelto[]) => {
+    for (const item of items) {
+      const plato = platos.find((p) => p.id === item.plato_id)
+      if (plato) carrito.cambiarCantidad(plato, item.cantidad)
+    }
+    if (items.length > 0) usoVoz.current = true
+  }
+
+  const marcarTactil = (plato: Plato, delta: number) => {
+    usoTactil.current = true
+    carrito.cambiarCantidad(plato, delta)
+  }
+
   return (
     <div className="pantalla pantalla-menu">
       <div className="cabecera-menu">
@@ -300,6 +324,11 @@ export function Cliente() {
           ← Cancelar todo
         </button>
         <h1>Menú de hoy</h1>
+        {config?.voz_disponible && (
+          <button className="boton-pedir-voz" onClick={() => setVozAbierta(true)}>
+            🎤 PEDIR POR VOZ
+          </button>
+        )}
       </div>
 
       <div className="contenido-menu">
@@ -317,7 +346,7 @@ export function Cliente() {
                     key={p.id}
                     plato={p}
                     cantidad={carrito.cantidadDe(p.id)}
-                    onCambiar={(delta) => carrito.cambiarCantidad(p, delta)}
+                    onCambiar={(delta) => marcarTactil(p, delta)}
                   />
                 ))}
             </div>
@@ -345,6 +374,22 @@ export function Cliente() {
             </div>
           </div>
         </div>
+      )}
+
+      {vozAbierta && (
+        <PedidoPorVoz
+          platos={platos}
+          onContinuar={(items) => {
+            agregarItemsVoz(items)
+            setVozAbierta(false)
+            setPantalla('resumen')
+          }}
+          onUsarBotones={(items) => {
+            agregarItemsVoz(items)
+            setVozAbierta(false)
+          }}
+          onCerrar={() => setVozAbierta(false)}
+        />
       )}
 
       <AvisoInactividad {...inactividad} />

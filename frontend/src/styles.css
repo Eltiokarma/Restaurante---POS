@@ -1368,6 +1368,222 @@ button {
   top: 0;
 }
 
+/* ---------- Pedido por voz ---------- */
+
+.boton-pedir-voz {
+  margin-left: auto;
+  min-height: 64px;
+  padding: 0 22px;
+  font-size: 1.2rem;
+  font-weight: 800;
+  background: #1565c0;
+  color: #fff;
+}
+
+.voz-modal {
+  max-width: 720px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  text-align: left;
+}
+
+.voz-modal h2 {
+  text-align: center;
+}
+
+.voz-cerrar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 48px;
+  height: 48px;
+  font-size: 1.3rem;
+  background: #efe8de;
+}
+
+.voz-medidor {
+  height: 26px;
+  background: #efe8de;
+  border-radius: 13px;
+  overflow: hidden;
+}
+
+.voz-medidor-nivel {
+  height: 100%;
+  background: #1565c0;
+  transition: width 0.12s linear;
+}
+
+.voz-spinner {
+  width: 64px;
+  height: 64px;
+  margin: 12px auto;
+  border: 6px solid #efe8de;
+  border-top-color: #c62828;
+  border-radius: 50%;
+  animation: girar 0.9s linear infinite;
+}
+
+@keyframes girar {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voz-spinner { animation-duration: 2.5s; }
+}
+
+.voz-transcripcion {
+  font-size: 1.2rem;
+  font-style: italic;
+  color: #77705f;
+  text-align: center;
+}
+
+.voz-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.voz-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #faf7f2;
+  border: 2px solid #e5ded3;
+  border-radius: 14px;
+  padding: 12px 16px;
+}
+
+.voz-item-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.voz-item-nombre {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.voz-item-precio {
+  color: #77705f;
+}
+
+.voz-item .boton-cantidad {
+  width: 60px;
+  height: 60px;
+  font-size: 1.8rem;
+}
+
+.voz-quitar {
+  background: #ffebee;
+  color: #b71c1c;
+}
+
+.voz-no-encontrado {
+  background: #fff6e0;
+  border: 2px solid #b98a1f;
+  border-radius: 14px;
+  padding: 12px 16px;
+}
+
+.voz-sugerencias {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.voz-sugerencias button {
+  min-height: 56px;
+  padding: 0 16px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  background: #fff;
+  border: 2px solid #ddd3c6;
+}
+
+.voz-descartar-no-encontrado {
+  background: #efe8de !important;
+}
+
+.voz-total {
+  font-size: 1.3rem;
+  text-align: right;
+}
+
+.voz-botones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Panel de voz en admin */
+.etiqueta-voz-aceptado { background: #66bb6a; color: #0c290e; }
+.etiqueta-voz-corregido { background: #f9a825; color: #3d2c00; }
+.etiqueta-voz-descartado { background: #ef9a9a; color: #7f1d1d; }
+.etiqueta-voz-pendiente { background: #d7d2c8; color: #4a443b; }
+
+.voz-log-no-encontrados {
+  color: #b98a1f;
+}
+
+/* Chips de sinónimos */
+.chips-sinonimos {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 180px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #efe8de;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.95rem;
+}
+
+.chip button {
+  background: none;
+  font-size: 0.85rem;
+  color: #77705f;
+  padding: 2px;
+}
+
+.chip-input {
+  border: 1.5px dashed #c9c1b8 !important;
+  min-width: 110px !important;
+  width: 110px !important;
+  padding: 6px 10px !important;
+  font-size: 0.95rem !important;
+}
+
+.config-toggle {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 12px !important;
+  font-size: 1.1rem;
+}
+
+.config-toggle input {
+  width: 26px;
+  height: 26px;
+}
+
+.nota-advertencia {
+  color: #8a5a00;
+  background: #fff6e0;
+  border: 1.5px solid #b98a1f;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
 /* ---------- Impresión: solo se imprime el ticket ---------- */
 
 @media print {
