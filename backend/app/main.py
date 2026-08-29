@@ -89,6 +89,19 @@ def _migrar(engine_) -> None:
                 "ALTER TABLE orden_items ADD COLUMN es_extra BOOLEAN NOT NULL DEFAULT 0"
             ))
             conn.commit()
+        # Estado por ítem (§3): los ítems históricos heredan el estado de su
+        # orden (una anulada no es estado de cocina: sus ítems quedan
+        # 'pendiente', igual da porque cocina no la muestra)
+        if columnas_items and "estado" not in columnas_items:
+            conn.execute(text(
+                "ALTER TABLE orden_items ADD COLUMN estado VARCHAR(20) NOT NULL DEFAULT 'pendiente'"
+            ))
+            conn.execute(text(
+                "UPDATE orden_items SET estado = ("
+                "  SELECT CASE WHEN o.estado IN ('pendiente','preparando','listo','entregado')"
+                "  THEN o.estado ELSE 'pendiente' END FROM ordenes o WHERE o.id = orden_id)"
+            ))
+            conn.commit()
 
 @asynccontextmanager
 async def _ciclo_de_vida(app_: FastAPI):

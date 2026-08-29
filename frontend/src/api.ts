@@ -77,12 +77,16 @@ export interface MenuCarrito {
   nota: string
 }
 
+// Estado POR ÍTEM (§3): la cocina tacha porciones, no tickets enteros
+export type EstadoItem = 'pendiente' | 'preparando' | 'listo' | 'entregado'
+
 export interface OrdenItemOut {
   nombre: string
   precio: number
   cantidad: number
   empaque: Empaque
   nota: string
+  estado: EstadoItem
   subtotal: number
 }
 
@@ -201,6 +205,8 @@ export interface ConfigOut {
   voz_habilitada: boolean
   voz_disponible: boolean
   exigir_caja_abierta: boolean
+  // Ventana de la tanda en cocina (minutos); 0 = apagada
+  cocina_bulk_min: number
 }
 
 export interface MesaEstado {
@@ -471,6 +477,14 @@ export const api = {
 
   descartarPendientes: () =>
     request<{ descartadas: number }>('/api/orders/pending-print/clear', { method: 'POST' }),
+
+  // Tachar un bulk desde "Por salir": avanza N porciones de un plato en
+  // cascada (orden más antigua primero) y devuelve las órdenes que cambiaron
+  despacharBulk: (lineas: { plato_nombre: string; cantidad: number }[], estadoDestino: EstadoItem) =>
+    request<{ ordenes: OrdenOut[] }>('/api/orders/despachar-bulk', {
+      method: 'POST',
+      body: JSON.stringify({ estado_destino: estadoDestino, lineas }),
+    }),
 
   cambiarEstado: (id: number, estado: string) =>
     request<{ id: number; estado: string }>(`/api/orders/${id}/status`, {

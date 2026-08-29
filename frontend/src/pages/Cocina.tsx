@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, NOMBRE_EMPAQUE, NOMBRE_SERVICIO } from '../api'
-import type { OrdenOut } from '../api'
+import type { EstadoItem, OrdenOut } from '../api'
 
 const SIGUIENTE_ESTADO: Record<string, string> = {
   pendiente: 'preparando',
@@ -14,6 +14,11 @@ const TEXTO_AVANCE: Record<string, string> = {
   listo: '📤 Entregado',
 }
 
+// Un ítem "por salir" es el que aún no está listo
+const RANGO_ESTADO: Record<EstadoItem, number> = {
+  pendiente: 0, preparando: 1, listo: 2, entregado: 3,
+}
+
 // Formatea el tiempo de espera como temporizador: "4:37" o "1 h 12 m"
 function formatearEspera(segundos: number): string {
   const s = Math.max(0, Math.floor(segundos))
@@ -24,6 +29,8 @@ function formatearEspera(segundos: number): string {
 export function Cocina() {
   const [ordenes, setOrdenes] = useState<OrdenOut[]>([])
   const [error, setError] = useState(false)
+  // Ventana de la tanda (minutos): resalta lo que va junto en el bulk
+  const [ventanaMin, setVentanaMin] = useState(0)
   // Momento del último dato del servidor: el temporizador avanza en vivo
   // sumando el tiempo local transcurrido desde entonces
   const [traidoEn, setTraidoEn] = useState(Date.now())
@@ -43,6 +50,7 @@ export function Cocina() {
   // Polling simple cada 10 segundos (sin WebSockets en esta fase)
   useEffect(() => {
     cargar()
+    api.config().then((c) => setVentanaMin(c.cocina_bulk_min)).catch(() => {})
     const intervalo = window.setInterval(cargar, 10_000)
     return () => window.clearInterval(intervalo)
   }, [cargar])
@@ -95,24 +103,81 @@ export function Cocina() {
     } catch {
       cargar()
     }
+    cargar()
   }
 
   // Entregadas y anuladas desaparecen de la vista (quedan en BD)
   const activas = ordenes.filter((o) => o.estado !== 'entregado' && o.estado !== 'anulada')
 
-  // Resumen para cocinar por tandas: total por plato de lo que falta salir,
-  // con desglose por empaque (5× Lomo: 3 mesa · 2 táper). Los menús suman
-  // sus platos ELEGIDOS (y extras), no el menú como bloque.
-  const porSalir = new Map<string, { total: number; empaques: Map<string, number> }>()
+  // ---------- "Por salir": tachar bulks (§3) ----------
+
+  // Total por plato de lo que AÚN NO ESTÁ LISTO, con desglose por empaque
+  // y la "tanda": las porciones de la orden más antigua de ese plato más
+  // los pedidos que llegaron en los siguientes X minutos (configurable).
+  const porSalir = new Map<string, {
+    total: number
+    tanda: number
+    empaques: Map<string, number>
+    esperaMax: number
+  }>()
   for (const o of activas) {
     const lineas = [...o.items, ...o.menus.flatMap((m) => m.items)]
+    const espera = esperaSegundos(o)
     for (const item of lineas) {
-      const acumulado = porSalir.get(item.nombre) ?? { total: 0, empaques: new Map() }
+      if (RANGO_ESTADO[item.estado] >= RANGO_ESTADO.listo) continue
+      const acumulado = porSalir.get(item.nombre) ??
+        { total: 0, tanda: 0, empaques: new Map(), esperaMax: espera }
       acumulado.total += item.cantidad
+      // Las órdenes vienen ordenadas de la más antigua a la más nueva:
+      // la primera aparición fija el inicio de la tanda de este plato
+      if (ventanaMin > 0 && espera >= acumulado.esperaMax - ventanaMin * 60) {
+        acumulado.tanda += item.cantidad
+      }
       acumulado.empaques.set(item.empaque, (acumulado.empaques.get(item.empaque) ?? 0) + item.cantidad)
       porSalir.set(item.nombre, acumulado)
     }
   }
+
+  // Panel de despacho: plato elegido de la tira y cuántas porciones tachar
+  const [bulk, setBulk] = useState<{ nombre: string; cantidad: number } | null>(null)
+  const [bulkError, setBulkError] = useState('')
+  const [despachando, setDespachando] = useState(false)
+
+  const abrirBulk = (nombre: string) => {
+    const info = porSalir.get(nombre)
+    if (!info) return
+    setBulkError('')
+    setBulk({ nombre, cantidad: ventanaMin > 0 && info.tanda > 0 ? info.tanda : info.total })
+  }
+
+  const despacharBulk = async (destino: EstadoItem) => {
+    if (!bulk || despachando) return
+    setDespachando(true)
+    setBulkError('')
+    try {
+      const r = await api.despacharBulk(
+        [{ plato_nombre: bulk.nombre, cantidad: bulk.cantidad }], destino,
+      )
+      // Refresco inmediato con las órdenes que cambiaron, sin esperar el poll
+      setOrdenes((prev) =>
+        prev.map((o) => r.ordenes.find((n) => n.id === o.id) ?? o),
+      )
+      setBulk(null)
+    } catch (e) {
+      setBulkError(e instanceof Error ? e.message : 'No se pudo despachar, intenta de nuevo')
+      cargar()
+    } finally {
+      setDespachando(false)
+    }
+  }
+
+  const claseItem = (estado: EstadoItem) =>
+    RANGO_ESTADO[estado] >= RANGO_ESTADO.listo
+      ? 'item-tachado'
+      : estado === 'preparando'
+        ? 'item-preparando'
+        : ''
+
   const seleccionadasAvanzables = activas.filter(
     (o) => seleccion.has(o.id) && SIGUIENTE_ESTADO[o.estado],
   ).length
@@ -131,14 +196,22 @@ export function Cocina() {
           {[...porSalir.entries()]
             .sort((a, b) => b[1].total - a[1].total)
             .map(([nombre, info]) => (
-              <span key={nombre} className="cocina-resumen-item">
+              <button
+                key={nombre}
+                className="cocina-resumen-item bulk-tachable"
+                onClick={() => abrirBulk(nombre)}
+                title="Toca para tachar porciones de este plato"
+              >
                 <strong>{info.total}×</strong> {nombre}
+                {ventanaMin > 0 && info.tanda < info.total && (
+                  <span className="bulk-tanda">tanda: {info.tanda}</span>
+                )}
                 {(info.empaques.size > 1 || !info.empaques.has('mesa')) && (
                   <span className="cocina-resumen-empaques">
                     {' '}({[...info.empaques.entries()].map(([e, n]) => `${n} ${e}`).join(' · ')})
                   </span>
                 )}
-              </span>
+              </button>
             ))}
         </div>
       )}
@@ -193,7 +266,7 @@ export function Cocina() {
                     </span>
                     <ul>
                       {menu.items.map((item, i) => (
-                        <li key={i}>
+                        <li key={i} className={claseItem(item.estado)}>
                           {item.cantidad} × {item.nombre}
                           {item.es_extra && <span className="item-extra-tag">extra</span>}
                           {item.empaque !== 'mesa' && (
@@ -206,7 +279,7 @@ export function Cocina() {
                   </li>
                 ))}
                 {orden.items.map((item, i) => (
-                  <li key={i}>
+                  <li key={i} className={claseItem(item.estado)}>
                     <strong>{item.cantidad} ×</strong> {item.nombre}
                     {item.empaque !== 'mesa' && (
                       <span className="item-empaque">{NOMBRE_EMPAQUE[item.empaque]}</span>
@@ -236,6 +309,62 @@ export function Cocina() {
           <button className="boton-grande boton-cancelar-tanda" onClick={() => setSeleccion(new Set())}>
             Deseleccionar
           </button>
+        </div>
+      )}
+
+      {bulk && (
+        <div className="modal-fondo" onClick={() => setBulk(null)}>
+          <div className="modal modal-bulk" onClick={(e) => e.stopPropagation()}>
+            <h2>{bulk.nombre}</h2>
+            <p className="bulk-detalle">
+              Quedan <strong>{porSalir.get(bulk.nombre)?.total ?? 0}</strong> porciones por salir.
+              Se tachan de la orden más antigua a la más nueva.
+              {ventanaMin > 0 && (porSalir.get(bulk.nombre)?.tanda ?? 0) < (porSalir.get(bulk.nombre)?.total ?? 0) && (
+                <> La tanda de ahora (pedidos con hasta {ventanaMin} min de diferencia) es de{' '}
+                <strong>{porSalir.get(bulk.nombre)?.tanda}</strong>.</>
+              )}
+            </p>
+            {bulkError && <div className="banner-error">{bulkError}</div>}
+            <div className="armado-cantidad bulk-cantidad">
+              <button
+                className="boton-cantidad"
+                onClick={() => setBulk((b) => b && { ...b, cantidad: Math.max(1, b.cantidad - 1) })}
+                disabled={bulk.cantidad <= 1}
+                aria-label="Una porción menos"
+              >−</button>
+              <strong>{bulk.cantidad}</strong>
+              <button
+                className="boton-cantidad boton-mas"
+                onClick={() =>
+                  setBulk((b) => b && {
+                    ...b,
+                    cantidad: Math.min(porSalir.get(b.nombre)?.total ?? b.cantidad, b.cantidad + 1),
+                  })
+                }
+                disabled={bulk.cantidad >= (porSalir.get(bulk.nombre)?.total ?? 0)}
+                aria-label="Una porción más"
+              >+</button>
+            </div>
+            <div className="modal-botones">
+              <button
+                className="boton-grande boton-secundario"
+                disabled={despachando}
+                onClick={() => despacharBulk('preparando')}
+              >
+                ▶ En preparación
+              </button>
+              <button
+                className="boton-grande boton-confirmar"
+                disabled={despachando}
+                onClick={() => despacharBulk('listo')}
+              >
+                {despachando ? 'Tachando…' : `✔ Listos (${bulk.cantidad})`}
+              </button>
+            </div>
+            <button className="boton-grande boton-cancelar-tanda" onClick={() => setBulk(null)}>
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
     </div>

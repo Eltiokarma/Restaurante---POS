@@ -154,6 +154,7 @@ def _item_a_dict(item) -> dict:
         "cantidad": item.cantidad,
         "empaque": item.empaque,
         "nota": item.nota,
+        "estado": item.estado,
         "subtotal": round(item.precio_snapshot * item.cantidad, 2),
     }
 
@@ -358,8 +359,64 @@ def cambiar_estado(orden_id: int, payload: EstadoIn, db: Session = Depends(get_d
         consumir_por_orden(db, orden)
 
     orden.estado = payload.estado
+    # Avanzar la orden completa arrastra todos sus ítems (el estado de la
+    # orden es el mínimo de sus ítems: deben quedar consistentes)
+    if payload.estado != "anulada":
+        for item in orden.items:
+            item.estado = payload.estado
     db.commit()
     return {"id": orden.id, "estado": orden.estado}
+
+
+# ---------- Despacho por bulks (§3): tachar desde "Por salir" ----------
+
+ESTADOS_ITEM = ["pendiente", "preparando", "listo", "entregado"]
+
+
+class BulkLineaIn(BaseModel):
+    # Una de las dos referencias; "Por salir" agrupa por nombre (snapshot)
+    plato_id: int | None = None
+    plato_nombre: str | None = None
+    cantidad: int = Field(gt=0, le=200)
+
+
+class BulkIn(BaseModel):
+    estado_destino: str
+    # Varias líneas = bulk mixto ("2 asados y 2 tallarines"): todo o nada
+    lineas: list[BulkLineaIn] = Field(min_length=1, max_length=30)
+
+
+@router.post("/despachar-bulk")
+def despachar_bulk_endpoint(payload: BulkIn, db: Session = Depends(get_db)):
+    """Avanza N porciones de un plato al estado destino, en cascada de la
+    orden más antigua a la más nueva. Devuelve las órdenes que cambiaron
+    para que la pantalla de cocina se actualice sin esperar el poll."""
+    from ..services.cocina import BulkInsuficiente, despachar_bulk
+
+    if payload.estado_destino not in ESTADOS_ITEM or payload.estado_destino == "pendiente":
+        raise HTTPException(
+            status_code=422, detail=f"Estado destino inválido: {payload.estado_destino}"
+        )
+    for linea in payload.lineas:
+        if linea.plato_id is None and not linea.plato_nombre:
+            raise HTTPException(
+                status_code=422, detail="Cada línea necesita plato_id o plato_nombre"
+            )
+    try:
+        cambiadas = despachar_bulk(
+            db, [l.model_dump() for l in payload.lineas], payload.estado_destino
+        )
+    except BulkInsuficiente as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"De {e.nombre} solo quedan {e.disponibles} porciones por avanzar "
+                f"(se pidió {e.pedidas}). Refresca la pantalla."
+            ),
+        )
+    mapa = _mapa_mesas(db)
+    return {"ordenes": [_orden_a_dict(o, mapa) for o in cambiadas]}
 
 
 class MesasIn(BaseModel):

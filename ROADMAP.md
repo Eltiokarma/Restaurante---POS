@@ -111,8 +111,15 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       (clases `.combo-*`), bloque agrupado en cocina/ticket/caja, "Por salir" suma
       los platos elegidos, menús en Resumen y CSV (columna `menu`), compatibilidad
       total con la venta a la carta y el histórico.
-- [ ] §3 Estado por ítem + despacho por bulks desde "Por salir" (tachar 4 asados de un
-      toque, en cascada por antigüedad).
+- [x] §3 Estado por ítem + despacho por bulks desde "Por salir": los chips de la tira
+      son tachables (elige cuántas porciones y si pasan a preparación o listas), la
+      cascada va de la orden más antigua a la más nueva partiendo ítems si hace falta
+      (el total nunca cambia), bulk mixto atómico en el backend, ítems tachados en la
+      tarjeta, y "tanda" configurable: agrupa el pedido más antiguo con los que
+      llegaron en los siguientes X minutos (Admin → Configuración, default 10, 0 =
+      apagado) y sugiere esa cantidad al tachar.
+- [ ] Pantalla de cocina POR ESTACIÓN (plancha / entradas): filtrar la tira y las
+      tarjetas por categoría o estación. Decidido dejarlo para más adelante.
 - [ ] §4 Menores: cintillo de anulada en cocina (60 s), descuadre como cifra grande,
       fotos de plato, emoji → SVG.
 - [ ] Kardex fase 2 (cuando se use en serio): reporte de consumo semanal, alertas de stock
@@ -162,3 +169,5 @@ Pagos integrados (Yape/tarjeta), control de stock y mermas, app nativa, multi-lo
 | 8 | Nube (Railway) habilitada con candado `PIN_LOCAL`; la laptop queda como plan B ante cortes de internet | El dueño decidió operar en nube. El PIN protege todas las pantallas en la URL pública; la misma base de código corre local con `iniciar.bat` si el internet del local falla (bases de datos separadas). |
 | 9 | Menú encadenado: los platos elegidos son `OrdenItem`s ligados a `orden_menus` con `precio_snapshot` = 0/recargo/extra; la `entrega` sigue viviendo en la ORDEN (no por menú) | El precio del menú vive en `orden_menus` y el total nunca suma el precio de carta de los platos (sin doble cobro), pero cocina y kardex los ven como items normales. La espec sugería `entrega` por menú; se mantuvo por orden porque así se implementó el §2 y la cocina despacha la orden completa. |
 | 10 | Porciones extra con el menú: `precio_extra` configurable POR TIEMPO en la plantilla (+ recargo de la alternativa) | "Una entrada más" no se cobra ni al precio de carta (S/ 6) ni al implícito del combo (S/ 1), sino al precio que el dueño fija (S/ 3). Vacío/0 = ese tiempo no ofrece extras. |
+| 11 | `ordenes.estado` queda como CACHÉ recalculada = el estado MÍNIMO de sus ítems (no un campo derivado en consultas) | Media docena de sitios lo leen (cocina, caja, admin, stats, ticketera): mantenerlo materializado no rompe a nadie. Se recalcula en cada despacho de bulk; avanzar la orden completa arrastra todos sus ítems al mismo estado. Anulada sigue siendo estado solo de la orden. |
+| 12 | Despacho parcial parte el ítem en dos filas (mismas snapshots, estados distintos) | Es la única forma de tachar "3 de 5" sin perder de qué orden salió cada porción; el total de la orden y el kardex no se alteran (la anulación devuelve por movimientos, no por filas). |
