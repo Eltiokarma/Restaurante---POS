@@ -1651,6 +1651,93 @@ button {
   height: 26px;
 }
 
+/* Cobro en caja */
+.caja-orden-cobro {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cobro-etiqueta {
+  font-weight: 700;
+  color: #77705f;
+}
+
+.boton-cobro {
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  background: #fff;
+  border: 2px solid #ddd3c6;
+  border-radius: 999px;
+  min-height: 44px;
+}
+
+.boton-cobro.cobro-activo {
+  background: #2e7d32;
+  border-color: #2e7d32;
+  color: #fff;
+}
+
+/* Insumos */
+.formularios-insumos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin: 18px 0;
+  align-items: start;
+}
+
+.form-insumo {
+  background: #fff;
+  border: 2px solid #e5ded3;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-insumo input,
+.form-insumo select {
+  font-size: 1rem;
+  padding: 10px 12px;
+  border: 2px solid #ddd3c6;
+  border-radius: 8px;
+}
+
+.form-insumo button {
+  padding: 12px;
+  font-weight: 700;
+  background: #efe8de;
+  border-radius: 10px;
+}
+
+.form-insumo .boton-primario {
+  background: #c62828;
+  color: #fff;
+}
+
+.receta-fila {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.receta-fila select {
+  flex: 1;
+}
+
+.receta-fila input {
+  width: 120px;
+}
+
+.stock-negativo {
+  color: #c62828;
+  font-weight: 800;
+}
+
 .nota-advertencia {
   color: #8a5a00;
   background: #fff6e0;

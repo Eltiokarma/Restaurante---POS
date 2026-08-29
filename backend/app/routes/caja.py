@@ -27,15 +27,35 @@ class CierreIn(BaseModel):
     notas: str = ""
 
 
-def _ventas_de_hoy(db: Session) -> float:
-    ordenes = db.scalars(select(Orden).where(Orden.fecha == hoy_lima())).all()
-    return round(sum(o.total for o in ordenes if o.estado != "anulada"), 2)
+def _ventas_de_hoy(db: Session) -> dict:
+    """Ventas del día desglosadas por método de pago.
 
-
-def _a_dict(registro: CierreCaja | None, total_vendido: float) -> dict:
-    if registro is None:
-        return {"abierta": False, "cerrada": False, "total_vendido": total_vendido}
+    Una orden sin método registrado se asume EFECTIVO (comportamiento
+    histórico: si la caja no usa los botones de cobro, el cierre sigue
+    cuadrando como antes).
+    """
+    ordenes = [
+        o for o in db.scalars(select(Orden).where(Orden.fecha == hoy_lima())).all()
+        if o.estado != "anulada"
+    ]
+    efectivo = sum(o.total for o in ordenes if o.metodo_pago in (None, "efectivo"))
+    tarjeta = sum(o.total for o in ordenes if o.metodo_pago == "tarjeta")
+    yape = sum(o.total for o in ordenes if o.metodo_pago == "yape")
     return {
+        "total_vendido": round(efectivo + tarjeta + yape, 2),
+        "ventas_efectivo": round(efectivo, 2),
+        "ventas_tarjeta": round(tarjeta, 2),
+        "ventas_yape": round(yape, 2),
+        "sin_registrar": sum(1 for o in ordenes if o.metodo_pago is None),
+    }
+
+
+def _a_dict(registro: CierreCaja | None, ventas: dict) -> dict:
+    base = {"abierta": False, "cerrada": False, **ventas}
+    if registro is None:
+        return base
+    return {
+        **base,
         "abierta": registro.hora_cierre is None,
         "cerrada": registro.hora_cierre is not None,
         "fecha": registro.fecha.isoformat(),
@@ -46,7 +66,6 @@ def _a_dict(registro: CierreCaja | None, total_vendido: float) -> dict:
         "total_sistema": registro.total_sistema,
         "diferencia": registro.diferencia,
         "notas": registro.notas,
-        "total_vendido": total_vendido,
     }
 
 
@@ -77,21 +96,26 @@ def abrir(payload: AperturaIn, db: Session = Depends(get_db)):
 
 @router.post("/cerrar")
 def cerrar(payload: CierreIn, db: Session = Depends(get_db)):
-    """Cierra la caja del día. Re-cerrar actualiza el conteo (corrección)."""
+    """Cierra la caja del día. El conteo de efectivo se cuadra SOLO contra
+    el efectivo esperado (fondo + ventas en efectivo); tarjeta y Yape se
+    reportan aparte. Re-cerrar actualiza el conteo (corrección)."""
     registro = _registro_de_hoy(db)
     if registro is None:
         raise HTTPException(status_code=409, detail="La caja de hoy no está abierta todavía")
 
-    total_vendido = _ventas_de_hoy(db)
-    esperado = round(registro.monto_apertura + total_vendido, 2)
+    ventas = _ventas_de_hoy(db)
+    esperado_efectivo = round(registro.monto_apertura + ventas["ventas_efectivo"], 2)
     registro.hora_cierre = ahora_lima().strftime("%H:%M:%S")
     registro.monto_contado = round(payload.monto_contado, 2)
-    registro.total_sistema = total_vendido
-    registro.diferencia = round(registro.monto_contado - esperado, 2)
+    registro.total_sistema = ventas["total_vendido"]
+    registro.ventas_efectivo = ventas["ventas_efectivo"]
+    registro.ventas_tarjeta = ventas["ventas_tarjeta"]
+    registro.ventas_yape = ventas["ventas_yape"]
+    registro.diferencia = round(registro.monto_contado - esperado_efectivo, 2)
     if payload.notas.strip():
         registro.notas = payload.notas.strip()
     db.commit()
-    return _a_dict(registro, total_vendido)
+    return _a_dict(registro, ventas)
 
 
 @router.get("/historial", dependencies=[Depends(requiere_admin)])
@@ -100,4 +124,13 @@ def historial(db: Session = Depends(get_db)):
     registros = db.scalars(
         select(CierreCaja).order_by(CierreCaja.fecha.desc()).limit(30)
     ).all()
-    return {"cierres": [_a_dict(r, r.total_sistema or 0.0) for r in registros]}
+    return {"cierres": [
+        _a_dict(r, {
+            "total_vendido": r.total_sistema or 0.0,
+            "ventas_efectivo": r.ventas_efectivo or 0.0,
+            "ventas_tarjeta": r.ventas_tarjeta or 0.0,
+            "ventas_yape": r.ventas_yape or 0.0,
+            "sin_registrar": 0,
+        })
+        for r in registros
+    ]}

@@ -57,17 +57,23 @@
       toda la API exige el PIN (se pide una vez por dispositivo); sin ella, la LAN funciona
       igual que siempre.
 
-## Fase 4 — operación avanzada (siguiente, por lotes)
+## Fase 4 — operación avanzada
 
-- [ ] **Métodos de pago**: registrar en caja cómo se pagó cada orden (efectivo / tarjeta /
-      Yape-Plin). El cierre de caja debe cuadrar solo el EFECTIVO esperado y reportar
-      tarjeta/Yape aparte. (Primer lote: es prerequisito del cierre exacto.)
-- [ ] **Insumos y recetas**: catálogo de insumos (papa, arroz, carne…) y receta por plato
-      (cuánto insumo consume una porción).
-- [ ] **Kardex**: entradas (compras) y salidas (consumo calculado por ventas + mermas
-      manuales), stock actual y costo. Reporte de consumo del día/semana.
+- [x] **Métodos de pago**: la caja registra cómo se pagó cada orden (💵 efectivo / 💳
+      tarjeta / 📱 Yape; corregible con re-toque). El cierre de caja cuadra SOLO el
+      efectivo esperado (fondo + ventas en efectivo) y reporta tarjeta/Yape aparte; una
+      orden sin método registrado se asume efectivo (comportamiento histórico). Columna
+      `pago` en el CSV.
+- [x] **Insumos y recetas**: catálogo de insumos con stock y costo promedio ponderado, y
+      receta por plato (insumo + cantidad por porción) con costo por porción y margen
+      calculados.
+- [x] **Kardex**: compras (recalculan costo promedio), mermas, ajustes por conteo físico y
+      **consumo automático por venta** según la receta (anular una orden devuelve el
+      stock). Stock negativo visible en rojo = vendiste más de lo que el kardex tenía.
 - [ ] **Despliegue en Railway** (guía lista en el README): crear el proyecto con la cuenta
       del dueño, variables (`ADMIN_PASSWORD`, `PIN_LOCAL`), volumen en `/data` y dominio.
+- [ ] Kardex fase 2 (cuando se use en serio): reporte de consumo semanal, alertas de stock
+      mínimo por insumo, export CSV del kardex.
 
 ## Fase 2 de voz — laboratorio (`voz-lab/`, independiente del POS)
 

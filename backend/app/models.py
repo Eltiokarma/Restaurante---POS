@@ -57,6 +57,9 @@ class Orden(Base):
     tipo_servicio: Mapped[str] = mapped_column(String(10), default="sala", nullable=False)
     # tactil | voz | mixto — cómo se armó el carrito (para comparar canales)
     origen: Mapped[str] = mapped_column(String(10), default="tactil", nullable=False)
+    # efectivo | tarjeta | yape — lo registra la caja al cobrar.
+    # None = sin registrar (el cierre lo asume efectivo, comportamiento histórico)
+    metodo_pago: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
     items: Mapped[list["OrdenItem"]] = relationship(
@@ -126,7 +129,56 @@ class CierreCaja(Base):
     monto_contado: Mapped[float | None] = mapped_column(Float, nullable=True)
     total_sistema: Mapped[float | None] = mapped_column(Float, nullable=True)
     diferencia: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Desglose por método al momento del cierre (el esperado en caja
+    # cuadra SOLO contra el efectivo)
+    ventas_efectivo: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ventas_tarjeta: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ventas_yape: Mapped[float | None] = mapped_column(Float, nullable=True)
     notas: Mapped[str] = mapped_column(Text, default="", nullable=False)
+
+
+class Insumo(Base):
+    """Insumo de cocina (papa, arroz, carne…) con stock y costo promedio."""
+
+    __tablename__ = "insumos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(120), nullable=False)
+    unidad: Mapped[str] = mapped_column(String(20), nullable=False)  # kg, g, l, ml, unidad…
+    stock_actual: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    costo_unitario: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
+
+
+class RecetaItem(Base):
+    """Receta: cuánto insumo consume UNA porción de un plato."""
+
+    __tablename__ = "receta_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plato_id: Mapped[int] = mapped_column(ForeignKey("platos.id"), nullable=False)
+    insumo_id: Mapped[int] = mapped_column(ForeignKey("insumos.id"), nullable=False)
+    cantidad: Mapped[float] = mapped_column(Float, nullable=False)  # en la unidad del insumo
+
+
+class MovimientoInsumo(Base):
+    """Kardex: cada entrada/salida de un insumo, con auditoría.
+
+    ``cantidad`` es el delta con signo aplicado al stock: compra +5,
+    consumo -1.2, merma -0.5, ajuste ±.
+    """
+
+    __tablename__ = "movimientos_insumo"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    insumo_id: Mapped[int] = mapped_column(ForeignKey("insumos.id"), nullable=False)
+    fecha: Mapped[date] = mapped_column(Date, nullable=False)
+    hora: Mapped[str] = mapped_column(String(8), nullable=False)
+    tipo: Mapped[str] = mapped_column(String(10), nullable=False)  # compra | consumo | merma | ajuste
+    cantidad: Mapped[float] = mapped_column(Float, nullable=False)
+    costo_total: Mapped[float | None] = mapped_column(Float, nullable=True)  # solo compras
+    referencia: Mapped[str] = mapped_column(String(200), default="", nullable=False)
 
 
 class Config(Base):

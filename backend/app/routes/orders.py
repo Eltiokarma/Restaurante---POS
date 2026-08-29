@@ -61,6 +61,7 @@ def _orden_a_dict(orden: Orden) -> dict:
         "estado": orden.estado,
         "tipo_servicio": orden.tipo_servicio,
         "origen": orden.origen,
+        "metodo_pago": orden.metodo_pago,
         "minutos_espera": round(_minutos_espera(orden), 1),
         "items": [
             {
@@ -197,6 +198,37 @@ def cambiar_estado(orden_id: int, payload: EstadoIn, db: Session = Depends(get_d
     orden = db.get(Orden, orden_id)
     if orden is None:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    # Kardex: anular devuelve el stock consumido (y des-anular lo vuelve a consumir)
+    from ..services.inventario import consumir_por_orden, revertir_por_orden
+
+    if payload.estado == "anulada" and orden.estado != "anulada":
+        revertir_por_orden(db, orden)
+    elif payload.estado != "anulada" and orden.estado == "anulada":
+        consumir_por_orden(db, orden)
+
     orden.estado = payload.estado
     db.commit()
     return {"id": orden.id, "estado": orden.estado}
+
+
+METODOS_PAGO = ["efectivo", "tarjeta", "yape"]
+
+
+class PagoIn(BaseModel):
+    metodo_pago: str
+
+
+@router.patch("/{orden_id}/pago")
+def registrar_pago(orden_id: int, payload: PagoIn, db: Session = Depends(get_db)):
+    """La caja registra cómo se pagó la orden. Re-PATCH corrige el método."""
+    if payload.metodo_pago not in METODOS_PAGO:
+        raise HTTPException(status_code=422, detail=f"Método inválido: {payload.metodo_pago}")
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if orden.estado == "anulada":
+        raise HTTPException(status_code=409, detail="Una orden anulada no se cobra")
+    orden.metodo_pago = payload.metodo_pago
+    db.commit()
+    return {"id": orden.id, "metodo_pago": orden.metodo_pago}

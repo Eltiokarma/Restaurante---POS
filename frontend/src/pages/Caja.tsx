@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_SERVICIO, soles } from '../api'
-import type { CajaEstado, ConfigOut, DatosLocal, OrdenOut, Plato } from '../api'
+import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, MetodoPago, OrdenOut, Plato } from '../api'
+
+const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
 import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket } from '../components/Ticket'
 import { useCarrito } from '../hooks/useCarrito'
@@ -181,6 +183,18 @@ export function Caja() {
     }
   }
 
+  const cobrar = async (orden: OrdenOut, metodo: MetodoPago) => {
+    setOrdenes((prev) =>
+      prev.map((o) => (o.id === orden.id ? { ...o, metodo_pago: metodo } : o)),
+    )
+    try {
+      await api.cobrarOrden(orden.id, metodo)
+      cargarCaja()
+    } catch {
+      cargarOrdenes()
+    }
+  }
+
   const reimprimir = async (orden: OrdenOut) => {
     try {
       const cfg = config ?? (await api.config())
@@ -233,8 +247,12 @@ export function Caja() {
         <div className="caja-panel">
           <span>
             🔓 Caja abierta a las {estadoCaja.hora_apertura?.slice(0, 5)} con{' '}
-            <strong>{soles(estadoCaja.monto_apertura ?? 0)}</strong> de fondo · esperado ahora en
-            caja: <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.total_vendido)}</strong>
+            <strong>{soles(estadoCaja.monto_apertura ?? 0)}</strong> de fondo · esperado en
+            EFECTIVO: <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo)}</strong>
+            {' '}· 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)}
+            {estadoCaja.sin_registrar > 0 && (
+              <em> · {estadoCaja.sin_registrar} sin registrar (se asumen efectivo)</em>
+            )}
           </span>
           {!cerrandoCaja ? (
             <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(true)}>
@@ -259,10 +277,10 @@ export function Caja() {
       {estadoCaja?.cerrada && (
         <div className={`caja-panel ${estadoCaja.diferencia ? 'caja-panel-descuadre' : ''}`}>
           <span>
-            🔒 Caja cerrada a las {estadoCaja.hora_cierre?.slice(0, 5)} — sistema:{' '}
-            <strong>{soles(estadoCaja.total_sistema ?? 0)}</strong> + fondo{' '}
-            {soles(estadoCaja.monto_apertura ?? 0)} · contado:{' '}
-            <strong>{soles(estadoCaja.monto_contado ?? 0)}</strong> ·{' '}
+            🔒 Caja cerrada a las {estadoCaja.hora_cierre?.slice(0, 5)} — efectivo esperado:{' '}
+            <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo)}</strong>{' '}
+            · contado: <strong>{soles(estadoCaja.monto_contado ?? 0)}</strong>{' '}
+            · 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)} ·{' '}
             {estadoCaja.diferencia === 0
               ? 'cuadró exacto 🎯'
               : (estadoCaja.diferencia ?? 0) > 0
@@ -372,6 +390,20 @@ export function Caja() {
                 <div className="caja-orden-items">
                   {o.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(', ')}
                 </div>
+                {o.estado !== 'anulada' && (
+                  <div className="caja-orden-cobro">
+                    {o.metodo_pago === null && <span className="cobro-etiqueta">Cobrar:</span>}
+                    {METODOS.map((m) => (
+                      <button
+                        key={m}
+                        className={`boton-cobro ${o.metodo_pago === m ? 'cobro-activo' : ''}`}
+                        onClick={() => cobrar(o, m)}
+                      >
+                        {NOMBRE_PAGO[m]}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="caja-orden-botones">
                   {SIGUIENTE_ESTADO[o.estado] && (
                     <button onClick={() => avanzar(o)}>▶ {SIGUIENTE_ESTADO[o.estado]}</button>

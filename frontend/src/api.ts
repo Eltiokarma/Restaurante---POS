@@ -42,6 +42,7 @@ export interface OrdenOut {
   total: number
   estado: string
   tipo_servicio: TipoServicio
+  metodo_pago: MetodoPago | null
   minutos_espera: number
   items: OrdenItemOut[]
 }
@@ -54,9 +55,49 @@ export const NOMBRE_SERVICIO: Record<TipoServicio, string> = {
   mixto: '🥡 Mixto',
 }
 
+export type MetodoPago = 'efectivo' | 'tarjeta' | 'yape'
+
+export const NOMBRE_PAGO: Record<MetodoPago, string> = {
+  efectivo: '💵 Efectivo',
+  tarjeta: '💳 Tarjeta',
+  yape: '📱 Yape',
+}
+
+export interface Insumo {
+  id: number
+  nombre: string
+  unidad: string
+  stock_actual: number
+  costo_unitario: number
+  valor: number
+  activo: boolean
+}
+
+export interface MovimientoKardex {
+  id: number
+  fecha: string
+  hora: string
+  insumo: string
+  unidad: string
+  tipo: string
+  cantidad: number
+  costo_total: number | null
+  referencia: string
+}
+
+export interface RecetaDetalle {
+  plato_id: number
+  items: { insumo_id: number; insumo: string; unidad: string; cantidad: number }[]
+  costo_porcion: number
+}
+
 export interface CajaEstado {
   abierta: boolean
   cerrada: boolean
+  ventas_efectivo: number
+  ventas_tarjeta: number
+  ventas_yape: number
+  sin_registrar: number
   fecha?: string
   hora_apertura?: string
   monto_apertura?: number
@@ -225,6 +266,45 @@ export const api = {
     }).catch(() => null), // el log es telemetría: nunca bloquea al cliente
 
   vozLogsHoy: () => request<VozPanel>('/api/voice/logs/today', {}, true),
+
+  cobrarOrden: (id: number, metodo: MetodoPago) =>
+    request<{ id: number; metodo_pago: MetodoPago }>(`/api/orders/${id}/pago`, {
+      method: 'PATCH',
+      body: JSON.stringify({ metodo_pago: metodo }),
+    }),
+
+  // --- Insumos, recetas y kardex (admin) ---
+  insumos: () => request<{ insumos: Insumo[]; valor_inventario: number }>('/api/insumos', {}, true),
+
+  crearInsumo: (nombre: string, unidad: string, costoUnitario: number) =>
+    request<Insumo>('/api/insumos', {
+      method: 'POST',
+      body: JSON.stringify({ nombre, unidad, costo_unitario: costoUnitario }),
+    }, true),
+
+  movimientoInsumo: (
+    insumoId: number,
+    tipo: 'compra' | 'merma' | 'ajuste',
+    cantidad: number,
+    costoTotal?: number,
+    nota = '',
+  ) =>
+    request<Insumo>(`/api/insumos/${insumoId}/movimientos`, {
+      method: 'POST',
+      body: JSON.stringify({ tipo, cantidad, costo_total: costoTotal, nota }),
+    }, true),
+
+  kardex: (insumoId?: number) =>
+    request<{ movimientos: MovimientoKardex[] }>(
+      `/api/insumos/kardex${insumoId ? `?insumo_id=${insumoId}` : ''}`, {}, true),
+
+  receta: (platoId: number) => request<RecetaDetalle>(`/api/insumos/recetas/${platoId}`, {}, true),
+
+  guardarReceta: (platoId: number, items: { insumo_id: number; cantidad: number }[]) =>
+    request<RecetaDetalle>(`/api/insumos/recetas/${platoId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ items }),
+    }, true),
 
   // --- Apertura y cierre de caja ---
   cajaHoy: () => request<CajaEstado>('/api/caja/hoy'),
