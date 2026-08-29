@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, NOMBRE_CATEGORIA, soles } from '../api'
-import type { ConfigOut, DatosLocal, OrdenOut, Plato } from '../api'
+import { api, NOMBRE_CATEGORIA, NOMBRE_SERVICIO, soles } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, OrdenOut, Plato, TipoServicio } from '../api'
 import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket } from '../components/Ticket'
 import { useCarrito } from '../hooks/useCarrito'
@@ -25,8 +25,20 @@ export function Caja() {
   const [error, setError] = useState('')
   const [registrando, setRegistrando] = useState(false)
   const [ticket, setTicket] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
+  const [tipoServicio, setTipoServicio] = useState<TipoServicio>('sala')
+  const [estadoCaja, setEstadoCaja] = useState<CajaEstado | null>(null)
+  const [montoCaja, setMontoCaja] = useState('')
+  const [cerrandoCaja, setCerrandoCaja] = useState(false)
   const carrito = useCarrito()
   const { sincronizarConMenu } = carrito
+
+  const cargarCaja = useCallback(async () => {
+    try {
+      setEstadoCaja(await api.cajaHoy())
+    } catch {
+      /* el banner de conexión ya lo maneja cargarOrdenes */
+    }
+  }, [])
 
   const cargarMenu = useCallback(async () => {
     try {
@@ -53,13 +65,55 @@ export function Caja() {
     api.config().then(setConfig).catch(() => {})
     cargarMenu()
     cargarOrdenes()
+    cargarCaja()
     const iMenu = window.setInterval(cargarMenu, 30_000)
     const iOrdenes = window.setInterval(cargarOrdenes, 10_000)
     return () => {
       window.clearInterval(iMenu)
       window.clearInterval(iOrdenes)
     }
-  }, [cargarMenu, cargarOrdenes])
+  }, [cargarMenu, cargarOrdenes, cargarCaja])
+
+  const abrirCaja = async () => {
+    const monto = parseFloat(montoCaja)
+    if (!(monto >= 0)) {
+      setError('Pon el fondo inicial de caja (puede ser 0)')
+      return
+    }
+    try {
+      setEstadoCaja(await api.abrirCaja(monto))
+      setMontoCaja('')
+      setMensaje(`✔ Caja abierta con ${soles(monto)} de fondo`)
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo abrir la caja')
+    }
+  }
+
+  const cerrarCaja = async () => {
+    const monto = parseFloat(montoCaja)
+    if (!(monto >= 0)) {
+      setError('Pon cuánto efectivo contaste en caja')
+      return
+    }
+    try {
+      const resultado = await api.cerrarCaja(monto)
+      setEstadoCaja(resultado)
+      setMontoCaja('')
+      setCerrandoCaja(false)
+      const dif = resultado.diferencia ?? 0
+      setMensaje(
+        dif === 0
+          ? '✔ Caja cerrada: cuadró exacto 🎯'
+          : dif > 0
+            ? `✔ Caja cerrada: sobran ${soles(dif)}`
+            : `✔ Caja cerrada: faltan ${soles(-dif)}`,
+      )
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo cerrar la caja')
+    }
+  }
 
   // Impresión local (modo "terminal"): igual que en admin, el ticket se
   // monta oculto y se imprime cuando está en el DOM
@@ -84,9 +138,13 @@ export function Caja() {
     try {
       const resultado = await api.crearOrden(
         carrito.items.map((i) => ({ plato_id: i.plato.id, cantidad: i.cantidad })),
+        undefined,
+        tipoServicio,
       )
       carrito.vaciar()
+      setTipoServicio('sala')
       cargarOrdenes()
+      cargarCaja()
       const numero = String(resultado.orden.numero_orden_dia).padStart(3, '0')
       if (imprimeAqui) {
         setTicket(resultado)
@@ -121,6 +179,7 @@ export function Caja() {
       await api.cambiarEstado(orden.id, 'anulada')
       setMensaje(`Orden #${numero} anulada`)
       cargarOrdenes()
+      cargarCaja()
     } catch {
       setError('No se pudo anular, intenta de nuevo')
     }
@@ -158,6 +217,82 @@ export function Caja() {
         {error && <span className="banner-error caja-banner">{error}</span>}
       </header>
 
+      {estadoCaja && !estadoCaja.abierta && !estadoCaja.cerrada && (
+        <div className="caja-panel caja-panel-apertura">
+          <strong>La caja de hoy no está abierta.</strong>
+          <label>
+            Fondo inicial (sencillo para vueltos)
+            <input
+              type="number" step="0.50" min="0" placeholder="50.00"
+              value={montoCaja} onChange={(e) => setMontoCaja(e.target.value)}
+            />
+          </label>
+          <button className="boton-grande boton-confirmar" onClick={abrirCaja}>
+            🔓 Abrir caja
+          </button>
+        </div>
+      )}
+
+      {estadoCaja?.abierta && (
+        <div className="caja-panel">
+          <span>
+            🔓 Caja abierta a las {estadoCaja.hora_apertura?.slice(0, 5)} con{' '}
+            <strong>{soles(estadoCaja.monto_apertura ?? 0)}</strong> de fondo · esperado ahora en
+            caja: <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.total_vendido)}</strong>
+          </span>
+          {!cerrandoCaja ? (
+            <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(true)}>
+              🔒 Cerrar caja
+            </button>
+          ) : (
+            <span className="caja-cierre-form">
+              <label>
+                Efectivo contado
+                <input
+                  type="number" step="0.10" min="0" autoFocus
+                  value={montoCaja} onChange={(e) => setMontoCaja(e.target.value)}
+                />
+              </label>
+              <button className="boton-grande boton-confirmar" onClick={cerrarCaja}>Confirmar cierre</button>
+              <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(false)}>Cancelar</button>
+            </span>
+          )}
+        </div>
+      )}
+
+      {estadoCaja?.cerrada && (
+        <div className={`caja-panel ${estadoCaja.diferencia ? 'caja-panel-descuadre' : ''}`}>
+          <span>
+            🔒 Caja cerrada a las {estadoCaja.hora_cierre?.slice(0, 5)} — sistema:{' '}
+            <strong>{soles(estadoCaja.total_sistema ?? 0)}</strong> + fondo{' '}
+            {soles(estadoCaja.monto_apertura ?? 0)} · contado:{' '}
+            <strong>{soles(estadoCaja.monto_contado ?? 0)}</strong> ·{' '}
+            {estadoCaja.diferencia === 0
+              ? 'cuadró exacto 🎯'
+              : (estadoCaja.diferencia ?? 0) > 0
+                ? `sobran ${soles(estadoCaja.diferencia ?? 0)}`
+                : `faltan ${soles(-(estadoCaja.diferencia ?? 0))}`}
+          </span>
+          {!cerrandoCaja ? (
+            <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(true)}>
+              Corregir conteo
+            </button>
+          ) : (
+            <span className="caja-cierre-form">
+              <label>
+                Efectivo contado
+                <input
+                  type="number" step="0.10" min="0" autoFocus
+                  value={montoCaja} onChange={(e) => setMontoCaja(e.target.value)}
+                />
+              </label>
+              <button className="boton-grande boton-confirmar" onClick={cerrarCaja}>Guardar corrección</button>
+              <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(false)}>Cancelar</button>
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="caja-columnas">
         <section className="caja-nuevo">
           <h2>Nuevo pedido</h2>
@@ -179,6 +314,17 @@ export function Caja() {
               </div>
             </div>
           ))}
+          <div className="selector-servicio selector-servicio-caja">
+            {(['sala', 'llevar', 'mixto'] as TipoServicio[]).map((t) => (
+              <button
+                key={t}
+                className={`boton-servicio ${tipoServicio === t ? 'servicio-activo' : ''}`}
+                onClick={() => setTipoServicio(t)}
+              >
+                {NOMBRE_SERVICIO[t]}
+              </button>
+            ))}
+          </div>
           <div className="caja-acciones">
             <button
               className="boton-grande boton-secundario"
@@ -209,6 +355,9 @@ export function Caja() {
                 <div className="caja-orden-info">
                   <span className="caja-orden-numero">#{String(o.numero_orden_dia).padStart(3, '0')}</span>
                   <span className={`etiqueta-estado etiqueta-${o.estado}`}>{o.estado}</span>
+                  {o.tipo_servicio !== 'sala' && (
+                    <span className="badge-servicio">{NOMBRE_SERVICIO[o.tipo_servicio]}</span>
+                  )}
                   <span className="caja-orden-hora">{o.hora.slice(0, 5)}</span>
                   <span className="caja-orden-total">{soles(o.total)}</span>
                 </div>

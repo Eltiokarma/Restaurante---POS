@@ -24,11 +24,16 @@ class ItemIn(BaseModel):
     cantidad: int = Field(gt=0, le=50)
 
 
+TIPOS_SERVICIO = ["sala", "llevar", "mixto"]
+
+
 class OrdenIn(BaseModel):
     items: list[ItemIn] = Field(min_length=1)
     # Medido por la terminal: segundos desde que empezó el pedido hasta
     # confirmar. Opcional; se ignora fuera de un rango razonable.
     duracion_seg: int | None = Field(default=None, ge=0, le=3600)
+    # sala (default) | llevar | mixto
+    tipo_servicio: str = "sala"
 
 
 class EstadoIn(BaseModel):
@@ -51,6 +56,7 @@ def _orden_a_dict(orden: Orden) -> dict:
         "hora": orden.hora,
         "total": orden.total,
         "estado": orden.estado,
+        "tipo_servicio": orden.tipo_servicio,
         "minutos_espera": round(_minutos_espera(orden), 1),
         "items": [
             {
@@ -71,8 +77,13 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     Devuelve el número de orden del día y los datos del local para imprimir
     el ticket.
     """
+    if payload.tipo_servicio not in TIPOS_SERVICIO:
+        raise HTTPException(status_code=422, detail=f"Tipo de servicio inválido: {payload.tipo_servicio}")
     try:
-        orden = crear_orden(db, [i.model_dump() for i in payload.items], payload.duracion_seg)
+        orden = crear_orden(
+            db, [i.model_dump() for i in payload.items],
+            payload.duracion_seg, payload.tipo_servicio,
+        )
     except PlatoNoDisponible as e:
         raise HTTPException(status_code=409, detail=f"'{e.nombre}' ya no está disponible")
     except ValueError as e:

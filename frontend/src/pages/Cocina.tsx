@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '../api'
+import { api, NOMBRE_SERVICIO } from '../api'
 import type { OrdenOut } from '../api'
 
 const SIGUIENTE_ESTADO: Record<string, string> = {
@@ -56,6 +56,35 @@ export function Cocina() {
   const esperaSegundos = (orden: OrdenOut) =>
     orden.minutos_espera * 60 + (Date.now() - traidoEn) / 1000
 
+  // Selección múltiple: la cocina despacha por tandas de 2-3 pedidos
+  const [seleccion, setSeleccion] = useState<Set<number>>(new Set())
+
+  const alternarSeleccion = (id: number) => {
+    setSeleccion((prev) => {
+      const nueva = new Set(prev)
+      if (nueva.has(id)) nueva.delete(id)
+      else nueva.add(id)
+      return nueva
+    })
+  }
+
+  const avanzarSeleccionadas = async () => {
+    const elegidas = ordenes.filter((o) => seleccion.has(o.id) && SIGUIENTE_ESTADO[o.estado])
+    // Optimista: todas avanzan a su siguiente estado de una vez
+    setOrdenes((prev) =>
+      prev.map((o) =>
+        seleccion.has(o.id) && SIGUIENTE_ESTADO[o.estado]
+          ? { ...o, estado: SIGUIENTE_ESTADO[o.estado] }
+          : o,
+      ),
+    )
+    setSeleccion(new Set())
+    await Promise.allSettled(
+      elegidas.map((o) => api.cambiarEstado(o.id, SIGUIENTE_ESTADO[o.estado])),
+    )
+    cargar()
+  }
+
   const avanzar = async (orden: OrdenOut) => {
     const siguiente = SIGUIENTE_ESTADO[orden.estado]
     if (!siguiente) return
@@ -71,6 +100,18 @@ export function Cocina() {
   // Entregadas y anuladas desaparecen de la vista (quedan en BD)
   const activas = ordenes.filter((o) => o.estado !== 'entregado' && o.estado !== 'anulada')
 
+  // Resumen para cocinar por tandas: total por plato de lo que falta salir
+  const porSalir = new Map<string, number>()
+  for (const o of activas) {
+    if (o.estado === 'entregado') continue
+    for (const item of o.items) {
+      porSalir.set(item.nombre, (porSalir.get(item.nombre) ?? 0) + item.cantidad)
+    }
+  }
+  const seleccionadasAvanzables = activas.filter(
+    (o) => seleccion.has(o.id) && SIGUIENTE_ESTADO[o.estado],
+  ).length
+
   return (
     <div className="pantalla-cocina">
       <header className="cocina-cabecera">
@@ -79,15 +120,39 @@ export function Cocina() {
         {error && <span className="banner-error">Sin conexión con el sistema</span>}
       </header>
 
+      {porSalir.size > 0 && (
+        <div className="cocina-resumen-cola">
+          <span className="cocina-resumen-titulo">Por salir:</span>
+          {[...porSalir.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .map(([nombre, cantidad]) => (
+              <span key={nombre} className="cocina-resumen-item">
+                <strong>{cantidad}×</strong> {nombre}
+              </span>
+            ))}
+        </div>
+      )}
+
       {activas.length === 0 && !error && <p className="cocina-vacia">Sin órdenes pendientes 🎉</p>}
 
       <div className="grilla-cocina">
         {activas.map((orden) => {
           const segundos = esperaSegundos(orden)
           const urgente = orden.estado === 'pendiente' && segundos > 600
+          const seleccionada = seleccion.has(orden.id)
           return (
-            <div key={orden.id} className={`tarjeta-orden estado-${orden.estado} ${urgente ? 'urgente' : ''}`}>
+            <div
+              key={orden.id}
+              className={`tarjeta-orden estado-${orden.estado} ${urgente ? 'urgente' : ''} ${seleccionada ? 'seleccionada' : ''}`}
+            >
               <div className="tarjeta-orden-cabecera">
+                <button
+                  className={`boton-seleccion ${seleccionada ? 'marcada' : ''}`}
+                  onClick={() => alternarSeleccion(orden.id)}
+                  aria-label={`Seleccionar orden ${orden.numero_orden_dia}`}
+                >
+                  {seleccionada ? '☑' : '☐'}
+                </button>
                 <span className="tarjeta-orden-numero">#{String(orden.numero_orden_dia).padStart(3, '0')}</span>
                 <span className={`tarjeta-orden-timer ${urgente ? 'timer-urgente' : ''}`}>
                   ⏱ {formatearEspera(segundos)}
@@ -95,6 +160,11 @@ export function Cocina() {
               </div>
               <div className="tarjeta-orden-fila-estado">
                 <span className={`etiqueta-estado etiqueta-${orden.estado}`}>{orden.estado.toUpperCase()}</span>
+                {orden.tipo_servicio !== 'sala' && (
+                  <span className="badge-servicio badge-servicio-cocina">
+                    {NOMBRE_SERVICIO[orden.tipo_servicio]}
+                  </span>
+                )}
                 <span className="tarjeta-orden-hora">pedido a las {orden.hora.slice(0, 5)}</span>
               </div>
               <ul className="tarjeta-orden-items">
@@ -111,6 +181,22 @@ export function Cocina() {
           )
         })}
       </div>
+
+      {seleccion.size > 0 && (
+        <div className="barra-tanda">
+          <span>{seleccion.size} seleccionada{seleccion.size > 1 ? 's' : ''}</span>
+          <button
+            className="boton-grande boton-avance-tanda"
+            disabled={seleccionadasAvanzables === 0}
+            onClick={avanzarSeleccionadas}
+          >
+            ▶▶ Avanzar la tanda ({seleccionadasAvanzables})
+          </button>
+          <button className="boton-grande boton-cancelar-tanda" onClick={() => setSeleccion(new Set())}>
+            Deseleccionar
+          </button>
+        </div>
+      )}
     </div>
   )
 }

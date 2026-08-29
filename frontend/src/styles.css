@@ -310,6 +310,62 @@ button {
   flex-wrap: wrap;
 }
 
+/* Selector de tipo de servicio (sala / llevar / mixto) */
+.selector-servicio {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.selector-servicio-titulo {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.selector-servicio-botones {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.boton-servicio {
+  flex: 1;
+  min-height: 80px;
+  min-width: 150px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  background: #fff;
+  border: 3px solid #ddd3c6;
+  color: #2b2b2b;
+}
+
+.boton-servicio.servicio-activo {
+  background: #2e7d32;
+  border-color: #2e7d32;
+  color: #fff;
+}
+
+.selector-servicio-caja {
+  flex-direction: row;
+  margin-bottom: 12px;
+}
+
+.selector-servicio-caja .boton-servicio {
+  min-height: 60px;
+  min-width: 120px;
+  font-size: 1.05rem;
+}
+
+.badge-servicio {
+  background: #fff3cd;
+  border: 2px solid #b98a1f;
+  color: #6e5312;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .botones-resumen .boton-confirmar {
   flex: 1;
 }
@@ -489,6 +545,86 @@ button {
   color: #b7c0c9;
 }
 
+/* Resumen para cocinar por tandas: total por plato de lo que falta salir */
+.cocina-resumen-cola {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #2e343b;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  font-size: 1.2rem;
+}
+
+.cocina-resumen-titulo {
+  color: #b7c0c9;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+}
+
+.cocina-resumen-item {
+  background: #22262b;
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
+.badge-servicio-cocina {
+  font-size: 1rem;
+}
+
+/* Selección múltiple para despachar en tandas */
+.boton-seleccion {
+  width: 48px;
+  height: 48px;
+  font-size: 1.6rem;
+  background: transparent;
+  border: 2px solid #4a525b;
+  border-radius: 10px;
+  color: #b7c0c9;
+}
+
+.boton-seleccion.marcada {
+  background: #66bb6a;
+  border-color: #66bb6a;
+  color: #0c290e;
+}
+
+.tarjeta-orden.seleccionada {
+  outline: 3px solid #66bb6a;
+  outline-offset: 2px;
+}
+
+.barra-tanda {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #171a1d;
+  border-top: 3px solid #66bb6a;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 22px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  z-index: 20;
+}
+
+.boton-avance-tanda {
+  flex: 1;
+  background: #66bb6a;
+  color: #0c290e;
+}
+
+.boton-cancelar-tanda {
+  background: #2e343b;
+  color: #e6edf3;
+}
+
 .grilla-cocina {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -618,6 +754,76 @@ button {
   margin: 0;
   padding: 8px 14px;
   font-size: 1rem;
+}
+
+/* Panel de apertura/cierre de caja */
+.caja-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 2px solid #2e7d32;
+  border-radius: 12px;
+  margin: 16px 22px 0;
+  padding: 14px 18px;
+  font-size: 1.05rem;
+}
+
+.caja-panel-apertura {
+  border-color: #b98a1f;
+  background: #fff6e0;
+}
+
+.caja-panel-descuadre {
+  border-color: #d32f2f;
+}
+
+.caja-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.caja-panel input {
+  font-size: 1.2rem;
+  padding: 10px 14px;
+  border: 2px solid #ddd3c6;
+  border-radius: 10px;
+  width: 160px;
+}
+
+.caja-panel .boton-grande {
+  min-height: 60px;
+  font-size: 1.1rem;
+}
+
+.boton-cerrar-caja {
+  margin-left: auto;
+  padding: 12px 18px;
+  font-size: 1rem;
+  font-weight: 700;
+  background: #efe8de;
+  border-radius: 10px;
+}
+
+.caja-cierre-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+/* Ticket: aviso de para llevar */
+.ticket-servicio {
+  font-size: 15px;
+  font-weight: 900;
+  border: 2px solid #000;
+  padding: 4px 6px;
+  margin: 6px 0 2px;
 }
 
 .caja-columnas {

@@ -27,8 +27,31 @@ export interface OrdenOut {
   hora: string
   total: number
   estado: string
+  tipo_servicio: TipoServicio
   minutos_espera: number
   items: OrdenItemOut[]
+}
+
+export type TipoServicio = 'sala' | 'llevar' | 'mixto'
+
+export const NOMBRE_SERVICIO: Record<TipoServicio, string> = {
+  sala: '🍽 En sala',
+  llevar: '🛍 Para llevar',
+  mixto: '🥡 Mixto',
+}
+
+export interface CajaEstado {
+  abierta: boolean
+  cerrada: boolean
+  fecha?: string
+  hora_apertura?: string
+  monto_apertura?: number
+  hora_cierre?: string | null
+  monto_contado?: number | null
+  total_sistema?: number | null
+  diferencia?: number | null
+  notas?: string
+  total_vendido: number
 }
 
 export interface DatosLocal {
@@ -92,10 +115,29 @@ export const api = {
 
   config: () => request<ConfigOut>('/api/config'),
 
-  crearOrden: (items: { plato_id: number; cantidad: number }[], duracionSeg?: number) =>
+  crearOrden: (
+    items: { plato_id: number; cantidad: number }[],
+    duracionSeg?: number,
+    tipoServicio: TipoServicio = 'sala',
+  ) =>
     request<{ orden: OrdenOut; local: DatosLocal }>('/api/orders', {
       method: 'POST',
-      body: JSON.stringify({ items, duracion_seg: duracionSeg }),
+      body: JSON.stringify({ items, duracion_seg: duracionSeg, tipo_servicio: tipoServicio }),
+    }),
+
+  // --- Apertura y cierre de caja ---
+  cajaHoy: () => request<CajaEstado>('/api/caja/hoy'),
+
+  abrirCaja: (montoApertura: number, notas = '') =>
+    request<CajaEstado>('/api/caja/abrir', {
+      method: 'POST',
+      body: JSON.stringify({ monto_apertura: montoApertura, notas }),
+    }),
+
+  cerrarCaja: (montoContado: number, notas = '') =>
+    request<CajaEstado>('/api/caja/cerrar', {
+      method: 'POST',
+      body: JSON.stringify({ monto_contado: montoContado, notas }),
     }),
 
   ordenesHoy: () => request<{ ordenes: OrdenOut[]; total_vendido: number }>('/api/orders/today'),

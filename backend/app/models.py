@@ -50,6 +50,8 @@ class Orden(Base):
     # Segundos desde que el cliente empezó el pedido hasta que lo confirmó
     # (lo mide y envía la terminal; None en órdenes antiguas o si no llegó)
     duracion_seg: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # sala | llevar | mixto — cómo se sirve el pedido (sale en ticket y cocina)
+    tipo_servicio: Mapped[str] = mapped_column(String(10), default="sala", nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
     items: Mapped[list["OrdenItem"]] = relationship(
@@ -79,6 +81,23 @@ class Cancelacion(Base):
     hora: Mapped[str] = mapped_column(String(8), nullable=False)
     items_json: Mapped[str] = mapped_column(Text, nullable=False)
     total: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class CierreCaja(Base):
+    """Apertura y cierre de caja del día: fondo inicial, conteo final y
+    diferencia contra lo que el sistema dice que se vendió."""
+
+    __tablename__ = "cierres_caja"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fecha: Mapped[date] = mapped_column(Date, unique=True, nullable=False)
+    hora_apertura: Mapped[str] = mapped_column(String(8), nullable=False)
+    monto_apertura: Mapped[float] = mapped_column(Float, nullable=False)
+    hora_cierre: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    monto_contado: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_sistema: Mapped[float | None] = mapped_column(Float, nullable=True)
+    diferencia: Mapped[float | None] = mapped_column(Float, nullable=True)
+    notas: Mapped[str] = mapped_column(Text, default="", nullable=False)
 
 
 class Config(Base):

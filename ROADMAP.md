@@ -43,6 +43,12 @@
       (confirma en persona) y gestiona los del día — avanzar estado, reimprimir y anular.
       Estado nuevo `anulada`: la orden queda en BD pero no cuenta en ventas, sale de la
       cola de impresión y no aparece en cocina.
+- [x] Apertura y cierre de caja: fondo inicial, conteo al cierre, diferencia contra el
+      sistema (re-cerrar corrige), un registro por día e historial para el admin.
+- [x] Tipo de servicio por pedido (sala / llevar / mixto): selector en terminal y caja,
+      resaltado en ticket y cocina, columna en el CSV de ventas.
+- [x] Cocina por tandas: tira "Por salir" con totales por plato y selección múltiple para
+      avanzar 2-3 pedidos de una vez.
 
 ## Fase 2 de voz — laboratorio (`voz-lab/`, independiente del POS)
 
