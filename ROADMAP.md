@@ -87,8 +87,27 @@
 - [x] **Notas por plato**: pedidos especiales ("sin frijoles", "con un huevo frito") por
       item — se escriben en terminal o caja, salen resaltadas en la tarjeta de cocina y en
       el ticket impreso, y quedan en el CSV.
+- [x] **Rediseño visual "Fonda"** (de Claude Design, auditado e integrado): identidad de
+      fonda peruana moderna en `styles.css` — papel y tinta, serif del sistema para
+      rótulos, paleta achiote/ají/culantro/mayólica, cenefa, estados con forma además de
+      color, "Por salir" como pieza principal de cocina. Cero dependencias, cero recursos
+      externos, impresión térmica intacta. Nota completa en `docs/NOTA-DE-DISENO.md`.
 - [ ] **Despliegue en Railway** (guía lista en el README): crear el proyecto con la cuenta
       del dueño, variables (`ADMIN_PASSWORD`, `PIN_LOCAL`), volumen en `/data` y dominio.
+
+## Fase 5 — el menú como unidad de venta (espec en `docs/ESPEC-FONDA-BACKEND.md`)
+
+Especificación completa entregada junto al rediseño. Orden acordado:
+
+- [ ] §2 `sale_al_momento` por plato + entrega "Todo junto" / "Separado por tiempos" con
+      validación (un bistec al momento no puede salir junto con la sopa).
+- [ ] §1 Menú encadenado: plantillas de menú con tiempos y alternativas, precio en el
+      menú (no en los platos), tiempos de una sola opción se informan como incluidos.
+      El diseño ya trae las clases `.combo-*` listas.
+- [ ] §3 Estado por ítem + despacho por bulks desde "Por salir" (tachar 4 asados de un
+      toque, en cascada por antigüedad).
+- [ ] §4 Menores: cintillo de anulada en cocina (60 s), descuadre como cifra grande,
+      fotos de plato, emoji → SVG.
 - [ ] Kardex fase 2 (cuando se use en serio): reporte de consumo semanal, alertas de stock
       mínimo por insumo, export CSV del kardex.
 
