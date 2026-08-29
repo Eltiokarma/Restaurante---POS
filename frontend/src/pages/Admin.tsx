@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, NOMBRE_CATEGORIA } from '../api'
-import type { ConfigOut, DatosLocal, OrdenOut, Plato, StatsOut } from '../api'
+import type { ConfigOut, DatosLocal, OrdenOut, Plato, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
-type Tab = 'resumen' | 'menu' | 'ordenes' | 'cancelaciones' | 'config'
+type Tab = 'resumen' | 'menu' | 'ordenes' | 'cancelaciones' | 'voz' | 'config'
 
 interface PlatoEditable {
   id?: number
@@ -11,6 +11,7 @@ interface PlatoEditable {
   categoria: string
   precio: string // como texto mientras se edita
   activo_hoy: boolean
+  sinonimos: string[]
 }
 
 export function Admin() {
@@ -30,6 +31,7 @@ export function Admin() {
           <button className={tab === 'menu' ? 'activa' : ''} onClick={() => setTab('menu')}>Menú del día</button>
           <button className={tab === 'ordenes' ? 'activa' : ''} onClick={() => setTab('ordenes')}>Órdenes de hoy</button>
           <button className={tab === 'cancelaciones' ? 'activa' : ''} onClick={() => setTab('cancelaciones')}>Cancelaciones</button>
+          <button className={tab === 'voz' ? 'activa' : ''} onClick={() => setTab('voz')}>Voz</button>
           <button className={tab === 'config' ? 'activa' : ''} onClick={() => setTab('config')}>Configuración</button>
         </nav>
         <button
@@ -47,6 +49,7 @@ export function Admin() {
         {tab === 'menu' && <TabMenu onSesionVencida={() => setLogueado(false)} />}
         {tab === 'ordenes' && <TabOrdenes />}
         {tab === 'cancelaciones' && <TabCancelaciones onSesionVencida={() => setLogueado(false)} />}
+        {tab === 'voz' && <TabVoz onSesionVencida={() => setLogueado(false)} />}
         {tab === 'config' && <TabConfig onSesionVencida={() => setLogueado(false)} />}
       </main>
     </div>
@@ -267,6 +270,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
     categoria: p.categoria,
     precio: p.precio.toFixed(2),
     activo_hoy: p.activo_hoy,
+    sinonimos: p.sinonimos ?? [],
   })
 
   const cargar = useCallback(async () => {
@@ -287,7 +291,10 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
   }
 
   const agregar = () => {
-    setPlatos((prev) => [...prev, { nombre: '', categoria: 'fondo', precio: '', activo_hoy: true }])
+    setPlatos((prev) => [
+      ...prev,
+      { nombre: '', categoria: 'fondo', precio: '', activo_hoy: true, sinonimos: [] },
+    ])
   }
 
   const quitar = (idx: number) => {
@@ -343,6 +350,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
           categoria: p.categoria,
           precio: parseFloat(p.precio),
           activo_hoy: p.activo_hoy,
+          sinonimos: p.sinonimos,
         })),
       )
       setPlatos(data.platos.map(aEditable))
@@ -368,6 +376,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
             <th>Plato</th>
             <th>Categoría</th>
             <th>Precio S/</th>
+            <th>Sinónimos (para la voz)</th>
             <th>Disponible hoy</th>
             <th></th>
           </tr>
@@ -395,6 +404,12 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
                   placeholder="0.00"
                 />
               </td>
+              <td>
+                <ChipsSinonimos
+                  sinonimos={p.sinonimos}
+                  onCambiar={(sinonimos) => editar(idx, { sinonimos })}
+                />
+              </td>
               <td className="celda-centro">
                 <input
                   type="checkbox"
@@ -415,6 +430,132 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
         Para agotar un plato a mitad de servicio: desmarca "Disponible hoy" y guarda. Desaparece de la
         terminal en el siguiente refresco (máx. 30 segundos).
       </p>
+    </div>
+  )
+}
+
+// Editor de sinónimos (chips): la herramienta de mejora continua de la voz
+function ChipsSinonimos({
+  sinonimos,
+  onCambiar,
+}: {
+  sinonimos: string[]
+  onCambiar: (s: string[]) => void
+}) {
+  const [texto, setTexto] = useState('')
+
+  const agregar = () => {
+    const nuevo = texto.trim().toLowerCase()
+    if (nuevo && !sinonimos.includes(nuevo)) onCambiar([...sinonimos, nuevo])
+    setTexto('')
+  }
+
+  return (
+    <div className="chips-sinonimos">
+      {sinonimos.map((s) => (
+        <span className="chip" key={s}>
+          {s}
+          <button onClick={() => onCambiar(sinonimos.filter((x) => x !== s))} aria-label={`Quitar ${s}`}>✕</button>
+        </span>
+      ))}
+      <input
+        className="chip-input"
+        value={texto}
+        placeholder="+ sinónimo"
+        onChange={(e) => setTexto(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault()
+            agregar()
+          }
+        }}
+        onBlur={agregar}
+      />
+    </div>
+  )
+}
+
+// ---------- Panel de voz ----------
+
+function TabVoz({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [panel, setPanel] = useState<VozPanel | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const cargar = () =>
+      api.vozLogsHoy().then(setPanel).catch((e) => setError(manejarError(e, onSesionVencida)))
+    cargar()
+    const intervalo = window.setInterval(cargar, 30_000)
+    return () => window.clearInterval(intervalo)
+  }, [onSesionVencida])
+
+  if (error) return <div className="banner-error">{error}</div>
+  if (!panel) return <p>Cargando…</p>
+
+  const m = panel.metricas
+  return (
+    <div>
+      <p className="nota-admin">
+        Cada semana revisa los <strong>corregidos y descartados</strong>: las palabras que el
+        sistema no entendió se agregan como sinónimos en Menú del día. Así la precisión sube
+        semana a semana. El toggle de encendido está en Configuración.
+      </p>
+      <div className="tiles-resumen">
+        <div className="tile">
+          <span className="tile-etiqueta">Pedidos por voz hoy</span>
+          <span className="tile-valor">{m.total}</span>
+        </div>
+        <div className="tile">
+          <span className="tile-etiqueta">Aceptado sin corrección</span>
+          <span className="tile-valor">{m.pct_aceptado}%</span>
+        </div>
+        <div className="tile">
+          <span className="tile-etiqueta">Corregido / Descartado</span>
+          <span className="tile-valor">{m.pct_corregido}% / {m.pct_descartado}%</span>
+        </div>
+        <div className="tile">
+          <span className="tile-etiqueta">Latencia promedio</span>
+          <span className="tile-valor">
+            {m.latencia_promedio_ms !== null ? `${(m.latencia_promedio_ms / 1000).toFixed(1)} s` : '—'}
+          </span>
+        </div>
+        <div className="tile">
+          <span className="tile-etiqueta">Costo estimado del día</span>
+          <span className="tile-valor">≈ S/ {m.costo_dia_soles.toFixed(2)}</span>
+          <span className="tile-detalle">${m.costo_dia_usd.toFixed(4)} USD</span>
+        </div>
+      </div>
+
+      <table className="tabla-admin">
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Transcripción</th>
+            <th>Interpretación</th>
+            <th>Resultado</th>
+            <th>Latencia</th>
+          </tr>
+        </thead>
+        <tbody>
+          {panel.logs.map((l) => (
+            <tr key={l.id}>
+              <td>{l.hora}</td>
+              <td>“{l.transcripcion}”</td>
+              <td>
+                {l.interpretacion.items.map((i) => `${i.cantidad}× #${i.plato_id}`).join(', ') || '—'}
+                {l.interpretacion.no_encontrados.length > 0 && (
+                  <span className="voz-log-no-encontrados">
+                    {' '}(sin match: {l.interpretacion.no_encontrados.join(', ')})
+                  </span>
+                )}
+              </td>
+              <td><span className={`etiqueta-estado etiqueta-voz-${l.resultado}`}>{l.resultado}</span></td>
+              <td>{(l.latencia_ms / 1000).toFixed(1)} s</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {panel.logs.length === 0 && <p className="nota-admin">Sin pedidos por voz hoy.</p>}
     </div>
   )
 }
@@ -634,6 +775,21 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
         <p className="nota-admin">
           Modo para terminales tablet: abre <strong>/ticketera</strong> en la computadora que tiene
           la impresora conectada y déjala abierta. Los tickets de todas las terminales salen por ahí.
+        </p>
+      )}
+      <label className="config-toggle">
+        <input
+          type="checkbox"
+          checked={config.voz_habilitada}
+          onChange={(e) => setConfig({ ...config, voz_habilitada: e.target.checked })}
+        />
+        🎤 Pedido por voz habilitado (kill switch)
+      </label>
+      {config.voz_habilitada && !config.voz_disponible && (
+        <p className="nota-admin nota-advertencia">
+          ⚠ La voz está encendida pero faltan las API keys (OPENAI_API_KEY y ANTHROPIC_API_KEY)
+          en el .env del servidor: el botón NO aparecerá en la terminal hasta configurarlas y
+          reiniciar.
         </p>
       )}
       {mensaje && <div className="banner-ok">{mensaje}</div>}

@@ -17,13 +17,17 @@ class ConfigIn(BaseModel):
     ventana_cancelacion_seg: int | None = None
     timeout_inactividad_seg: int | None = None
     modo_impresion: str | None = None  # "terminal" | "estacion"
+    voz_habilitada: bool | None = None  # kill switch del pedido por voz
 
 
 def leer_config(db: Session) -> dict:
     valores = dict(CONFIG_DEFAULTS)
     for c in db.scalars(select(Config)).all():
         valores[c.clave] = c.valor
+    from ..services.voice import claves_configuradas
+
     modo = valores["modo_impresion"]
+    voz_habilitada = valores["voz_habilitada"] in ("1", "true", "True")
     return {
         "nombre_local": valores["nombre_local"],
         "direccion": valores["direccion"],
@@ -31,6 +35,10 @@ def leer_config(db: Session) -> dict:
         "ventana_cancelacion_seg": int(valores["ventana_cancelacion_seg"]),
         "timeout_inactividad_seg": int(valores["timeout_inactividad_seg"]),
         "modo_impresion": modo if modo in ("terminal", "estacion") else "terminal",
+        # El toggle guardado (para el admin) y la disponibilidad efectiva
+        # (toggle encendido + API keys presentes) para la terminal
+        "voz_habilitada": voz_habilitada,
+        "voz_disponible": voz_habilitada and claves_configuradas(),
     }
 
 
@@ -44,6 +52,8 @@ def obtener(db: Session = Depends(get_db)):
 @router.put("", dependencies=[Depends(requiere_admin)])
 def actualizar(payload: ConfigIn, db: Session = Depends(get_db)):
     for clave, valor in payload.model_dump(exclude_none=True).items():
+        if clave == "voz_habilitada":
+            valor = "1" if valor else "0"
         registro = db.get(Config, clave)
         if registro is None:
             db.add(Config(clave=clave, valor=str(valor)))

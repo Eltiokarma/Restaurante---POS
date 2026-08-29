@@ -6,6 +6,7 @@ export interface Plato {
   categoria: string
   precio: number
   activo_hoy: boolean
+  sinonimos: string[]
 }
 
 export interface ItemCarrito {
@@ -69,6 +70,49 @@ export interface ConfigOut {
   // "terminal": imprime la pantalla donde pide el cliente
   // "estacion": imprime la PC que tenga abierta /ticketera
   modo_impresion: 'terminal' | 'estacion'
+  // Toggle guardado (admin) y disponibilidad efectiva (toggle + API keys)
+  voz_habilitada: boolean
+  voz_disponible: boolean
+}
+
+export type OrigenPedido = 'tactil' | 'voz' | 'mixto'
+
+export interface VozItemResuelto {
+  plato_id: number
+  nombre: string
+  precio: number
+  cantidad: number
+}
+
+export interface VozRespuesta {
+  log_id: number
+  transcripcion: string
+  items_resueltos: VozItemResuelto[]
+  no_encontrados: string[]
+  notas: string
+  latencia_ms: number
+}
+
+export type VozResultado = 'aceptado' | 'corregido' | 'descartado'
+
+export interface VozPanel {
+  logs: {
+    id: number
+    hora: string
+    transcripcion: string
+    interpretacion: { items: { plato_id: number; cantidad: number }[]; no_encontrados: string[]; notas: string }
+    resultado: string
+    latencia_ms: number
+  }[]
+  metricas: {
+    total: number
+    pct_aceptado: number
+    pct_corregido: number
+    pct_descartado: number
+    latencia_promedio_ms: number | null
+    costo_dia_usd: number
+    costo_dia_soles: number
+  }
 }
 
 const TOKEN_KEY = 'pos_admin_token'
@@ -119,11 +163,39 @@ export const api = {
     items: { plato_id: number; cantidad: number }[],
     duracionSeg?: number,
     tipoServicio: TipoServicio = 'sala',
+    origen: OrigenPedido = 'tactil',
   ) =>
     request<{ orden: OrdenOut; local: DatosLocal }>('/api/orders', {
       method: 'POST',
-      body: JSON.stringify({ items, duracion_seg: duracionSeg, tipo_servicio: tipoServicio }),
+      body: JSON.stringify({
+        items, duracion_seg: duracionSeg, tipo_servicio: tipoServicio, origen,
+      }),
     }),
+
+  // --- Pedido por voz ---
+  vozOrden: async (audio: Blob, duracionSeg: number): Promise<VozRespuesta> => {
+    const datos = new FormData()
+    datos.append('audio', audio, 'pedido.webm')
+    datos.append('duracion_seg', duracionSeg.toFixed(1))
+    const res = await fetch('/api/voice/order', { method: 'POST', body: datos })
+    if (!res.ok) {
+      let detail = `Error ${res.status}`
+      try {
+        const body = await res.json()
+        if (body.detail) detail = body.detail
+      } catch { /* sin JSON */ }
+      throw new ApiError(res.status, detail)
+    }
+    return res.json()
+  },
+
+  vozResultado: (logId: number, resultado: VozResultado) =>
+    request<{ id: number; resultado: string }>(`/api/voice/logs/${logId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ resultado }),
+    }).catch(() => null), // el log es telemetría: nunca bloquea al cliente
+
+  vozLogsHoy: () => request<VozPanel>('/api/voice/logs/today', {}, true),
 
   // --- Apertura y cierre de caja ---
   cajaHoy: () => request<CajaEstado>('/api/caja/hoy'),
@@ -178,7 +250,7 @@ export const api = {
 
   menuAnterior: () => request<{ fecha: string | null; platos: Plato[] }>('/api/menu/previous', {}, true),
 
-  guardarMenu: (platos: { id?: number; nombre: string; categoria: string; precio: number; activo_hoy: boolean }[]) =>
+  guardarMenu: (platos: { id?: number; nombre: string; categoria: string; precio: number; activo_hoy: boolean; sinonimos?: string[] }[]) =>
     request<{ categorias: string[]; platos: Plato[] }>('/api/menu/today', {
       method: 'PUT',
       body: JSON.stringify({ platos }),

@@ -297,6 +297,61 @@ contenedores). Pasos en Railway:
 Para lo que sí sirve hoy: **demos** (mostrarle el sistema a alguien sin instalar nada) y
 **monitoreo remoto** (ver el Resumen de ventas desde tu casa).
 
+## Pedido por voz (Fase 3) — integrado, apagado por defecto
+
+La voz es solo **otra manera de llenar el carrito**: el cliente habla, Whisper transcribe,
+Claude interpreta contra el menú del día (con sinónimos), y una **pantalla de verificación
+táctil** muestra lo entendido para corregir con los dedos. La voz **nunca confirma sola**;
+desde la verificación el flujo es el estándar (resumen → ventana de 30s → ticket → cocina).
+
+### Activar la voz
+
+1. Consigue las claves: `OPENAI_API_KEY` (platform.openai.com, para Whisper) y
+   `ANTHROPIC_API_KEY` (console.anthropic.com, para Claude). Son de pago por uso —
+   centavos por pedido; el costo del día se ve en Admin → Voz.
+2. Ponlas en `backend/.env` (descomenta las líneas) y reinicia el sistema.
+3. En **Admin → Configuración**, enciende **"🎤 Pedido por voz habilitado"** y guarda.
+4. En la terminal aparece el botón **"🎤 PEDIR POR VOZ"**. La primera vez, el navegador
+   pedirá permiso de micrófono — acéptalo. (El micrófono del navegador requiere
+   `localhost` o HTTPS; en la laptop del local funciona directo.)
+
+Si la voz da problemas en pleno servicio: apaga el toggle y la terminal vuelve a ser 100%
+táctil al siguiente refresco. Si el toggle está encendido pero faltan las claves, el botón
+no aparece y el servidor lo avisa en su log (la app no se rompe).
+
+> ⚠ **Antes de encenderla con clientes reales**: corre el banco de pruebas de la Fase 2
+> (`voz-lab/`) con audios del local y pega el prompt refinado en los marcadores `TODO` de
+> `backend/app/services/voice.py`. Integrar sin validar es depurar en producción.
+
+### Mejora continua (el trabajo semanal del dueño)
+
+1. **Admin → Voz**: revisa los pedidos `corregidos` y `descartados` — la transcripción
+   dice qué palabra usó el cliente y no se entendió.
+2. **Admin → Menú del día**: agrega esa palabra como **sinónimo** del plato (chips en la
+   columna "Sinónimos"). El intérprete la usa desde el instante en que guardas.
+3. El % de "aceptado sin corrección" del panel debería subir semana a semana. El campo
+   `origen` del CSV de ventas te dice cuánta gente elige voz vs táctil.
+
+### Checklist de prueba manual (10 casos)
+
+1. **Pedido simple**: "un lomo saltado" → 1 item correcto en la verificación.
+2. **Múltiple**: "dos lomos y una chicha" → 2 items con cantidades correctas.
+3. **Con sinónimo**: "una chichita" → resuelve a Chicha morada (con el sinónimo cargado).
+4. **Plato inexistente**: "un ceviche" → aparece en "No encontré…" con los platos del día
+   como botones; elegir uno lo agrega.
+5. **Corrección táctil**: pedir "un lomo", subirlo a 2 con [+] en la verificación →
+   continuar → el resumen muestra 2 (y el log queda `corregido`).
+6. **Silencio**: tocar el botón y no hablar → no se corta solo (espera "Ya pedí" o 20s);
+   si hablaste y te callas 2.5s, corta solo.
+7. **Con ruido**: pedir en hora punta → verificar si la transcripción sale bien (si sale
+   mal aquí, es micrófono/ruido, no el intérprete).
+8. **Cancelado en ventana**: pedido por voz → confirmar → 🛑 CANCELAR en los 30s → vuelve
+   al inicio, nada llega a cocina (igual que táctil).
+9. **Mixto**: agregar un plato con botones + otro por voz → la orden sale con
+   `origen: mixto` en el CSV.
+10. **Voz apagada**: apagar el toggle en admin → el botón desaparece de la terminal y el
+    flujo táctil sigue exactamente igual.
+
 ## Tests y CI
 
 El backend tiene una suite de tests (correlativo diario, snapshot de precios, cola de

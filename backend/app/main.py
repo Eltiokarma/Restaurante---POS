@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from .db import BACKEND_DIR, Base, engine
-from .routes import admin, caja, cancellations, config, menu, orders, stats
+from .routes import admin, caja, cancellations, config, menu, orders, stats, voice
 from .services.backup import ciclo_backup_automatico
 
 
@@ -29,14 +29,45 @@ def _migrar(engine_) -> None:
                 "ALTER TABLE ordenes ADD COLUMN tipo_servicio TEXT NOT NULL DEFAULT 'sala'"
             ))
             conn.commit()
+        if columnas and "origen" not in columnas:
+            conn.execute(text(
+                "ALTER TABLE ordenes ADD COLUMN origen TEXT NOT NULL DEFAULT 'tactil'"
+            ))
+            conn.commit()
+        columnas_platos = [fila[1] for fila in conn.execute(text("PRAGMA table_info(platos)"))]
+        if columnas_platos and "sinonimos" not in columnas_platos:
+            conn.execute(text("ALTER TABLE platos ADD COLUMN sinonimos TEXT NOT NULL DEFAULT '[]'"))
+            conn.commit()
 
 @asynccontextmanager
 async def _ciclo_de_vida(app_: FastAPI):
     # Backup automático mientras el servidor corre (ver services/backup.py).
     # El retraso inicial de 60s hace que no interfiera con tests ni arranques.
     tarea_backup = asyncio.create_task(ciclo_backup_automatico())
+    _avisar_si_voz_mal_configurada()
     yield
     tarea_backup.cancel()
+
+
+def _avisar_si_voz_mal_configurada() -> None:
+    """Voz encendida sin API keys: warning al arrancar y el botón no aparece
+    en la terminal (voz_disponible=False); la app no se rompe."""
+    import logging
+
+    from .db import SessionLocal
+    from .routes.config import leer_config
+    from .services.voice import claves_configuradas
+
+    db = SessionLocal()
+    try:
+        cfg = leer_config(db)
+        if cfg["voz_habilitada"] and not claves_configuradas():
+            logging.getLogger("uvicorn.error").warning(
+                "voz_habilitada está encendida pero faltan OPENAI_API_KEY / "
+                "ANTHROPIC_API_KEY en el .env: el botón de voz no aparecerá."
+            )
+    finally:
+        db.close()
 
 
 app = FastAPI(title="POS Auto-Atención", version="1.0.0", lifespan=_ciclo_de_vida)
@@ -59,6 +90,7 @@ app.include_router(config.router)
 app.include_router(admin.router)
 app.include_router(stats.router)
 app.include_router(caja.router)
+app.include_router(voice.router)
 
 
 @app.get("/api/health")

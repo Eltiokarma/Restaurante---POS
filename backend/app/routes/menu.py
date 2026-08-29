@@ -1,5 +1,7 @@
+import json
+
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,6 +22,18 @@ class PlatoOut(BaseModel):
     categoria: str
     precio: float
     activo_hoy: bool
+    sinonimos: list[str] = []
+
+    @field_validator("sinonimos", mode="before")
+    @classmethod
+    def _desde_json(cls, v):
+        # En BD viven como texto JSON; hacia afuera siempre como lista
+        if isinstance(v, str):
+            try:
+                return json.loads(v or "[]")
+            except json.JSONDecodeError:
+                return []
+        return v or []
 
 
 class PlatoIn(BaseModel):
@@ -28,6 +42,7 @@ class PlatoIn(BaseModel):
     categoria: str
     precio: float = Field(gt=0)
     activo_hoy: bool = True
+    sinonimos: list[str] = Field(default_factory=list, max_length=30)
 
 
 class MenuUpdate(BaseModel):
@@ -58,6 +73,9 @@ def actualizar_menu(payload: MenuUpdate, db: Session = Depends(get_db)):
     for p in payload.platos:
         if p.categoria not in CATEGORIAS:
             p.categoria = "fondo"
+        sinonimos_json = json.dumps(
+            [s.strip() for s in p.sinonimos if s.strip()], ensure_ascii=False
+        )
         if p.id is not None:
             plato = db.get(Plato, p.id)
             if plato is None:
@@ -66,6 +84,7 @@ def actualizar_menu(payload: MenuUpdate, db: Session = Depends(get_db)):
             plato.categoria = p.categoria
             plato.precio = round(p.precio, 2)
             plato.activo_hoy = p.activo_hoy
+            plato.sinonimos = sinonimos_json
         else:
             plato = Plato(
                 nombre=p.nombre,
@@ -73,6 +92,7 @@ def actualizar_menu(payload: MenuUpdate, db: Session = Depends(get_db)):
                 precio=round(p.precio, 2),
                 activo_hoy=p.activo_hoy,
                 en_catalogo=True,
+                sinonimos=sinonimos_json,
             )
             db.add(plato)
             db.flush()

@@ -62,9 +62,17 @@
 
 ## Fase 3 — pedido por voz (integración al POS)
 
-- [ ] Conectar el intérprete validado del laboratorio en
-      `backend/app/services/voice.py`. Contrato ya definido en el stub: la voz devuelve
-      items para el carrito y NADA MÁS cambia (el flujo posterior es agnóstico al origen).
+- [x] Integración completa, **apagada por defecto** (kill switch `voz_habilitada` en
+      Configuración; además requiere las API keys en `.env`): botón "🎤 PEDIR POR VOZ" en
+      la terminal, grabación con medidor de nivel y corte por silencio (2.5s) o 20s,
+      pantalla de verificación táctil (la voz NUNCA confirma sola), suma al carrito y
+      sigue el flujo estándar. Campo `origen` (tactil/voz/mixto) en órdenes y CSV,
+      sinónimos por plato editables en admin (chips), tabla `voz_logs`, y panel Admin →
+      Voz con % aceptado/corregido/descartado, latencia y costo del día en S/.
+- [ ] **Antes de encenderla**: correr el banco de pruebas (Fase 2) con audios reales del
+      local y pegar el prompt refinado + sinónimos en los marcadores `TODO` de
+      `backend/app/services/voice.py`. Umbral acordado: >85% integra; 70–85% con
+      corrección obligatoria (ya es el diseño); <70% se queda apagada.
 
 ## Fuera de alcance por ahora
 
