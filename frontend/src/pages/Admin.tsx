@@ -1398,6 +1398,21 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
         />
       </label>
       <label>
+        Tanda de cocina: agrupar pedidos con hasta estos minutos de diferencia (0 = apagado)
+        <input
+          type="number"
+          min="0"
+          max="60"
+          value={config.cocina_bulk_min}
+          onChange={(e) => setConfig({ ...config, cocina_bulk_min: parseInt(e.target.value) || 0 })}
+        />
+      </label>
+      <p className="nota-admin">
+        En la tira "Por salir" de cocina, cada plato muestra además su <strong>tanda</strong>: las
+        porciones del pedido más antiguo más los que llegaron en los siguientes minutos configurados.
+        Al tocar el plato para tachar, esa cantidad viene sugerida.
+      </p>
+      <label>
         ¿Dónde se imprimen los tickets?
         <select
           value={config.modo_impresion}

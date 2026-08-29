@@ -19,6 +19,7 @@ class ConfigIn(BaseModel):
     modo_impresion: str | None = None  # "terminal" | "estacion"
     voz_habilitada: bool | None = None  # kill switch del pedido por voz
     exigir_caja_abierta: bool | None = None  # bloquear ventas sin apertura de caja
+    cocina_bulk_min: int | None = None  # ventana de la tanda en cocina (0 = apagado)
 
 
 def leer_config(db: Session) -> dict:
@@ -41,6 +42,7 @@ def leer_config(db: Session) -> dict:
         "voz_habilitada": voz_habilitada,
         "voz_disponible": voz_habilitada and claves_configuradas(),
         "exigir_caja_abierta": valores["exigir_caja_abierta"] in ("1", "true", "True"),
+        "cocina_bulk_min": max(0, int(valores["cocina_bulk_min"])),
     }
 
 

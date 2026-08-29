@@ -175,6 +175,12 @@ class OrdenItem(Base):
     tiempo_orden: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # True = porción adicional pedida junto al menú ("una entrada más")
     es_extra: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Estado POR ÍTEM (§3): la cocina cocina por bulks (4 asados de un
+    # toque), no ticket por ticket. ordenes.estado queda como caché
+    # derivada = el estado MÍNIMO de sus ítems (ver services/cocina.py).
+    estado: Mapped[str] = mapped_column(
+        String(20), default="pendiente", nullable=False
+    )  # pendiente | preparando | listo | entregado
 
     orden: Mapped[Orden] = relationship(back_populates="items")
     orden_menu: Mapped[OrdenMenu | None] = relationship(back_populates="items")
@@ -313,4 +319,8 @@ CONFIG_DEFAULTS: dict[str, str] = {
     # Si está en 1, no se pueden registrar ventas hasta abrir la caja del
     # día con su fondo inicial
     "exigir_caja_abierta": "1",
+    # Ventana de la tanda en cocina (minutos): "Por salir" resalta cuántas
+    # porciones pertenecen a la tanda actual (la orden activa más antigua
+    # + los pedidos que llegaron en los siguientes X minutos). 0 = apagado.
+    "cocina_bulk_min": "10",
 }
