@@ -103,9 +103,14 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       junto" / "Separado por tiempos": selector en el resumen del cliente (con "junto"
       bloqueado y aviso cuando hay un plato al momento), corregible en caja, badge en
       cocina, línea ENTREGA en el ticket, columna en el CSV y validación 422 en backend.
-- [ ] §1 Menú encadenado: plantillas de menú con tiempos y alternativas, precio en el
-      menú (no en los platos), tiempos de una sola opción se informan como incluidos.
-      El diseño ya trae las clases `.combo-*` listas.
+- [x] §1 Menú encadenado: plantillas de menú con tiempos y alternativas (editor en
+      Admin → Menú del día), precio en el MENÚ (los platos elegidos entran con precio
+      0/recargo: sin doble cobro), tiempos de una sola opción se informan como
+      incluidos, porciones extra por tiempo a precio configurable ("una entrada más"
+      a S/ 3 aunque dentro del menú vaya a S/ 1), armado táctil en terminal y caja
+      (clases `.combo-*`), bloque agrupado en cocina/ticket/caja, "Por salir" suma
+      los platos elegidos, menús en Resumen y CSV (columna `menu`), compatibilidad
+      total con la venta a la carta y el histórico.
 - [ ] §3 Estado por ítem + despacho por bulks desde "Por salir" (tachar 4 asados de un
       toque, en cascada por antigüedad).
 - [ ] §4 Menores: cintillo de anulada en cocina (60 s), descuadre como cifra grande,
@@ -155,3 +160,5 @@ Pagos integrados (Yape/tarjeta), control de stock y mermas, app nativa, multi-lo
 | 6 | Auth admin: token HMAC stateless de 12h | Suficiente para un local con una laptop; sin tabla de sesiones ni dependencias extra. |
 | 7 | Frontend compilado servido por FastAPI en producción | Un solo proceso y un solo puerto (8000) en la laptop del local; Vite queda solo para desarrollo. |
 | 8 | Nube (Railway) habilitada con candado `PIN_LOCAL`; la laptop queda como plan B ante cortes de internet | El dueño decidió operar en nube. El PIN protege todas las pantallas en la URL pública; la misma base de código corre local con `iniciar.bat` si el internet del local falla (bases de datos separadas). |
+| 9 | Menú encadenado: los platos elegidos son `OrdenItem`s ligados a `orden_menus` con `precio_snapshot` = 0/recargo/extra; la `entrega` sigue viviendo en la ORDEN (no por menú) | El precio del menú vive en `orden_menus` y el total nunca suma el precio de carta de los platos (sin doble cobro), pero cocina y kardex los ven como items normales. La espec sugería `entrega` por menú; se mantuvo por orden porque así se implementó el §2 y la cocina despacha la orden completa. |
+| 10 | Porciones extra con el menú: `precio_extra` configurable POR TIEMPO en la plantilla (+ recargo de la alternativa) | "Una entrada más" no se cobra ni al precio de carta (S/ 6) ni al implícito del combo (S/ 1), sino al precio que el dueño fija (S/ 3). Vacío/0 = ese tiempo no ofrece extras. |

@@ -35,6 +35,48 @@ export interface ItemCarrito {
   nota: string
 }
 
+// ---------- Menú encadenado (§1): el menú como unidad de venta ----------
+
+export interface MenuAlternativaHoy {
+  plato_id: number
+  nombre: string
+  precio: number
+  recargo: number
+  sale_al_momento: boolean
+}
+
+export interface MenuTiempoHoy {
+  orden: number
+  rotulo: string
+  obligatorio: boolean
+  // Precio de UNA porción adicional pedida con el menú (0 = no se ofrece)
+  precio_extra: number
+  alternativas: MenuAlternativaHoy[]
+}
+
+export interface MenuHoy {
+  id: number
+  nombre: string
+  precio: number
+  tiempos: MenuTiempoHoy[]
+}
+
+export interface ExtraMenu {
+  tiempo_orden: number
+  plato_id: number
+  cantidad: number
+}
+
+// Un menú armado dentro del carrito (elecciones ya resueltas)
+export interface MenuCarrito {
+  menu: MenuHoy
+  cantidad: number
+  elecciones: Record<number, number> // tiempo_orden → plato_id
+  extras: ExtraMenu[]
+  empaque: Empaque
+  nota: string
+}
+
 export interface OrdenItemOut {
   nombre: string
   precio: number
@@ -42,6 +84,20 @@ export interface OrdenItemOut {
   empaque: Empaque
   nota: string
   subtotal: number
+}
+
+export interface OrdenMenuItemOut extends OrdenItemOut {
+  tiempo_orden: number | null
+  es_extra: boolean
+}
+
+export interface OrdenMenuOut {
+  nombre: string
+  precio: number
+  cantidad: number
+  nota: string
+  subtotal: number
+  items: OrdenMenuItemOut[]
 }
 
 export interface OrdenOut {
@@ -58,7 +114,9 @@ export interface OrdenOut {
   mesas: string[]
   mesa_liberada: boolean
   minutos_espera: number
+  // Solo la venta a la carta; los platos de menú van agrupados en "menus"
   items: OrdenItemOut[]
+  menus: OrdenMenuOut[]
 }
 
 export type TipoServicio = 'sala' | 'llevar' | 'mixto'
@@ -246,8 +304,18 @@ export class ApiError extends Error {
   }
 }
 
+export interface MenuOrdenIn {
+  menu_id: number
+  cantidad: number
+  elecciones: Record<number, number>
+  extras: ExtraMenu[]
+  empaque: Empaque
+  nota?: string
+}
+
 export const api = {
-  menuHoy: () => request<{ categorias: string[]; platos: Plato[] }>('/api/menu/today'),
+  menuHoy: () =>
+    request<{ categorias: string[]; platos: Plato[]; menus: MenuHoy[] }>('/api/menu/today'),
 
   config: () => request<ConfigOut>('/api/config'),
 
@@ -257,11 +325,12 @@ export const api = {
     origen: OrigenPedido = 'tactil',
     mesaIds: number[] = [],
     entrega: Entrega = 'junto',
+    menus: MenuOrdenIn[] = [],
   ) =>
     request<{ orden: OrdenOut; local: DatosLocal }>('/api/orders', {
       method: 'POST',
       body: JSON.stringify({
-        items, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega,
+        items, menus, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega,
       }),
     }),
 
@@ -424,6 +493,15 @@ export const api = {
 
   catalogo: () => request<{ platos: Plato[] }>('/api/menu/catalog', {}, true),
 
+  // --- Plantillas de menú encadenado (admin) ---
+  plantillas: () => request<{ plantillas: PlantillaMenu[] }>('/api/menu/plantillas', {}, true),
+
+  guardarPlantillas: (plantillas: PlantillaMenuIn[]) =>
+    request<{ plantillas: PlantillaMenu[] }>('/api/menu/plantillas', {
+      method: 'PUT',
+      body: JSON.stringify({ plantillas }),
+    }, true),
+
   menuAnterior: () => request<{ fecha: string | null; platos: Plato[] }>('/api/menu/previous', {}, true),
 
   guardarMenu: (platos: { id?: number; nombre: string; categoria: string; precio: number; activo_hoy: boolean; sale_al_momento?: boolean; sinonimos?: string[] }[]) =>
@@ -476,6 +554,60 @@ export interface StatsOut {
   num_cancelaciones: number
   total_cancelado: number
   tasa_cancelacion: number
+}
+
+// Formas del CRUD admin de plantillas de menú
+export interface PlantillaMenu {
+  id: number
+  nombre: string
+  precio: number
+  activo_hoy: boolean
+  tiempos: {
+    orden: number
+    rotulo: string
+    obligatorio: boolean
+    precio_extra: number
+    alternativas: { plato_id: number; nombre: string; recargo: number }[]
+  }[]
+}
+
+export interface PlantillaMenuIn {
+  id?: number
+  nombre: string
+  precio: number
+  activo_hoy: boolean
+  tiempos: {
+    rotulo: string
+    obligatorio: boolean
+    precio_extra: number
+    alternativas: { plato_id: number; recargo: number }[]
+  }[]
+}
+
+// Lo que suma UNA unidad del menú armado (precio + recargos elegidos);
+// los extras van aparte porque no se multiplican por la cantidad de menús
+export function precioUnitarioMenu(linea: MenuCarrito): number {
+  let unitario = linea.menu.precio
+  for (const tiempo of linea.menu.tiempos) {
+    const elegido = linea.elecciones[tiempo.orden]
+    const alternativa = tiempo.alternativas.find((a) => a.plato_id === elegido)
+    if (alternativa) unitario += alternativa.recargo
+  }
+  return unitario
+}
+
+export function subtotalExtras(linea: MenuCarrito): number {
+  let total = 0
+  for (const extra of linea.extras) {
+    const tiempo = linea.menu.tiempos.find((t) => t.orden === extra.tiempo_orden)
+    const alternativa = tiempo?.alternativas.find((a) => a.plato_id === extra.plato_id)
+    if (tiempo) total += (tiempo.precio_extra + (alternativa?.recargo ?? 0)) * extra.cantidad
+  }
+  return total
+}
+
+export function subtotalMenu(linea: MenuCarrito): number {
+  return precioUnitarioMenu(linea) * linea.cantidad + subtotalExtras(linea)
 }
 
 export function soles(monto: number): string {

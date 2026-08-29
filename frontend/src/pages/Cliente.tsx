@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, soles } from '../api'
-import type { ConfigOut, DatosLocal, Entrega, OrdenOut, Plato, VozItemResuelto } from '../api'
+import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles, subtotalMenu } from '../api'
+import type { ConfigOut, DatosLocal, Entrega, MenuHoy, OrdenOut, Plato, VozItemResuelto } from '../api'
+import { ArmadoMenu, describirMenu } from '../components/ArmadoMenu'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
 import { PedidoPorVoz } from '../components/PedidoPorVoz'
@@ -14,6 +15,9 @@ type Pantalla = 'inicio' | 'menu' | 'resumen' | 'countdown' | 'final'
 export function Cliente() {
   const [pantalla, setPantalla] = useState<Pantalla>('inicio')
   const [platos, setPlatos] = useState<Plato[]>([])
+  const [menusHoy, setMenusHoy] = useState<MenuHoy[]>([])
+  // Menú encadenado que se está armando (abre el modal de tiempos)
+  const [armandoMenu, setArmandoMenu] = useState<MenuHoy | null>(null)
   const [config, setConfig] = useState<ConfigOut | null>(null)
   const carrito = useCarrito()
 
@@ -50,9 +54,10 @@ export function Cliente() {
     try {
       const data = await api.menuHoy()
       setPlatos(data.platos)
+      setMenusHoy(data.menus)
       // Si el admin cambió un precio a mitad de pedido, el carrito se
       // actualiza para que el total mostrado coincida con lo que se cobra.
-      sincronizarConMenu(data.platos)
+      sincronizarConMenu(data.platos, data.menus)
     } catch {
       // Si el polling falla se mantiene el último menú conocido
     }
@@ -106,11 +111,18 @@ export function Cliente() {
   }
 
   const cancelarPedidoEnVentana = async () => {
-    const items = carrito.items.map((i) => ({
-      nombre: i.plato.nombre,
-      precio: i.plato.precio,
-      cantidad: i.cantidad,
-    }))
+    const items = [
+      ...carrito.menus.map((m) => ({
+        nombre: `${m.menu.nombre} (${describirMenu(m)})`,
+        precio: precioUnitarioMenu(m),
+        cantidad: m.cantidad,
+      })),
+      ...carrito.items.map((i) => ({
+        nombre: i.plato.nombre,
+        precio: i.plato.precio,
+        cantidad: i.cantidad,
+      })),
+    ]
     const total = carrito.totalSoles
     volverAlInicio('Pedido cancelado')
     try {
@@ -121,8 +133,21 @@ export function Cliente() {
     }
   }
 
-  // Un plato "al momento" (bistec frito) obliga a entrega separada
-  const hayAlMomento = carrito.items.some((i) => i.plato.sale_al_momento)
+  // Un plato "al momento" (bistec frito) obliga a entrega separada — también
+  // si es la alternativa elegida (o un extra) dentro de un menú
+  const platoAlMomentoDe = (m: (typeof carrito.menus)[number]) =>
+    m.menu.tiempos
+      .flatMap((t) => t.alternativas)
+      .find(
+        (a) =>
+          a.sale_al_momento &&
+          (Object.values(m.elecciones).includes(a.plato_id) ||
+            m.extras.some((e) => e.plato_id === a.plato_id)),
+      )
+  const alMomentoEnMenus = carrito.menus.map(platoAlMomentoDe).find(Boolean)
+  const alMomentoEnItems = carrito.items.find((i) => i.plato.sale_al_momento)
+  const nombreAlMomento = alMomentoEnItems?.plato.nombre ?? alMomentoEnMenus?.nombre
+  const hayAlMomento = nombreAlMomento !== undefined
   const entregaEfectiva: Entrega = hayAlMomento ? 'separado' : entrega
 
   const guardandoRef = useRef(false)
@@ -144,6 +169,10 @@ export function Cliente() {
         origen,
         [],
         entregaEfectiva,
+        carrito.menus.map((m) => ({
+          menu_id: m.menu.id, cantidad: m.cantidad, elecciones: m.elecciones,
+          extras: m.extras, empaque: m.empaque, nota: m.nota.trim(),
+        })),
       )
       setOrdenFinal(resultado)
       carrito.vaciar()
@@ -155,11 +184,22 @@ export function Cliente() {
         try {
           const menu = await api.menuHoy()
           setPlatos(menu.platos)
+          setMenusHoy(menu.menus)
           const disponibles = new Set(menu.platos.map((p) => p.id))
-          const agotados = carrito.items
-            .filter((i) => !disponibles.has(i.plato.id))
-            .map((i) => i.plato.nombre)
-          carrito.eliminarNoDisponibles(disponibles)
+          const menusDisponibles = new Set(menu.menus.map((m) => m.id))
+          const agotados = [
+            ...carrito.items
+              .filter((i) => !disponibles.has(i.plato.id))
+              .map((i) => i.plato.nombre),
+            ...carrito.menus
+              .filter(
+                (m) =>
+                  !menusDisponibles.has(m.menu.id) ||
+                  !Object.values(m.elecciones).every((id) => disponibles.has(id)),
+              )
+              .map((m) => m.menu.nombre),
+          ]
+          carrito.eliminarNoDisponibles(disponibles, menusDisponibles)
           setErrorConexion(
             agotados.length > 0
               ? `Se agotó: ${agotados.join(', ')}. Lo quitamos de tu pedido; revisa y confirma de nuevo.`
@@ -262,6 +302,11 @@ export function Cliente() {
           onTerminado={confirmarDefinitivo}
         />
         <div className="resumen-breve">
+          {carrito.menus.map((m, idx) => (
+            <div key={`menu-${idx}`}>
+              {m.cantidad} × {m.menu.nombre} ({describirMenu(m)})
+            </div>
+          ))}
           {carrito.items.map((i) => (
             <div key={i.plato.id}>
               {i.cantidad} × {i.plato.nombre}
@@ -296,6 +341,49 @@ export function Cliente() {
           </div>
         </div>
         <div className="lista-resumen">
+          {carrito.menus.map((m, idx) => (
+            <div className="linea-resumen linea-con-empaque" key={`menu-${idx}`}>
+              <div className="linea-resumen-fila">
+                <span>
+                  {m.cantidad} × {m.menu.nombre}
+                </span>
+                <span className="linea-resumen-precios">
+                  <strong>{soles(subtotalMenu(m))}</strong>
+                </span>
+              </div>
+              <div className="linea-menu-detalle">{describirMenu(m)}</div>
+              <div className="empaques-linea">
+                <button
+                  className="boton-servicio boton-empaque"
+                  onClick={() => carrito.cambiarCantidadMenu(idx, -1)}
+                >
+                  − Quitar uno
+                </button>
+                <button
+                  className="boton-servicio boton-empaque"
+                  onClick={() => carrito.cambiarCantidadMenu(idx, 1)}
+                >
+                  + Uno más
+                </button>
+                {EMPAQUES.map((e) => (
+                  <button
+                    key={e}
+                    className={`boton-servicio boton-empaque ${m.empaque === e ? 'servicio-activo' : ''}`}
+                    onClick={() => carrito.cambiarEmpaqueMenu(idx, e)}
+                  >
+                    {NOMBRE_EMPAQUE[e]}
+                  </button>
+                ))}
+              </div>
+              <input
+                className="input-nota-plato"
+                placeholder="📝 Algún cambio: sin arroz, sin frijoles…"
+                maxLength={150}
+                value={m.nota}
+                onChange={(e) => carrito.cambiarNotaMenu(idx, e.target.value)}
+              />
+            </div>
+          ))}
           {carrito.items.map((i) => (
             <div className="linea-resumen linea-con-empaque" key={i.plato.id}>
               <div className="linea-resumen-fila">
@@ -327,7 +415,7 @@ export function Cliente() {
             </div>
           ))}
         </div>
-        {(carrito.items.length >= 2 || hayAlMomento) && (
+        {(carrito.items.length >= 2 || carrito.menus.length > 0 || hayAlMomento) && (
           <div className="selector-servicio">
             <span className="selector-servicio-titulo">¿Cómo sale tu pedido?</span>
             <div className="selector-entrega">
@@ -345,8 +433,8 @@ export function Cliente() {
             </div>
             {hayAlMomento && (
               <p className="aviso-entrega">
-                {carrito.items.find((i) => i.plato.sale_al_momento)?.plato.nombre} se prepara
-                al momento, así que tu pedido saldrá por tiempos: lo demás llega primero.
+                {nombreAlMomento} se prepara al momento, así que tu pedido saldrá
+                por tiempos: lo demás llega primero.
               </p>
             )}
           </div>
@@ -406,8 +494,36 @@ export function Cliente() {
       </div>
 
       <div className="contenido-menu">
-        {platos.length === 0 && (
+        {platos.length === 0 && menusHoy.length === 0 && (
           <p className="menu-vacio">Todavía no hay menú cargado. Pregunta en caja, por favor.</p>
+        )}
+        {menusHoy.length > 0 && (
+          <section>
+            <h2 className="titulo-categoria">Menús</h2>
+            <div className="combo-lista">
+              {menusHoy.map((m) => (
+                <div className="combo" key={m.id}>
+                  <div className="combo-cabecera">
+                    <span className="combo-titulo">{m.nombre}</span>
+                    <span className="combo-precio">{soles(m.precio)}</span>
+                  </div>
+                  <div className="combo-resumen-tiempos">
+                    {m.tiempos.map((t) => (
+                      <div key={t.orden}>
+                        <strong>{t.rotulo}:</strong>{' '}
+                        {t.alternativas.length === 1
+                          ? `${t.alternativas[0].nombre} (incluido)`
+                          : t.alternativas.map((a) => a.nombre).join(' / ')}
+                      </div>
+                    ))}
+                  </div>
+                  <button className="boton-armar" onClick={() => setArmandoMenu(m)}>
+                    🍽 ARMAR ESTE MENÚ
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
         {categoriasConPlatos.map((cat) => (
           <section key={cat}>
@@ -448,6 +564,18 @@ export function Cliente() {
             </div>
           </div>
         </div>
+      )}
+
+      {armandoMenu && (
+        <ArmadoMenu
+          menu={armandoMenu}
+          onAgregar={(linea) => {
+            usoTactil.current = true
+            carrito.agregarMenu(linea)
+            setArmandoMenu(null)
+          }}
+          onCerrar={() => setArmandoMenu(null)}
+        />
       )}
 
       {vozAbierta && (

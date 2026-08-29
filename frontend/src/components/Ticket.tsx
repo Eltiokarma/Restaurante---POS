@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import type { DatosLocal, OrdenOut } from '../api'
 import { soles } from '../api'
 
@@ -29,17 +30,40 @@ export function Ticket({ orden, local }: Props) {
       {orden.mesas.length > 0 && (
         <div className="ticket-servicio">🪑 MESA: {orden.mesas.join(' + ')}</div>
       )}
-      {orden.items.length >= 2 && (
+      {orden.items.length + orden.menus.length >= 2 || orden.menus.length > 0 ? (
         <div className="ticket-servicio">
           {orden.entrega === 'separado' ? 'ENTREGA: POR TIEMPOS' : 'ENTREGA: TODO JUNTO'}
         </div>
-      )}
+      ) : null}
       <div className="ticket-fecha">
         {orden.fecha} — {orden.hora}
       </div>
       <hr />
       <table className="ticket-items">
         <tbody>
+          {orden.menus.map((menu, m) => (
+            <Fragment key={`menu-${m}`}>
+              <tr>
+                <td>
+                  {menu.cantidad} × {menu.nombre}
+                  {menu.nota && <div className="ticket-item-nota">→ {menu.nota}</div>}
+                </td>
+                <td className="ticket-subtotal">{soles(menu.precio * menu.cantidad)}</td>
+              </tr>
+              {menu.items.map((item, i) => (
+                <tr key={`menu-${m}-item-${i}`} className="ticket-item-tiempo">
+                  <td>
+                    · {item.cantidad} × {item.nombre}
+                    {item.es_extra && ' (EXTRA)'}
+                    {item.empaque !== 'mesa' && (
+                      <span className="ticket-item-empaque"> [{item.empaque.toUpperCase()}]</span>
+                    )}
+                  </td>
+                  <td className="ticket-subtotal">{item.subtotal > 0 ? soles(item.subtotal) : ''}</td>
+                </tr>
+              ))}
+            </Fragment>
+          ))}
           {orden.items.map((item, i) => (
             <tr key={i}>
               <td>

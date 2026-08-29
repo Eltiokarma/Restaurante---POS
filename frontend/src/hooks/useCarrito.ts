@@ -1,10 +1,14 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { Empaque, ItemCarrito, Plato } from '../api'
+import { subtotalMenu } from '../api'
+import type { Empaque, ItemCarrito, MenuCarrito, MenuHoy, Plato } from '../api'
 
 // El carrito vive SOLO en el estado del frontend hasta que termina la
 // ventana de cancelación; recién ahí se persiste en el backend.
+// Tiene dos tipos de línea: platos a la carta (items) y menús encadenados
+// ya armados (menus), cada uno con sus elecciones y porciones extra.
 export function useCarrito() {
   const [items, setItems] = useState<ItemCarrito[]>([])
+  const [menus, setMenus] = useState<MenuCarrito[]>([])
 
   const cambiarCantidad = useCallback((plato: Plato, delta: number) => {
     setItems((prev) => {
@@ -27,6 +31,7 @@ export function useCarrito() {
 
   const empaqueParaTodos = useCallback((empaque: Empaque) => {
     setItems((prev) => prev.map((i) => ({ ...i, empaque })))
+    setMenus((prev) => prev.map((m) => ({ ...m, empaque })))
   }, [])
 
   // Pedido especial por plato: "sin frijoles", "con un huevo frito"…
@@ -39,15 +44,65 @@ export function useCarrito() {
     [items],
   )
 
-  const vaciar = useCallback(() => setItems([]), [])
+  // ---------- Menús encadenados ----------
 
-  // Quita del carrito los platos que ya no están disponibles (agotados)
-  const eliminarNoDisponibles = useCallback((idsDisponibles: Set<number>) => {
-    setItems((prev) => prev.filter((i) => idsDisponibles.has(i.plato.id)))
+  const agregarMenu = useCallback((linea: MenuCarrito) => {
+    setMenus((prev) => {
+      // Dos menús armados igual (mismas elecciones, sin extras) se juntan
+      const clave = (m: MenuCarrito) => JSON.stringify([m.menu.id, m.elecciones, m.empaque])
+      const idx = prev.findIndex(
+        (m) => m.extras.length === 0 && linea.extras.length === 0 && clave(m) === clave(linea),
+      )
+      if (idx === -1) return [...prev, linea]
+      return prev.map((m, i) => (i === idx ? { ...m, cantidad: m.cantidad + linea.cantidad } : m))
+    })
   }, [])
 
-  // Refresca nombre/precio de los items con los datos más recientes del menú
-  const sincronizarConMenu = useCallback((platos: Plato[]) => {
+  const cambiarCantidadMenu = useCallback((idx: number, delta: number) => {
+    setMenus((prev) =>
+      prev
+        .map((m, i) => (i === idx ? { ...m, cantidad: m.cantidad + delta } : m))
+        .filter((m) => m.cantidad > 0),
+    )
+  }, [])
+
+  const quitarMenu = useCallback((idx: number) => {
+    setMenus((prev) => prev.filter((_, i) => i !== idx))
+  }, [])
+
+  const cambiarEmpaqueMenu = useCallback((idx: number, empaque: Empaque) => {
+    setMenus((prev) => prev.map((m, i) => (i === idx ? { ...m, empaque } : m)))
+  }, [])
+
+  const cambiarNotaMenu = useCallback((idx: number, nota: string) => {
+    setMenus((prev) => prev.map((m, i) => (i === idx ? { ...m, nota } : m)))
+  }, [])
+
+  const vaciar = useCallback(() => {
+    setItems([])
+    setMenus([])
+  }, [])
+
+  // Quita del carrito lo que ya no está disponible (agotados)
+  const eliminarNoDisponibles = useCallback(
+    (idsDisponibles: Set<number>, menuIdsDisponibles?: Set<number>) => {
+      setItems((prev) => prev.filter((i) => idsDisponibles.has(i.plato.id)))
+      if (menuIdsDisponibles) {
+        setMenus((prev) =>
+          prev.filter(
+            (m) =>
+              menuIdsDisponibles.has(m.menu.id) &&
+              Object.values(m.elecciones).every((id) => idsDisponibles.has(id)) &&
+              m.extras.every((e) => idsDisponibles.has(e.plato_id)),
+          ),
+        )
+      }
+    },
+    [],
+  )
+
+  // Refresca nombre/precio de los items y menús con el menú más reciente
+  const sincronizarConMenu = useCallback((platos: Plato[], menusHoy?: MenuHoy[]) => {
     const porId = new Map(platos.map((p) => [p.id, p]))
     setItems((prev) =>
       prev.map((i) => {
@@ -55,21 +110,41 @@ export function useCarrito() {
         return nuevo ? { ...i, plato: nuevo } : i
       }),
     )
+    if (menusHoy) {
+      const menuPorId = new Map(menusHoy.map((m) => [m.id, m]))
+      setMenus((prev) =>
+        prev.map((m) => {
+          const nuevo = menuPorId.get(m.menu.id)
+          return nuevo ? { ...m, menu: nuevo } : m
+        }),
+      )
+    }
   }, [])
 
-  const totalItems = useMemo(() => items.reduce((s, i) => s + i.cantidad, 0), [items])
+  const totalItems = useMemo(
+    () => items.reduce((s, i) => s + i.cantidad, 0) + menus.reduce((s, m) => s + m.cantidad, 0),
+    [items, menus],
+  )
   const totalSoles = useMemo(
-    () => items.reduce((s, i) => s + i.plato.precio * i.cantidad, 0),
-    [items],
+    () =>
+      items.reduce((s, i) => s + i.plato.precio * i.cantidad, 0) +
+      menus.reduce((s, m) => s + subtotalMenu(m), 0),
+    [items, menus],
   )
 
   return {
     items,
+    menus,
     cambiarCantidad,
     cambiarEmpaque,
     empaqueParaTodos,
     cambiarNota,
     cantidadDe,
+    agregarMenu,
+    cambiarCantidadMenu,
+    quitarMenu,
+    cambiarEmpaqueMenu,
+    cambiarNotaMenu,
     vaciar,
     eliminarNoDisponibles,
     sincronizarConMenu,

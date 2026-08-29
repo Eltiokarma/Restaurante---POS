@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, NOMBRE_CATEGORIA } from '../api'
-import type { CajaEstado, ConfigOut, DatosLocal, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, StatsOut, VozPanel } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
 type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'cancelaciones' | 'voz' | 'config'
@@ -496,6 +496,300 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
         Para agotar un plato a mitad de servicio: desmarca "Disponible hoy" y guarda. Desaparece de la
         terminal en el siguiente refresco (máx. 30 segundos).
       </p>
+      <EditorPlantillas onSesionVencida={onSesionVencida} />
+    </div>
+  )
+}
+
+// ---------- Menús encadenados (plantillas) ----------
+
+interface TiempoEditable {
+  rotulo: string
+  obligatorio: boolean
+  precio_extra: string // como texto mientras se edita
+  alternativas: { plato_id: number; recargo: string }[]
+}
+
+interface PlantillaEditable {
+  id?: number
+  nombre: string
+  precio: string
+  activo_hoy: boolean
+  tiempos: TiempoEditable[]
+}
+
+const TIEMPOS_SUGERIDOS = ['Entrada o sopa', 'Segundo', 'Refresco', 'Postre']
+
+function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [plantillas, setPlantillas] = useState<PlantillaEditable[]>([])
+  const [catalogo, setCatalogo] = useState<Plato[]>([])
+  const [mensaje, setMensaje] = useState('')
+  const [error, setError] = useState('')
+
+  const cargar = useCallback(async () => {
+    try {
+      const [datosPlantillas, datosCatalogo] = await Promise.all([
+        api.plantillas(),
+        api.catalogo(),
+      ])
+      setCatalogo(datosCatalogo.platos)
+      setPlantillas(
+        datosPlantillas.plantillas.map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          precio: p.precio.toFixed(2),
+          activo_hoy: p.activo_hoy,
+          tiempos: p.tiempos.map((t) => ({
+            rotulo: t.rotulo,
+            obligatorio: t.obligatorio,
+            precio_extra: t.precio_extra > 0 ? t.precio_extra.toFixed(2) : '',
+            alternativas: t.alternativas.map((a) => ({
+              plato_id: a.plato_id,
+              recargo: a.recargo > 0 ? a.recargo.toFixed(2) : '',
+            })),
+          })),
+        })),
+      )
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }, [onSesionVencida])
+
+  useEffect(() => {
+    cargar()
+  }, [cargar])
+
+  const editar = (idx: number, cambios: Partial<PlantillaEditable>) => {
+    setPlantillas((prev) => prev.map((p, i) => (i === idx ? { ...p, ...cambios } : p)))
+  }
+
+  const editarTiempo = (idx: number, t: number, cambios: Partial<TiempoEditable>) => {
+    setPlantillas((prev) =>
+      prev.map((p, i) =>
+        i === idx
+          ? { ...p, tiempos: p.tiempos.map((x, j) => (j === t ? { ...x, ...cambios } : x)) }
+          : p,
+      ),
+    )
+  }
+
+  const alternarPlato = (idx: number, t: number, platoId: number) => {
+    setPlantillas((prev) =>
+      prev.map((p, i) => {
+        if (i !== idx) return p
+        const tiempos = p.tiempos.map((x, j) => {
+          if (j !== t) return x
+          const ya = x.alternativas.some((a) => a.plato_id === platoId)
+          return {
+            ...x,
+            alternativas: ya
+              ? x.alternativas.filter((a) => a.plato_id !== platoId)
+              : [...x.alternativas, { plato_id: platoId, recargo: '' }],
+          }
+        })
+        return { ...p, tiempos }
+      }),
+    )
+  }
+
+  const agregarPlantilla = () => {
+    setPlantillas((prev) => [
+      ...prev,
+      {
+        nombre: 'Menú del día',
+        precio: '',
+        activo_hoy: true,
+        tiempos: [
+          { rotulo: 'Entrada o sopa', obligatorio: true, precio_extra: '3.00', alternativas: [] },
+          { rotulo: 'Segundo', obligatorio: true, precio_extra: '', alternativas: [] },
+        ],
+      },
+    ])
+  }
+
+  const guardar = async () => {
+    setError('')
+    setMensaje('')
+    const validas = plantillas.filter((p) => p.nombre.trim() !== '')
+    const sinPrecio = validas.filter((p) => !(parseFloat(p.precio) > 0))
+    if (sinPrecio.length > 0) {
+      setError(`Falta el precio de: ${sinPrecio.map((p) => p.nombre.trim()).join(', ')}`)
+      return
+    }
+    const sinAlternativas = validas.filter((p) =>
+      p.tiempos.some((t) => t.rotulo.trim() !== '' && t.alternativas.length === 0),
+    )
+    if (sinAlternativas.length > 0) {
+      setError(
+        `Cada tiempo necesita al menos un plato: revisa ${sinAlternativas
+          .map((p) => p.nombre.trim())
+          .join(', ')}`,
+      )
+      return
+    }
+    const payload: PlantillaMenuIn[] = validas.map((p) => ({
+      id: p.id,
+      nombre: p.nombre.trim(),
+      precio: parseFloat(p.precio),
+      activo_hoy: p.activo_hoy,
+      tiempos: p.tiempos
+        .filter((t) => t.rotulo.trim() !== '')
+        .map((t) => ({
+          rotulo: t.rotulo.trim(),
+          obligatorio: t.obligatorio,
+          precio_extra: parseFloat(t.precio_extra) > 0 ? parseFloat(t.precio_extra) : 0,
+          alternativas: t.alternativas.map((a) => ({
+            plato_id: a.plato_id,
+            recargo: parseFloat(a.recargo) > 0 ? parseFloat(a.recargo) : 0,
+          })),
+        })),
+    }))
+    try {
+      await api.guardarPlantillas(payload)
+      await cargar()
+      setMensaje('Menús guardados ✔ (la terminal los verá en el próximo refresco)')
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const nombreDe = (platoId: number) =>
+    catalogo.find((p) => p.id === platoId)?.nombre ?? `#${platoId}`
+
+  return (
+    <div className="editor-plantillas">
+      <h2 className="titulo-categoria">Menús (combo con tiempos)</h2>
+      <p className="nota-admin">
+        El menú se cobra por SU precio, no por la suma de los platos. "Extra S/" es el precio de
+        una porción adicional de ese tiempo pedida junto al menú (déjalo vacío si no se ofrece);
+        "recargo" es lo que suma elegir ese plato dentro del menú.
+      </p>
+      {mensaje && <div className="banner-ok">{mensaje}</div>}
+      {error && <div className="banner-error">{error}</div>}
+      {plantillas.map((p, idx) => (
+        <div className="plantilla-editor" key={p.id ?? `nueva-${idx}`}>
+          <div className="plantilla-cabecera">
+            <input
+              value={p.nombre}
+              onChange={(e) => editar(idx, { nombre: e.target.value })}
+              placeholder="Nombre del menú"
+            />
+            <label>
+              S/{' '}
+              <input
+                type="number" step="0.50" min="0" className="input-precio"
+                value={p.precio}
+                onChange={(e) => editar(idx, { precio: e.target.value })}
+                placeholder="11.00"
+              />
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={p.activo_hoy}
+                onChange={(e) => editar(idx, { activo_hoy: e.target.checked })}
+              />{' '}
+              Se vende hoy
+            </label>
+            <button
+              className="boton-quitar"
+              onClick={() => setPlantillas((prev) => prev.filter((_, i) => i !== idx))}
+              title="Quitar este menú (se retira al guardar; las ventas pasadas no cambian)"
+            >
+              ✕
+            </button>
+          </div>
+          {p.tiempos.map((t, ti) => (
+            <div className="plantilla-tiempo" key={ti}>
+              <div className="plantilla-tiempo-fila">
+                <span className="tiempo-orden">{ti + 1}</span>
+                <input
+                  value={t.rotulo}
+                  onChange={(e) => editarTiempo(idx, ti, { rotulo: e.target.value })}
+                  placeholder={TIEMPOS_SUGERIDOS[ti] ?? 'Rótulo del tiempo'}
+                />
+                <label title="Precio de una porción adicional pedida con el menú">
+                  Extra S/{' '}
+                  <input
+                    type="number" step="0.50" min="0" className="input-precio"
+                    value={t.precio_extra}
+                    onChange={(e) => editarTiempo(idx, ti, { precio_extra: e.target.value })}
+                    placeholder="—"
+                  />
+                </label>
+                <button
+                  className="boton-quitar"
+                  onClick={() =>
+                    editar(idx, { tiempos: p.tiempos.filter((_, j) => j !== ti) })
+                  }
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="chips-sinonimos">
+                {t.alternativas.map((a) => (
+                  <span className="chip" key={a.plato_id}>
+                    {nombreDe(a.plato_id)}
+                    <label title="Recargo por elegir este plato en el menú">
+                      {' '}+S/{' '}
+                      <input
+                        type="number" step="0.50" min="0" className="input-recargo"
+                        value={a.recargo}
+                        onChange={(e) =>
+                          editarTiempo(idx, ti, {
+                            alternativas: t.alternativas.map((x) =>
+                              x.plato_id === a.plato_id ? { ...x, recargo: e.target.value } : x,
+                            ),
+                          })
+                        }
+                        placeholder="0"
+                      />
+                    </label>
+                    <button onClick={() => alternarPlato(idx, ti, a.plato_id)} aria-label={`Quitar ${nombreDe(a.plato_id)}`}>✕</button>
+                  </span>
+                ))}
+                <select
+                  className="chip-input"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) alternarPlato(idx, ti, Number(e.target.value))
+                  }}
+                >
+                  <option value="">+ plato…</option>
+                  {catalogo
+                    .filter((pl) => !t.alternativas.some((a) => a.plato_id === pl.id))
+                    .map((pl) => (
+                      <option key={pl.id} value={pl.id}>
+                        {pl.nombre}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+          ))}
+          <button
+            onClick={() =>
+              editar(idx, {
+                tiempos: [
+                  ...p.tiempos,
+                  {
+                    rotulo: TIEMPOS_SUGERIDOS[p.tiempos.length] ?? '',
+                    obligatorio: true,
+                    precio_extra: '',
+                    alternativas: [],
+                  },
+                ],
+              })
+            }
+          >
+            + Agregar tiempo
+          </button>
+        </div>
+      ))}
+      <div className="admin-acciones">
+        <button onClick={agregarPlantilla}>+ Agregar menú</button>
+        <button className="boton-primario" onClick={guardar}>💾 Guardar menús</button>
+      </div>
     </div>
   )
 }
@@ -715,7 +1009,15 @@ function TabOrdenes() {
             <tr key={o.id}>
               <td>#{String(o.numero_orden_dia).padStart(3, '0')}</td>
               <td>{o.hora}</td>
-              <td>{o.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(', ')}</td>
+              <td>
+                {[
+                  ...o.menus.map(
+                    (m) =>
+                      `${m.cantidad}× ${m.nombre} (${m.items.map((i) => i.nombre).join(' + ')})`,
+                  ),
+                  ...o.items.map((i) => `${i.cantidad}× ${i.nombre}`),
+                ].join(', ')}
+              </td>
               <td>{soles(o.total)}</td>
               <td><span className={`etiqueta-estado etiqueta-${o.estado}`}>{o.estado}</span></td>
               <td>
