@@ -609,6 +609,10 @@ export const api = {
   imprimirPrueba: () =>
     request<{ encolada: boolean }>('/api/print/prueba', { method: 'POST' }, true),
 
+  // El ticket de prueba se confirma como las órdenes: si no sale, sigue en cola
+  confirmarPruebaImpresa: () =>
+    request<{ confirmada: boolean }>('/api/print/prueba/impresa', { method: 'POST' }),
+
   // Cola de tickets en bytes ESC/POS (base64): la consume el puente del
   // local o la ticketera-tablet con RawBT
   colaImpresion: () =>

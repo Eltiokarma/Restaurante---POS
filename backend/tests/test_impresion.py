@@ -52,7 +52,7 @@ def test_anulada_sale_de_la_cola(client, db, menu_ejemplo):
     assert client.get("/api/print/cola").json()["trabajos"] == []
 
 
-def test_ticket_de_prueba_requiere_admin_y_se_consume(client, admin_headers):
+def test_ticket_de_prueba_requiere_admin_y_espera_confirmacion(client, admin_headers):
     assert client.post("/api/print/prueba").status_code == 401
 
     r = client.post("/api/print/prueba", headers=admin_headers)
@@ -64,7 +64,10 @@ def test_ticket_de_prueba_requiere_admin_y_se_consume(client, admin_headers):
     datos = base64.b64decode(cola["trabajos"][0]["datos_b64"])
     assert b"PRUEBA OK" in datos
 
-    # Se sirve UNA vez: el siguiente ciclo del puente ya no la ve
+    # Sigue en cola hasta que quien imprime confirme: si la impresora no
+    # responde, el trabajo no se pierde y se reintenta solo
+    assert [t["tipo"] for t in client.get("/api/print/cola").json()["trabajos"]] == ["prueba"]
+    client.post("/api/print/prueba/impresa")
     assert client.get("/api/print/cola").json()["trabajos"] == []
 
 

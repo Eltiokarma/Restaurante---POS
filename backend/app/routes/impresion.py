@@ -36,6 +36,22 @@ def pedir_ticket_de_prueba(db: Session = Depends(get_db)):
     return {"encolada": True}
 
 
+@router.post("/prueba/impresa")
+def confirmar_ticket_de_prueba(db: Session = Depends(get_db)):
+    """Lo llama quien imprime, DESPUÉS de que el ticket salió.
+
+    Sin esto el trabajo de prueba se perdería al servirse: justo cuando la
+    impresora no responde — que es el caso que el botón sirve para
+    diagnosticar — el admin vería "encolado ✔" y no saldría nada nunca.
+    Igual que las órdenes, el trabajo espera en cola hasta confirmarse.
+    """
+    registro = db.get(Config, CLAVE_PRUEBA)
+    if registro is not None:
+        registro.valor = "0"
+        db.commit()
+    return {"confirmada": True}
+
+
 @router.get("/cola")
 def cola_de_impresion(db: Session = Depends(get_db)):
     """Trabajos pendientes en bytes ESC/POS (base64) + datos de la impresora.
@@ -55,11 +71,10 @@ def cola_de_impresion(db: Session = Depends(get_db)):
     columnas = config["impresora_columnas"]
     trabajos = []
 
-    # Ticket de prueba (botón de Admin → Configuración): se consume al servirse
+    # Ticket de prueba (botón de Admin → Configuración). Se queda en cola
+    # hasta que quien imprime confirme con POST /prueba/impresa.
     registro_prueba = db.get(Config, CLAVE_PRUEBA)
     if registro_prueba is not None and registro_prueba.valor == "1":
-        registro_prueba.valor = "0"
-        db.commit()
         trabajos.append({
             "tipo": "prueba",
             "orden_id": None,
