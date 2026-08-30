@@ -130,6 +130,9 @@ export function Cocina() {
   // los pedidos que llegaron en los siguientes X minutos (configurable).
   const porSalir = new Map<string, {
     total: number
+    // Solo las porciones sin empezar: son las únicas que pueden pasar a
+    // "en preparación" (el backend nunca retrocede un estado)
+    pendientes: number
     tanda: number
     empaques: Map<string, number>
     esperaMax: number
@@ -140,8 +143,9 @@ export function Cocina() {
     for (const item of lineas) {
       if (RANGO_ESTADO[item.estado] >= RANGO_ESTADO.listo) continue
       const acumulado = porSalir.get(item.nombre) ??
-        { total: 0, tanda: 0, empaques: new Map(), esperaMax: espera }
+        { total: 0, pendientes: 0, tanda: 0, empaques: new Map(), esperaMax: espera }
       acumulado.total += item.cantidad
+      if (item.estado === 'pendiente') acumulado.pendientes += item.cantidad
       // Las órdenes vienen ordenadas de la más antigua a la más nueva:
       // la primera aparición fija el inicio de la tanda de este plato
       if (ventanaMin > 0 && espera >= acumulado.esperaMax - ventanaMin * 60) {
@@ -362,8 +366,11 @@ export function Cocina() {
           <div className="modal modal-bulk" onClick={(e) => e.stopPropagation()}>
             <h2>{bulk.nombre}</h2>
             <p className="bulk-detalle">
-              Quedan <strong>{porSalir.get(bulk.nombre)?.total ?? 0}</strong> porciones por salir.
-              Se tachan de la orden más antigua a la más nueva.
+              Quedan <strong>{porSalir.get(bulk.nombre)?.total ?? 0}</strong> porciones por salir
+              {(porSalir.get(bulk.nombre)?.pendientes ?? 0) < (porSalir.get(bulk.nombre)?.total ?? 0) && (
+                <> (<strong>{porSalir.get(bulk.nombre)?.pendientes}</strong> sin empezar, el resto
+                ya en preparación)</>
+              )}. Se tachan de la orden más antigua a la más nueva.
               {ventanaMin > 0 && (porSalir.get(bulk.nombre)?.tanda ?? 0) < (porSalir.get(bulk.nombre)?.total ?? 0) && (
                 <> La tanda de ahora (pedidos con hasta {ventanaMin} min de diferencia) es de{' '}
                 <strong>{porSalir.get(bulk.nombre)?.tanda}</strong>.</>
@@ -393,7 +400,12 @@ export function Cocina() {
             <div className="modal-botones">
               <button
                 className="boton-grande boton-secundario"
-                disabled={despachando}
+                disabled={despachando || bulk.cantidad > (porSalir.get(bulk.nombre)?.pendientes ?? 0)}
+                title={
+                  bulk.cantidad > (porSalir.get(bulk.nombre)?.pendientes ?? 0)
+                    ? `Solo ${porSalir.get(bulk.nombre)?.pendientes ?? 0} sin empezar: el resto ya está en preparación`
+                    : undefined
+                }
                 onClick={() => despacharBulk('preparando')}
               >
                 ▶ En preparación

@@ -621,14 +621,39 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
   const guardar = async () => {
     setError('')
     setMensaje('')
-    const validas = plantillas.filter((p) => p.nombre.trim() !== '')
+    // Nada se descarta en silencio: un menú sin nombre o un tiempo sin
+    // rótulo se avisan, porque al no enviarse el backend los retiraría del
+    // catálogo y el menú desaparecería de la terminal con un "guardado ✔"
+    if (plantillas.some((p) => p.nombre.trim() === '')) {
+      setError('Hay un menú sin nombre: ponle uno o quítalo con la ✕.')
+      return
+    }
+    const validas = plantillas
     const sinPrecio = validas.filter((p) => !(parseFloat(p.precio) > 0))
     if (sinPrecio.length > 0) {
       setError(`Falta el precio de: ${sinPrecio.map((p) => p.nombre.trim()).join(', ')}`)
       return
     }
+    const sinRotulo = validas.filter((p) => p.tiempos.some((t) => t.rotulo.trim() === ''))
+    if (sinRotulo.length > 0) {
+      setError(
+        `Hay un tiempo sin nombre (ej. "Postre") en: ${sinRotulo
+          .map((p) => p.nombre.trim())
+          .join(', ')}. Ponle rótulo o quítalo con la ✕.`,
+      )
+      return
+    }
+    const sinTiempos = validas.filter((p) => p.tiempos.length === 0)
+    if (sinTiempos.length > 0) {
+      setError(
+        `Un menú necesita al menos un tiempo: revisa ${sinTiempos
+          .map((p) => p.nombre.trim())
+          .join(', ')}`,
+      )
+      return
+    }
     const sinAlternativas = validas.filter((p) =>
-      p.tiempos.some((t) => t.rotulo.trim() !== '' && t.alternativas.length === 0),
+      p.tiempos.some((t) => t.alternativas.length === 0),
     )
     if (sinAlternativas.length > 0) {
       setError(
@@ -644,7 +669,6 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
       precio: parseFloat(p.precio),
       activo_hoy: p.activo_hoy,
       tiempos: p.tiempos
-        .filter((t) => t.rotulo.trim() !== '')
         .map((t) => ({
           rotulo: t.rotulo.trim(),
           obligatorio: t.obligatorio,

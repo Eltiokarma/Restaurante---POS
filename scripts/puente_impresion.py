@@ -83,11 +83,16 @@ def ciclo(url_base: str, pin: str) -> None:
                 print(f"✖ No se pudo imprimir #{trabajo['numero']}: {e}")
                 print(f"  Revisa que la impresora esté prendida y su IP sea {ip}:{puerto}.")
                 break  # el ticket sigue en cola; se reintenta en el próximo ciclo
-            if trabajo["tipo"] == "orden":
-                try:
-                    api(url_base, pin, f"/api/orders/{trabajo['orden_id']}/printed", "POST")
-                except Exception:
-                    pass  # si no se pudo confirmar, el próximo ciclo lo reintenta
+            # Confirmar: hasta que esto llegue, el trabajo sigue en cola
+            ruta_ok = (
+                f"/api/orders/{trabajo['orden_id']}/printed"
+                if trabajo["tipo"] == "orden"
+                else "/api/print/prueba/impresa"
+            )
+            try:
+                api(url_base, pin, ruta_ok, "POST")
+            except Exception:
+                pass  # si no se pudo confirmar, el próximo ciclo lo reintenta
             print(f"✔ Ticket #{trabajo['numero']} impreso")
 
         time.sleep(INTERVALO_SEG)

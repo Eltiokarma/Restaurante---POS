@@ -208,6 +208,12 @@ export function Cliente() {
         } catch {
           setErrorConexion(e.message)
         }
+      } else if (e instanceof ApiError && e.status === 422) {
+        // El backend explica qué falta ("Falta elegir Segundo del Menú del
+        // día"): mostrarlo tal cual es más útil que un error genérico
+        setErrorConexion(e.message)
+      } else if (e instanceof ApiError) {
+        setErrorConexion(e.message)
       } else {
         // Robustez offline parcial: no se pierde el carrito
         setErrorConexion('Error de conexión, intenta de nuevo')

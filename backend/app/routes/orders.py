@@ -399,11 +399,17 @@ def cambiar_estado(orden_id: int, payload: EstadoIn, db: Session = Depends(get_d
         orden.anulada_en = None
 
     orden.estado = payload.estado
-    # Avanzar la orden completa arrastra todos sus ítems (el estado de la
-    # orden es el mínimo de sus ítems: deben quedar consistentes)
+    # Avanzar la orden completa arrastra sus ítems (el estado de la orden es
+    # el mínimo de sus ítems: deben quedar consistentes). Pero SOLO hacia
+    # adelante: si cocina ya tachó porciones por bulk, "empezar a preparar"
+    # no puede devolverlas a la cola y hacer que se cocinen dos veces.
     if payload.estado != "anulada":
+        from ..services.cocina import RANGO_ESTADO
+
+        destino = RANGO_ESTADO[payload.estado]
         for item in orden.items:
-            item.estado = payload.estado
+            if RANGO_ESTADO[item.estado] < destino:
+                item.estado = payload.estado
     db.commit()
     return {"id": orden.id, "estado": orden.estado}
 

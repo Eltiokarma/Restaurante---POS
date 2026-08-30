@@ -132,6 +132,9 @@ export function Ticketera() {
         // No llegó la confirmación: se libera para que la cola lo reintente
         confirmando.current.delete(trabajo.orden_id)
       }
+    } else if (trabajo.tipo === 'prueba') {
+      // El ticket de prueba también espera en cola hasta confirmarse
+      await api.confirmarPruebaImpresa().catch(() => {})
     }
     setImpresos((n) => n + 1)
     setEnCola((n) => Math.max(0, n - 1))
@@ -147,6 +150,12 @@ export function Ticketera() {
         const cola = await api.colaImpresion()
         setConectado(true)
         setEnCola(cola.trabajos.length)
+        // Olvidar los ids que el servidor ya dejó de ofrecer: si no, una
+        // reimpresión desde caja quedaría filtrada para siempre
+        const idsEnCola = new Set(cola.trabajos.map((t) => t.orden_id))
+        for (const id of [...confirmando.current]) {
+          if (!idsEnCola.has(id)) confirmando.current.delete(id)
+        }
         const trabajo = cola.trabajos.find(
           (t) => t.orden_id === null || !confirmando.current.has(t.orden_id),
         )
