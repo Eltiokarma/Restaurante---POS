@@ -2923,6 +2923,81 @@ select:focus-visible {
   text-decoration: none;
 }
 
+/* Cintillo de impresión detenida (caja y cocina) */
+.aviso-impresion {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--aji-tenue) 0 14px,
+    var(--papel-alto) 14px 28px
+  );
+  border: 2px solid var(--aji);
+  border-left: 10px solid var(--aji);
+  border-radius: var(--r-chico);
+  color: var(--aji-hondo);
+  padding: 12px 16px;
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+.aviso-impresion strong {
+  font-size: 1.15rem;
+}
+
+/* En cocina (fondo oscuro) el cintillo va sólido para que resalte */
+.pantalla-cocina .aviso-impresion {
+  background: var(--aji);
+  color: #fff;
+  border-color: #fff;
+}
+
+/* Insumos por agotarse */
+.aviso-por-agotarse {
+  background: var(--aji-tenue);
+  border-left: 8px solid var(--aji);
+  border-radius: var(--r-chico);
+  color: var(--aji-hondo);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.fila-por-agotarse {
+  background: var(--aji-tenue);
+}
+
+.input-minimo {
+  width: 72px;
+  text-align: right;
+}
+
+/* Zona de borrado: se ve peligrosa a propósito */
+.panel-peligro {
+  margin-top: 34px;
+  border: 2px dashed var(--aji);
+  border-radius: var(--r);
+  padding: 16px 18px;
+  background: var(--papel-alto);
+}
+
+.boton-borrar-datos {
+  background: var(--papel-hondo);
+  color: var(--aji-hondo);
+  box-shadow: inset 0 0 0 2px var(--aji);
+  font-weight: 700;
+  border-radius: var(--r-chico);
+  padding: 12px 18px;
+}
+
+.confirmar-borrado {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
 /* Configuración de la impresora (modo puente) */
 .panel-impresora {
   display: flex;

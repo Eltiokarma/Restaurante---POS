@@ -152,9 +152,27 @@ export interface Insumo {
   nombre: string
   unidad: string
   stock_actual: number
+  // Avisar cuando el stock baje de aquí; 0 = sin aviso configurado
+  stock_minimo: number
+  bajo_minimo: boolean
   costo_unitario: number
   valor: number
   activo: boolean
+}
+
+// Tickets que llevan rato sin imprimirse (la ticketera o el puente se colgaron)
+export interface ImpresionPendiente {
+  cantidad: number
+  minutos: number
+}
+
+// Cuánto movimiento hay en la base, para el borrado de datos de prueba
+export interface ResumenDatos {
+  ordenes: number
+  cancelaciones: number
+  cierres_caja: number
+  movimientos_kardex: number
+  voz_logs: number
 }
 
 export interface MovimientoKardex {
@@ -430,7 +448,15 @@ export const api = {
     }),
 
   // --- Insumos, recetas y kardex (admin) ---
-  insumos: () => request<{ insumos: Insumo[]; valor_inventario: number }>('/api/insumos', {}, true),
+  insumos: () =>
+    request<{ insumos: Insumo[]; valor_inventario: number; por_agotarse: string[] }>(
+      '/api/insumos', {}, true),
+
+  actualizarInsumo: (id: number, cambios: { nombre?: string; unidad?: string; activo?: boolean; stock_minimo?: number }) =>
+    request<Insumo>(`/api/insumos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(cambios),
+    }, true),
 
   crearInsumo: (nombre: string, unidad: string, costoUnitario: number) =>
     request<Insumo>('/api/insumos', {
@@ -477,7 +503,18 @@ export const api = {
       body: JSON.stringify({ monto_contado: montoContado, notas }),
     }),
 
-  ordenesHoy: () => request<{ ordenes: OrdenOut[]; total_vendido: number }>('/api/orders/today'),
+  ordenesHoy: () =>
+    request<{ ordenes: OrdenOut[]; total_vendido: number; impresion_pendiente: ImpresionPendiente }>(
+      '/api/orders/today'),
+
+  // --- Empezar limpio (admin): borra el movimiento de las pruebas ---
+  resumenDatos: () => request<ResumenDatos>('/api/mantenimiento/datos', {}, true),
+
+  reiniciarDatos: (confirmacion: string, reiniciarStock: boolean) =>
+    request<{ borrado: ResumenDatos; stock_reiniciado: boolean }>('/api/mantenimiento/reiniciar', {
+      method: 'POST',
+      body: JSON.stringify({ confirmacion, reiniciar_stock: reiniciarStock }),
+    }, true),
 
   // --- Estación de impresión (/ticketera) ---
   pendientesImpresion: () =>

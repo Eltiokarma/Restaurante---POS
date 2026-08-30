@@ -280,6 +280,29 @@ def ordenes_de_un_dia(fecha: date, db: Session = Depends(get_db)):
     return _ordenes_del_dia(db, fecha)
 
 
+def _impresion_atascada(db: Session, ordenes: list[Orden], fecha: date) -> dict:
+    """Tickets que llevan rato sin imprimirse.
+
+    Si la ticketera o el puente se cuelgan, los tickets se acumulan EN
+    SILENCIO: cocina no se entera y el cliente espera un plato que nadie
+    está preparando. Caja y cocina muestran esto como cintillo.
+
+    Solo aplica cuando imprime alguien más (modos "estacion" y "puente");
+    en modo "terminal" la orden nace impresa.
+    """
+    vacio = {"cantidad": 0, "minutos": 0.0}
+    if fecha != hoy_lima() or leer_config(db)["modo_impresion"] == "terminal":
+        return vacio
+    pendientes = [o for o in ordenes if not o.impreso and o.estado != "anulada"]
+    if not pendientes:
+        return vacio
+    # La más antigua manda: es la que lleva más tiempo esperando
+    return {
+        "cantidad": len(pendientes),
+        "minutos": round(max(_minutos_espera(o) for o in pendientes), 1),
+    }
+
+
 def _ordenes_del_dia(db: Session, fecha: date) -> dict:
     ordenes = db.scalars(
         select(Orden)
@@ -293,6 +316,7 @@ def _ordenes_del_dia(db: Session, fecha: date) -> dict:
         "fecha": fecha.isoformat(),
         "ordenes": [_orden_a_dict(o, mapa) for o in ordenes],
         "total_vendido": total_vendido,
+        "impresion_pendiente": _impresion_atascada(db, ordenes, fecha),
     }
 
 

@@ -10,7 +10,10 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from .db import BACKEND_DIR, Base, engine
-from .routes import admin, caja, cancellations, config, impresion, insumos, menu, mesas, orders, stats, voice
+from .routes import (
+    admin, caja, cancellations, config, impresion, insumos, mantenimiento,
+    menu, mesas, orders, stats, voice,
+)
 from .services.backup import ciclo_backup_automatico
 
 
@@ -89,9 +92,6 @@ def _migrar(engine_) -> None:
                 "ALTER TABLE orden_items ADD COLUMN es_extra BOOLEAN NOT NULL DEFAULT 0"
             ))
             conn.commit()
-        # Estado por ítem (§3): los ítems históricos heredan el estado de su
-        # orden (una anulada no es estado de cocina: sus ítems quedan
-        # 'pendiente', igual da porque cocina no la muestra)
         # §4: cintillo de anulada en cocina y fotos de plato
         if columnas and "anulada_en" not in columnas:
             conn.execute(text("ALTER TABLE ordenes ADD COLUMN anulada_en DATETIME"))
@@ -99,6 +99,16 @@ def _migrar(engine_) -> None:
         if columnas_platos and "foto" not in columnas_platos:
             conn.execute(text("ALTER TABLE platos ADD COLUMN foto VARCHAR(80)"))
             conn.commit()
+        # Aviso de stock que se acaba: 0 = sin alerta (comportamiento previo)
+        columnas_insumos = [fila[1] for fila in conn.execute(text("PRAGMA table_info(insumos)"))]
+        if columnas_insumos and "stock_minimo" not in columnas_insumos:
+            conn.execute(text(
+                "ALTER TABLE insumos ADD COLUMN stock_minimo FLOAT NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
+        # Estado por ítem (§3): los ítems históricos heredan el estado de su
+        # orden (una anulada no es estado de cocina: sus ítems quedan
+        # 'pendiente', igual da porque cocina no la muestra)
         if columnas_items and "estado" not in columnas_items:
             conn.execute(text(
                 "ALTER TABLE orden_items ADD COLUMN estado VARCHAR(20) NOT NULL DEFAULT 'pendiente'"
@@ -190,6 +200,7 @@ app.include_router(voice.router)
 app.include_router(insumos.router)
 app.include_router(mesas.router)
 app.include_router(impresion.router)
+app.include_router(mantenimiento.router)
 
 
 @app.get("/api/health")

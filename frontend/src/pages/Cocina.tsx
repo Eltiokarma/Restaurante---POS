@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, NOMBRE_EMPAQUE, NOMBRE_SERVICIO } from '../api'
-import type { EstadoItem, OrdenOut } from '../api'
+import type { EstadoItem, ImpresionPendiente, OrdenOut } from '../api'
+import { AvisoImpresion } from '../components/AvisoImpresion'
 import { IconoProhibido, IconoReloj, IconoSarten, IconoSilla } from '../components/Iconos'
 
 const SIGUIENTE_ESTADO: Record<string, string> = {
@@ -29,6 +30,7 @@ function formatearEspera(segundos: number): string {
 
 export function Cocina() {
   const [ordenes, setOrdenes] = useState<OrdenOut[]>([])
+  const [impresion, setImpresion] = useState<ImpresionPendiente | undefined>()
   const [error, setError] = useState(false)
   // Ventana de la tanda (minutos): resalta lo que va junto en el bulk
   const [ventanaMin, setVentanaMin] = useState(0)
@@ -41,6 +43,7 @@ export function Cocina() {
     try {
       const data = await api.ordenesHoy()
       setOrdenes(data.ordenes)
+      setImpresion(data.impresion_pendiente)
       setTraidoEn(Date.now())
       setError(false)
     } catch {
@@ -200,6 +203,8 @@ export function Cocina() {
         <span className="cocina-contador">{activas.length} órdenes activas</span>
         {error && <span className="banner-error">Sin conexión con el sistema</span>}
       </header>
+
+      <AvisoImpresion estado={impresion} />
 
       {porSalir.size > 0 && (
         <div className="cocina-resumen-cola">

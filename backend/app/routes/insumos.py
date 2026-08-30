@@ -20,12 +20,15 @@ class InsumoIn(BaseModel):
     nombre: str = Field(min_length=1, max_length=120)
     unidad: str = Field(min_length=1, max_length=20)
     costo_unitario: float = Field(default=0.0, ge=0)
+    # Avisar cuando el stock baje de aquí; 0 = sin aviso
+    stock_minimo: float = Field(default=0.0, ge=0)
 
 
 class InsumoUpdate(BaseModel):
     nombre: str | None = None
     unidad: str | None = None
     activo: bool | None = None
+    stock_minimo: float | None = Field(default=None, ge=0)
 
 
 class MovimientoIn(BaseModel):
@@ -35,12 +38,19 @@ class MovimientoIn(BaseModel):
     nota: str = ""
 
 
+def _bajo_minimo(i: Insumo) -> bool:
+    """Se está acabando: hay aviso configurado y el stock ya lo alcanzó."""
+    return i.activo and i.stock_minimo > 0 and i.stock_actual <= i.stock_minimo
+
+
 def _insumo_a_dict(i: Insumo) -> dict:
     return {
         "id": i.id,
         "nombre": i.nombre,
         "unidad": i.unidad,
         "stock_actual": round(i.stock_actual, 3),
+        "stock_minimo": round(i.stock_minimo, 3),
+        "bajo_minimo": _bajo_minimo(i),
         "costo_unitario": round(i.costo_unitario, 4),
         "valor": round(max(i.stock_actual, 0) * i.costo_unitario, 2),
         "activo": i.activo,
@@ -55,6 +65,8 @@ def listar(db: Session = Depends(get_db)):
         "valor_inventario": round(
             sum(max(i.stock_actual, 0) * i.costo_unitario for i in insumos), 2
         ),
+        # Para el aviso "se te están acabando 3 cosas" del admin
+        "por_agotarse": [i.nombre for i in insumos if _bajo_minimo(i)],
     }
 
 
@@ -64,6 +76,7 @@ def crear(payload: InsumoIn, db: Session = Depends(get_db)):
         nombre=payload.nombre.strip(),
         unidad=payload.unidad.strip(),
         costo_unitario=payload.costo_unitario,
+        stock_minimo=payload.stock_minimo,
     )
     db.add(insumo)
     db.commit()

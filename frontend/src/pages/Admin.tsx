@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA } from '../api'
 import { IconoEngranaje } from '../components/Iconos'
-import type { CajaEstado, ConfigOut, DatosLocal, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, StatsOut, VozPanel } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
 type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'cancelaciones' | 'voz' | 'config'
@@ -1119,6 +1119,7 @@ function TabOrdenes() {
 function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [insumos, setInsumos] = useState<Insumo[]>([])
   const [valorInventario, setValorInventario] = useState(0)
+  const [porAgotarse, setPorAgotarse] = useState<string[]>([])
   const [movimientos, setMovimientos] = useState<MovimientoKardex[]>([])
   const [catalogo, setCatalogo] = useState<Plato[]>([])
   const [mensaje, setMensaje] = useState('')
@@ -1140,6 +1141,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
       ])
       setInsumos(datos.insumos)
       setValorInventario(datos.valor_inventario)
+      setPorAgotarse(datos.por_agotarse)
       setMovimientos(kardex.movimientos)
       setCatalogo(cat.platos)
       setError('')
@@ -1231,6 +1233,18 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
     }
   }
 
+  // El mínimo se guarda al salir del campo: un dato suelto no merece un botón
+  const guardarMinimo = async (insumo: Insumo, valor: string) => {
+    const minimo = parseFloat(valor) || 0
+    if (minimo === insumo.stock_minimo) return
+    try {
+      await api.actualizarInsumo(insumo.id, { stock_minimo: minimo })
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
   const precioPlato = catalogo.find((p) => p.id === parseInt(recetaPlato))?.precio
 
   return (
@@ -1239,16 +1253,35 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
       {error && <div className="banner-error">{error}</div>}
 
       <h3 className="subtitulo-resumen">Inventario (valor: {soles(valorInventario)})</h3>
+      {porAgotarse.length > 0 && (
+        <div className="aviso-por-agotarse">
+          <strong>⚠ Se está acabando:</strong> {porAgotarse.join(', ')}. Compra antes de la
+          próxima hora punta.
+        </div>
+      )}
       <table className="tabla-admin">
         <thead>
-          <tr><th>Insumo</th><th>Unidad</th><th className="col-cantidad">Stock</th><th className="col-cantidad">Costo unit.</th><th className="col-total">Valor</th></tr>
+          <tr>
+            <th>Insumo</th><th>Unidad</th>
+            <th className="col-cantidad">Stock</th>
+            <th className="col-cantidad" title="Avisar cuando el stock baje de aquí (0 = sin aviso)">Avisar bajo</th>
+            <th className="col-cantidad">Costo unit.</th><th className="col-total">Valor</th>
+          </tr>
         </thead>
         <tbody>
           {insumos.map((i) => (
-            <tr key={i.id}>
-              <td>{i.nombre}</td>
+            <tr key={i.id} className={i.bajo_minimo ? 'fila-por-agotarse' : ''}>
+              <td>{i.bajo_minimo && '⚠ '}{i.nombre}</td>
               <td>{i.unidad}</td>
               <td className={`col-cantidad ${i.stock_actual < 0 ? 'stock-negativo' : ''}`}>{i.stock_actual}</td>
+              <td className="col-cantidad">
+                <input
+                  type="number" step="0.5" min="0" className="input-minimo"
+                  defaultValue={i.stock_minimo || ''}
+                  placeholder="—"
+                  onBlur={(e) => guardarMinimo(i, e.target.value)}
+                />
+              </td>
               <td className="col-cantidad">{soles(i.costo_unitario)}</td>
               <td className="col-total">{soles(i.valor)}</td>
             </tr>
@@ -1591,6 +1624,115 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
       <button className="boton-grande boton-primario" onClick={guardar}>💾 Guardar configuración</button>
 
       <GestorMesas onSesionVencida={onSesionVencida} />
+      <EmpezarLimpio onSesionVencida={onSesionVencida} />
+    </div>
+  )
+}
+
+// ---------- Empezar limpio: borrar los datos de prueba ----------
+
+/**
+ * Tras las pruebas queda basura en la base (pedidos falsos, cierres de caja
+ * de prueba). Si el local abre así, el Resumen del primer día real sale
+ * contaminado. Esto borra SOLO el movimiento y conserva la configuración.
+ */
+function EmpezarLimpio({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [datos, setDatos] = useState<ResumenDatos | null>(null)
+  const [abierto, setAbierto] = useState(false)
+  const [confirmacion, setConfirmacion] = useState('')
+  const [reiniciarStock, setReiniciarStock] = useState(true)
+  const [mensaje, setMensaje] = useState('')
+  const [error, setError] = useState('')
+
+  const cargar = useCallback(() => {
+    api.resumenDatos().then(setDatos).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    cargar()
+  }, [cargar])
+
+  const total = datos
+    ? datos.ordenes + datos.cancelaciones + datos.cierres_caja + datos.movimientos_kardex
+    : 0
+
+  const borrar = async () => {
+    setError('')
+    setMensaje('')
+    try {
+      const r = await api.reiniciarDatos(confirmacion, reiniciarStock)
+      setMensaje(
+        `Listo: se borraron ${r.borrado.ordenes} pedido(s), ${r.borrado.cancelaciones} ` +
+        `cancelación(es) y ${r.borrado.cierres_caja} cierre(s) de caja. ` +
+        'El local queda como nuevo, con tu menú y tus mesas intactos.',
+      )
+      setAbierto(false)
+      setConfirmacion('')
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  return (
+    <div className="panel-peligro">
+      <h3 className="subtitulo-resumen">🧹 Empezar limpio</h3>
+      <p className="nota-admin">
+        Borra los pedidos, cancelaciones, cierres de caja y kardex de las <strong>pruebas</strong>,
+        para que tu primer día real arranque con números limpios y el pedido #001.
+        <strong> No toca</strong> tu menú, tus menús encadenados, mesas, insumos, recetas ni la
+        configuración. Esto no se puede deshacer.
+      </p>
+      {mensaje && <div className="banner-ok">{mensaje}</div>}
+      {error && <div className="banner-error">{error}</div>}
+      {datos && total === 0 && !mensaje && (
+        <p className="nota-admin">No hay nada que borrar: la base ya está limpia. 🎉</p>
+      )}
+      {datos && total > 0 && !abierto && (
+        <>
+          <p className="nota-admin">
+            Hoy hay <strong>{datos.ordenes}</strong> pedido(s), <strong>{datos.cancelaciones}</strong>{' '}
+            cancelación(es), <strong>{datos.cierres_caja}</strong> registro(s) de caja y{' '}
+            <strong>{datos.movimientos_kardex}</strong> movimiento(s) de kardex.
+          </p>
+          <button className="boton-borrar-datos" onClick={() => setAbierto(true)}>
+            🧹 Borrar los datos de prueba…
+          </button>
+        </>
+      )}
+      {abierto && (
+        <div className="confirmar-borrado">
+          <label>
+            <span>Escribe <strong>BORRAR</strong> para confirmar</span>
+            <input
+              value={confirmacion}
+              onChange={(e) => setConfirmacion(e.target.value)}
+              placeholder="BORRAR"
+              autoFocus
+            />
+          </label>
+          <label className="config-toggle">
+            <input
+              type="checkbox"
+              checked={reiniciarStock}
+              onChange={(e) => setReiniciarStock(e.target.checked)}
+            />{' '}
+            Dejar el stock de insumos en 0 (recomendado: luego haces tu conteo real)
+          </label>
+          <div className="modal-botones">
+            <button className="boton-grande boton-secundario" onClick={() => { setAbierto(false); setConfirmacion('') }}>
+              Cancelar
+            </button>
+            <button
+              className="boton-grande boton-cancelar-rojo"
+              disabled={confirmacion.trim().toUpperCase() !== 'BORRAR'}
+              onClick={borrar}
+            >
+              Sí, borrar y empezar limpio
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
