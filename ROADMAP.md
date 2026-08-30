@@ -29,6 +29,15 @@
 - [x] Resumen semanal/histórico: selector Hoy / Últimos 7 días / Últimos 30 días en el
       Resumen, con ventas por día y export CSV del período (`GET /api/stats/range`).
 - [ ] Ajustes de UX táctil que surjan de observar clientes reales.
+- [x] **Empezar limpio**: Admin → Configuración borra el movimiento de las pruebas
+      (órdenes, cancelaciones, caja, kardex, logs de voz) conservando menú, plantillas,
+      mesas, insumos, recetas y config. Pide escribir "BORRAR" y opcionalmente deja el
+      stock en 0 para el conteo físico inicial. Sin esto, el primer día real arranca con
+      los números de las pruebas encima.
+- [x] **Aviso de impresión detenida**: si la ticketera/puente se cuelga, los tickets se
+      acumulaban EN SILENCIO y cocina no se enteraba. Caja y cocina muestran ahora un
+      cintillo "⚠ N tickets sin imprimir hace X min" (a partir de 2 min; solo en modos
+      estacion/puente).
 - [x] Impresión ESC/POS directa (corte automático, tildes CP850): quedó corta en la
       práctica la impresión por driver al pasar a tablets + Railway. Modo de impresión
       nuevo "puente": el backend genera los bytes del ticket y
@@ -97,8 +106,10 @@
       rótulos, paleta achiote/ají/culantro/mayólica, cenefa, estados con forma además de
       color, "Por salir" como pieza principal de cocina. Cero dependencias, cero recursos
       externos, impresión térmica intacta. Nota completa en `docs/NOTA-DE-DISENO.md`.
-- [ ] **Despliegue en Railway** (guía lista en el README): crear el proyecto con la cuenta
-      del dueño, variables (`ADMIN_PASSWORD`, `PIN_LOCAL`), volumen en `/data` y dominio.
+- [x] **Despliegue en Railway**: proyecto creado con la cuenta del dueño, variables
+      (`ADMIN_PASSWORD`, `PIN_LOCAL`), volumen en `/data` y dominio público. Las tablets
+      del local entran por esa URL con el PIN. Ojo aprendido: Railway debe apuntar a la
+      rama `main`, si no sirve una versión vieja.
 
 ## Fase 5 — el menú como unidad de venta (espec en `docs/ESPEC-FONDA-BACKEND.md`)
 
@@ -133,8 +144,17 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       sin PIN porque un `<img>` no manda headers), y arranque de emoji → SVG con
       `components/Iconos.tsx` (cabeceras y badges: sartén, billete, silla, reloj,
       engranaje, prohibido); el resto de emojis migra gradualmente.
-- [ ] Kardex fase 2 (cuando se use en serio): reporte de consumo semanal, alertas de stock
-      mínimo por insumo, export CSV del kardex.
+- [x] **Alertas de stock mínimo**: cada insumo puede tener un "avisar bajo" (0 = sin
+      aviso); Admin → Insumos resalta la fila y muestra "se está acabando: pollo, arroz".
+- [ ] Kardex fase 2 (lo que queda): reporte de consumo semanal y export CSV del kardex.
+- [ ] **App propia de Android para imprimir** (reemplazo de RawBT): decisión del dueño —
+      se hace en la fase final del prototipo, no ahora. Llevaría dentro el mismo driver
+      ESC/POS que hoy pone RawBT, se compilaría en GitHub Actions y se instalaría en la
+      tablet; ventaja extra sobre el navegador: puede seguir imprimiendo con la tablet
+      bloqueada. Mientras tanto opera RawBT (probado y funcionando).
+- [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
+      cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
+      hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.
 
 ## Fase 2 de voz — laboratorio (`voz-lab/`, independiente del POS)
 

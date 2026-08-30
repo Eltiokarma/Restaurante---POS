@@ -265,6 +265,9 @@ class Insumo(Base):
     nombre: Mapped[str] = mapped_column(String(120), nullable=False)
     unidad: Mapped[str] = mapped_column(String(20), nullable=False)  # kg, g, l, ml, unidad…
     stock_actual: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    # Aviso "se está acabando": con stock_actual <= stock_minimo el admin lo
+    # resalta. 0 = sin alerta configurada para ese insumo.
+    stock_minimo: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     costo_unitario: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)

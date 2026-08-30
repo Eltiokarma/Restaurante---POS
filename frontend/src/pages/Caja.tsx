@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, subtotalMenu } from '../api'
-import type { CajaEstado, ConfigOut, DatosLocal, Entrega, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, Entrega, ImpresionPendiente, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
 import { ArmadoMenu, describirMenu } from '../components/ArmadoMenu'
+import { AvisoImpresion } from '../components/AvisoImpresion'
 import { IconoBillete, IconoSilla } from '../components/Iconos'
 import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket } from '../components/Ticket'
@@ -27,6 +28,7 @@ export function Caja() {
   const [config, setConfig] = useState<ConfigOut | null>(null)
   const [ordenes, setOrdenes] = useState<OrdenOut[]>([])
   const [totalVendido, setTotalVendido] = useState(0)
+  const [impresion, setImpresion] = useState<ImpresionPendiente | undefined>()
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
   const [registrando, setRegistrando] = useState(false)
@@ -73,6 +75,7 @@ export function Caja() {
       const data = await api.ordenesHoy()
       setOrdenes(data.ordenes)
       setTotalVendido(data.total_vendido)
+      setImpresion(data.impresion_pendiente)
       setError('')
     } catch {
       setError('Sin conexión con el sistema')
@@ -322,6 +325,8 @@ export function Caja() {
         {mensaje && <span className="banner-ok caja-banner">{mensaje}</span>}
         {error && <span className="banner-error caja-banner">{error}</span>}
       </header>
+
+      <AvisoImpresion estado={impresion} />
 
       {estadoCaja && !estadoCaja.abierta && !estadoCaja.cerrada && (
         <div className="caja-panel caja-panel-apertura">
