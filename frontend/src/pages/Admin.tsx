@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA } from '../api'
 import { IconoEngranaje } from '../components/Iconos'
 import type { CajaEstado, ConfigOut, DatosLocal, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ResumenDatos, StatsOut, VozPanel } from '../api'
@@ -1157,26 +1157,38 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [catalogo, setCatalogo] = useState<Plato[]>([])
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
+  const [seccion, setSeccion] = useState<'despensa' | 'recetas' | 'historial'>('despensa')
 
-  // Formularios
+  // Acción rápida abierta en una fila de la despensa
+  const [accion, setAccion] = useState<{ id: number; tipo: 'compra' | 'merma' | 'ajuste' } | null>(null)
+  const [accionCantidad, setAccionCantidad] = useState('')
+  const [accionCosto, setAccionCosto] = useState('')
   const [nuevo, setNuevo] = useState({ nombre: '', unidad: 'kg', costo: '' })
-  const [mov, setMov] = useState({ insumoId: '', tipo: 'compra', cantidad: '', costo: '', nota: '' })
+  const [mostrarNuevo, setMostrarNuevo] = useState(false)
+
+  // Recetas
   const [recetaPlato, setRecetaPlato] = useState('')
   const [recetaItems, setRecetaItems] = useState<{ insumo_id: number; cantidad: string }[]>([])
   const [costoPorcion, setCostoPorcion] = useState<number | null>(null)
+  const [sugerida, setSugerida] = useState<{ base: string | null; encontrada: boolean; items: { insumo: string; unidad: string; cantidad: number; existe: boolean }[] } | null>(null)
+  const [platosConReceta, setPlatosConReceta] = useState<Set<number>>(new Set())
 
   const cargar = useCallback(async () => {
     try {
-      const [datos, kardex, cat] = await Promise.all([
-        api.insumos(),
-        api.kardex(),
-        api.catalogo(),
-      ])
+      const [datos, kardex, cat] = await Promise.all([api.insumos(), api.kardex(), api.catalogo()])
       setInsumos(datos.insumos)
       setValorInventario(datos.valor_inventario)
       setPorAgotarse(datos.por_agotarse)
       setMovimientos(kardex.movimientos)
       setCatalogo(cat.platos)
+      // Qué platos ya tienen receta (para marcar cuáles descuentan stock)
+      const con = new Set<number>()
+      await Promise.all(cat.platos.map(async (p) => {
+        try {
+          if ((await api.receta(p.id)).items.length > 0) con.add(p.id)
+        } catch { /* sin receta */ }
+      }))
+      setPlatosConReceta(con)
       setError('')
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
@@ -1187,63 +1199,112 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
     cargar()
   }, [cargar])
 
-  const crearInsumo = async () => {
-    if (!nuevo.nombre.trim()) return
+  const avisar = (texto: string) => {
+    setMensaje(texto)
+    setError('')
+  }
+
+  // ---------- Despensa ----------
+
+  const cargarDespensa = async () => {
     try {
-      await api.crearInsumo(nuevo.nombre.trim(), nuevo.unidad.trim() || 'unidad', parseFloat(nuevo.costo) || 0)
-      setNuevo({ nombre: '', unidad: 'kg', costo: '' })
-      setMensaje('Insumo creado ✔')
+      const r = await api.cargarDespensaBase()
+      avisar(
+        r.creados.length === 0
+          ? 'Tu despensa ya tiene todos los insumos típicos.'
+          : `Listo: ${r.creados.length} insumo(s) típicos de fonda agregados con stock 0. Edítalos a tu gusto y registra tu primera compra o conteo.`,
+      )
       cargar()
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
   }
 
-  const registrarMovimiento = async () => {
-    const insumoId = parseInt(mov.insumoId)
-    const cantidad = parseFloat(mov.cantidad)
-    const costo = parseFloat(mov.costo)
-    if (!insumoId) {
-      setError('Elige el insumo')
-      return
+  const crearInsumo = async () => {
+    if (!nuevo.nombre.trim()) return
+    try {
+      await api.crearInsumo(nuevo.nombre.trim(), nuevo.unidad.trim() || 'kg', parseFloat(nuevo.costo) || 0)
+      setNuevo({ nombre: '', unidad: 'kg', costo: '' })
+      setMostrarNuevo(false)
+      avisar('Insumo creado ✔')
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
     }
-    // Ajuste = conteo físico (0 es válido); compra y merma necesitan cantidad > 0
-    if (mov.tipo === 'ajuste' ? !(cantidad >= 0) : !(cantidad > 0)) {
-      setError(mov.tipo === 'ajuste' ? 'Pon el stock contado (puede ser 0)' : 'Pon una cantidad mayor a 0')
-      return
-    }
-    if (mov.tipo === 'compra' && !(costo > 0)) {
-      setError('Pon el costo total pagado por la compra (mayor a 0)')
+  }
+
+  const abrirAccion = (id: number, tipo: 'compra' | 'merma' | 'ajuste') => {
+    setAccion({ id, tipo })
+    setAccionCantidad('')
+    setAccionCosto('')
+  }
+
+  const confirmarAccion = async () => {
+    if (!accion) return
+    const cantidad = parseFloat(accionCantidad)
+    const insumo = insumos.find((i) => i.id === accion.id)
+    if (!insumo || !(cantidad >= 0)) {
+      setError('Pon la cantidad.')
       return
     }
     try {
       await api.movimientoInsumo(
-        insumoId,
-        mov.tipo as 'compra' | 'merma' | 'ajuste',
-        cantidad,
-        mov.tipo === 'compra' ? costo : undefined,
-        mov.nota,
+        accion.id, accion.tipo, cantidad,
+        accion.tipo === 'compra' ? parseFloat(accionCosto) || undefined : undefined,
       )
-      setMov({ insumoId: '', tipo: 'compra', cantidad: '', costo: '', nota: '' })
-      setMensaje('Movimiento registrado ✔')
-      setError('')
+      const texto = {
+        compra: `Compra de ${cantidad} ${insumo.unidad} de ${insumo.nombre} registrada ✔ (el costo promedio se recalculó solo)`,
+        merma: `Merma de ${cantidad} ${insumo.unidad} de ${insumo.nombre} registrada`,
+        ajuste: `${insumo.nombre}: stock corregido a ${cantidad} ${insumo.unidad} según tu conteo ✔`,
+      }[accion.tipo]
+      avisar(texto)
+      setAccion(null)
       cargar()
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
   }
 
+  const guardarMinimo = async (insumo: Insumo, valor: string) => {
+    const minimo = parseFloat(valor) || 0
+    if (minimo === insumo.stock_minimo) return
+    try {
+      await api.actualizarInsumo(insumo.id, { stock_minimo: minimo })
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  // ---------- Recetas ----------
+
   const cargarReceta = async (platoId: string) => {
     setRecetaPlato(platoId)
+    setRecetaItems([])
     setCostoPorcion(null)
-    if (!platoId) {
-      setRecetaItems([])
-      return
-    }
+    setSugerida(null)
+    if (!platoId) return
     try {
-      const receta = await api.receta(parseInt(platoId))
+      const [receta, sug] = await Promise.all([
+        api.receta(parseInt(platoId)),
+        api.recetaSugerida(parseInt(platoId)),
+      ])
       setRecetaItems(receta.items.map((i) => ({ insumo_id: i.insumo_id, cantidad: String(i.cantidad) })))
       setCostoPorcion(receta.costo_porcion)
+      setSugerida(sug)
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const usarSugerida = async () => {
+    if (!recetaPlato) return
+    try {
+      const receta = await api.aplicarRecetaSugerida(parseInt(recetaPlato))
+      setRecetaItems(receta.items.map((i) => ({ insumo_id: i.insumo_id, cantidad: String(i.cantidad) })))
+      setCostoPorcion(receta.costo_porcion)
+      avisar('Receta base cargada ✔ — ajusta las cantidades a tu mano y guarda. Los insumos que faltaban se crearon con stock 0.')
+      cargar()
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
@@ -1259,176 +1320,254 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
           .filter((i) => i.cantidad > 0),
       )
       setCostoPorcion(receta.costo_porcion)
-      setMensaje('Receta guardada ✔ (las ventas descontarán estos insumos)')
+      avisar('Receta guardada ✔ (cada venta de este plato descontará estos insumos)')
       cargar()
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
   }
 
-  // El mínimo se guarda al salir del campo: un dato suelto no merece un botón
-  const guardarMinimo = async (insumo: Insumo, valor: string) => {
-    const minimo = parseFloat(valor) || 0
-    if (minimo === insumo.stock_minimo) return
-    try {
-      await api.actualizarInsumo(insumo.id, { stock_minimo: minimo })
-      cargar()
-    } catch (e) {
-      setError(manejarError(e, onSesionVencida))
-    }
-  }
-
-  const precioPlato = catalogo.find((p) => p.id === parseInt(recetaPlato))?.precio
+  const platoElegido = catalogo.find((p) => p.id === parseInt(recetaPlato))
+  const precioPlato = platoElegido?.precio
+  const unidadDe = (id: number) => insumos.find((i) => i.id === id)?.unidad ?? ''
 
   return (
     <div>
+      <nav className="subtabs">
+        <button className={seccion === 'despensa' ? 'activa' : ''} onClick={() => setSeccion('despensa')}>
+          🧺 Despensa {porAgotarse.length > 0 && <span className="subtab-alerta">{porAgotarse.length}</span>}
+        </button>
+        <button className={seccion === 'recetas' ? 'activa' : ''} onClick={() => setSeccion('recetas')}>
+          📖 Recetas
+        </button>
+        <button className={seccion === 'historial' ? 'activa' : ''} onClick={() => setSeccion('historial')}>
+          🧾 Historial
+        </button>
+      </nav>
       {mensaje && <div className="banner-ok">{mensaje}</div>}
       {error && <div className="banner-error">{error}</div>}
 
-      <h3 className="subtitulo-resumen">Inventario (valor: {soles(valorInventario)})</h3>
-      {porAgotarse.length > 0 && (
-        <div className="aviso-por-agotarse">
-          <strong>⚠ Se está acabando:</strong> {porAgotarse.join(', ')}. Compra antes de la
-          próxima hora punta.
-        </div>
-      )}
-      <table className="tabla-admin">
-        <thead>
-          <tr>
-            <th>Insumo</th><th>Unidad</th>
-            <th className="col-cantidad">Stock</th>
-            <th className="col-cantidad" title="Avisar cuando el stock baje de aquí (0 = sin aviso)">Avisar bajo</th>
-            <th className="col-cantidad">Costo unit.</th><th className="col-total">Valor</th>
-          </tr>
-        </thead>
-        <tbody>
-          {insumos.map((i) => (
-            <tr key={i.id} className={i.bajo_minimo ? 'fila-por-agotarse' : ''}>
-              <td>{i.bajo_minimo && '⚠ '}{i.nombre}</td>
-              <td>{i.unidad}</td>
-              <td className={`col-cantidad ${i.stock_actual < 0 ? 'stock-negativo' : ''}`}>{i.stock_actual}</td>
-              <td className="col-cantidad">
-                <input
-                  type="number" step="0.5" min="0" className="input-minimo"
-                  defaultValue={i.stock_minimo || ''}
-                  placeholder="—"
-                  onBlur={(e) => guardarMinimo(i, e.target.value)}
-                />
-              </td>
-              <td className="col-cantidad">{soles(i.costo_unitario)}</td>
-              <td className="col-total">{soles(i.valor)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {insumos.length === 0 && <p className="nota-admin">Todavía no hay insumos. Crea el primero abajo.</p>}
-
-      <div className="formularios-insumos">
-        <div className="form-insumo">
-          <h3 className="subtitulo-resumen">+ Nuevo insumo</h3>
-          <input placeholder="Nombre (Papa, Arroz…)" value={nuevo.nombre}
-                 onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
-          <input placeholder="Unidad (kg, l, unidad)" value={nuevo.unidad}
-                 onChange={(e) => setNuevo({ ...nuevo, unidad: e.target.value })} />
-          <input type="number" step="0.1" min="0" placeholder="Costo por unidad (opcional)"
-                 value={nuevo.costo} onChange={(e) => setNuevo({ ...nuevo, costo: e.target.value })} />
-          <button className="boton-primario" onClick={crearInsumo}>Crear</button>
-        </div>
-
-        <div className="form-insumo">
-          <h3 className="subtitulo-resumen">Registrar movimiento</h3>
-          <select value={mov.insumoId} onChange={(e) => setMov({ ...mov, insumoId: e.target.value })}>
-            <option value="">— Insumo —</option>
-            {insumos.map((i) => <option key={i.id} value={i.id}>{i.nombre} ({i.unidad})</option>)}
-          </select>
-          <select value={mov.tipo} onChange={(e) => setMov({ ...mov, tipo: e.target.value })}>
-            <option value="compra">🛒 Compra (entra stock)</option>
-            <option value="merma">🗑 Merma (se perdió)</option>
-            <option value="ajuste">📋 Ajuste (conteo físico)</option>
-          </select>
-          <input type="number" step="0.01" min="0"
-                 placeholder={mov.tipo === 'ajuste' ? 'Stock contado' : 'Cantidad'}
-                 value={mov.cantidad} onChange={(e) => setMov({ ...mov, cantidad: e.target.value })} />
-          {mov.tipo === 'compra' && (
-            <input type="number" step="0.1" min="0" placeholder="Costo total S/ de la compra"
-                   value={mov.costo} onChange={(e) => setMov({ ...mov, costo: e.target.value })} />
+      {seccion === 'despensa' && (
+        <>
+          {porAgotarse.length > 0 && (
+            <div className="aviso-por-agotarse">
+              <strong>⚠ Se está acabando:</strong> {porAgotarse.join(', ')}. Compra antes de la
+              próxima hora punta.
+            </div>
           )}
-          <input placeholder="Nota (opcional)" value={mov.nota}
-                 onChange={(e) => setMov({ ...mov, nota: e.target.value })} />
-          <button className="boton-primario" onClick={registrarMovimiento}>Registrar</button>
-        </div>
+          <div className="admin-acciones">
+            <button onClick={() => setMostrarNuevo((v) => !v)}>+ Nuevo insumo</button>
+            <button onClick={cargarDespensa} title="Arroz, papa, pollo, aceite… lo típico de una fonda, con stock 0 para que lo edites">
+              🧺 Cargar despensa típica de fonda
+            </button>
+            <span className="nota-admin">Inventario valorizado: <strong>{soles(valorInventario)}</strong></span>
+          </div>
+          {mostrarNuevo && (
+            <div className="form-insumo form-insumo-inline">
+              <input placeholder="Nombre (Papa, Arroz…)" value={nuevo.nombre} autoFocus
+                     onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
+              <input placeholder="Unidad (kg, l, unidad)" value={nuevo.unidad}
+                     onChange={(e) => setNuevo({ ...nuevo, unidad: e.target.value })} />
+              <input type="number" step="0.1" min="0" placeholder="Costo por unidad S/ (opcional)"
+                     value={nuevo.costo} onChange={(e) => setNuevo({ ...nuevo, costo: e.target.value })} />
+              <button className="boton-primario" onClick={crearInsumo}>Crear</button>
+            </div>
+          )}
+          {insumos.length === 0 && (
+            <div className="asistente-menu">
+              <h3>Tu despensa está vacía</h3>
+              <p className="nota-admin">
+                Lo más rápido: <strong>"Cargar despensa típica de fonda"</strong> te pone arroz, papa,
+                pollo, aceite y 60 insumos más con su unidad y un costo de referencia. Después borras
+                o editas lo que no uses y registras tu primer conteo.
+              </p>
+            </div>
+          )}
+          {insumos.length > 0 && (
+            <table className="tabla-admin tabla-despensa">
+              <thead>
+                <tr>
+                  <th>Insumo</th>
+                  <th className="col-cantidad">Tengo</th>
+                  <th className="col-cantidad" title="Avisar cuando el stock baje de aquí (vacío = sin aviso)">Avisar bajo</th>
+                  <th className="col-cantidad">Costo / unidad</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {insumos.map((i) => (
+                  <Fragment key={i.id}>
+                    <tr className={i.bajo_minimo ? 'fila-por-agotarse' : ''}>
+                      <td>{i.bajo_minimo && '⚠ '}{i.nombre} <span className="unidad-suave">({i.unidad})</span></td>
+                      <td className={`col-cantidad ${i.stock_actual < 0 ? 'stock-negativo' : ''}`}>
+                        <strong>{i.stock_actual}</strong> {i.unidad}
+                      </td>
+                      <td className="col-cantidad">
+                        <input type="number" step="0.5" min="0" className="input-minimo"
+                               defaultValue={i.stock_minimo || ''} placeholder="—"
+                               onBlur={(e) => guardarMinimo(i, e.target.value)} />
+                      </td>
+                      <td className="col-cantidad">{soles(i.costo_unitario)}</td>
+                      <td className="celda-acciones">
+                        <button className="boton-accion" onClick={() => abrirAccion(i.id, 'compra')}>🛒 Compré</button>
+                        <button className="boton-accion" onClick={() => abrirAccion(i.id, 'ajuste')}>📋 Conté</button>
+                        <button className="boton-accion" onClick={() => abrirAccion(i.id, 'merma')}>🗑 Se perdió</button>
+                      </td>
+                    </tr>
+                    {accion?.id === i.id && (
+                      <tr className="fila-accion">
+                        <td colSpan={5}>
+                          <div className="accion-inline">
+                            <strong>
+                              {accion.tipo === 'compra' && `🛒 Compré ${i.nombre}:`}
+                              {accion.tipo === 'ajuste' && `📋 Conté ${i.nombre}, hay:`}
+                              {accion.tipo === 'merma' && `🗑 Se perdió de ${i.nombre}:`}
+                            </strong>
+                            <input type="number" step="0.01" min="0" autoFocus
+                                   placeholder={`${accion.tipo === 'ajuste' ? 'total en' : 'cantidad en'} ${i.unidad}`}
+                                   value={accionCantidad} onChange={(e) => setAccionCantidad(e.target.value)}
+                                   onKeyDown={(e) => e.key === 'Enter' && confirmarAccion()} />
+                            {accion.tipo === 'compra' && (
+                              <input type="number" step="0.1" min="0" placeholder="pagué S/ (total)"
+                                     value={accionCosto} onChange={(e) => setAccionCosto(e.target.value)}
+                                     onKeyDown={(e) => e.key === 'Enter' && confirmarAccion()} />
+                            )}
+                            <button className="boton-primario" onClick={confirmarAccion}>Registrar</button>
+                            <button onClick={() => setAccion(null)}>Cancelar</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="nota-admin">
+            <strong>Compré</strong> suma stock y recalcula el costo promedio con lo que pagaste.
+            <strong> Conté</strong> corrige el stock al número real que tienes (úsalo cada vez que
+            hagas inventario). <strong>Se perdió</strong> registra merma. Las ventas descuentan
+            solas según las recetas.
+          </p>
+        </>
+      )}
 
-        <div className="form-insumo">
-          <h3 className="subtitulo-resumen">Receta por plato</h3>
-          <select value={recetaPlato} onChange={(e) => cargarReceta(e.target.value)}>
-            <option value="">— Plato —</option>
-            {catalogo.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+      {seccion === 'recetas' && (
+        <div className="panel-recetas">
+          <p className="nota-admin">
+            La receta dice cuánto insumo consume UNA porción. Con eso, cada venta descuenta stock
+            sola y ves el costo y margen del plato. Elige un plato: si es un clásico (lomo, ají de
+            gallina, seco…), te ofrezco una receta base para que la ajustes a tu mano.
+          </p>
+          <select value={recetaPlato} onChange={(e) => cargarReceta(e.target.value)} className="select-plato">
+            <option value="">— Elige un plato —</option>
+            {catalogo.map((p) => (
+              <option key={p.id} value={p.id}>
+                {platosConReceta.has(p.id) ? '✔ ' : '· '}{p.nombre}
+              </option>
+            ))}
           </select>
           {recetaPlato && (
             <>
-              {recetaItems.map((item, idx) => (
-                <div className="receta-fila" key={idx}>
-                  <select
-                    value={item.insumo_id}
-                    onChange={(e) => setRecetaItems((prev) =>
-                      prev.map((x, i) => (i === idx ? { ...x, insumo_id: parseInt(e.target.value) } : x)))}
-                  >
-                    {insumos.map((i) => <option key={i.id} value={i.id}>{i.nombre}</option>)}
-                  </select>
-                  <input type="number" step="0.01" min="0" placeholder="Cant./porción"
-                         value={item.cantidad}
-                         onChange={(e) => setRecetaItems((prev) =>
-                           prev.map((x, i) => (i === idx ? { ...x, cantidad: e.target.value } : x)))} />
-                  <button className="boton-quitar"
-                          onClick={() => setRecetaItems((prev) => prev.filter((_, i) => i !== idx))}>✕</button>
+              {sugerida?.encontrada && (
+                <div className="sugerencia-menu">
+                  <span>
+                    ✨ Tengo una receta base de <strong>{sugerida.base}</strong> ({sugerida.items.length} insumos
+                    {sugerida.items.some((s) => !s.existe) && '; los que no tengas se crean solos'}).
+                  </span>
+                  <button className="boton-grande boton-confirmar boton-sugerencia" onClick={usarSugerida}>
+                    ✨ Usar receta base
+                  </button>
                 </div>
-              ))}
-              <button
-                disabled={insumos.length === 0}
-                onClick={() => setRecetaItems((prev) => [...prev, { insumo_id: insumos[0]?.id ?? 0, cantidad: '' }])}
-              >
-                + Agregar insumo a la receta
-              </button>
-              <button className="boton-primario" onClick={guardarReceta}>💾 Guardar receta</button>
-              {costoPorcion !== null && (
-                <p className="nota-admin">
-                  Costo por porción: <strong>{soles(costoPorcion)}</strong>
-                  {precioPlato !== undefined && costoPorcion > 0 && (
-                    <> · margen: <strong>{soles(precioPlato - costoPorcion)}</strong> ({Math.round((1 - costoPorcion / precioPlato) * 100)}%)</>
+              )}
+              {sugerida && !sugerida.encontrada && recetaItems.length === 0 && (
+                <p className="nota-admin">No tengo una receta base para este plato: ármala abajo insumo por insumo.</p>
+              )}
+              <div className="receta-editor">
+                {recetaItems.map((item, idx) => (
+                  <div className="receta-fila" key={idx}>
+                    <select
+                      value={item.insumo_id}
+                      onChange={(e) => setRecetaItems((prev) =>
+                        prev.map((x, i) => (i === idx ? { ...x, insumo_id: parseInt(e.target.value) } : x)))}
+                    >
+                      {insumos.map((i) => <option key={i.id} value={i.id}>{i.nombre}</option>)}
+                    </select>
+                    <input type="number" step="0.001" min="0" placeholder="Cantidad"
+                           value={item.cantidad}
+                           onChange={(e) => setRecetaItems((prev) =>
+                             prev.map((x, i) => (i === idx ? { ...x, cantidad: e.target.value } : x)))} />
+                    <span className="unidad-suave">{unidadDe(item.insumo_id)} por porción</span>
+                    <button className="boton-quitar"
+                            onClick={() => setRecetaItems((prev) => prev.filter((_, i) => i !== idx))}>✕</button>
+                  </div>
+                ))}
+                <div className="admin-acciones">
+                  <button
+                    disabled={insumos.length === 0}
+                    onClick={() => setRecetaItems((prev) => [...prev, { insumo_id: insumos[0]?.id ?? 0, cantidad: '' }])}
+                  >
+                    + Agregar insumo
+                  </button>
+                  <button className="boton-primario" onClick={guardarReceta} disabled={recetaItems.length === 0}>
+                    💾 Guardar receta
+                  </button>
+                </div>
+                {insumos.length === 0 && (
+                  <p className="nota-admin">Primero necesitas insumos: usa "Usar receta base" arriba o carga la despensa típica en la pestaña Despensa.</p>
+                )}
+              </div>
+              {costoPorcion !== null && costoPorcion > 0 && (
+                <div className="costo-porcion">
+                  <span>Costo por porción: <strong>{soles(costoPorcion)}</strong></span>
+                  {precioPlato !== undefined && (
+                    <span>
+                      · se vende a <strong>{soles(precioPlato)}</strong> · te queda{' '}
+                      <strong className={precioPlato - costoPorcion < 0 ? 'stock-negativo' : ''}>
+                        {soles(precioPlato - costoPorcion)}
+                      </strong>{' '}
+                      ({Math.round((1 - costoPorcion / precioPlato) * 100)}%)
+                    </span>
                   )}
-                </p>
+                </div>
               )}
             </>
           )}
         </div>
-      </div>
+      )}
 
-      <h3 className="subtitulo-resumen">Kardex (últimos 7 días)</h3>
-      <table className="tabla-admin">
-        <thead>
-          <tr><th>Fecha</th><th>Hora</th><th>Insumo</th><th>Tipo</th><th className="col-cantidad">Cantidad</th><th>Referencia</th></tr>
-        </thead>
-        <tbody>
-          {movimientos.map((m) => (
-            <tr key={m.id}>
-              <td>{m.fecha}</td>
-              <td>{m.hora}</td>
-              <td>{m.insumo}</td>
-              <td>{m.tipo}{m.costo_total != null ? ` (${soles(m.costo_total)})` : ''}</td>
-              <td className={`col-cantidad ${m.cantidad < 0 ? 'stock-negativo' : ''}`}>
-                {m.cantidad > 0 ? '+' : ''}{m.cantidad} {m.unidad}
-              </td>
-              <td>{m.referencia}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {movimientos.length === 0 && <p className="nota-admin">Sin movimientos en los últimos 7 días.</p>}
-      <p className="nota-admin">
-        Las ventas descuentan insumos SOLO en los platos que tienen receta. Un stock en rojo
-        significa que se vendió más de lo que el kardex tenía: corrígelo con un ajuste de
-        conteo físico.
-      </p>
+      {seccion === 'historial' && (
+        <>
+          <h3 className="subtitulo-resumen">Movimientos (últimos 7 días)</h3>
+          <table className="tabla-admin">
+            <thead>
+              <tr><th>Fecha</th><th>Hora</th><th>Insumo</th><th>Qué pasó</th><th className="col-cantidad">Cantidad</th><th>Detalle</th></tr>
+            </thead>
+            <tbody>
+              {movimientos.map((m) => (
+                <tr key={m.id}>
+                  <td>{m.fecha}</td>
+                  <td>{m.hora}</td>
+                  <td>{m.insumo}</td>
+                  <td>
+                    {{ compra: '🛒 Compra', consumo: '🍽 Venta', merma: '🗑 Merma', ajuste: '📋 Conteo' }[m.tipo] ?? m.tipo}
+                    {m.costo_total != null ? ` (${soles(m.costo_total)})` : ''}
+                  </td>
+                  <td className={`col-cantidad ${m.cantidad < 0 ? 'stock-negativo' : ''}`}>
+                    {m.cantidad > 0 ? '+' : ''}{m.cantidad} {m.unidad}
+                  </td>
+                  <td>{m.referencia}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {movimientos.length === 0 && <p className="nota-admin">Sin movimientos en los últimos 7 días.</p>}
+          <p className="nota-admin">
+            Un stock en rojo significa que se vendió más de lo que el kardex tenía: corrígelo con
+            "Conté" en la despensa.
+          </p>
+        </>
+      )}
     </div>
   )
 }

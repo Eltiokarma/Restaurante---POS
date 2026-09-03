@@ -146,6 +146,12 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       engranaje, prohibido); el resto de emojis migra gradualmente.
 - [x] **Alertas de stock mínimo**: cada insumo puede tener un "avisar bajo" (0 = sin
       aviso); Admin → Insumos resalta la fila y muestra "se está acabando: pollo, arroz".
+- [x] **Kardex intuitivo con bases pregrabadas** (pedido tras la prueba en sala): Admin →
+      Insumos en tres pestañas — Despensa (acciones por fila: Compré / Conté / Se perdió,
+      sin formularios aparte), Recetas (elige el plato y "Usar receta base" si es un
+      clásico) e Historial en lenguaje claro. `app/data/fonda_base.py` trae 62 insumos
+      típicos de fonda (unidad, costo referencial, mínimo sugerido) y 47 recetas base por
+      porción; se cargan sin duplicar y todo queda editable.
 - [ ] Kardex fase 2 (lo que queda): reporte de consumo semanal y export CSV del kardex.
 - [ ] **App propia de Android para imprimir** (reemplazo de RawBT): decisión del dueño —
       se hace en la fase final del prototipo, no ahora. Llevaría dentro el mismo driver
