@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import requiere_admin
 from ..db import get_db
+from ..data.fonda_base import INSUMOS_BASE, RECETAS_BASE, buscar_receta_base, insumo_base, normalizar
 from ..models import Insumo, MovimientoInsumo, Plato, RecetaItem, hoy_lima
 from ..services.inventario import registrar_ajuste, registrar_compra, registrar_merma
 
@@ -207,5 +208,114 @@ def guardar_receta(plato_id: int, payload: RecetaIn, db: Session = Depends(get_d
         db.delete(ri)
     for item in payload.items:
         db.add(RecetaItem(plato_id=plato_id, insumo_id=item.insumo_id, cantidad=item.cantidad))
+    db.commit()
+    return receta_de(plato_id, db)
+
+
+# ---------- Bases pregrabadas (despensa y recetas de fonda) ----------
+
+
+def _insumo_por_nombre(db: Session, nombre: str) -> Insumo | None:
+    objetivo = normalizar(nombre)
+    for insumo in db.scalars(select(Insumo)).all():
+        if normalizar(insumo.nombre) == objetivo:
+            return insumo
+    return None
+
+
+def _crear_desde_base(db: Session, nombre: str) -> Insumo | None:
+    """Crea el insumo con los datos de la base (unidad, costo referencial,
+    mínimo sugerido). Devuelve el existente si ya estaba."""
+    existente = _insumo_por_nombre(db, nombre)
+    if existente is not None:
+        return existente
+    fila = insumo_base(nombre)
+    if fila is None:
+        return None
+    nombre_base, unidad, costo, minimo = fila
+    insumo = Insumo(nombre=nombre_base, unidad=unidad, costo_unitario=costo,
+                    stock_minimo=minimo)
+    db.add(insumo)
+    db.flush()
+    return insumo
+
+
+@router.get("/base")
+def base_disponible(db: Session = Depends(get_db)):
+    """Qué trae la base pregrabada y qué de eso ya existe en la despensa."""
+    return {
+        "insumos": [
+            {"nombre": n, "unidad": u, "costo_referencial": c, "stock_minimo": m,
+             "existe": _insumo_por_nombre(db, n) is not None}
+            for n, u, c, m in INSUMOS_BASE
+        ],
+        "platos_con_receta": sorted(RECETAS_BASE.keys()),
+    }
+
+
+@router.post("/base/cargar")
+def cargar_despensa_base(db: Session = Depends(get_db)):
+    """Crea de golpe la despensa típica de fonda (solo lo que falte).
+
+    Todo queda con stock 0, costo referencial y mínimo sugerido: el dueño
+    ajusta lo que quiera después. Nada se duplica ni se sobreescribe.
+    """
+    creados = []
+    for nombre, *_ in INSUMOS_BASE:
+        if _insumo_por_nombre(db, nombre) is None:
+            _crear_desde_base(db, nombre)
+            creados.append(nombre)
+    db.commit()
+    return {"creados": creados, "total": len(INSUMOS_BASE)}
+
+
+@router.get("/recetas/{plato_id}/sugerida")
+def receta_sugerida(plato_id: int, db: Session = Depends(get_db)):
+    """La receta base que coincide con el nombre del plato (si hay)."""
+    plato = db.get(Plato, plato_id)
+    if plato is None:
+        raise HTTPException(status_code=404, detail="Plato no encontrado")
+    encontrada = buscar_receta_base(plato.nombre)
+    if encontrada is None:
+        return {"plato_id": plato_id, "encontrada": False, "base": None, "items": []}
+    clave, items = encontrada
+    return {
+        "plato_id": plato_id,
+        "encontrada": True,
+        "base": clave,
+        "items": [
+            {
+                "insumo": nombre,
+                "unidad": (insumo_base(nombre) or (nombre, "", 0, 0))[1],
+                "cantidad": cantidad,
+                "existe": _insumo_por_nombre(db, nombre) is not None,
+            }
+            for nombre, cantidad in items
+        ],
+    }
+
+
+@router.post("/recetas/{plato_id}/sugerida")
+def aplicar_receta_sugerida(plato_id: int, db: Session = Depends(get_db)):
+    """Pone la receta base al plato, creando los insumos que falten.
+
+    Reemplaza la receta que tuviera: es un punto de partida editable.
+    """
+    plato = db.get(Plato, plato_id)
+    if plato is None:
+        raise HTTPException(status_code=404, detail="Plato no encontrado")
+    encontrada = buscar_receta_base(plato.nombre)
+    if encontrada is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No hay receta base para \"{plato.nombre}\": ármala a mano abajo.",
+        )
+    _, items = encontrada
+    for ri in db.scalars(select(RecetaItem).where(RecetaItem.plato_id == plato_id)).all():
+        db.delete(ri)
+    for nombre, cantidad in items:
+        insumo = _crear_desde_base(db, nombre)
+        if insumo is not None:
+            db.add(RecetaItem(plato_id=plato_id, insumo_id=insumo.id, cantidad=cantidad))
     db.commit()
     return receta_de(plato_id, db)

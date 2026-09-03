@@ -482,6 +482,27 @@ export const api = {
 
   receta: (platoId: number) => request<RecetaDetalle>(`/api/insumos/recetas/${platoId}`, {}, true),
 
+  // --- Bases pregrabadas: despensa típica de fonda y recetas por plato ---
+  baseKardex: () =>
+    request<{
+      insumos: { nombre: string; unidad: string; costo_referencial: number; stock_minimo: number; existe: boolean }[]
+      platos_con_receta: string[]
+    }>('/api/insumos/base', {}, true),
+
+  cargarDespensaBase: () =>
+    request<{ creados: string[]; total: number }>('/api/insumos/base/cargar', { method: 'POST' }, true),
+
+  recetaSugerida: (platoId: number) =>
+    request<{
+      plato_id: number
+      encontrada: boolean
+      base: string | null
+      items: { insumo: string; unidad: string; cantidad: number; existe: boolean }[]
+    }>(`/api/insumos/recetas/${platoId}/sugerida`, {}, true),
+
+  aplicarRecetaSugerida: (platoId: number) =>
+    request<RecetaDetalle>(`/api/insumos/recetas/${platoId}/sugerida`, { method: 'POST' }, true),
+
   guardarReceta: (platoId: number, items: { insumo_id: number; cantidad: number }[]) =>
     request<RecetaDetalle>(`/api/insumos/recetas/${platoId}`, {
       method: 'PUT',
