@@ -497,11 +497,14 @@ export const api = {
       plato_id: number
       encontrada: boolean
       base: string | null
-      items: { insumo: string; unidad: string; cantidad: number; existe: boolean }[]
+      items: { insumo: string; unidad: string; cantidad: number; existe: boolean; sin_conversion: boolean }[]
     }>(`/api/insumos/recetas/${platoId}/sugerida`, {}, true),
 
   aplicarRecetaSugerida: (platoId: number) =>
-    request<RecetaDetalle>(`/api/insumos/recetas/${platoId}/sugerida`, { method: 'POST' }, true),
+    request<RecetaDetalle & { avisos: string[] }>(`/api/insumos/recetas/${platoId}/sugerida`, { method: 'POST' }, true),
+
+  // Ids de los platos que ya tienen receta (una sola consulta)
+  platosConReceta: () => request<{ plato_ids: number[] }>('/api/insumos/recetas', {}, true),
 
   guardarReceta: (platoId: number, items: { insumo_id: number; cantidad: number }[]) =>
     request<RecetaDetalle>(`/api/insumos/recetas/${platoId}`, {
