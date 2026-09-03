@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles, subtotalMenu } from '../api'
 import type { ConfigOut, DatosLocal, Entrega, MenuHoy, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { ArmadoMenu, describirMenu } from '../components/ArmadoMenu'
+import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
 import { PedidoPorVoz } from '../components/PedidoPorVoz'
@@ -335,6 +336,7 @@ export function Cliente() {
       <div className="pantalla pantalla-resumen">
         <h1>Tu pedido</h1>
         {errorConexion && <div className="banner-error">{errorConexion}</div>}
+        <SugerenciaMenu items={carrito.items} menus={menusHoy} onConvertir={carrito.convertirEnMenu} />
         <div className="selector-servicio">
           <span className="selector-servicio-titulo">¿Cómo va cada plato?</span>
           <div className="selector-servicio-botones fila-todos">

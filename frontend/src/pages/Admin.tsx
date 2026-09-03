@@ -618,21 +618,23 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
     ])
   }
 
-  const guardar = async () => {
+  const guardar = () => guardarLista(plantillas)
+
+  const guardarLista = async (lista: PlantillaEditable[]) => {
     setError('')
     setMensaje('')
     // Nada se descarta en silencio: un menú sin nombre o un tiempo sin
     // rótulo se avisan, porque al no enviarse el backend los retiraría del
     // catálogo y el menú desaparecería de la terminal con un "guardado ✔"
-    if (plantillas.some((p) => p.nombre.trim() === '')) {
+    if (lista.some((p) => p.nombre.trim() === '')) {
       setError('Hay un menú sin nombre: ponle uno o quítalo con la ✕.')
-      return
+      return false
     }
-    const validas = plantillas
+    const validas = lista
     const sinPrecio = validas.filter((p) => !(parseFloat(p.precio) > 0))
     if (sinPrecio.length > 0) {
       setError(`Falta el precio de: ${sinPrecio.map((p) => p.nombre.trim()).join(', ')}`)
-      return
+      return false
     }
     const sinRotulo = validas.filter((p) => p.tiempos.some((t) => t.rotulo.trim() === ''))
     if (sinRotulo.length > 0) {
@@ -641,7 +643,7 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
           .map((p) => p.nombre.trim())
           .join(', ')}. Ponle rótulo o quítalo con la ✕.`,
       )
-      return
+      return false
     }
     const sinTiempos = validas.filter((p) => p.tiempos.length === 0)
     if (sinTiempos.length > 0) {
@@ -650,7 +652,7 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
           .map((p) => p.nombre.trim())
           .join(', ')}`,
       )
-      return
+      return false
     }
     const sinAlternativas = validas.filter((p) =>
       p.tiempos.some((t) => t.alternativas.length === 0),
@@ -661,7 +663,7 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
           .map((p) => p.nombre.trim())
           .join(', ')}`,
       )
-      return
+      return false
     }
     const payload: PlantillaMenuIn[] = validas.map((p) => ({
       id: p.id,
@@ -683,8 +685,10 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
       await api.guardarPlantillas(payload)
       await cargar()
       setMensaje('Menús guardados ✔ (la terminal los verá en el próximo refresco)')
+      return true
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
+      return false
     }
   }
 
@@ -695,12 +699,17 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
     <div className="editor-plantillas">
       <h2 className="titulo-categoria">Menús (combo con tiempos)</h2>
       <p className="nota-admin">
-        El menú se cobra por SU precio, no por la suma de los platos. "Extra S/" es el precio de
-        una porción adicional de ese tiempo pedida junto al menú (déjalo vacío si no se ofrece);
-        "recargo" es lo que suma elegir ese plato dentro del menú.
+        Un menú es entrada + segundo + refresco (y postre si quieres) por UN precio. Sin esto, la
+        terminal cobra cada plato por separado. El menú se cobra por SU precio, no por la suma de
+        los platos.
       </p>
       {mensaje && <div className="banner-ok">{mensaje}</div>}
       {error && <div className="banner-error">{error}</div>}
+      <AsistenteMenu
+        catalogo={catalogo}
+        yaHayMenus={plantillas.length > 0}
+        onCrear={(nueva) => guardarLista([...plantillas, nueva])}
+      />
       {plantillas.map((p, idx) => (
         <div className="plantilla-editor" key={p.id ?? `nueva-${idx}`}>
           <div className="plantilla-cabecera">
@@ -1649,6 +1658,163 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
 
       <GestorMesas onSesionVencida={onSesionVencida} />
       <EmpezarLimpio onSesionVencida={onSesionVencida} />
+    </div>
+  )
+}
+
+// ---------- Asistente: crear el menú del día en un minuto ----------
+
+const TIEMPOS_POR_CATEGORIA: { categoria: string; rotulo: string; extra: string }[] = [
+  { categoria: 'entrada', rotulo: 'Entrada o sopa', extra: '3.00' },
+  { categoria: 'fondo', rotulo: 'Segundo', extra: '' },
+  { categoria: 'bebida', rotulo: 'Refresco', extra: '' },
+  { categoria: 'postre', rotulo: 'Postre', extra: '' },
+]
+
+/**
+ * Lo que se aprendió en sala: el dueño no arma el menú a mano tiempo por
+ * tiempo. Aquí marca los platos de hoy por categoría, pone el precio y el
+ * menú queda creado. El editor de abajo sigue para afinar.
+ */
+function AsistenteMenu({
+  catalogo,
+  yaHayMenus,
+  onCrear,
+}: {
+  catalogo: Plato[]
+  yaHayMenus: boolean
+  onCrear: (nueva: PlantillaEditable) => Promise<boolean>
+}) {
+  const [abierto, setAbierto] = useState(!yaHayMenus)
+  const [nombre, setNombre] = useState('Menú del día')
+  const [precio, setPrecio] = useState('')
+  const [extraEntrada, setExtraEntrada] = useState('3.00')
+  const [marcados, setMarcados] = useState<Set<number>>(new Set())
+  const [aviso, setAviso] = useState('')
+
+  useEffect(() => {
+    setAbierto(!yaHayMenus)
+  }, [yaHayMenus])
+
+  const activos = catalogo.filter((p) => p.activo_hoy)
+  const alternar = (id: number) =>
+    setMarcados((prev) => {
+      const s = new Set(prev)
+      if (s.has(id)) s.delete(id)
+      else s.add(id)
+      return s
+    })
+  const marcarCategoria = (categoria: string, valor: boolean) =>
+    setMarcados((prev) => {
+      const s = new Set(prev)
+      for (const p of activos.filter((x) => x.categoria === categoria)) {
+        if (valor) s.add(p.id)
+        else s.delete(p.id)
+      }
+      return s
+    })
+
+  const crear = async () => {
+    setAviso('')
+    if (!(parseFloat(precio) > 0)) {
+      setAviso('Pon el precio del menú (ej. 11.00).')
+      return
+    }
+    const tiempos: TiempoEditable[] = TIEMPOS_POR_CATEGORIA
+      .map((t) => ({
+        rotulo: t.rotulo,
+        obligatorio: true,
+        precio_extra: t.categoria === 'entrada' ? extraEntrada : t.extra,
+        alternativas: activos
+          .filter((p) => p.categoria === t.categoria && marcados.has(p.id))
+          .map((p) => ({ plato_id: p.id, recargo: '' })),
+      }))
+      .filter((t) => t.alternativas.length > 0)
+    const tieneSegundo = tiempos.some((t) => t.rotulo === 'Segundo')
+    if (tiempos.length < 2 || !tieneSegundo) {
+      setAviso('Marca al menos un segundo y un acompañamiento (entrada o refresco).')
+      return
+    }
+    const ok = await onCrear({ nombre: nombre.trim() || 'Menú del día', precio, activo_hoy: true, tiempos })
+    if (ok) {
+      setAbierto(false)
+      setMarcados(new Set())
+      setPrecio('')
+    }
+  }
+
+  if (!abierto) {
+    return (
+      <button className="boton-asistente" onClick={() => setAbierto(true)}>
+        ✨ Crear otro menú en un minuto
+      </button>
+    )
+  }
+
+  return (
+    <div className="asistente-menu">
+      <h3>✨ Crea tu menú del día en un minuto</h3>
+      {activos.length === 0 && (
+        <p className="nota-admin">
+          Primero carga y guarda los platos de hoy en la tabla de arriba; después vuelve aquí y
+          márcalos.
+        </p>
+      )}
+      <div className="asistente-fila">
+        <label>
+          Nombre
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Menú del día" />
+        </label>
+        <label>
+          Precio del menú S/
+          <input
+            type="number" step="0.50" min="0" className="input-precio"
+            value={precio} onChange={(e) => setPrecio(e.target.value)} placeholder="11.00"
+          />
+        </label>
+        <label title="Precio de una entrada adicional pedida con el menú (vacío = no se ofrece)">
+          Entrada extra S/
+          <input
+            type="number" step="0.50" min="0" className="input-precio"
+            value={extraEntrada} onChange={(e) => setExtraEntrada(e.target.value)} placeholder="3.00"
+          />
+        </label>
+      </div>
+      {TIEMPOS_POR_CATEGORIA.map((t) => {
+        const platos = activos.filter((p) => p.categoria === t.categoria)
+        if (platos.length === 0) return null
+        const todos = platos.every((p) => marcados.has(p.id))
+        return (
+          <div className="asistente-tiempo" key={t.categoria}>
+            <div className="asistente-tiempo-cabecera">
+              <strong>{t.rotulo}</strong>
+              <button onClick={() => marcarCategoria(t.categoria, !todos)}>
+                {todos ? 'Quitar todos' : 'Marcar todos'}
+              </button>
+            </div>
+            <div className="asistente-chips">
+              {platos.map((p) => (
+                <label key={p.id} className={`chip-marcable ${marcados.has(p.id) ? 'marcado' : ''}`}>
+                  <input type="checkbox" checked={marcados.has(p.id)} onChange={() => alternar(p.id)} />
+                  {p.nombre}
+                </label>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+      {aviso && <div className="banner-error">{aviso}</div>}
+      <div className="admin-acciones">
+        <button className="boton-primario" onClick={crear} disabled={activos.length === 0}>
+          ✅ Crear menú
+        </button>
+        {yaHayMenus && <button onClick={() => setAbierto(false)}>Cancelar</button>}
+      </div>
+      <p className="nota-admin">
+        Se cobra el precio del menú, no la suma de los platos. Un tiempo con un solo plato marcado
+        (ej. una sola chicha) sale como "incluido" sin preguntar. Abajo puedes afinar recargos y
+        extras por plato.
+      </p>
     </div>
   )
 }
