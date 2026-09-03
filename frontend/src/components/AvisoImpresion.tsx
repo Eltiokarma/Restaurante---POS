@@ -19,9 +19,16 @@ export function AvisoImpresion({ estado }: { estado?: ImpresionPendiente }) {
   const [cantidadOcultada, setCantidadOcultada] = useState(0)
 
   const cantidad = estado?.cantidad ?? 0
-  // Si llegaron más tickets atascados desde que se ocultó, vuelve a mostrarse
+  // Si llegaron más tickets atascados desde que se ocultó, vuelve a mostrarse.
+  // Y si la cola se vació, se olvida lo ocultado: un atasco NUEVO (aunque
+  // sea de un solo ticket) es justo lo que este aviso existe para mostrar.
   useEffect(() => {
-    if (cantidad > cantidadOcultada) setOcultoHasta(0)
+    if (cantidad === 0 && cantidadOcultada !== 0) {
+      setCantidadOcultada(0)
+      setOcultoHasta(0)
+    } else if (cantidad > cantidadOcultada) {
+      setOcultoHasta(0)
+    }
   }, [cantidad, cantidadOcultada])
 
   if (!estado || cantidad === 0 || estado.minutos < MINUTOS_PARA_AVISAR) return null

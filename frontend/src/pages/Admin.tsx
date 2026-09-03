@@ -1163,6 +1163,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [accion, setAccion] = useState<{ id: number; tipo: 'compra' | 'merma' | 'ajuste' } | null>(null)
   const [accionCantidad, setAccionCantidad] = useState('')
   const [accionCosto, setAccionCosto] = useState('')
+  const [accionNota, setAccionNota] = useState('')
   const [nuevo, setNuevo] = useState({ nombre: '', unidad: 'kg', costo: '' })
   const [mostrarNuevo, setMostrarNuevo] = useState(false)
 
@@ -1170,25 +1171,21 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [recetaPlato, setRecetaPlato] = useState('')
   const [recetaItems, setRecetaItems] = useState<{ insumo_id: number; cantidad: string }[]>([])
   const [costoPorcion, setCostoPorcion] = useState<number | null>(null)
-  const [sugerida, setSugerida] = useState<{ base: string | null; encontrada: boolean; items: { insumo: string; unidad: string; cantidad: number; existe: boolean }[] } | null>(null)
+  const [sugerida, setSugerida] = useState<{ base: string | null; encontrada: boolean; items: { insumo: string; unidad: string; cantidad: number; existe: boolean; sin_conversion: boolean }[] } | null>(null)
   const [platosConReceta, setPlatosConReceta] = useState<Set<number>>(new Set())
 
   const cargar = useCallback(async () => {
     try {
-      const [datos, kardex, cat] = await Promise.all([api.insumos(), api.kardex(), api.catalogo()])
+      const [datos, kardex, cat, conReceta] = await Promise.all([
+        api.insumos(), api.kardex(), api.catalogo(), api.platosConReceta(),
+      ])
       setInsumos(datos.insumos)
       setValorInventario(datos.valor_inventario)
       setPorAgotarse(datos.por_agotarse)
       setMovimientos(kardex.movimientos)
       setCatalogo(cat.platos)
-      // Qué platos ya tienen receta (para marcar cuáles descuentan stock)
-      const con = new Set<number>()
-      await Promise.all(cat.platos.map(async (p) => {
-        try {
-          if ((await api.receta(p.id)).items.length > 0) con.add(p.id)
-        } catch { /* sin receta */ }
-      }))
-      setPlatosConReceta(con)
+      // Qué platos ya tienen receta (marca ✔ en el selector): una sola consulta
+      setPlatosConReceta(new Set(conReceta.plato_ids))
       setError('')
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
@@ -1237,6 +1234,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
     setAccion({ id, tipo })
     setAccionCantidad('')
     setAccionCosto('')
+    setAccionNota('')
   }
 
   const confirmarAccion = async () => {
@@ -1247,10 +1245,21 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
       setError('Pon la cantidad.')
       return
     }
+    // Mensajes claros ANTES de ir al servidor (el 422 del backend es más seco)
+    if (accion.tipo !== 'ajuste' && cantidad <= 0) {
+      setError('La cantidad tiene que ser mayor a 0.')
+      return
+    }
+    const costo = parseFloat(accionCosto)
+    if (accion.tipo === 'compra' && !(costo > 0)) {
+      setError('Pon cuánto pagaste en total por esta compra: con eso se calcula el costo promedio.')
+      return
+    }
     try {
       await api.movimientoInsumo(
         accion.id, accion.tipo, cantidad,
-        accion.tipo === 'compra' ? parseFloat(accionCosto) || undefined : undefined,
+        accion.tipo === 'compra' ? costo : undefined,
+        accionNota.trim(),
       )
       const texto = {
         compra: `Compra de ${cantidad} ${insumo.unidad} de ${insumo.nombre} registrada ✔ (el costo promedio se recalculó solo)`,
@@ -1278,6 +1287,8 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
 
   // ---------- Recetas ----------
 
+  const platoElegido = catalogo.find((p) => p.id === parseInt(recetaPlato))
+
   const cargarReceta = async (platoId: string) => {
     setRecetaPlato(platoId)
     setRecetaItems([])
@@ -1299,12 +1310,19 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
 
   const usarSugerida = async () => {
     if (!recetaPlato) return
+    // La base REEMPLAZA la receta guardada: si ya hay una afinada a mano, se pregunta
+    if (recetaItems.length > 0 && !window.confirm(
+      `${platoElegido?.nombre ?? 'Este plato'} ya tiene una receta con ${recetaItems.length} insumo(s). ` +
+      '¿La reemplazo por la receta base? Lo que ajustaste a mano se pierde.',
+    )) return
     try {
       const receta = await api.aplicarRecetaSugerida(parseInt(recetaPlato))
       setRecetaItems(receta.items.map((i) => ({ insumo_id: i.insumo_id, cantidad: String(i.cantidad) })))
       setCostoPorcion(receta.costo_porcion)
       avisar('Receta base cargada ✔ — ajusta las cantidades a tu mano y guarda. Los insumos que faltaban se crearon con stock 0.')
-      cargar()
+      // cargar() limpia el error al terminar: el aviso de unidades va DESPUÉS
+      await cargar()
+      if (receta.avisos.length > 0) setError(receta.avisos.join(' '))
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
@@ -1327,7 +1345,6 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
     }
   }
 
-  const platoElegido = catalogo.find((p) => p.id === parseInt(recetaPlato))
   const precioPlato = platoElegido?.precio
   const unidadDe = (id: number) => insumos.find((i) => i.id === id)?.unidad ?? ''
 
@@ -1432,6 +1449,9 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
                                      value={accionCosto} onChange={(e) => setAccionCosto(e.target.value)}
                                      onKeyDown={(e) => e.key === 'Enter' && confirmarAccion()} />
                             )}
+                            <input placeholder={accion.tipo === 'compra' ? 'dónde / a quién (opcional)' : 'nota (opcional)'}
+                                   maxLength={200} value={accionNota} onChange={(e) => setAccionNota(e.target.value)}
+                                   onKeyDown={(e) => e.key === 'Enter' && confirmarAccion()} />
                             <button className="boton-primario" onClick={confirmarAccion}>Registrar</button>
                             <button onClick={() => setAccion(null)}>Cancelar</button>
                           </div>
@@ -1474,6 +1494,10 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
                   <span>
                     ✨ Tengo una receta base de <strong>{sugerida.base}</strong> ({sugerida.items.length} insumos
                     {sugerida.items.some((s) => !s.existe) && '; los que no tengas se crean solos'}).
+                    {sugerida.items.some((s) => s.sin_conversion) && (
+                      <> ⚠ {sugerida.items.filter((s) => s.sin_conversion).map((s) => s.insumo).join(', ')}:
+                      lo tienes en otra unidad, ese lo agregas a mano.</>
+                    )}
                   </span>
                   <button className="boton-grande boton-confirmar boton-sugerencia" onClick={usarSugerida}>
                     ✨ Usar receta base

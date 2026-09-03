@@ -214,19 +214,23 @@ def guardar_receta(plato_id: int, payload: RecetaIn, db: Session = Depends(get_d
 
 # ---------- Bases pregrabadas (despensa y recetas de fonda) ----------
 
+# Conversiones entre unidades equivalentes: cuánto vale 1 unidad de la
+# receta base (izquierda) en la unidad que ya tiene el insumo (derecha)
+FACTOR_UNIDAD: dict[tuple[str, str], float] = {
+    ("kg", "g"): 1000.0, ("g", "kg"): 0.001,
+    ("l", "ml"): 1000.0, ("ml", "l"): 0.001,
+}
 
-def _insumo_por_nombre(db: Session, nombre: str) -> Insumo | None:
-    objetivo = normalizar(nombre)
-    for insumo in db.scalars(select(Insumo)).all():
-        if normalizar(insumo.nombre) == objetivo:
-            return insumo
-    return None
+
+def _despensa_por_nombre(db: Session) -> dict[str, Insumo]:
+    """Una sola lectura de la tabla por petición, indexada por nombre."""
+    return {normalizar(i.nombre): i for i in db.scalars(select(Insumo)).all()}
 
 
-def _crear_desde_base(db: Session, nombre: str) -> Insumo | None:
+def _crear_desde_base(db: Session, despensa: dict[str, Insumo], nombre: str) -> Insumo | None:
     """Crea el insumo con los datos de la base (unidad, costo referencial,
     mínimo sugerido). Devuelve el existente si ya estaba."""
-    existente = _insumo_por_nombre(db, nombre)
+    existente = despensa.get(normalizar(nombre))
     if existente is not None:
         return existente
     fila = insumo_base(nombre)
@@ -237,16 +241,30 @@ def _crear_desde_base(db: Session, nombre: str) -> Insumo | None:
                     stock_minimo=minimo)
     db.add(insumo)
     db.flush()
+    despensa[normalizar(nombre)] = insumo
     return insumo
+
+
+def _cantidad_en_unidad_real(cantidad: float, unidad_base: str, insumo: Insumo) -> float | None:
+    """La receta base viene en kg/l/unidad; si el insumo del dueño ya
+    existe en otra unidad, se convierte cuando se puede (kg↔g, l↔ml).
+    None = no hay conversión sensata (ej. 'saco'): mejor no adivinar."""
+    real = normalizar(insumo.unidad)
+    base = normalizar(unidad_base)
+    if real == base:
+        return cantidad
+    factor = FACTOR_UNIDAD.get((base, real))
+    return round(cantidad * factor, 4) if factor is not None else None
 
 
 @router.get("/base")
 def base_disponible(db: Session = Depends(get_db)):
     """Qué trae la base pregrabada y qué de eso ya existe en la despensa."""
+    despensa = _despensa_por_nombre(db)
     return {
         "insumos": [
             {"nombre": n, "unidad": u, "costo_referencial": c, "stock_minimo": m,
-             "existe": _insumo_por_nombre(db, n) is not None}
+             "existe": normalizar(n) in despensa}
             for n, u, c, m in INSUMOS_BASE
         ],
         "platos_con_receta": sorted(RECETAS_BASE.keys()),
@@ -260,18 +278,28 @@ def cargar_despensa_base(db: Session = Depends(get_db)):
     Todo queda con stock 0, costo referencial y mínimo sugerido: el dueño
     ajusta lo que quiera después. Nada se duplica ni se sobreescribe.
     """
+    despensa = _despensa_por_nombre(db)
     creados = []
     for nombre, *_ in INSUMOS_BASE:
-        if _insumo_por_nombre(db, nombre) is None:
-            _crear_desde_base(db, nombre)
+        if normalizar(nombre) not in despensa:
+            _crear_desde_base(db, despensa, nombre)
             creados.append(nombre)
     db.commit()
     return {"creados": creados, "total": len(INSUMOS_BASE)}
 
 
+@router.get("/recetas")
+def platos_con_receta(db: Session = Depends(get_db)):
+    """Ids de los platos que ya tienen receta (una sola consulta, para
+    marcarlos en el admin sin pedir cada receta por separado)."""
+    ids = db.scalars(select(RecetaItem.plato_id).distinct()).all()
+    return {"plato_ids": sorted(ids)}
+
+
 @router.get("/recetas/{plato_id}/sugerida")
 def receta_sugerida(plato_id: int, db: Session = Depends(get_db)):
-    """La receta base que coincide con el nombre del plato (si hay)."""
+    """La receta base que coincide con el nombre del plato (si hay), con la
+    unidad REAL del insumo cuando ya existe y aviso si no se puede convertir."""
     plato = db.get(Plato, plato_id)
     if plato is None:
         raise HTTPException(status_code=404, detail="Plato no encontrado")
@@ -279,27 +307,31 @@ def receta_sugerida(plato_id: int, db: Session = Depends(get_db)):
     if encontrada is None:
         return {"plato_id": plato_id, "encontrada": False, "base": None, "items": []}
     clave, items = encontrada
-    return {
-        "plato_id": plato_id,
-        "encontrada": True,
-        "base": clave,
-        "items": [
-            {
-                "insumo": nombre,
-                "unidad": (insumo_base(nombre) or (nombre, "", 0, 0))[1],
-                "cantidad": cantidad,
-                "existe": _insumo_por_nombre(db, nombre) is not None,
-            }
-            for nombre, cantidad in items
-        ],
-    }
+    despensa = _despensa_por_nombre(db)
+    detalle = []
+    for nombre, cantidad in items:
+        unidad_base = (insumo_base(nombre) or (nombre, "", 0, 0))[1]
+        existente = despensa.get(normalizar(nombre))
+        convertida = _cantidad_en_unidad_real(cantidad, unidad_base, existente) if existente else cantidad
+        detalle.append({
+            "insumo": existente.nombre if existente else nombre,
+            "unidad": existente.unidad if existente else unidad_base,
+            "cantidad": convertida if convertida is not None else cantidad,
+            "existe": existente is not None,
+            # True = el insumo está en una unidad que no sé convertir ("saco"):
+            # se omite al aplicar y el dueño lo pone a mano
+            "sin_conversion": existente is not None and convertida is None,
+        })
+    return {"plato_id": plato_id, "encontrada": True, "base": clave, "items": detalle}
 
 
 @router.post("/recetas/{plato_id}/sugerida")
 def aplicar_receta_sugerida(plato_id: int, db: Session = Depends(get_db)):
     """Pone la receta base al plato, creando los insumos que falten.
 
-    Reemplaza la receta que tuviera: es un punto de partida editable.
+    Reemplaza la receta que tuviera: es un punto de partida editable. Un
+    insumo que ya exista en una unidad sin conversión conocida se omite y
+    se devuelve en ``avisos`` para que el dueño lo agregue a mano.
     """
     plato = db.get(Plato, plato_id)
     if plato is None:
@@ -311,11 +343,22 @@ def aplicar_receta_sugerida(plato_id: int, db: Session = Depends(get_db)):
             detail=f"No hay receta base para \"{plato.nombre}\": ármala a mano abajo.",
         )
     _, items = encontrada
+    despensa = _despensa_por_nombre(db)
     for ri in db.scalars(select(RecetaItem).where(RecetaItem.plato_id == plato_id)).all():
         db.delete(ri)
+    avisos = []
     for nombre, cantidad in items:
-        insumo = _crear_desde_base(db, nombre)
-        if insumo is not None:
-            db.add(RecetaItem(plato_id=plato_id, insumo_id=insumo.id, cantidad=cantidad))
+        insumo = _crear_desde_base(db, despensa, nombre)
+        if insumo is None:
+            continue
+        unidad_base = (insumo_base(nombre) or (nombre, insumo.unidad, 0, 0))[1]
+        convertida = _cantidad_en_unidad_real(cantidad, unidad_base, insumo)
+        if convertida is None:
+            avisos.append(
+                f"{insumo.nombre} está en \"{insumo.unidad}\" y la receta base viene en "
+                f"{unidad_base}: agrégalo a mano con la cantidad correcta."
+            )
+            continue
+        db.add(RecetaItem(plato_id=plato_id, insumo_id=insumo.id, cantidad=convertida))
     db.commit()
-    return receta_de(plato_id, db)
+    return {**receta_de(plato_id, db), "avisos": avisos}

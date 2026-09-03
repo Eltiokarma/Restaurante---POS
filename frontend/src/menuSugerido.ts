@@ -33,8 +33,10 @@ export function sugerirMenu(items: ItemCarrito[], menus: MenuHoy[]): SugerenciaM
         usados.push(item.plato.id)
         precioMenu += tiempo.alternativas.find((a) => a.plato_id === item.plato.id)?.recargo ?? 0
       } else if (tiempo.alternativas.length === 1) {
-        // Tiempo de una sola opción: viene incluido, no hace falta que esté en el carrito
+        // Tiempo de una sola opción: viene incluido, no hace falta que esté
+        // en el carrito — pero su recargo sí se cobra (igual que el backend)
         elecciones[tiempo.orden] = tiempo.alternativas[0].plato_id
+        precioMenu += tiempo.alternativas[0].recargo
       } else if (tiempo.obligatorio) {
         cubre = false
         break

@@ -2941,7 +2941,7 @@ select:focus-visible {
 }
 
 .boton-sugerencia {
-  min-height: 64px;
+  min-height: 80px; /* vista de cliente: botones táctiles ≥ 80 px */
   flex: 0 0 auto;
 }
 

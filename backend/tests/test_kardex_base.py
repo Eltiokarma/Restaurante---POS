@@ -76,3 +76,35 @@ def test_receta_sugerida_sin_coincidencia(client, admin_headers, db):
 def test_base_requiere_admin(client):
     assert client.get("/api/insumos/base").status_code == 401
     assert client.post("/api/insumos/base/cargar").status_code == 401
+
+
+def test_receta_sugerida_respeta_la_unidad_del_insumo_existente(client, admin_headers, db, menu_ejemplo):
+    """El bug: el dueño ya tenía 'arroz' en sacos; la receta base traía 0.1 kg
+    y se aplicaba como 0.1 SACOS por porción (≈5 kg): cada venta descontaba
+    una barbaridad. Ahora se convierte lo convertible y se avisa lo demás."""
+    from app.models import Insumo
+
+    db.add(Insumo(nombre="arroz", unidad="saco", stock_actual=2.0, costo_unitario=180.0))
+    db.add(Insumo(nombre="Aceite", unidad="ml", stock_actual=3000.0, costo_unitario=0.008))
+    db.commit()
+    plato_id = menu_ejemplo["Lomo saltado"]
+
+    vista = client.get(f"/api/insumos/recetas/{plato_id}/sugerida", headers=admin_headers).json()
+    arroz = next(i for i in vista["items"] if i["insumo"] == "arroz")
+    assert arroz["existe"] and arroz["unidad"] == "saco" and arroz["sin_conversion"] is True
+    aceite = next(i for i in vista["items"] if i["insumo"] == "Aceite")
+    assert aceite["unidad"] == "ml" and aceite["cantidad"] == 40.0  # 0.04 l → 40 ml
+
+    r = client.post(f"/api/insumos/recetas/{plato_id}/sugerida", headers=admin_headers).json()
+    nombres = {i["insumo"]: i for i in r["items"]}
+    assert "arroz" not in nombres            # omitido: no se adivina en sacos
+    assert nombres["Aceite"]["cantidad"] == 40.0 and nombres["Aceite"]["unidad"] == "ml"
+    assert len(r["avisos"]) == 1 and "arroz" in r["avisos"][0] and "saco" in r["avisos"][0]
+
+
+def test_lista_de_platos_con_receta(client, admin_headers, menu_ejemplo):
+    assert client.get("/api/insumos/recetas", headers=admin_headers).json() == {"plato_ids": []}
+    client.post(f"/api/insumos/recetas/{menu_ejemplo['Lomo saltado']}/sugerida", headers=admin_headers)
+    assert client.get("/api/insumos/recetas", headers=admin_headers).json() == {
+        "plato_ids": [menu_ejemplo["Lomo saltado"]],
+    }
