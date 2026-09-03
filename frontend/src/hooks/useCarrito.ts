@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { subtotalMenu } from '../api'
 import type { Empaque, ItemCarrito, MenuCarrito, MenuHoy, Plato } from '../api'
+import type { SugerenciaMenu } from '../menuSugerido'
 
 // El carrito vive SOLO en el estado del frontend hasta que termina la
 // ventana de cancelación; recién ahí se persiste en el backend.
@@ -57,6 +58,25 @@ export function useCarrito() {
       return prev.map((m, i) => (i === idx ? { ...m, cantidad: m.cantidad + linea.cantidad } : m))
     })
   }, [])
+
+  // "Sopa + lomo + chicha" a la carta → una línea de menú: sale UNA unidad de
+  // cada plato usado y entra el menú con esas elecciones. Las notas de los
+  // platos se conservan en la nota del menú; el empaque, el del primero.
+  const convertirEnMenu = useCallback((s: SugerenciaMenu) => {
+    // Se lee el carrito actual aquí (no dentro de un updater): un setState
+    // anidado en otro se ejecutaría dos veces en modo estricto
+    const usados = items.filter((i) => s.platosUsados.includes(i.plato.id))
+    const nota = usados.map((i) => i.nota.trim()).filter(Boolean).join(' / ')
+    const empaque = usados[0]?.empaque ?? ('mesa' as Empaque)
+    setMenus((m) => [...m, {
+      menu: s.menu, cantidad: 1, elecciones: s.elecciones, extras: [], empaque, nota,
+    }])
+    setItems((prev) =>
+      prev
+        .map((i) => (s.platosUsados.includes(i.plato.id) ? { ...i, cantidad: i.cantidad - 1 } : i))
+        .filter((i) => i.cantidad > 0),
+    )
+  }, [items])
 
   const cambiarCantidadMenu = useCallback((idx: number, delta: number) => {
     setMenus((prev) =>
@@ -141,6 +161,7 @@ export function useCarrito() {
     cambiarNota,
     cantidadDe,
     agregarMenu,
+    convertirEnMenu,
     cambiarCantidadMenu,
     quitarMenu,
     cambiarEmpaqueMenu,

@@ -151,7 +151,9 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       se hace en la fase final del prototipo, no ahora. Llevaría dentro el mismo driver
       ESC/POS que hoy pone RawBT, se compilaría en GitHub Actions y se instalaría en la
       tablet; ventaja extra sobre el navegador: puede seguir imprimiendo con la tablet
-      bloqueada. Mientras tanto opera RawBT (probado y funcionando).
+      bloqueada. Mientras tanto opera RawBT — probado en sala: imprime, pero en la
+      tablet del dueño **pide un toque por ticket** (política de Chrome Android). Por eso
+      la app propia sube de prioridad para la fase final.
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
       hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.

@@ -5,6 +5,7 @@ import type { CajaEstado, ConfigOut, DatosLocal, Entrega, ImpresionPendiente, Me
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
 import { ArmadoMenu, describirMenu } from '../components/ArmadoMenu'
 import { AvisoImpresion } from '../components/AvisoImpresion'
+import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { IconoBillete, IconoSilla } from '../components/Iconos'
 import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket } from '../components/Ticket'
@@ -491,6 +492,7 @@ export function Caja() {
           {(carrito.items.length > 0 || carrito.menus.length > 0) && (
             <div className="caja-carrito">
               <h3 className="titulo-categoria">Pedido en armado</h3>
+              <SugerenciaMenu items={carrito.items} menus={menusHoy} onConvertir={carrito.convertirEnMenu} />
               {carrito.menus.map((m, idx) => (
                 <div className="caja-carrito-item" key={`menu-${idx}`}>
                   <span className="caja-carrito-nombre">
