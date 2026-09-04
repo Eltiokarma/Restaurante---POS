@@ -1,7 +1,7 @@
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA } from '../api'
 import { IconoEngranaje } from '../components/Iconos'
-import type { CajaEstado, ConfigOut, DatosLocal, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ResumenDatos, StatsOut, VozPanel } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
 type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'cancelaciones' | 'voz' | 'config'
@@ -120,10 +120,19 @@ const NOMBRE_PERIODO: Record<Periodo, string> = {
   '30': 'últimos 30 días',
 }
 
-function fechaLocalISO(diasAtras: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - diasAtras)
+// Fecha local en AAAA-MM-DD (toISOString daría el día de ayer en Lima)
+function fechaIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function sumarDias(d: Date, dias: number): Date {
+  const copia = new Date(d)
+  copia.setDate(copia.getDate() + dias)
+  return copia
+}
+
+function fechaLocalISO(diasAtras: number): string {
+  return fechaIso(sumarDias(new Date(), -diasAtras))
 }
 
 function rangoDe(periodo: Periodo): { desde: string; hasta: string } {
@@ -1157,7 +1166,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [catalogo, setCatalogo] = useState<Plato[]>([])
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
-  const [seccion, setSeccion] = useState<'despensa' | 'recetas' | 'historial'>('despensa')
+  const [seccion, setSeccion] = useState<'despensa' | 'consumo' | 'recetas' | 'historial'>('despensa')
 
   // Acción rápida abierta en una fila de la despensa
   const [accion, setAccion] = useState<{ id: number; tipo: 'compra' | 'merma' | 'ajuste' } | null>(null)
@@ -1354,6 +1363,9 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
         <button className={seccion === 'despensa' ? 'activa' : ''} onClick={() => setSeccion('despensa')}>
           🧺 Despensa {porAgotarse.length > 0 && <span className="subtab-alerta">{porAgotarse.length}</span>}
         </button>
+        <button className={seccion === 'consumo' ? 'activa' : ''} onClick={() => setSeccion('consumo')}>
+          📉 Consumo
+        </button>
         <button className={seccion === 'recetas' ? 'activa' : ''} onClick={() => setSeccion('recetas')}>
           📖 Recetas
         </button>
@@ -1471,6 +1483,8 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
           </p>
         </>
       )}
+
+      {seccion === 'consumo' && <SeccionConsumo onSesionVencida={onSesionVencida} />}
 
       {seccion === 'recetas' && (
         <div className="panel-recetas">
@@ -1593,6 +1607,204 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
         </>
       )}
     </div>
+  )
+}
+
+// ---------- Consumo semanal del kardex ----------
+
+type RangoConsumo = 'semana' | 'semana-pasada' | 'mes' | 'manual'
+
+function lunesDe(d: Date): Date {
+  return sumarDias(d, -((d.getDay() + 6) % 7)) // getDay(): 0 = domingo
+}
+
+function rangoConsumoDe(rango: RangoConsumo, hoy = new Date()): { desde: string; hasta: string } {
+  if (rango === 'semana') return { desde: fechaIso(lunesDe(hoy)), hasta: fechaIso(hoy) }
+  if (rango === 'semana-pasada') {
+    const lunesPasado = sumarDias(lunesDe(hoy), -7)
+    return { desde: fechaIso(lunesPasado), hasta: fechaIso(sumarDias(lunesPasado, 6)) }
+  }
+  return { desde: fechaIso(sumarDias(hoy, -29)), hasta: fechaIso(hoy) } // últimos 30 días
+}
+
+const DIA_CORTO = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá']
+
+function etiquetaDia(fechaIso: string): string {
+  const [a, m, d] = fechaIso.split('-').map(Number)
+  const fecha = new Date(a, m - 1, d)
+  return `${DIA_CORTO[fecha.getDay()]} ${d}`
+}
+
+function SeccionConsumo({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [rango, setRango] = useState<RangoConsumo>('semana')
+  const [fechas, setFechas] = useState(() => rangoConsumoDe('semana'))
+  const [datos, setDatos] = useState<ReporteConsumo | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    // Si el dueño cambia de rango antes de que llegue la respuesta anterior,
+    // esa respuesta se descarta: si no, quedarían datos de otras fechas
+    let vigente = true
+    api.consumoKardex(fechas.desde, fechas.hasta)
+      .then((r) => { if (vigente) { setDatos(r); setError('') } })
+      .catch((e) => {
+        if (!vigente) return
+        setDatos(null)   // no dejar el reporte anterior bajo el aviso de error
+        setError(manejarError(e, onSesionVencida))
+      })
+    return () => { vigente = false }
+  }, [fechas, onSesionVencida])
+
+  const elegirRango = (nuevo: RangoConsumo) => {
+    setRango(nuevo)
+    if (nuevo !== 'manual') setFechas(rangoConsumoDe(nuevo))
+  }
+
+  const descargar = async () => {
+    try {
+      await api.descargarConsumoCsv(fechas.desde, fechas.hasta)
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const maximoDia = Math.max(1, ...(datos?.por_dia ?? []).map((d) => d.soles))
+  // Con muchos días las barras se angostan y solo se rotula una de cada tres;
+  // el valor exacto de cada día sale al tocarla.
+  const compacto = (datos?.por_dia.length ?? 0) > 14
+
+  // Un rango largo no cabe entero: se muestra pegado al final (los días
+  // recientes), que es lo que el dueño mira primero.
+  const barras = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (barras.current) barras.current.scrollLeft = barras.current.scrollWidth
+  }, [datos])
+
+  return (
+    <>
+      <div className="admin-acciones">
+        {([['semana', 'Esta semana'], ['semana-pasada', 'Semana pasada'], ['mes', 'Últimos 30 días'],
+           ['manual', 'Otras fechas']] as [RangoConsumo, string][]).map(([valor, texto]) => (
+          <button key={valor} className={rango === valor ? 'boton-primario' : ''}
+                  onClick={() => elegirRango(valor)}>
+            {texto}
+          </button>
+        ))}
+        {rango === 'manual' && (
+          <span className="rango-manual">
+            <input type="date" value={fechas.desde} max={fechas.hasta}
+                   onChange={(e) => e.target.value && setFechas((f) => ({ ...f, desde: e.target.value }))} />
+            <span>a</span>
+            <input type="date" value={fechas.hasta} min={fechas.desde}
+                   onChange={(e) => e.target.value && setFechas((f) => ({ ...f, hasta: e.target.value }))} />
+          </span>
+        )}
+      </div>
+
+      {error && <div className="banner-error">{error}</div>}
+      {!datos && !error && <p className="nota-admin">Cargando…</p>}
+
+      {datos && (
+        <>
+          <div className="tarjetas-consumo">
+            <div className="tarjeta-consumo">
+              <span className="tarjeta-consumo-rotulo">Compraste</span>
+              <strong>{soles(datos.gasto_compras)}</strong>
+              <span className="nota-admin">lo que pagaste por insumos</span>
+            </div>
+            <div className="tarjeta-consumo">
+              <span className="tarjeta-consumo-rotulo">Se usó en los platos</span>
+              <strong>{soles(datos.valor_consumo)}</strong>
+              <span className="nota-admin">valorizado al costo de hoy</span>
+            </div>
+            <div className={`tarjeta-consumo ${datos.valor_mermas > 0 ? 'alerta' : ''}`}>
+              <span className="tarjeta-consumo-rotulo">Se perdió</span>
+              <strong>{soles(datos.valor_mermas)}</strong>
+              <span className="nota-admin">mermas registradas</span>
+            </div>
+            <div className={`tarjeta-consumo ${datos.por_agotarse.length > 0 ? 'alerta' : ''}`}>
+              <span className="tarjeta-consumo-rotulo">Por agotarse</span>
+              <strong>{datos.por_agotarse.length}</strong>
+              <span className="nota-admin">
+                {datos.por_agotarse.length > 0 ? datos.por_agotarse.join(', ') : 'nada bajo el mínimo'}
+              </span>
+            </div>
+          </div>
+
+          <h3 className="subtitulo-resumen">Cuánto se usó cada día</h3>
+          <div className="barras-horas" ref={barras}>
+            {datos.por_dia.map((d, n) => (
+              <div className={`barra-hora barra-dia ${compacto ? 'barra-dia-compacta' : ''}`}
+                   key={d.fecha} title={`${d.fecha}: ${soles(d.soles)}`}>
+                {/* Un número sobre cada barra estorba: en rangos largos se rotula el día más alto */}
+                <span className="barra-hora-valor">
+                  {d.soles > 0 && (!compacto || d.soles === maximoDia) ? soles(d.soles) : ''}
+                </span>
+                {d.soles > 0 && (
+                  <div className="barra-hora-relleno" style={{ height: `${(d.soles / maximoDia) * 100}%` }} />
+                )}
+                <span className="barra-hora-etiqueta">
+                  {!compacto || n % 3 === 0 || n === datos.por_dia.length - 1 ? etiquetaDia(d.fecha) : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="admin-acciones">
+            <button onClick={descargar}>📊 Descargar Excel (CSV)</button>
+            <span className="nota-admin">
+              Del {datos.desde} al {datos.hasta} ({datos.dias} {datos.dias === 1 ? 'día' : 'días'})
+            </span>
+          </div>
+
+          <div className="tabla-desplazable">
+            <table className="tabla-admin">
+              <thead>
+                <tr>
+                  <th>Insumo</th>
+                  <th className="col-cantidad">Se usó</th>
+                  <th className="col-cantidad">Costo</th>
+                  <th className="col-cantidad">Compraste</th>
+                  <th className="col-cantidad">Pagaste</th>
+                  <th className="col-cantidad">Se perdió</th>
+                  <th className="col-cantidad">Queda hoy</th>
+                  <th className="col-cantidad">Alcanza para</th>
+                </tr>
+              </thead>
+              <tbody>
+                {datos.insumos.map((i) => (
+                  <tr key={i.id} className={i.bajo_minimo ? 'fila-alerta' : ''}>
+                    <td>{i.nombre}</td>
+                    <td className="col-cantidad">{i.consumido} {i.unidad}</td>
+                    <td className="col-cantidad">{soles(i.consumido_soles)}</td>
+                    <td className="col-cantidad">{i.comprado ? `${i.comprado} ${i.unidad}` : ''}</td>
+                    <td className="col-cantidad">{i.comprado_soles ? soles(i.comprado_soles) : ''}</td>
+                    <td className="col-cantidad">{i.merma ? `${i.merma} ${i.unidad}` : ''}</td>
+                    <td className={`col-cantidad ${i.stock_actual < 0 ? 'stock-negativo' : ''}`}>
+                      {i.stock_actual} {i.unidad}
+                    </td>
+                    <td className={`col-cantidad ${i.dias_stock != null && i.dias_stock < 2 ? 'stock-negativo' : ''}`}>
+                      {i.dias_stock == null ? '—' : `${i.dias_stock} días`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {datos.insumos.length === 0 && (
+            <p className="nota-admin">
+              No hubo movimientos de insumos en estas fechas. Aparecen aquí las ventas de platos
+              con receta, las compras, las mermas y los conteos.
+            </p>
+          )}
+          <p className="nota-admin">
+            "Queda hoy" y el resaltado son el stock de este momento, no el de esas fechas;
+            "Alcanza para" proyecta ese stock con el ritmo de consumo del rango. Lo usado se
+            valoriza al costo promedio de hoy: es una guía para comprar, no un número contable.
+          </p>
+        </>
+      )}
+    </>
   )
 }
 

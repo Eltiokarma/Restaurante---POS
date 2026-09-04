@@ -653,23 +653,65 @@ export const api = {
   statsRango: (desde: string, hasta: string) =>
     request<StatsOut>(`/api/stats/range?desde=${desde}&hasta=${hasta}`, {}, true),
 
-  // Descarga el CSV de ventas (necesita el token, así que va por
-  // fetch + blob en vez de un <a href> directo). Sin fechas: hoy.
-  descargarVentasCsv: async (desde?: string, hasta?: string) => {
-    const params = desde && hasta ? `?desde=${desde}&hasta=${hasta}` : ''
-    const cabeceras: Record<string, string> = { 'X-Admin-Token': getAdminToken() }
-    if (getPinLocal()) cabeceras['X-Pin-Local'] = getPinLocal()
-    const res = await fetch(`/api/stats/export${params}`, { headers: cabeceras })
-    if (!res.ok) throw new ApiError(res.status, `Error ${res.status}`)
-    const blob = await res.blob()
-    const nombre = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'ventas.csv'
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = nombre
-    a.click()
-    URL.revokeObjectURL(url)
-  },
+  // Descarga el CSV de ventas. Sin fechas: hoy.
+  descargarVentasCsv: (desde?: string, hasta?: string) =>
+    descargarCsv(`/api/stats/export${rangoEnUrl(desde, hasta)}`, 'ventas.csv'),
+
+  // Reporte de consumo del kardex. Sin fechas: últimos 7 días.
+  consumoKardex: (desde?: string, hasta?: string) =>
+    request<ReporteConsumo>(`/api/insumos/consumo${rangoEnUrl(desde, hasta)}`, {}, true),
+
+  descargarConsumoCsv: (desde?: string, hasta?: string) =>
+    descargarCsv(`/api/insumos/consumo.csv${rangoEnUrl(desde, hasta)}`, 'consumo.csv'),
+}
+
+function rangoEnUrl(desde?: string, hasta?: string): string {
+  return desde && hasta ? `?desde=${desde}&hasta=${hasta}` : ''
+}
+
+// Los CSV necesitan el token, así que van por fetch + blob en vez de un
+// <a href> directo; el navegador guarda el archivo con el nombre del backend.
+async function descargarCsv(ruta: string, nombrePorDefecto: string) {
+  const cabeceras: Record<string, string> = { 'X-Admin-Token': getAdminToken() }
+  if (getPinLocal()) cabeceras['X-Pin-Local'] = getPinLocal()
+  const res = await fetch(ruta, { headers: cabeceras })
+  if (!res.ok) throw new ApiError(res.status, `Error ${res.status}`)
+  const blob = await res.blob()
+  const nombre = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? nombrePorDefecto
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nombre
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export interface ConsumoInsumo {
+  id: number
+  nombre: string
+  unidad: string
+  consumido: number
+  consumido_soles: number
+  comprado: number
+  comprado_soles: number
+  merma: number
+  merma_soles: number
+  ajuste: number
+  stock_actual: number
+  bajo_minimo: boolean
+  dias_stock: number | null
+}
+
+export interface ReporteConsumo {
+  desde: string
+  hasta: string
+  dias: number
+  gasto_compras: number
+  valor_consumo: number
+  valor_mermas: number
+  por_agotarse: string[]
+  por_dia: { fecha: string; soles: number }[]
+  insumos: ConsumoInsumo[]
 }
 
 export interface StatsOut {

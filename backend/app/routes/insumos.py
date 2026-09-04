@@ -1,7 +1,10 @@
 """Insumos, recetas y kardex (todo protegido con admin)."""
+import csv
+import io
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,6 +13,7 @@ from ..auth import requiere_admin
 from ..db import get_db
 from ..data.fonda_base import INSUMOS_BASE, RECETAS_BASE, buscar_receta_base, insumo_base, normalizar
 from ..models import Insumo, MovimientoInsumo, Plato, RecetaItem, hoy_lima
+from ..services import consumo as servicio_consumo
 from ..services.inventario import registrar_ajuste, registrar_compra, registrar_merma
 
 router = APIRouter(
@@ -39,9 +43,7 @@ class MovimientoIn(BaseModel):
     nota: str = ""
 
 
-def _bajo_minimo(i: Insumo) -> bool:
-    """Se está acabando: hay aviso configurado y el stock ya lo alcanzó."""
-    return i.activo and i.stock_minimo > 0 and i.stock_actual <= i.stock_minimo
+_bajo_minimo = servicio_consumo.bajo_minimo
 
 
 def _insumo_a_dict(i: Insumo) -> dict:
@@ -158,6 +160,72 @@ def kardex(
         }
         for m, nombre, unidad in db.execute(consulta).all()
     ]}
+
+
+# ---------- Reporte de consumo ----------
+
+
+def _rango_pedido(desde: date | None, hasta: date | None) -> tuple[date, date]:
+    por_defecto = servicio_consumo.rango_por_defecto()
+    desde = desde or por_defecto[0]
+    hasta = hasta or por_defecto[1]
+    if desde > hasta:
+        raise HTTPException(status_code=422, detail="'desde' no puede ser posterior a 'hasta'")
+    if (hasta - desde).days >= servicio_consumo.MAX_DIAS_RANGO:
+        raise HTTPException(
+            status_code=422,
+            detail=f"El rango máximo es de {servicio_consumo.MAX_DIAS_RANGO} días",
+        )
+    return desde, hasta
+
+
+@router.get("/consumo")
+def reporte_de_consumo(
+    desde: date | None = Query(default=None),
+    hasta: date | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """Qué se usó, se compró y se perdió en el rango (default: últimos 7 días)."""
+    return servicio_consumo.resumen(db, *_rango_pedido(desde, hasta))
+
+
+@router.get("/consumo.csv")
+def exportar_consumo_csv(
+    desde: date | None = Query(default=None),
+    hasta: date | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """El mismo reporte en CSV, listo para abrir en Excel."""
+    desde, hasta = _rango_pedido(desde, hasta)
+    datos = servicio_consumo.resumen(db, desde, hasta)
+
+    buffer = io.StringIO()
+    # Separador ";" y BOM: así Excel en español lo abre en columnas directamente
+    writer = csv.writer(buffer, delimiter=";")
+    writer.writerow([
+        "insumo", "unidad", "se_uso", "costo_de_lo_usado", "compraste", "pagaste",
+        "se_perdio", "costo_de_lo_perdido", "ajuste_por_conteo", "stock_actual",
+        "dias_de_stock",
+    ])
+    for fila in datos["insumos"]:
+        writer.writerow([
+            fila["nombre"], fila["unidad"], fila["consumido"], fila["consumido_soles"],
+            fila["comprado"], fila["comprado_soles"], fila["merma"], fila["merma_soles"],
+            fila["ajuste"], fila["stock_actual"],
+            "" if fila["dias_stock"] is None else fila["dias_stock"],
+        ])
+    writer.writerow([])
+    writer.writerow(["TOTAL compras (S/)", datos["gasto_compras"]])
+    writer.writerow(["TOTAL consumo (S/)", datos["valor_consumo"]])
+    writer.writerow(["TOTAL mermas (S/)", datos["valor_mermas"]])
+
+    nombre = f"consumo-{desde.isoformat()}-a-{hasta.isoformat()}.csv"
+    contenido = "\ufeff" + buffer.getvalue()  # BOM: Excel detecta UTF-8
+    return StreamingResponse(
+        iter([contenido]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+    )
 
 
 # ---------- Recetas ----------

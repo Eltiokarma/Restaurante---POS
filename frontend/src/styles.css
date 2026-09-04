@@ -3560,3 +3560,91 @@ select:focus-visible {
     margin: 2mm;
   }
 }
+
+/* ---- Consumo del kardex (Admin → Insumos → Consumo) ---- */
+
+.rango-manual {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rango-manual input[type='date'] {
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: var(--r-chico);
+  border: 1.5px solid var(--linea-fuerte);
+  background: var(--papel-alto);
+  font-family: var(--fuente-ui);
+  font-size: 1rem;
+  color: var(--tinta);
+}
+
+.tarjetas-consumo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.tarjeta-consumo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--papel-alto);
+  border: 1.5px solid var(--linea);
+  border-radius: var(--r-chico);
+}
+
+.tarjeta-consumo.alerta {
+  border-color: var(--aji);
+  background: var(--aji-tenue);
+}
+
+.tarjeta-consumo-rotulo {
+  font-family: var(--fuente-ui);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--tinta-media);
+}
+
+.tarjeta-consumo strong {
+  font-family: var(--fuente-display);
+  font-size: 1.9rem;
+  line-height: 1.1;
+  color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Las tablas anchas se desplazan dentro de su caja: la página nunca de lado */
+.tabla-desplazable {
+  overflow-x: auto;
+}
+
+.tabla-admin .col-cantidad {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabla-admin tbody tr.fila-alerta {
+  background: var(--aji-tenue);
+}
+
+.barra-dia-compacta {
+  width: 38px;
+}
+
+.barra-dia-compacta .barra-hora-relleno {
+  max-width: 18px;
+}
+
+/* En compacto solo se rotula una barra de cada tres: el texto puede salirse
+   de sus 38px sin chocar con nada y no debe partirse en dos líneas */
+.barra-dia-compacta .barra-hora-valor,
+.barra-dia-compacta .barra-hora-etiqueta {
+  white-space: nowrap;
+}

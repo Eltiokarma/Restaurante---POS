@@ -29,7 +29,11 @@ stock mínimo, sugerencia automática de menú en el resumen del cliente + asist
 armado en Admin, kardex intuitivo con 62 insumos y 47 recetas base editables. 171 tests
 en verde. Pendiente de prueba en sala: la vuelta de kardex y la sugerencia de menú.
 
-## Bloque 1 — Reporte de consumo semanal del kardex (+ CSV)
+## Bloque 1 — Reporte de consumo semanal del kardex (+ CSV) — HECHO
+
+> Mergeado en la sesión 2. Quedó en Admin → Insumos → Consumo, con endpoints
+> `GET /api/insumos/consumo` y `/consumo.csv` y el servicio `services/consumo.py`.
+> Detalle abajo, por si hace falta el contexto.
 
 Lo que falta del kardex según `ROADMAP.md` ("Kardex fase 2").
 
@@ -136,6 +140,6 @@ tablets 8" y 10", vertical y horizontal). Hoy `styles.css` solo tiene un breakpo
 
 ## Orden y cierre
 
-1 → 2 → 3, un PR por bloque. Al terminar los tres: actualizar `ROADMAP.md` (Kardex fase 2
+2 → 3, un PR por bloque (el 1 ya está mergeado). Al terminar los tres: actualizar `ROADMAP.md` (Kardex fase 2
 tachado, decisión nueva sobre menú editable y agregados en el registro, nota de
 responsive), borrar este archivo y dar al dueño el resumen corto en su idioma.

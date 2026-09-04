@@ -152,10 +152,15 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       clásico) e Historial en lenguaje claro. `app/data/fonda_base.py` trae 62 insumos
       típicos de fonda (unidad, costo referencial, mínimo sugerido) y 47 recetas base por
       porción; se cargan sin duplicar y todo queda editable.
-- [ ] Kardex fase 2 (lo que queda): reporte de consumo semanal y export CSV del kardex.
-      **Siguiente sesión (plan en `CONTINUAR.md`)**, junto con el pedido "desde el menú"
+- [x] **Reporte de consumo del kardex** (Admin → Insumos → Consumo): rango Esta semana /
+      Semana pasada / Últimos 30 días / fechas a mano; tarjetas de compraste, se usó, se
+      perdió y por agotarse; barras de consumo por día; tabla por insumo con lo usado, lo
+      comprado, la merma, el stock de hoy y para cuántos días alcanza; y export CSV
+      (`GET /api/insumos/consumo` y `/consumo.csv`). Lo usado se valoriza al costo promedio
+      vigente y la devolución de una orden anulada descuenta del consumo sin bajar de cero.
+- [ ] Pedido "desde el menú" y auditoría de tamaños de tablet: **plan en `CONTINUAR.md`**
       (empezar por "Un menú" completo y quitarle/agregarle: sin sopa, + presa, + refresco…,
-      cada menú editable en una lista con sus costos) y la auditoría de tamaños de tablet.
+      cada menú editable en una lista con sus costos).
 - [ ] **App propia de Android para imprimir** (reemplazo de RawBT): decisión del dueño —
       se hace en la fase final del prototipo, no ahora. Llevaría dentro el mismo driver
       ESC/POS que hoy pone RawBT, se compilaría en GitHub Actions y se instalaría en la
