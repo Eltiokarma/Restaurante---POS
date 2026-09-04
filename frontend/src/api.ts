@@ -102,6 +102,8 @@ export interface MenuCarrito {
 export type EstadoItem = 'pendiente' | 'preparando' | 'listo' | 'entregado'
 
 export interface OrdenItemOut {
+  // Línea de cobro (ej. "Táper × 3"): al total y al ticket, no a cocina
+  es_cargo?: boolean
   nombre: string
   precio: number
   cantidad: number
@@ -257,6 +259,9 @@ export interface ConfigOut {
   exigir_caja_abierta: boolean
   // La terminal del cliente muestra solo los menús (la caja siempre ve todo)
   terminal_solo_menus: boolean
+  // S/ por porción que sale en táper (0 = gratis) y qué empaques se ofrecen
+  precio_taper: number
+  empaques_ofrecidos: Empaque[]
   // Ventana de la tanda en cocina (minutos); 0 = apagada
   cocina_bulk_min: number
 }
@@ -826,6 +831,26 @@ export function subtotalExtras(linea: MenuCarrito): number {
     if (tiempo) total += (tiempo.precio_extra + (alternativa?.recargo ?? 0)) * extra.cantidad
   }
   return total
+}
+
+// Porciones que salen en táper (para mostrar el cargo ANTES de confirmar;
+// el backend hace el mismo conteo y es la autoridad)
+export function unidadesEnTaper(items: ItemCarrito[], menus: MenuCarrito[]): number {
+  let n = items.reduce((s, i) => s + (i.empaque === 'taper' ? i.cantidad : 0), 0)
+  for (const m of menus) {
+    const empaqueDe = (orden: number) => m.empaques[orden] ?? m.empaque
+    for (const t of m.menu.tiempos) {
+      if (m.omitidos.includes(t.orden)) continue
+      const elegida = t.alternativas.some((a) => a.plato_id === m.elecciones[t.orden])
+      const incluida = elegida || t.alternativas.length === 1
+      if (incluida && empaqueDe(t.orden) === 'taper') n += m.cantidad
+    }
+    for (const e of m.extras) {
+      if (empaqueDe(e.tiempo_orden) === 'taper') n += e.cantidad
+    }
+    if (m.empaque === 'taper') n += m.agregados.reduce((s, a) => s + a.cantidad, 0)
+  }
+  return n
 }
 
 export function subtotalAgregados(linea: MenuCarrito): number {

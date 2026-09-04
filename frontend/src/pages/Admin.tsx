@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA } from '../api'
+import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE } from '../api'
 import { IconoEngranaje } from '../components/Iconos'
-import type { CajaEstado, ConfigOut, DatosLocal, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, Empaque, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
 type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'cancelaciones' | 'voz' | 'config'
@@ -2039,6 +2039,38 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
         En la tira "Por salir" de cocina, cada plato muestra además su <strong>tanda</strong>: las
         porciones del pedido más antiguo más los que llegaron en los siguientes minutos configurados.
         Al tocar el plato para tachar, esa cantidad viene sugerida.
+      </p>
+      <label>
+        El táper cuesta S/ extra por porción (0 = gratis)
+        <input
+          type="number"
+          min="0"
+          step="0.50"
+          value={config.precio_taper}
+          onChange={(e) => setConfig({ ...config, precio_taper: parseFloat(e.target.value) || 0 })}
+        />
+      </label>
+      <div className="config-empaques">
+        <span>Empaques que se ofrecen (mesa siempre va):</span>
+        {(['taper', 'bolsa', 'lonchera'] as Empaque[]).map((e) => (
+          <label key={e} className="check-agregado">
+            <input
+              type="checkbox"
+              checked={config.empaques_ofrecidos.includes(e)}
+              onChange={(ev) => setConfig({
+                ...config,
+                empaques_ofrecidos: ev.target.checked
+                  ? [...config.empaques_ofrecidos, e]
+                  : config.empaques_ofrecidos.filter((x) => x !== e),
+              })}
+            />{' '}
+            {NOMBRE_EMPAQUE[e]}
+          </label>
+        ))}
+      </div>
+      <p className="nota-admin">
+        El cargo del táper sale como línea "Táper × N" en el ticket y entra al total; cocina no
+        la ve. Los empaques apagados desaparecen de la terminal y de la caja.
       </p>
       <label>
         ¿Dónde se imprimen los tickets?

@@ -158,6 +158,13 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       comprado, la merma, el stock de hoy y para cuántos días alcanza; y export CSV
       (`GET /api/insumos/consumo` y `/consumo.csv`). Lo usado se valoriza al costo promedio
       vigente y la devolución de una orden anulada descuenta del consumo sin bajar de cero.
+- [x] **Táper con precio y empaques configurables** (reglas del dueño para el servicio
+      real: "táper cuesta un sol más; bolsa y lonchera no"): `precio_taper` en Admin →
+      Configuración cobra cada porción en táper como línea "Táper × N" (item `es_cargo`,
+      nace "entregado": entra al total, al ticket y al CSV pero cocina no la ve ni frena
+      la orden), con el cargo visible ANTES de confirmar y el "+S/ 1.00" en el propio
+      chip del táper; `empaques_ofrecidos` apaga bolsa/lonchera en terminal y caja (mesa
+      siempre va). La "carne más a S/ 6" es el agregado, editable en Admin.
 - [x] **Pantalla única del pedido** (pedido del dueño tras probar): tocar la pantalla de
       inicio lleva DIRECTO a "Tu pedido" — la oferta del menú con su botón "UN MENÚ"
       arriba y las tarjetas editables abajo; sin pantalla intermedia y sin "Prefiero

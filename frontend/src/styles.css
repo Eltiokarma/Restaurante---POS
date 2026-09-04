@@ -3898,3 +3898,17 @@ select:focus-visible {
 .cabecera-en-pedido h1 {
   font-size: 2rem;
 }
+
+/* Cargo del táper en el resumen del pedido */
+.linea-cargo-taper {
+  text-align: right;
+  font-size: 1.1rem;
+  color: var(--tinta-media);
+}
+
+.config-empaques {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}

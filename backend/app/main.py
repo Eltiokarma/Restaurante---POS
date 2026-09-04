@@ -138,6 +138,12 @@ def _migrar(engine_) -> None:
                 "ALTER TABLE orden_items ADD COLUMN es_agregado BOOLEAN NOT NULL DEFAULT 0"
             ))
             conn.commit()
+        # Cargo por táper ("táper cuesta un sol más")
+        if columnas_items and "es_cargo" not in columnas_items:
+            conn.execute(text(
+                "ALTER TABLE orden_items ADD COLUMN es_cargo BOOLEAN NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
 
 
 def _sembrar_agregados(engine_) -> None:

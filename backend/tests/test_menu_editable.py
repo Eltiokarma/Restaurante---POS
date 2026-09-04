@@ -215,3 +215,50 @@ def test_empaque_por_tiempo_del_menu(client, fonda):
     # Empaque inventado o tiempo inexistente: 422
     assert pedir(client, fonda, empaques={"2": "maletin"}).status_code == 422
     assert pedir(client, fonda, empaques={"9": "taper"}).status_code == 422
+
+
+def test_taper_cuesta_un_sol_mas(client, db, admin_headers, fonda, menu_ejemplo):
+    """Regla del dueño: cada porción en táper suma S/ 1 como línea de cobro."""
+    from app.models import Config
+
+    db.add(Config(clave="precio_taper", valor="1"))
+    db.commit()
+
+    # Menú con el segundo en táper + 2 lomos a la carta en táper
+    r = client.post("/api/orders", json={
+        "menus": [{"menu_id": fonda["menu_id"], "cantidad": 1, "empaques": {"2": "taper"}}],
+        "items": [{"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 2, "empaque": "taper"}],
+        "entrega": "separado",
+    })
+    assert r.status_code == 201
+    orden = r.json()["orden"]
+    # 11 (menú) + 30 (2 lomos) + 3 táperes × S/ 1
+    assert orden["total"] == 44.0
+
+    cargo = next(i for i in orden["items"] if i["nombre"] == "Táper")
+    assert cargo["es_cargo"] is True and cargo["cantidad"] == 3
+    assert cargo["estado"] == "entregado"    # cocina no lo prepara ni lo espera
+    # La orden sigue "pendiente": el cargo no adelanta el estado de cocina
+    assert orden["estado"] == "pendiente"
+
+    # Sin la config, el táper no cobra (comportamiento de siempre)
+    db.delete(db.get(Config, "precio_taper")); db.commit()
+    r = client.post("/api/orders", json={
+        "items": [{"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 1, "empaque": "taper"}],
+    })
+    assert r.json()["orden"]["total"] == 15.0
+    assert all(i["nombre"] != "Táper" for i in r.json()["orden"]["items"])
+
+
+def test_config_de_empaques_y_precio_taper(client, admin_headers):
+    config = client.get("/api/config").json()
+    assert config["precio_taper"] == 0
+    assert config["empaques_ofrecidos"] == ["mesa", "taper", "bolsa", "lonchera"]
+
+    r = client.put("/api/config", json={
+        "precio_taper": 1, "empaques_ofrecidos": ["taper", "maletin"],
+    }, headers=admin_headers)
+    datos = r.json()
+    assert datos["precio_taper"] == 1
+    # mesa siempre va; lo inventado se descarta
+    assert datos["empaques_ofrecidos"] == ["mesa", "taper"]

@@ -173,6 +173,7 @@ def _orden_a_dict(orden: Orden, mapa_mesas: dict[int, str] | None = None) -> dic
 def _item_a_dict(item) -> dict:
     return {
         "nombre": item.nombre_snapshot,
+        "es_cargo": item.es_cargo,
         "precio": item.precio_snapshot,
         "cantidad": item.cantidad,
         "empaque": item.empaque,
