@@ -36,7 +36,8 @@ def _fila(izquierda: str, derecha: str, columnas: int) -> str:
     """Cantidad/plato a la izquierda, monto a la derecha, en una línea."""
     espacio = columnas - len(derecha)
     if len(izquierda) > espacio - 1:
-        izquierda = izquierda[: max(0, espacio - 2)] + "…"
+        # "…" no existe en CP850 (saldría "?"): se corta con un punto
+        izquierda = izquierda[: max(0, espacio - 2)] + "."
     return izquierda.ljust(espacio) + derecha
 
 
@@ -72,6 +73,11 @@ def render_orden(orden: Orden, local: dict, columnas: int = 42) -> bytes:
     partes.append(_texto(f"{orden.fecha.isoformat()} - {orden.hora}"))
 
     partes += [ALINEAR_IZQ, _texto("-" * columnas)]
+
+    # Los platos van en DOBLE ALTO: mismas columnas, letra al doble —
+    # pedido del dueño tras el primer servicio (el ticket es la comanda
+    # que viaja a cocina, se lee de un vistazo)
+    partes.append(DOBLE_ALTO)
 
     # Menús encadenados: el menú con su precio, los tiempos indentados,
     # lo quitado en su propia línea destacada (SIN SOPA) y los agregados
@@ -117,10 +123,12 @@ def render_orden(orden: Orden, local: dict, columnas: int = 42) -> bytes:
         if item.nota:
             partes.append(_texto(f"  -> {item.nota}"))
 
-    partes.append(_texto("-" * columnas))
+    partes += [TAMANO_NORMAL, _texto("-" * columnas)]
+    # TOTAL en doble ancho y alto: la línea se formatea a la mitad de
+    # columnas porque cada carácter ocupa el doble de ancho
     partes += [
-        DOBLE_ALTO, NEGRITA_ON,
-        _texto(_fila("TOTAL", f"S/ {_soles(orden.total)}", columnas)),
+        DOBLE_TAMANO, NEGRITA_ON,
+        _texto(_fila("TOTAL", f"S/ {_soles(orden.total)}", columnas // 2)),
         NEGRITA_OFF, TAMANO_NORMAL,
     ]
     partes += [CENTRAR, _texto(""), _texto("Paga en caja con este ticket."), _texto("Gracias!")]
