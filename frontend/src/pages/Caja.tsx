@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles } from '../api'
+import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, unidadesEnTaper } from '../api'
 import type { CajaEstado, ConfigOut, DatosLocal, Entrega, ImpresionPendiente, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
@@ -28,6 +28,7 @@ export function Caja() {
   const [menusHoy, setMenusHoy] = useState<MenuHoy[]>([])
   const [armandoMenu, setArmandoMenu] = useState<MenuHoy | null>(null)
   const [config, setConfig] = useState<ConfigOut | null>(null)
+
   const [ordenes, setOrdenes] = useState<OrdenOut[]>([])
   const [totalVendido, setTotalVendido] = useState(0)
   const [impresion, setImpresion] = useState<ImpresionPendiente | undefined>()
@@ -51,6 +52,10 @@ export function Caja() {
     }
   }, [])
   const carrito = useCarrito()
+  const empaquesOfrecidos = config?.empaques_ofrecidos ?? EMPAQUES
+  const precioTaper = config?.precio_taper ?? 0
+  const cargoTaper = precioTaper * unidadesEnTaper(carrito.items, carrito.menus)
+  const totalConCargos = carrito.totalSoles + cargoTaper
   const { sincronizarConMenu } = carrito
 
   const cargarCaja = useCallback(async () => {
@@ -510,6 +515,8 @@ export function Caja() {
                   onCambiarEmpaque={(e) => carrito.cambiarEmpaqueMenu(idx, e)}
                   onCambiarEmpaqueTiempo={(t, e) => carrito.cambiarEmpaqueTiempo(idx, t, e)}
                   onCambiarNota={(n) => carrito.cambiarNotaMenu(idx, n)}
+                  empaquesOfrecidos={empaquesOfrecidos}
+                  precioTaper={precioTaper}
                 />
               ))}
               {carrito.items.map((i) => (
@@ -525,13 +532,14 @@ export function Caja() {
                     onChange={(e) => carrito.cambiarNota(i.plato.id, e.target.value)}
                   />
                   <div className="empaques-linea">
-                    {EMPAQUES.map((e) => (
+                    {empaquesOfrecidos.map((e) => (
                       <button
                         key={e}
                         className={`boton-servicio boton-empaque boton-empaque-caja ${i.empaque === e ? 'servicio-activo' : ''}`}
                         onClick={() => carrito.cambiarEmpaque(i.plato.id, e)}
                       >
                         {NOMBRE_EMPAQUE[e]}
+                        {e === 'taper' && precioTaper > 0 && <small> +{soles(precioTaper)}</small>}
                       </button>
                     ))}
                   </div>
@@ -576,7 +584,7 @@ export function Caja() {
                 ? 'Registrando…'
                 : carrito.totalItems === 0
                   ? 'REGISTRAR PEDIDO'
-                  : `✅ REGISTRAR — ${soles(carrito.totalSoles)}`}
+                  : `✅ REGISTRAR — ${soles(totalConCargos)}`}
             </button>
           </div>
         </section>

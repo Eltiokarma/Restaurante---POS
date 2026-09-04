@@ -230,6 +230,9 @@ class OrdenItem(Base):
     # True = agregado del menú ("+1 presa"): no es plato de carta
     # (plato_id NULL) y su snapshot viene de menu_agregados
     es_agregado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # True = línea de cobro (ej. "Táper × 3"): entra al total y al ticket,
+    # pero cocina no la prepara (nace en estado "entregado")
+    es_cargo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Estado POR ÍTEM (§3): la cocina cocina por bulks (4 asados de un
     # toque), no ticket por ticket. ordenes.estado queda como caché
     # derivada = el estado MÍNIMO de sus ítems (ver services/cocina.py).
@@ -390,6 +393,13 @@ CONFIG_DEFAULTS: dict[str, str] = {
     # del dueño: repetir abajo los platos sueltos confundía). La caja
     # siempre ve la carta completa.
     "terminal_solo_menus": "1",
+    # Cuánto cuesta CADA porción que sale en táper (0 = el táper es gratis).
+    # Se cobra como línea "Táper × N" en la orden; regla del dueño:
+    # "táper cuesta un sol más".
+    "precio_taper": "0",
+    # Qué empaques se ofrecen en las pantallas (mesa siempre va).
+    # El dueño de hoy: "bolsa y lonchera no".
+    "empaques_ofrecidos": "mesa,taper,bolsa,lonchera",
     # Ventana de la tanda en cocina (minutos): "Por salir" resalta cuántas
     # porciones pertenecen a la tanda actual (la orden activa más antigua
     # + los pedidos que llegaron en los siguientes X minutos). 0 = apagado.

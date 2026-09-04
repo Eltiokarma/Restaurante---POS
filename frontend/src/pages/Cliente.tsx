@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles } from '../api'
+import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles, unidadesEnTaper } from '../api'
 import type { ConfigOut, DatosLocal, Entrega, MenuHoy, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { describirMenu } from '../components/ArmadoMenu'
 import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
@@ -164,6 +164,12 @@ export function Cliente() {
   // arriba y las tarjetas editables abajo (sin pantalla intermedia de carta).
   // Si hoy no hay ningún menú activo, la carta aparece como respaldo.
   const soloMenusConfig = config?.terminal_solo_menus ?? true
+  // Regla del local: qué empaques se ofrecen hoy y cuánto cuesta el táper
+  const empaquesOfrecidos = config?.empaques_ofrecidos ?? EMPAQUES
+  const precioTaper = config?.precio_taper ?? 0
+  const tapers = unidadesEnTaper(carrito.items, carrito.menus)
+  const cargoTaper = precioTaper * tapers
+  const totalConCargos = carrito.totalSoles + cargoTaper
   // Mientras el carrito tenga menús, la pantalla única no cambia de forma
   // aunque el menú del día se agote a mitad de pedido
   const soloMenus = soloMenusConfig && (menusHoy.length > 0 || carrito.menus.length > 0)
@@ -199,7 +205,7 @@ export function Cliente() {
         cantidad: i.cantidad,
       })),
     ]
-    const total = carrito.totalSoles
+    const total = totalConCargos
     volverAlInicio('Pedido cancelado')
     try {
       await api.registrarCancelacion(items, total)
@@ -396,7 +402,7 @@ export function Cliente() {
               {i.cantidad} × {i.plato.nombre}
             </div>
           ))}
-          <div className="resumen-breve-total">Total: {soles(carrito.totalSoles)}</div>
+          <div className="resumen-breve-total">Total: {soles(totalConCargos)}</div>
         </div>
         <button className="boton-grande boton-cancelar-rojo" onClick={cancelarPedidoEnVentana} disabled={guardando}>
           🛑 CANCELAR PEDIDO
@@ -451,9 +457,10 @@ export function Cliente() {
           <span className="selector-servicio-titulo">¿Cómo va cada plato?</span>
           <div className="selector-servicio-botones fila-todos">
             <span className="etiqueta-todos">Todos:</span>
-            {EMPAQUES.map((e) => (
+            {empaquesOfrecidos.map((e) => (
               <button key={e} className="boton-servicio boton-empaque" onClick={() => carrito.empaqueParaTodos(e)}>
                 {NOMBRE_EMPAQUE[e]}
+                {e === 'taper' && precioTaper > 0 && <small> +{soles(precioTaper)}</small>}
               </button>
             ))}
           </div>
@@ -474,6 +481,8 @@ export function Cliente() {
               onCambiarEmpaque={(e) => carrito.cambiarEmpaqueMenu(idx, e)}
               onCambiarEmpaqueTiempo={(t, e) => carrito.cambiarEmpaqueTiempo(idx, t, e)}
               onCambiarNota={(n) => carrito.cambiarNotaMenu(idx, n)}
+              empaquesOfrecidos={empaquesOfrecidos}
+              precioTaper={precioTaper}
             />
           ))}
           {carrito.items.map((i) => (
@@ -487,13 +496,14 @@ export function Cliente() {
                 </span>
               </div>
               <div className="empaques-linea">
-                {EMPAQUES.map((e) => (
+                {empaquesOfrecidos.map((e) => (
                   <button
                     key={e}
                     className={`boton-servicio boton-empaque ${i.empaque === e ? 'servicio-activo' : ''}`}
                     onClick={() => carrito.cambiarEmpaque(i.plato.id, e)}
                   >
                     {NOMBRE_EMPAQUE[e]}
+                    {e === 'taper' && precioTaper > 0 && <small> +{soles(precioTaper)}</small>}
                   </button>
                 ))}
               </div>
@@ -532,7 +542,15 @@ export function Cliente() {
           </div>
         )}
         {carrito.totalItems > 0 && (
-          <div className="total-grande">TOTAL: {soles(carrito.totalSoles)}</div>
+          <>
+            {cargoTaper > 0 && (
+              <div className="linea-cargo-taper">
+                {tapers} {tapers === 1 ? 'táper' : 'táperes'} × {soles(precioTaper)} ={' '}
+                <strong>{soles(cargoTaper)}</strong>
+              </div>
+            )}
+            <div className="total-grande">TOTAL: {soles(totalConCargos)}</div>
+          </>
         )}
         <div className="botones-resumen">
           {!soloMenus && (
@@ -637,7 +655,7 @@ export function Cliente() {
 
       <BarraCarrito
         totalItems={carrito.totalItems}
-        totalSoles={carrito.totalSoles}
+        totalSoles={totalConCargos}
         onVerPedido={() => setPantalla('resumen')}
       />
 

@@ -15,7 +15,7 @@ import threading
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import MenuAgregado, MenuPlantilla, Orden, OrdenItem, OrdenMenu, Plato, ahora_lima
+from ..models import Config, MenuAgregado, MenuPlantilla, Orden, OrdenItem, OrdenMenu, Plato, ahora_lima
 
 # Serializa la asignación del correlativo del día: sin esto, dos
 # confirmaciones simultáneas (p. ej. dos terminales) podrían leer el mismo
@@ -316,6 +316,27 @@ def _crear_orden(
     # El tipo de servicio se deriva de los empaques de TODOS los platos
     # (los del menú heredan el empaque del menú)
     orden.tipo_servicio = _tipo_servicio_de([i.empaque for i in orden.items] or ["mesa"])
+
+    # Cargo por táper ("táper cuesta un sol más"): una línea de cobro por
+    # las porciones que salen en táper. Nace "entregado" y es_cargo=True:
+    # entra al total, al ticket y al CSV, pero cocina no la prepara ni
+    # bloquea el avance de la orden.
+    registro_taper = db.get(Config, "precio_taper")
+    precio_taper = max(0.0, float(registro_taper.valor)) if registro_taper else 0.0
+    if precio_taper > 0:
+        en_taper = sum(i.cantidad for i in orden.items if i.empaque == "taper")
+        if en_taper > 0:
+            total += precio_taper * en_taper
+            orden.items.append(OrdenItem(
+                plato_id=None,
+                nombre_snapshot="Táper",
+                precio_snapshot=precio_taper,
+                cantidad=en_taper,
+                empaque="mesa",
+                nota="",
+                es_cargo=True,
+                estado="entregado",
+            ))
     orden.total = round(total, 2)
     db.add(orden)
     db.flush()  # asigna orden.id ANTES de ligar los movimientos del kardex

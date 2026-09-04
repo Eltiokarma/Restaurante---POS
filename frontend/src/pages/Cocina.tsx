@@ -138,7 +138,7 @@ export function Cocina() {
     esperaMax: number
   }>()
   for (const o of activas) {
-    const lineas = [...o.items, ...o.menus.flatMap((m) => m.items)]
+    const lineas = [...o.items.filter((i) => !i.es_cargo), ...o.menus.flatMap((m) => m.items)]
     const espera = esperaSegundos(o)
     for (const item of lineas) {
       if (RANGO_ESTADO[item.estado] >= RANGO_ESTADO.listo) continue
@@ -258,7 +258,7 @@ export function Cocina() {
                   <strong>{menu.cantidad} ×</strong> {menu.nombre}
                 </li>
               ))}
-              {orden.items.map((item, i) => (
+              {orden.items.filter((item) => !item.es_cargo).map((item, i) => (
                 <li key={i} className="item-tachado">
                   <strong>{item.cantidad} ×</strong> {item.nombre}
                 </li>
@@ -333,7 +333,7 @@ export function Cocina() {
                     {menu.nota && <div className="nota-cocina">⚠ {menu.nota}</div>}
                   </li>
                 ))}
-                {orden.items.map((item, i) => (
+                {orden.items.filter((item) => !item.es_cargo).map((item, i) => (
                   <li key={i} className={claseItem(item.estado)}>
                     <strong>{item.cantidad} ×</strong> {item.nombre}
                     {item.empaque !== 'mesa' && (

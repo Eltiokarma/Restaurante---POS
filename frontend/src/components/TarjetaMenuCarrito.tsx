@@ -15,9 +15,16 @@ interface Props {
   onCambiarEmpaque: (empaque: Empaque) => void
   onCambiarEmpaqueTiempo: (tiempoOrden: number, empaque: Empaque) => void
   onCambiarNota: (nota: string) => void
+  // Reglas del local: qué empaques se ofrecen y cuánto cuesta el táper
+  empaquesOfrecidos?: Empaque[]
+  precioTaper?: number
 }
 
 /** Chip con stepper −/+: lo usan las porciones extra y los agregados */
+function nombreEmpaque(e: Empaque, precioTaper: number): string {
+  return NOMBRE_EMPAQUE[e] + (e === 'taper' && precioTaper > 0 ? ` +${soles(precioTaper)}` : '')
+}
+
 function ChipStepper({ etiqueta, precio, cantidad, onCambiar }: {
   etiqueta: string
   precio: number
@@ -53,6 +60,7 @@ function ChipStepper({ etiqueta, precio, cantidad, onCambiar }: {
 export function TarjetaMenuCarrito({
   linea, numero, onCambiarEleccion, onAlternarOmitido, onCambiarAgregado, onCambiarExtra,
   onCambiarCantidad, onDuplicar, onCambiarEmpaque, onCambiarEmpaqueTiempo, onCambiarNota,
+  empaquesOfrecidos = EMPAQUES, precioTaper = 0,
 }: Props) {
   const [abierta, setAbierta] = useState(false)
   const [cambiando, setCambiando] = useState<number | null>(null) // tiempo con las opciones abiertas
@@ -123,14 +131,14 @@ export function TarjetaMenuCarrito({
                 </div>
                 {empacando === t.orden && !quitado && (
                   <div className="opciones-tiempo opciones-en-tarjeta">
-                    {EMPAQUES.map((e) => (
+                    {empaquesOfrecidos.map((e) => (
                       <button
                         key={e}
                         className={`opcion-tiempo ${empaqueDe(t.orden) === e ? 'opcion-activa' : ''}`}
                         onClick={() => { onCambiarEmpaqueTiempo(t.orden, e); setEmpacando(null) }}
                       >
                         {empaqueDe(t.orden) === e ? '● ' : '○ '}
-                        {NOMBRE_EMPAQUE[e]}
+                        {nombreEmpaque(e, precioTaper)}
                       </button>
                     ))}
                   </div>
@@ -200,13 +208,13 @@ export function TarjetaMenuCarrito({
               + Otro igual
             </button>
             <span className="etiqueta-todos">Todo el menú:</span>
-            {EMPAQUES.map((e) => (
+            {empaquesOfrecidos.map((e) => (
               <button
                 key={e}
                 className={`boton-servicio boton-empaque ${linea.empaque === e && Object.keys(linea.empaques).length === 0 ? 'servicio-activo' : ''}`}
                 onClick={() => onCambiarEmpaque(e)}
               >
-                {NOMBRE_EMPAQUE[e]}
+                {nombreEmpaque(e, precioTaper)}
               </button>
             ))}
           </div>
