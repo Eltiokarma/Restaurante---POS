@@ -174,12 +174,12 @@ def test_ticket_escpos_con_sin_sopa_y_agregado(client, db, fonda):
 
     trabajo = client.get("/api/print/cola").json()["trabajos"][0]
     datos = base64.b64decode(trabajo["datos_b64"])
-    assert b"** SIN SOPA **" in datos and b"-1.00" in datos
+    assert b"** SIN SOPA **" in datos
     assert b"** +1 PRESA **" in datos and b"4.00" in datos
-    assert b"10.00" in datos     # menú con el descuento aplicado
-    # La comanda impresa no lleva TOTAL ni bebidas
+    # La comanda impresa no lleva TOTAL, ni bebidas, ni la línea del menú
     assert b"TOTAL" not in datos
     assert "Chicha morada".encode("cp850") not in datos
+    assert "Menú del día".encode("cp850") not in datos
 
 
 def test_csv_marca_lo_quitado_y_los_agregados(client, admin_headers, fonda):

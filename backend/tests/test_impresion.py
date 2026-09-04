@@ -92,7 +92,8 @@ def test_ticket_escpos_con_menu_encadenado(client, db, menu_ejemplo):
 
     cola = client.get("/api/print/cola").json()
     datos = base64.b64decode(cola["trabajos"][0]["datos_b64"])
-    assert "Menú del día".encode("cp850") in datos
+    # La comanda no imprime la línea del menú: va directo a los platos
+    assert "Menú del día".encode("cp850") not in datos
     assert b"(EXTRA)" in datos
     # El impreso es la comanda: sin línea de TOTAL (el monto vive en
     # pantalla y caja)
