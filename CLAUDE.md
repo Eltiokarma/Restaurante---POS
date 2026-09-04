@@ -3,7 +3,8 @@
 POS de auto-atención táctil para un restaurante de menú peruano. El cliente arma su pedido en
 una terminal (PC o tablet), confirma con ventana de cancelación, se imprime un ticket y la
 orden va a la cola de cocina. El pago es en caja física. Ver `ROADMAP.md` para fases y
-decisiones tomadas.
+decisiones tomadas. **Si existe `CONTINUAR.md`, es el plan de la sesión en curso: léelo y
+empieza por su primer bloque sin pedir contexto.**
 
 ## Arquitectura
 
