@@ -34,6 +34,11 @@ def _texto(linea: str) -> bytes:
 
 def _fila(izquierda: str, derecha: str, columnas: int) -> str:
     """Cantidad/plato a la izquierda, monto a la derecha, en una línea."""
+    if not derecha:
+        # Sin monto no hace falta reservar columna derecha ni el espacio
+        if len(izquierda) > columnas:
+            izquierda = izquierda[: columnas - 1] + "."
+        return izquierda
     espacio = columnas - len(derecha)
     if len(izquierda) > espacio - 1:
         # "…" no existe en CP850 (saldría "?"): se corta con un punto
@@ -45,8 +50,22 @@ def _soles(monto: float) -> str:
     return f"{monto:.2f}"
 
 
-def render_orden(orden: Orden, local: dict, columnas: int = 42) -> bytes:
-    """El ticket completo de una orden, listo para mandarse a la impresora."""
+def render_orden(
+    orden: Orden,
+    local: dict,
+    columnas: int = 42,
+    categorias: dict[int, str] | None = None,
+) -> bytes:
+    """El ticket completo de una orden, listo para mandarse a la impresora.
+
+    El impreso funciona como COMANDA (decisión del dueño): las bebidas no
+    salen (se sirven en mesa, no se preparan) y tampoco la línea del
+    TOTAL — el monto se ve en la pantalla del cliente y en la caja.
+    """
+    categorias = categorias or {}
+
+    def es_bebida(item) -> bool:
+        return categorias.get(item.plato_id) == "bebida"
     numero = f"{orden.numero_orden_dia:03d}"
     partes: list[bytes] = [INICIALIZAR, CODEPAGE_CP850, CENTRAR]
 
@@ -93,7 +112,7 @@ def render_orden(orden: Orden, local: dict, columnas: int = 42) -> bytes:
             monto = f"-{_soles(omitido['descuento'] * om.cantidad)}" if omitido["descuento"] > 0 else ""
             partes.append(_texto(_fila(nombre, monto, columnas)))
         items_menu = sorted(
-            (i for i in orden.items if i.orden_menu_id == om.id),
+            (i for i in orden.items if i.orden_menu_id == om.id and not es_bebida(i)),
             key=lambda i: (i.es_agregado, i.es_extra, i.tiempo_orden or 0),
         )
         for item in items_menu:
@@ -112,7 +131,7 @@ def render_orden(orden: Orden, local: dict, columnas: int = 42) -> bytes:
 
     # Venta a la carta
     for item in orden.items:
-        if item.orden_menu_id is not None:
+        if item.orden_menu_id is not None or es_bebida(item):
             continue
         nombre = f"{item.cantidad} x {item.nombre_snapshot}"
         if item.empaque != "mesa":
@@ -124,13 +143,6 @@ def render_orden(orden: Orden, local: dict, columnas: int = 42) -> bytes:
             partes.append(_texto(f"  -> {item.nota}"))
 
     partes += [TAMANO_NORMAL, _texto("-" * columnas)]
-    # TOTAL en doble ancho y alto: la línea se formatea a la mitad de
-    # columnas porque cada carácter ocupa el doble de ancho
-    partes += [
-        DOBLE_TAMANO, NEGRITA_ON,
-        _texto(_fila("TOTAL", f"S/ {_soles(orden.total)}", columnas // 2)),
-        NEGRITA_OFF, TAMANO_NORMAL,
-    ]
     partes += [CENTRAR, _texto(""), _texto("Paga en caja con este ticket."), _texto("Gracias!")]
     partes.append(CORTAR)
     return b"".join(partes)

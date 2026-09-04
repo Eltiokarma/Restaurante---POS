@@ -177,7 +177,9 @@ def test_ticket_escpos_con_sin_sopa_y_agregado(client, db, fonda):
     assert b"** SIN SOPA **" in datos and b"-1.00" in datos
     assert b"** +1 PRESA **" in datos and b"4.00" in datos
     assert b"10.00" in datos     # menú con el descuento aplicado
-    assert b"TOTAL" in datos and b"14.00" in datos  # 10 + 4
+    # La comanda impresa no lleva TOTAL ni bebidas
+    assert b"TOTAL" not in datos
+    assert "Chicha morada".encode("cp850") not in datos
 
 
 def test_csv_marca_lo_quitado_y_los_agregados(client, admin_headers, fonda):
