@@ -9,7 +9,7 @@ from datetime import date, datetime, time
 from sqlalchemy import update
 
 from ..db import get_db
-from ..models import LIMA, CierreCaja, Config, Mesa, Orden, ahora_lima, hoy_lima
+from ..models import CierreCaja, Config, LIMA, Mesa, Orden, Plato, ahora_lima, hoy_lima
 from ..routes.config import leer_config
 from ..services.orders import (
     EleccionInvalida,
@@ -142,8 +142,18 @@ def _mapa_mesas(db: Session) -> dict[int, str]:
     return {m.id: m.nombre for m in db.scalars(select(Mesa)).all()}
 
 
-def _orden_a_dict(orden: Orden, mapa_mesas: dict[int, str] | None = None) -> dict:
+def _mapa_categorias(db: Session) -> dict[int, str]:
+    """plato_id → categoría, para que cocina sepa qué NO prepara (bebidas)."""
+    return dict(db.execute(select(Plato.id, Plato.categoria)).all())
+
+
+def _orden_a_dict(
+    orden: Orden,
+    mapa_mesas: dict[int, str] | None = None,
+    categorias: dict[int, str] | None = None,
+) -> dict:
     mapa_mesas = mapa_mesas or {}
+    categorias = categorias or {}
     ids_mesa = json.loads(orden.mesa_ids or "[]")
     return {
         "id": orden.id,
@@ -164,16 +174,18 @@ def _orden_a_dict(orden: Orden, mapa_mesas: dict[int, str] | None = None) -> dic
         # Solo la venta a la carta: los platos de un menú van agrupados en
         # "menus" (cocina y ticket muestran el menú como UN bloque)
         "items": [
-            _item_a_dict(i) for i in orden.items if i.orden_menu_id is None
+            _item_a_dict(i, categorias) for i in orden.items if i.orden_menu_id is None
         ],
-        "menus": [_orden_menu_a_dict(orden, om) for om in orden.menus],
+        "menus": [_orden_menu_a_dict(orden, om, categorias) for om in orden.menus],
     }
 
 
-def _item_a_dict(item) -> dict:
+def _item_a_dict(item, categorias: dict[int, str] | None = None) -> dict:
     return {
         "nombre": item.nombre_snapshot,
         "es_cargo": item.es_cargo,
+        # Un plato borrado del catálogo queda sin categoría: cocina lo muestra
+        "categoria": (categorias or {}).get(item.plato_id),
         "precio": item.precio_snapshot,
         "cantidad": item.cantidad,
         "empaque": item.empaque,
@@ -183,7 +195,7 @@ def _item_a_dict(item) -> dict:
     }
 
 
-def _orden_menu_a_dict(orden: Orden, om) -> dict:
+def _orden_menu_a_dict(orden: Orden, om, categorias: dict[int, str] | None = None) -> dict:
     """Un menú vendido con sus platos (elegidos, extras y agregados) y
     los tiempos que el cliente quitó ("sin sopa")."""
     items_menu = [i for i in orden.items if i.orden_menu_id == om.id]
@@ -196,7 +208,7 @@ def _orden_menu_a_dict(orden: Orden, om) -> dict:
         "nota": om.nota,
         "omitidos": [{"rotulo": o["rotulo"], "descuento": o["descuento"]} for o in omitidos],
         "items": [
-            {**_item_a_dict(i), "tiempo_orden": i.tiempo_orden,
+            {**_item_a_dict(i, categorias), "tiempo_orden": i.tiempo_orden,
              "es_extra": i.es_extra, "es_agregado": i.es_agregado}
             for i in items_menu
         ],
@@ -278,7 +290,7 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     db.commit()
 
     return {
-        "orden": _orden_a_dict(orden, _mapa_mesas(db)),
+        "orden": _orden_a_dict(orden, _mapa_mesas(db), _mapa_categorias(db)),
         "local": {
             "nombre": config["nombre_local"],
             "direccion": config["direccion"],
@@ -330,10 +342,11 @@ def _ordenes_del_dia(db: Session, fecha: date) -> dict:
         .order_by(Orden.numero_orden_dia)
     ).all()
     mapa = _mapa_mesas(db)
+    categorias = _mapa_categorias(db)
     total_vendido = round(sum(o.total for o in ordenes if o.estado != "anulada"), 2)
     return {
         "fecha": fecha.isoformat(),
-        "ordenes": [_orden_a_dict(o, mapa) for o in ordenes],
+        "ordenes": [_orden_a_dict(o, mapa, categorias) for o in ordenes],
         "total_vendido": total_vendido,
         "impresion_pendiente": _impresion_atascada(db, ordenes, fecha),
     }
@@ -481,7 +494,8 @@ def despachar_bulk_endpoint(payload: BulkIn, db: Session = Depends(get_db)):
             ),
         )
     mapa = _mapa_mesas(db)
-    return {"ordenes": [_orden_a_dict(o, mapa) for o in cambiadas]}
+    categorias = _mapa_categorias(db)
+    return {"ordenes": [_orden_a_dict(o, mapa, categorias) for o in cambiadas]}
 
 
 class MesasIn(BaseModel):

@@ -104,6 +104,9 @@ export type EstadoItem = 'pendiente' | 'preparando' | 'listo' | 'entregado'
 export interface OrdenItemOut {
   // Línea de cobro (ej. "Táper × 3"): al total y al ticket, no a cocina
   es_cargo?: boolean
+  // Categoría del plato (null si el plato salió del catálogo): cocina
+  // esconde las bebidas, que no se preparan
+  categoria?: string | null
   nombre: string
   precio: number
   cantidad: number

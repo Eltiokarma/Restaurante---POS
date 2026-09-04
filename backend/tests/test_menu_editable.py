@@ -262,3 +262,15 @@ def test_config_de_empaques_y_precio_taper(client, admin_headers):
     assert datos["precio_taper"] == 1
     # mesa siempre va; lo inventado se descarta
     assert datos["empaques_ofrecidos"] == ["mesa", "taper"]
+
+
+def test_los_items_dicen_su_categoria(client, fonda):
+    """Cocina esconde las bebidas: cada ítem dice de qué categoría es."""
+    r = pedir(client, fonda, agregados=[{"agregado_id": fonda["presa_id"], "cantidad": 1}])
+    assert r.status_code == 201
+
+    orden = client.get("/api/orders/today").json()["ordenes"][0]
+    categorias = {i["nombre"]: i["categoria"] for i in orden["menus"][0]["items"]}
+    assert categorias["Chicha morada"] == "bebida"
+    assert categorias["Asado con puré"] == "fondo"
+    assert categorias["Presa"] is None  # agregado: no es plato del catálogo
