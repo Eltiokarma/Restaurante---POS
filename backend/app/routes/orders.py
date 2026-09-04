@@ -62,6 +62,8 @@ class MenuIn(BaseModel):
     # Tiempos quitados ("sin sopa") y porciones agregadas ("+1 presa")
     omitidos: list[int] = Field(default_factory=list, max_length=6)
     agregados: list[MenuAgregadoIn] = Field(default_factory=list, max_length=10)
+    # Empaque por tiempo (tiempo_orden → empaque); lo que no venga usa "empaque"
+    empaques: dict[int, str] = Field(default_factory=dict)
     empaque: str = "mesa"
     nota: str = Field(default="", max_length=150)
 
@@ -222,6 +224,9 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     for menu in payload.menus:
         if menu.empaque not in EMPAQUES:
             raise HTTPException(status_code=422, detail=f"Empaque inválido: {menu.empaque}")
+        for e in menu.empaques.values():
+            if e not in EMPAQUES:
+                raise HTTPException(status_code=422, detail=f"Empaque inválido: {e}")
     if payload.origen not in ("tactil", "voz", "mixto"):
         raise HTTPException(status_code=422, detail=f"Origen inválido: {payload.origen}")
     _validar_mesas(db, payload.mesa_ids)

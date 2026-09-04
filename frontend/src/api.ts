@@ -92,6 +92,9 @@ export interface MenuCarrito {
   omitidos: number[] // tiempos quitados ("sin sopa")
   agregados: { agregado: AgregadoHoy; cantidad: number }[] // +1 presa…
   empaque: Empaque
+  // Empaque POR TIEMPO ("la sopa en bolsa, el segundo en lonchera");
+  // un tiempo que no esté aquí usa el empaque general del menú
+  empaques: Partial<Record<number, Empaque>>
   nota: string
 }
 
@@ -367,6 +370,7 @@ export interface MenuOrdenIn {
   omitidos: number[]
   agregados: { agregado_id: number; cantidad: number }[]
   empaque: Empaque
+  empaques: Partial<Record<number, Empaque>>
   nota?: string
 }
 

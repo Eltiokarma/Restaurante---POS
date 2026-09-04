@@ -195,3 +195,23 @@ def test_resumen_descuenta_lo_quitado(client, admin_headers, fonda):
     ventas = client.get("/api/stats/today", headers=admin_headers).json()["ventas_por_plato"]
     menu = next(v for v in ventas if v["nombre"] == "Menú del día")
     assert menu["total"] == 10.0
+
+
+def test_empaque_por_tiempo_del_menu(client, fonda):
+    """La señora de la mesa: la sopa para tomar ahí, el segundo en lonchera."""
+    r = pedir(client, fonda,
+              empaque="mesa",
+              empaques={"2": "lonchera"},
+              agregados=[{"agregado_id": fonda["presa_id"], "cantidad": 1}])
+    assert r.status_code == 201
+    orden = r.json()["orden"]
+
+    items = {i["nombre"]: i for i in orden["menus"][0]["items"]}
+    assert items["Sopa criolla"]["empaque"] == "mesa"
+    assert items["Asado con puré"]["empaque"] == "lonchera"
+    assert items["Presa"]["empaque"] == "mesa"      # agregado: empaque general
+    assert orden["tipo_servicio"] == "mixto"        # parte mesa, parte llevar
+
+    # Empaque inventado o tiempo inexistente: 422
+    assert pedir(client, fonda, empaques={"2": "maletin"}).status_code == 422
+    assert pedir(client, fonda, empaques={"9": "taper"}).status_code == 422
