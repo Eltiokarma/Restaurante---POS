@@ -971,8 +971,7 @@ select:focus-visible {
 
 .grilla-cocina {
   display: grid;
-  /* Tarjetas más anchas: con la letra al doble, los nombres largos caben */
-  grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 14px;
 }
 
@@ -1047,16 +1046,15 @@ select:focus-visible {
 
 .tarjeta-orden-items {
   list-style: none;
-  /* Pedido del dueño: letra al doble, para leer la comanda de lejos */
-  font-size: 3.1rem;
-  line-height: 1.15;
+  font-size: 1.6rem;
+  line-height: 1.3;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .tarjeta-orden-items strong {
-  font-size: 3.4rem;
+  font-size: 1.75rem;
   font-weight: 900;
 }
 
@@ -1915,6 +1913,9 @@ select:focus-visible {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  /* Los platos, bien grandes en el papel (pedido del dueño) */
+  font-size: 17px;
+  line-height: 1.35;
 }
 
 .ticket-items td {
@@ -1930,7 +1931,7 @@ select:focus-visible {
 .ticket-total {
   display: flex;
   justify-content: space-between;
-  font-size: 19px;
+  font-size: 23px;
   font-weight: 900;
   letter-spacing: 0.06em;
 }
