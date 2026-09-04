@@ -210,7 +210,7 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
       {stats.ventas_por_plato.length === 0 ? (
         <p className="nota-admin">Todavía no hay ventas hoy.</p>
       ) : (
-        <table className="tabla-admin tabla-resumen">
+        <div className="tabla-desplazable"><table className="tabla-admin tabla-resumen">
           <thead>
             <tr>
               <th>Plato</th>
@@ -231,7 +231,7 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
 
       {periodo !== 'hoy' && stats.ventas_por_dia.length > 0 && (
@@ -290,7 +290,7 @@ function HistorialCierres({ onSesionVencida }: { onSesionVencida: () => void }) 
   return (
     <>
       <h3 className="subtitulo-resumen">Cierres de caja (últimos 30 días)</h3>
-      <table className="tabla-admin">
+      <div className="tabla-desplazable"><table className="tabla-admin">
         <thead>
           <tr>
             <th>Fecha</th>
@@ -319,7 +319,7 @@ function HistorialCierres({ onSesionVencida }: { onSesionVencida: () => void }) 
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </>
   )
 }
@@ -440,7 +440,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
       </div>
       {mensaje && <div className="banner-ok">{mensaje}</div>}
       {error && <div className="banner-error">{error}</div>}
-      <table className="tabla-admin">
+      <div className="tabla-desplazable"><table className="tabla-admin">
         <thead>
           <tr>
             <th>Plato</th>
@@ -511,7 +511,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
       <p className="nota-admin">
         Para agotar un plato a mitad de servicio: desmarca "Disponible hoy" y guarda. Desaparece de la
         terminal en el siguiente refresco (máx. 30 segundos).
@@ -1017,7 +1017,7 @@ function TabVoz({ onSesionVencida }: { onSesionVencida: () => void }) {
         </div>
       </div>
 
-      <table className="tabla-admin">
+      <div className="tabla-desplazable"><table className="tabla-admin">
         <thead>
           <tr>
             <th>Hora</th>
@@ -1045,7 +1045,7 @@ function TabVoz({ onSesionVencida }: { onSesionVencida: () => void }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
       {panel.logs.length === 0 && <p className="nota-admin">Sin pedidos por voz hoy.</p>}
     </div>
   )
@@ -1124,7 +1124,7 @@ function TabOrdenes() {
         {' '}Total vendido: <strong>{soles(totalVendido)}</strong> ({ordenes.length} órdenes)
       </div>
       {avisoReimpresion && <div className="banner-ok">{avisoReimpresion}</div>}
-      <table className="tabla-admin">
+      <div className="tabla-desplazable"><table className="tabla-admin">
         <thead>
           <tr>
             <th>#</th>
@@ -1159,7 +1159,7 @@ function TabOrdenes() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
       {ordenes.length === 0 && <p className="nota-admin">Todavía no hay órdenes hoy.</p>}
       {ticket && (
         <div className="solo-impresion">
@@ -1427,7 +1427,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
             </div>
           )}
           {insumos.length > 0 && (
-            <table className="tabla-admin tabla-despensa">
+            <div className="tabla-desplazable"><table className="tabla-admin tabla-despensa">
               <thead>
                 <tr>
                   <th>Insumo</th>
@@ -1487,7 +1487,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
                   </Fragment>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
           <p className="nota-admin">
             <strong>Compré</strong> suma stock y recalcula el costo promedio con lo que pagaste.
@@ -1591,7 +1591,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
       {seccion === 'historial' && (
         <>
           <h3 className="subtitulo-resumen">Movimientos (últimos 7 días)</h3>
-          <table className="tabla-admin">
+          <div className="tabla-desplazable"><table className="tabla-admin">
             <thead>
               <tr><th>Fecha</th><th>Hora</th><th>Insumo</th><th>Qué pasó</th><th className="col-cantidad">Cantidad</th><th>Detalle</th></tr>
             </thead>
@@ -1612,7 +1612,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
           {movimientos.length === 0 && <p className="nota-admin">Sin movimientos en los últimos 7 días.</p>}
           <p className="nota-admin">
             Un stock en rojo significa que se vendió más de lo que el kardex tenía: corrígelo con
@@ -1941,7 +1941,7 @@ function TabCancelaciones({ onSesionVencida }: { onSesionVencida: () => void }) 
         confundiendo a los clientes.
       </p>
       {error && <div className="banner-error">{error}</div>}
-      <table className="tabla-admin">
+      <div className="tabla-desplazable"><table className="tabla-admin">
         <thead>
           <tr>
             <th>Fecha</th>
@@ -1960,7 +1960,7 @@ function TabCancelaciones({ onSesionVencida }: { onSesionVencida: () => void }) 
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
       {cancelaciones.length === 0 && !error && <p className="nota-admin">Sin cancelaciones hoy 🎉</p>}
     </div>
   )

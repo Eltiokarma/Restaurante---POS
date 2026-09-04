@@ -168,7 +168,14 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       y agregado, su costo y el total por tarjeta. Cocina y ticket destacan "SIN SOPA" y
       "+1 PRESA"; el CSV y el Resumen descuentan lo quitado. Los agregados NO descuentan
       kardex (no tienen receta): pendiente decidir si se les cuelga una.
-- [ ] Auditoría de tamaños de tablet: **plan en `CONTINUAR.md`** (bloque 3).
+- [x] **Auditoría de tamaños de tablet**: las cinco vistas probadas con capturas en 600×960,
+      960×600, 800×1280, 1280×800, 1200×1920, 1920×1200, 1024×768 y 1366×768. Correcciones:
+      chips y steppers del cliente a ≥64px (los botones principales siguen en ≥80px), el
+      chip largo de "Por salir" ya no desborda en 7", los modales usan `dvh` con scroll
+      interno y el pie del armado queda pegado abajo siempre visible, y las tablas del
+      admin scrollean dentro de sí mismas bajo 900px. La regla táctil quedó escrita en
+      `CLAUDE.md` y es la que heredará la app cuando se haga (decisión del dueño: "al final
+      se hará de todo esto una o varias apps").
 - [ ] **App propia de Android para imprimir** (reemplazo de RawBT): decisión del dueño —
       se hace en la fase final del prototipo, no ahora. Llevaría dentro el mismo driver
       ESC/POS que hoy pone RawBT, se compilaría en GitHub Actions y se instalaría en la

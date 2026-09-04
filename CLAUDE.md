@@ -38,7 +38,11 @@ empieza por su primer bloque sin pedir contexto.**
 
 - Textos de UI y de commits en español peruano natural ("¿Sigues ahí?", "Paga en caja").
 - Código (identificadores, comentarios) en español, consistente con lo existente.
-- UX táctil primero: botones ≥80px de alto en vistas de cliente, sin dependencias de hover.
+- UX táctil primero, en cualquier tamaño de tablet (probado de 600×960 a 1920×1200): botones
+  principales ≥80px de alto y controles secundarios (chips, steppers, empaques) ≥64px en
+  vistas de cliente, sin dependencias de hover; nada de scroll horizontal de página (las
+  tablas anchas scrollean dentro de su caja); modales con `max-height` en `dvh` y scroll
+  interno. Estas reglas las hereda la futura app.
 - Moneda: soles con 2 decimales; el backend es la autoridad de totales.
 - Endpoints admin protegidos con `Depends(requiere_admin)` (token HMAC de 12h, header
   `X-Admin-Token`). Cliente, cocina y ticketera no llevan auth (app de LAN).
