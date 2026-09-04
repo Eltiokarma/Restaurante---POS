@@ -98,28 +98,25 @@ def render_orden(
     # que viaja a cocina, se lee de un vistazo)
     partes.append(DOBLE_ALTO)
 
-    # Menús encadenados: el menú con su precio, los tiempos indentados,
-    # lo quitado en su propia línea destacada (SIN SOPA) y los agregados
-    # como +1 PRESA — decisión del dueño: imposibles de pasar por alto
-    for om in orden.menus:
-        omitidos = om.omitidos()
-        partes.append(_texto(_fila(
-            f"{om.cantidad} x {om.nombre_snapshot}",
-            _soles(om.precio_cobrado * om.cantidad), columnas,
-        )))
-        for omitido in omitidos:
-            nombre = f"  ** SIN {omitido['rotulo'].upper()} **"
-            monto = f"-{_soles(omitido['descuento'] * om.cantidad)}" if omitido["descuento"] > 0 else ""
-            partes.append(_texto(_fila(nombre, monto, columnas)))
+    # Menús encadenados: la comanda va directo a los platos (sin la línea
+    # "1 x Menú del día" ni su precio — decisión del dueño); lo quitado
+    # sale destacado (SIN SOPA) y los agregados como +1 PRESA. Entre un
+    # menú y otro, una línea en blanco: cocina ve qué va con qué.
+    for numero_menu, om in enumerate(orden.menus):
+        if numero_menu > 0:
+            partes.append(_texto(""))
+        for omitido in om.omitidos():
+            nombre = f"** SIN {omitido['rotulo'].upper()} **"
+            partes.append(_texto(_fila(nombre, "", columnas)))
         items_menu = sorted(
             (i for i in orden.items if i.orden_menu_id == om.id and not es_bebida(i)),
             key=lambda i: (i.es_agregado, i.es_extra, i.tiempo_orden or 0),
         )
         for item in items_menu:
             if item.es_agregado:
-                nombre = f"  ** +{item.cantidad} {item.nombre_snapshot.upper()} **"
+                nombre = f"** +{item.cantidad} {item.nombre_snapshot.upper()} **"
             else:
-                nombre = f"  . {item.cantidad} x {item.nombre_snapshot}"
+                nombre = f"{item.cantidad} x {item.nombre_snapshot}"
                 if item.es_extra:
                     nombre += " (EXTRA)"
             if item.empaque != "mesa":
@@ -127,12 +124,16 @@ def render_orden(
             monto = _soles(item.precio_snapshot * item.cantidad) if item.precio_snapshot > 0 else ""
             partes.append(_texto(_fila(nombre, monto, columnas)))
         if om.nota:
-            partes.append(_texto(f"  -> {om.nota}"))
+            partes.append(_texto(f"-> {om.nota}"))
 
     # Venta a la carta
+    primera_carta = True
     for item in orden.items:
         if item.orden_menu_id is not None or es_bebida(item):
             continue
+        if primera_carta and orden.menus:
+            partes.append(_texto(""))
+            primera_carta = False
         nombre = f"{item.cantidad} x {item.nombre_snapshot}"
         if item.empaque != "mesa":
             nombre += f" [{item.empaque.upper()}]"
