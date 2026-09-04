@@ -180,7 +180,7 @@ export function Cliente() {
         entregaEfectiva,
         carrito.menus.map((m) => ({
           menu_id: m.menu.id, cantidad: m.cantidad, elecciones: m.elecciones,
-          extras: m.extras, omitidos: m.omitidos,
+          extras: m.extras, omitidos: m.omitidos, empaques: m.empaques,
           agregados: m.agregados.map((a) => ({ agregado_id: a.agregado.id, cantidad: a.cantidad })),
           empaque: m.empaque, nota: m.nota.trim(),
         })),
@@ -367,9 +367,11 @@ export function Cliente() {
               onCambiarEleccion={(t, p) => carrito.cambiarEleccion(idx, t, p)}
               onAlternarOmitido={(t) => carrito.alternarOmitido(idx, t)}
               onCambiarAgregado={(a, d) => carrito.cambiarAgregado(idx, a, d)}
+              onCambiarExtra={(t, pl, d) => carrito.cambiarExtraMenu(idx, t, pl, d)}
               onCambiarCantidad={(d) => carrito.cambiarCantidadMenu(idx, d)}
               onDuplicar={() => carrito.duplicarMenu(idx)}
               onCambiarEmpaque={(e) => carrito.cambiarEmpaqueMenu(idx, e)}
+              onCambiarEmpaqueTiempo={(t, e) => carrito.cambiarEmpaqueTiempo(idx, t, e)}
               onCambiarNota={(n) => carrito.cambiarNotaMenu(idx, n)}
             />
           ))}
@@ -572,6 +574,9 @@ export function Cliente() {
             usoTactil.current = true
             carrito.agregarMenu(linea)
             setArmandoMenu(null)
+            // Un armado "para 4" salta directo a la lista: ahí cada menú es
+            // su tarjeta y la señora configura uno por uno
+            if (linea.cantidad > 1) setPantalla('resumen')
           }}
           onCerrar={() => setArmandoMenu(null)}
         />

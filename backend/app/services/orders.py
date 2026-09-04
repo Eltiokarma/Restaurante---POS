@@ -100,6 +100,12 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
     if cantidad <= 0:
         raise EleccionInvalida("La cantidad del menú debe ser mayor a 0")
     empaque = pedido.get("empaque", "mesa")
+    # Empaque POR TIEMPO ("la sopa en bolsa, el segundo en lonchera"): si un
+    # tiempo no viene aquí, usa el empaque general del menú
+    empaques_por_tiempo = {int(k): v for k, v in (pedido.get("empaques") or {}).items()}
+    numeros_de_tiempo = {t.orden for t in plantilla.tiempos}
+    if not set(empaques_por_tiempo) <= numeros_de_tiempo:
+        raise EleccionInvalida(f"El {plantilla.nombre} no tiene ese tiempo")
     elecciones = {int(k): int(v) for k, v in (pedido.get("elecciones") or {}).items()}
 
     # Tiempos que el cliente quitó ("sin sopa"): descuentan lo configurado
@@ -178,7 +184,7 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
             nombre_snapshot=plato.nombre,
             precio_snapshot=recargo,  # el precio del plato ya está en el menú
             cantidad=cantidad,
-            empaque=empaque,
+            empaque=empaques_por_tiempo.get(tiempo.orden, empaque),
             nota="",
             tiempo_orden=tiempo.orden,
             es_extra=False,
@@ -213,7 +219,7 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
             nombre_snapshot=plato.nombre,
             precio_snapshot=precio_extra,
             cantidad=cantidad_extra,
-            empaque=empaque,
+            empaque=empaques_por_tiempo.get(tiempo.orden, empaque),
             nota="",
             tiempo_orden=tiempo.orden,
             es_extra=True,

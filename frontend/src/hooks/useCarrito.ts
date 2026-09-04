@@ -40,7 +40,7 @@ export function useCarrito() {
 
   const empaqueParaTodos = useCallback((empaque: Empaque) => {
     setItems((prev) => prev.map((i) => ({ ...i, empaque })))
-    setMenus((prev) => prev.map((m) => ({ ...m, empaque })))
+    setMenus((prev) => prev.map((m) => ({ ...m, empaque, empaques: {} })))
   }, [])
 
   // Pedido especial por plato: "sin frijoles", "con un huevo frito"…
@@ -56,9 +56,21 @@ export function useCarrito() {
   // ---------- Menús encadenados ----------
 
   // Cada menú entra como SU PROPIA línea (no se juntan iguales): el
-  // cliente ve "Menú 1, Menú 2…" y edita cada uno por separado
+  // cliente ve "Menú 1, Menú 2…" y edita cada uno por separado. Un armado
+  // "para 4" entra como 4 tarjetas independientes por la misma razón.
   const agregarMenu = useCallback((linea: MenuCarrito) => {
-    setMenus((prev) => [...prev, linea])
+    // Los extras y agregados NO se multiplican por la cantidad (así lo
+    // muestra el botón del armado): al partir van solo en la primera unidad
+    const unidades = Array.from({ length: Math.max(1, linea.cantidad) }, (_, n) => ({
+      ...linea,
+      cantidad: 1,
+      elecciones: { ...linea.elecciones },
+      extras: n === 0 ? linea.extras.map((e) => ({ ...e })) : [],
+      omitidos: [...linea.omitidos],
+      agregados: n === 0 ? linea.agregados.map((a) => ({ ...a })) : [],
+      empaques: { ...linea.empaques },
+    }))
+    setMenus((prev) => [...prev, ...unidades])
   }, [])
 
   // "Un menú" al toque: entra completo con la opción por defecto de cada
@@ -70,7 +82,7 @@ export function useCarrito() {
     }
     setMenus((prev) => [...prev, {
       menu, cantidad: 1, elecciones, extras: [], omitidos: [], agregados: [],
-      empaque: 'mesa' as Empaque, nota: '',
+      empaque: 'mesa' as Empaque, empaques: {}, nota: '',
     }])
   }, [])
 
@@ -100,7 +112,13 @@ export function useCarrito() {
       }
       const elecciones = { ...m.elecciones }
       delete elecciones[tiempoOrden]
-      return { ...m, elecciones, omitidos: [...m.omitidos, tiempoOrden] }
+      return {
+        ...m,
+        elecciones,
+        omitidos: [...m.omitidos, tiempoOrden],
+        // Sus porciones extra se van con él: quedarían cobrándose sin chip a la vista
+        extras: m.extras.filter((e) => e.tiempo_orden !== tiempoOrden),
+      }
     }))
   }, [])
 
@@ -131,7 +149,7 @@ export function useCarrito() {
     const empaque = usados[0]?.empaque ?? ('mesa' as Empaque)
     setMenus((m) => [...m, {
       menu: s.menu, cantidad: 1, elecciones: s.elecciones, extras: [],
-      omitidos: [], agregados: [], empaque, nota,
+      omitidos: [], agregados: [], empaque, empaques: {}, nota,
     }])
     setItems((prev) =>
       prev
@@ -154,6 +172,7 @@ export function useCarrito() {
         omitidos: [...original.omitidos],
         agregados: original.agregados.map((a) => ({ ...a })),
         extras: original.extras.map((e) => ({ ...e })),
+        empaques: { ...original.empaques },
       }
       return [...prev.slice(0, idx + 1), copia, ...prev.slice(idx + 1)]
     })
@@ -171,9 +190,43 @@ export function useCarrito() {
     setMenus((prev) => prev.filter((_, i) => i !== idx))
   }, [])
 
+  // "Todo el menú en X" borra los empaques por tiempo: el general manda
   const cambiarEmpaqueMenu = useCallback((idx: number, empaque: Empaque) => {
-    setMenus((prev) => prev.map((m, i) => (i === idx ? { ...m, empaque } : m)))
+    setMenus((prev) => prev.map((m, i) => (i === idx ? { ...m, empaque, empaques: {} } : m)))
   }, [])
+
+  // "La sopa en bolsa": empaque de UN tiempo de UN menú. Elegir el mismo
+  // del menú borra el override (no es una excepción real)
+  const cambiarEmpaqueTiempo = useCallback((idx: number, tiempoOrden: number, empaque: Empaque) => {
+    setMenus((prev) => prev.map((m, i) => {
+      if (i !== idx) return m
+      const empaques = { ...m.empaques }
+      if (empaque === m.empaque) delete empaques[tiempoOrden]
+      else empaques[tiempoOrden] = empaque
+      return { ...m, empaques }
+    }))
+  }, [])
+
+  // Porción extra ("una entrada más a S/ 3") desde la tarjeta del menú
+  const cambiarExtraMenu = useCallback(
+    (idx: number, tiempoOrden: number, platoId: number, delta: number) => {
+      setMenus((prev) => prev.map((m, i) => {
+        if (i !== idx) return m
+        const pos = m.extras.findIndex((e) => e.tiempo_orden === tiempoOrden && e.plato_id === platoId)
+        if (pos === -1) {
+          return delta > 0
+            ? { ...m, extras: [...m.extras, { tiempo_orden: tiempoOrden, plato_id: platoId, cantidad: delta }] }
+            : m
+        }
+        const cantidad = m.extras[pos].cantidad + delta
+        const extras = cantidad <= 0
+          ? m.extras.filter((_, j) => j !== pos)
+          : m.extras.map((e, j) => (j === pos ? { ...e, cantidad } : e))
+        return { ...m, extras }
+      }))
+    },
+    [],
+  )
 
   const cambiarNotaMenu = useCallback((idx: number, nota: string) => {
     setMenus((prev) => prev.map((m, i) => (i === idx ? { ...m, nota } : m)))
@@ -222,6 +275,9 @@ export function useCarrito() {
             ...m,
             menu: nuevo,
             omitidos: m.omitidos.filter((o) => tiempos.has(o)),
+            empaques: Object.fromEntries(
+              Object.entries(m.empaques).filter(([k]) => tiempos.has(Number(k))),
+            ),
             agregados: m.agregados.flatMap((a) => {
               const vigente = nuevo.agregados.find((x) => x.id === a.agregado.id)
               return vigente ? [{ ...a, agregado: vigente }] : []
@@ -261,6 +317,8 @@ export function useCarrito() {
     cambiarCantidadMenu,
     quitarMenu,
     cambiarEmpaqueMenu,
+    cambiarEmpaqueTiempo,
+    cambiarExtraMenu,
     cambiarNotaMenu,
     vaciar,
     eliminarNoDisponibles,

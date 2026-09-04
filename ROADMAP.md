@@ -158,6 +158,18 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       comprado, la merma, el stock de hoy y para cuántos días alcanza; y export CSV
       (`GET /api/insumos/consumo` y `/consumo.csv`). Lo usado se valoriza al costo promedio
       vigente y la devolución de una orden anulada descuenta del consumo sin bajar de cero.
+- [x] **Menú para varios, cada uno a su manera** (caso real del dueño: "una señora quiere
+      algo para 4 — uno segundo solo, otro con sopa acá y segundo para llevar, otro sin
+      frijoles, otro todo en bolsa y lonchera"): el armado "para N" entra como N tarjetas
+      independientes (los extras y agregados del armado van en la primera, no se
+      multiplican) y salta directo a la lista para configurar cada una; en cada tarjeta se
+      elige el **empaque POR PLATO** ("Mesa ▾" en cada tiempo → mesa/táper/bolsa/lonchera,
+      con "Todo el menú:" como general) y también las **porciones extra** del tiempo (la
+      regla de la entrada: incluida vale lo del menú, una más a su `precio_extra`); quitar
+      un tiempo bota sus extras. Backend: `empaques {tiempo_orden→empaque}` en el payload
+      con validación, empaque por ítem en cocina/ticket/CSV y `tipo_servicio` mixto
+      derivado solo. El minicaso de los amigos sale exacto: solos S/ 14 + S/ 10; juntos,
+      dos menús completos a S/ 11 pasándose la entrada.
 - [x] **La terminal muestra SOLO los menús** (pedido del dueño tras probar el pedido
       "desde el menú"): las secciones de platos sueltos (entradas, segundos…) ya no salen
       en la terminal — repetían lo del menú y confundían. Interruptor en Admin →

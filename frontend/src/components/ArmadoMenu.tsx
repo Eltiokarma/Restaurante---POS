@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { soles, subtotalMenu } from '../api'
+import { soles, subtotalMenu, NOMBRE_EMPAQUE } from '../api'
 import type { Empaque, ExtraMenu, MenuCarrito, MenuHoy } from '../api'
 
 interface Props {
@@ -47,7 +47,7 @@ export function ArmadoMenu({ menu, onAgregar, onCerrar }: Props) {
 
   const linea: MenuCarrito = {
     menu, cantidad, elecciones, extras, omitidos: [], agregados: [],
-    empaque: 'mesa' as Empaque, nota: '',
+    empaque: 'mesa' as Empaque, empaques: {}, nota: '',
   }
 
   return (
@@ -130,7 +130,7 @@ export function ArmadoMenu({ menu, onAgregar, onCerrar }: Props) {
           >
             {faltantes.length > 0
               ? `Elige ${faltantes[0].rotulo.toLowerCase()}`
-              : `✅ Agregar — ${soles(subtotalMenu(linea))}`}
+              : `✅ Agregar ${cantidad > 1 ? `${cantidad} menús` : ''} — ${soles(subtotalMenu(linea))}`}
           </button>
         </div>
       </div>
@@ -148,7 +148,13 @@ export function describirMenu(linea: MenuCarrito): string {
       continue
     }
     const alternativa = t.alternativas.find((a) => a.plato_id === linea.elecciones[t.orden])
-    if (alternativa) partes.push(alternativa.nombre)
+    if (!alternativa) continue
+    // Solo se menciona el empaque cuando ESTE plato va distinto al resto
+    const distinto = linea.empaques[t.orden]
+    partes.push(
+      alternativa.nombre +
+        (distinto && distinto !== linea.empaque ? ` (${NOMBRE_EMPAQUE[distinto]})` : ''),
+    )
   }
   const extras = linea.extras.reduce((s, e) => s + e.cantidad, 0)
   const agregados = linea.agregados
