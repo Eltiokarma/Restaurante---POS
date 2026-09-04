@@ -94,7 +94,9 @@ def test_ticket_escpos_con_menu_encadenado(client, db, menu_ejemplo):
     datos = base64.b64decode(cola["trabajos"][0]["datos_b64"])
     assert "Menú del día".encode("cp850") in datos
     assert b"(EXTRA)" in datos
-    assert b"TOTAL" in datos and b"14.00" in datos
+    # El impreso es la comanda: sin línea de TOTAL (el monto vive en
+    # pantalla y caja)
+    assert b"TOTAL" not in datos
 
 
 def test_config_de_impresora(client, admin_headers):

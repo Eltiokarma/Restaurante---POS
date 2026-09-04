@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..auth import requiere_admin
 from ..db import get_db
-from ..models import Config, Mesa, Orden, hoy_lima
+from ..models import Config, Mesa, Orden, Plato, hoy_lima
 from ..routes.config import leer_config
 from ..services.escpos import render_orden, render_prueba
 
@@ -69,6 +69,8 @@ def cola_de_impresion(db: Session = Depends(get_db)):
         "mesas": {m.id: m.nombre for m in db.scalars(select(Mesa)).all()},
     }
     columnas = config["impresora_columnas"]
+    # Para que el ticket impreso (la comanda) esconda las bebidas
+    categorias = dict(db.execute(select(Plato.id, Plato.categoria)).all())
     trabajos = []
 
     # Ticket de prueba (botón de Admin → Configuración). Se queda en cola
@@ -97,7 +99,7 @@ def cola_de_impresion(db: Session = Depends(get_db)):
             "tipo": "orden",
             "orden_id": orden.id,
             "numero": f"{orden.numero_orden_dia:03d}",
-            "datos_b64": base64.b64encode(render_orden(orden, local, columnas)).decode(),
+            "datos_b64": base64.b64encode(render_orden(orden, local, columnas, categorias)).decode(),
         })
 
     return {
