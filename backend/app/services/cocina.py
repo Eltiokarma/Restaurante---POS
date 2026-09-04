@@ -61,6 +61,7 @@ def _partir_item(orden: Orden, item: OrdenItem, cantidad: int, estado: str) -> N
         orden_menu_id=item.orden_menu_id,
         tiempo_orden=item.tiempo_orden,
         es_extra=item.es_extra,
+        es_agregado=item.es_agregado,
         estado=estado,
     ))
 

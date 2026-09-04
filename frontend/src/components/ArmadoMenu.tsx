@@ -46,7 +46,8 @@ export function ArmadoMenu({ menu, onAgregar, onCerrar }: Props) {
   }
 
   const linea: MenuCarrito = {
-    menu, cantidad, elecciones, extras, empaque: 'mesa' as Empaque, nota: '',
+    menu, cantidad, elecciones, extras, omitidos: [], agregados: [],
+    empaque: 'mesa' as Empaque, nota: '',
   }
 
   return (
@@ -142,9 +143,20 @@ export function ArmadoMenu({ menu, onAgregar, onCerrar }: Props) {
 export function describirMenu(linea: MenuCarrito): string {
   const partes: string[] = []
   for (const t of linea.menu.tiempos) {
+    if (linea.omitidos.includes(t.orden)) {
+      partes.push(`sin ${t.rotulo.toLowerCase()}`)
+      continue
+    }
     const alternativa = t.alternativas.find((a) => a.plato_id === linea.elecciones[t.orden])
     if (alternativa) partes.push(alternativa.nombre)
   }
   const extras = linea.extras.reduce((s, e) => s + e.cantidad, 0)
-  return partes.join(' + ') + (extras > 0 ? ` (+${extras} extra)` : '')
+  const agregados = linea.agregados
+    .map((a) => `+${a.cantidad} ${a.agregado.nombre.toLowerCase()}`)
+    .join(', ')
+  return (
+    partes.join(' + ') +
+    (extras > 0 ? ` (+${extras} extra)` : '') +
+    (agregados ? ` (${agregados})` : '')
+  )
 }

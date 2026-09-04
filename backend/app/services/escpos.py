@@ -10,6 +10,8 @@ El layout replica el ticket HTML (components/Ticket.tsx): cabecera del
 local, número de orden grande, servicio/mesa/entrega, items con los menús
 encadenados indentados, total y pie. Tildes y ñ via codepage CP850.
 """
+import json
+
 from ..models import Orden
 
 # Comandos ESC/POS (estándar Epson, soportados por los clones chinos)
@@ -59,8 +61,6 @@ def render_orden(orden: Orden, local: dict, columnas: int = 42) -> bytes:
         partes.append(_texto("* PARA LLEVAR *"))
     elif orden.tipo_servicio == "mixto":
         partes.append(_texto("* MIXTO - parte para llevar *"))
-    import json
-
     mesas = json.loads(orden.mesa_ids or "[]")
     if mesas and not orden.mesa_liberada:
         nombres = local.get("mesas") or {}
@@ -73,20 +73,30 @@ def render_orden(orden: Orden, local: dict, columnas: int = 42) -> bytes:
 
     partes += [ALINEAR_IZQ, _texto("-" * columnas)]
 
-    # Menús encadenados: el menú con su precio, los tiempos indentados
+    # Menús encadenados: el menú con su precio, los tiempos indentados,
+    # lo quitado en su propia línea destacada (SIN SOPA) y los agregados
+    # como +1 PRESA — decisión del dueño: imposibles de pasar por alto
     for om in orden.menus:
+        omitidos = om.omitidos()
         partes.append(_texto(_fila(
             f"{om.cantidad} x {om.nombre_snapshot}",
-            _soles(om.precio_snapshot * om.cantidad), columnas,
+            _soles(om.precio_cobrado * om.cantidad), columnas,
         )))
+        for omitido in omitidos:
+            nombre = f"  ** SIN {omitido['rotulo'].upper()} **"
+            monto = f"-{_soles(omitido['descuento'] * om.cantidad)}" if omitido["descuento"] > 0 else ""
+            partes.append(_texto(_fila(nombre, monto, columnas)))
         items_menu = sorted(
             (i for i in orden.items if i.orden_menu_id == om.id),
-            key=lambda i: (i.es_extra, i.tiempo_orden or 0),
+            key=lambda i: (i.es_agregado, i.es_extra, i.tiempo_orden or 0),
         )
         for item in items_menu:
-            nombre = f"  . {item.cantidad} x {item.nombre_snapshot}"
-            if item.es_extra:
-                nombre += " (EXTRA)"
+            if item.es_agregado:
+                nombre = f"  ** +{item.cantidad} {item.nombre_snapshot.upper()} **"
+            else:
+                nombre = f"  . {item.cantidad} x {item.nombre_snapshot}"
+                if item.es_extra:
+                    nombre += " (EXTRA)"
             if item.empaque != "mesa":
                 nombre += f" [{item.empaque.upper()}]"
             monto = _soles(item.precio_snapshot * item.cantidad) if item.precio_snapshot > 0 else ""

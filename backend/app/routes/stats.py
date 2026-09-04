@@ -68,8 +68,21 @@ def _resumen(db: Session, desde: date, hasta: date) -> dict:
         .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada")
         .group_by(OrdenMenu.nombre_snapshot)
     ).all()
+    # Menús con tiempos quitados: el snapshot es el precio completo, pero
+    # se cobró con descuento — se resta lo quitado (filas con omitidos hay pocas)
+    descuento_por_menu: dict[str, float] = {}
+    for om in db.scalars(
+        select(OrdenMenu)
+        .join(Orden, OrdenMenu.orden_id == Orden.id)
+        .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada",
+               OrdenMenu.omitidos_json != "[]")
+    ).all():
+        quitado = om.descuento_omitidos * om.cantidad
+        descuento_por_menu[om.nombre_snapshot] = descuento_por_menu.get(om.nombre_snapshot, 0.0) + quitado
+
     ventas_por_plato += [
-        {"nombre": nombre, "cantidad": int(cantidad), "total": round(total, 2)}
+        {"nombre": nombre, "cantidad": int(cantidad),
+         "total": round(total - descuento_por_menu.get(nombre, 0.0), 2)}
         for nombre, cantidad, total in filas_menus
     ]
     ventas_por_plato.sort(key=lambda v: v["cantidad"], reverse=True)
@@ -192,12 +205,19 @@ def exportar_csv(
         # Cada menú vendido: su línea (donde vive el precio) y debajo sus
         # platos elegidos y extras, con la columna "menu" que los agrupa
         for om in orden.menus:
-            fila(orden, om.nombre_snapshot, om.nombre_snapshot, "", om.nota,
-                 om.cantidad, om.precio_snapshot)
+            # La fila del menú lleva el precio ya con el descuento por lo
+            # quitado, y la nota dice qué se quitó ("sin Sopa")
+            nota_menu = "; ".join(filter(None, [
+                om.nota, ", ".join("sin " + o["rotulo"] for o in om.omitidos()),
+            ]))
+            fila(orden, om.nombre_snapshot, om.nombre_snapshot, "", nota_menu,
+                 om.cantidad, om.precio_cobrado)
             items_menu = [i for i in orden.items if i.orden_menu_id == om.id]
-            items_menu.sort(key=lambda i: (i.es_extra, i.tiempo_orden or 0))
+            items_menu.sort(key=lambda i: (i.es_agregado, i.es_extra, i.tiempo_orden or 0))
             for item in items_menu:
-                nombre = item.nombre_snapshot + (" (extra)" if item.es_extra else "")
+                nombre = item.nombre_snapshot + (
+                    " (agregado)" if item.es_agregado else " (extra)" if item.es_extra else ""
+                )
                 fila(orden, nombre, om.nombre_snapshot, item.empaque, item.nota,
                      item.cantidad, item.precio_snapshot)
         for item in orden.items:

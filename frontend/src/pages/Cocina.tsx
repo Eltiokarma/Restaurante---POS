@@ -314,9 +314,15 @@ export function Cocina() {
                       <strong>{menu.cantidad} ×</strong> {menu.nombre}
                     </span>
                     <ul>
+                      {menu.omitidos.map((o, i) => (
+                        <li key={`sin-${i}`} className="item-sin-tiempo">
+                          ⛔ SIN {o.rotulo.toUpperCase()}
+                        </li>
+                      ))}
                       {menu.items.map((item, i) => (
-                        <li key={i} className={claseItem(item.estado)}>
-                          {item.cantidad} × {item.nombre}
+                        <li key={i} className={`${claseItem(item.estado)} ${item.es_agregado ? 'item-agregado' : ''}`}>
+                          {item.es_agregado ? <strong>＋{item.cantidad} {item.nombre.toUpperCase()}</strong>
+                            : <>{item.cantidad} × {item.nombre}</>}
                           {item.es_extra && <span className="item-extra-tag">extra</span>}
                           {item.empaque !== 'mesa' && (
                             <span className="item-empaque">{NOMBRE_EMPAQUE[item.empaque]}</span>

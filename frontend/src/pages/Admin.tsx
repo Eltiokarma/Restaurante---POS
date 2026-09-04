@@ -517,6 +517,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
         terminal en el siguiente refresco (máx. 30 segundos).
       </p>
       <EditorPlantillas onSesionVencida={onSesionVencida} />
+      <EditorAgregados onSesionVencida={onSesionVencida} />
     </div>
   )
 }
@@ -527,6 +528,7 @@ interface TiempoEditable {
   rotulo: string
   obligatorio: boolean
   precio_extra: string // como texto mientras se edita
+  descuento_quitar: string // cuánto baja el menú si el cliente lo quita
   alternativas: { plato_id: number; recargo: string }[]
 }
 
@@ -563,6 +565,7 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
             rotulo: t.rotulo,
             obligatorio: t.obligatorio,
             precio_extra: t.precio_extra > 0 ? t.precio_extra.toFixed(2) : '',
+            descuento_quitar: t.descuento_si_se_quita > 0 ? t.descuento_si_se_quita.toFixed(2) : '',
             alternativas: t.alternativas.map((a) => ({
               plato_id: a.plato_id,
               recargo: a.recargo > 0 ? a.recargo.toFixed(2) : '',
@@ -620,8 +623,8 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
         precio: '',
         activo_hoy: true,
         tiempos: [
-          { rotulo: 'Entrada o sopa', obligatorio: true, precio_extra: '3.00', alternativas: [] },
-          { rotulo: 'Segundo', obligatorio: true, precio_extra: '', alternativas: [] },
+          { rotulo: 'Entrada o sopa', obligatorio: true, precio_extra: '3.00', descuento_quitar: '1.00', alternativas: [] },
+          { rotulo: 'Segundo', obligatorio: true, precio_extra: '', descuento_quitar: '', alternativas: [] },
         ],
       },
     ])
@@ -684,6 +687,7 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
           rotulo: t.rotulo.trim(),
           obligatorio: t.obligatorio,
           precio_extra: parseFloat(t.precio_extra) > 0 ? parseFloat(t.precio_extra) : 0,
+          descuento_si_se_quita: parseFloat(t.descuento_quitar) > 0 ? parseFloat(t.descuento_quitar) : 0,
           alternativas: t.alternativas.map((a) => ({
             plato_id: a.plato_id,
             recargo: parseFloat(a.recargo) > 0 ? parseFloat(a.recargo) : 0,
@@ -770,6 +774,15 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
                     placeholder="—"
                   />
                 </label>
+                <label title="Cuánto baja el menú si el cliente quita este tiempo (ej. sin sopa). Vacío = no baja">
+                  Si lo quita −S/{' '}
+                  <input
+                    type="number" step="0.50" min="0" className="input-precio"
+                    value={t.descuento_quitar}
+                    onChange={(e) => editarTiempo(idx, ti, { descuento_quitar: e.target.value })}
+                    placeholder="—"
+                  />
+                </label>
                 <button
                   className="boton-quitar"
                   onClick={() =>
@@ -829,6 +842,7 @@ function EditorPlantillas({ onSesionVencida }: { onSesionVencida: () => void }) 
                     rotulo: TIEMPOS_SUGERIDOS[p.tiempos.length] ?? '',
                     obligatorio: true,
                     precio_extra: '',
+                    descuento_quitar: '',
                     alternativas: [],
                   },
                 ],
@@ -1610,6 +1624,104 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   )
 }
 
+
+// ---------- Agregados del menú (+presa, +refresco…) ----------
+
+interface AgregadoEditable {
+  id?: number
+  nombre: string
+  precio: string // como texto mientras se edita
+  activo: boolean
+}
+
+function EditorAgregados({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [agregados, setAgregados] = useState<AgregadoEditable[]>([])
+  const [mensaje, setMensaje] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.agregadosMenu()
+      .then((r) => setAgregados(r.agregados.map((a) => ({ ...a, precio: a.precio.toFixed(2) }))))
+      .catch((e) => setError(manejarError(e, onSesionVencida)))
+  }, [onSesionVencida])
+
+  const editar = (idx: number, cambios: Partial<AgregadoEditable>) => {
+    setAgregados((prev) => prev.map((a, i) => (i === idx ? { ...a, ...cambios } : a)))
+  }
+
+  const guardar = async () => {
+    setError('')
+    const validos = agregados.filter((a) => a.nombre.trim() !== '')
+    const sinPrecio = validos.filter((a) => !(parseFloat(a.precio) > 0))
+    if (sinPrecio.length > 0) {
+      setError(`Pon el precio de: ${sinPrecio.map((a) => a.nombre).join(', ')}.`)
+      return
+    }
+    try {
+      const r = await api.guardarAgregadosMenu(validos.map((a) => ({
+        id: a.id, nombre: a.nombre.trim(), precio: parseFloat(a.precio), activo: a.activo,
+      })))
+      setAgregados(r.agregados.map((a) => ({ ...a, precio: a.precio.toFixed(2) })))
+      setMensaje('Agregados guardados ✔')
+      setTimeout(() => setMensaje(''), 3000)
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  return (
+    <div className="editor-plantillas editor-agregados">
+      <h2 className="titulo-categoria">Agregados del menú (+ presa, + refresco…)</h2>
+      <p className="nota-admin">
+        Porciones que el cliente puede sumar a cualquier menú, cada una con su precio. No son
+        platos de la carta: la presa extra, más arroz, más ensalada. Apaga la que no quieras
+        ofrecer hoy. Ojo: por ahora los agregados NO descuentan del kardex (no tienen receta);
+        si vendes muchos, ajusta el stock con "Conté".
+      </p>
+      {mensaje && <div className="banner-ok">{mensaje}</div>}
+      {error && <div className="banner-error">{error}</div>}
+      {agregados.map((a, idx) => (
+        <div className="fila-agregado" key={a.id ?? `nuevo-${idx}`}>
+          <input
+            value={a.nombre}
+            onChange={(e) => editar(idx, { nombre: e.target.value })}
+            placeholder="Nombre (ej. Presa)"
+            maxLength={60}
+          />
+          <label>
+            S/{' '}
+            <input
+              type="number" step="0.50" min="0" className="input-precio"
+              value={a.precio}
+              onChange={(e) => editar(idx, { precio: e.target.value })}
+            />
+          </label>
+          <label className="check-agregado">
+            <input
+              type="checkbox"
+              checked={a.activo}
+              onChange={(e) => editar(idx, { activo: e.target.checked })}
+            />{' '}
+            se ofrece
+          </label>
+          <button
+            className="boton-quitar"
+            onClick={() => setAgregados((prev) => prev.filter((_, i) => i !== idx))}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <div className="admin-acciones">
+        <button onClick={() => setAgregados((prev) => [...prev, { nombre: '', precio: '', activo: true }])}>
+          + Nuevo agregado
+        </button>
+        <button className="boton-primario" onClick={guardar}>💾 Guardar agregados</button>
+      </div>
+    </div>
+  )
+}
+
 // ---------- Consumo semanal del kardex ----------
 
 type RangoConsumo = 'semana' | 'semana-pasada' | 'mes' | 'manual'
@@ -2039,11 +2151,13 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
 
 // ---------- Asistente: crear el menú del día en un minuto ----------
 
-const TIEMPOS_POR_CATEGORIA: { categoria: string; rotulo: string; extra: string }[] = [
-  { categoria: 'entrada', rotulo: 'Entrada o sopa', extra: '3.00' },
-  { categoria: 'fondo', rotulo: 'Segundo', extra: '' },
-  { categoria: 'bebida', rotulo: 'Refresco', extra: '' },
-  { categoria: 'postre', rotulo: 'Postre', extra: '' },
+// "quitar": cuánto baja el menú si el cliente lo quita ("sin sopa"),
+// editable después en el editor — decisión del dueño: sí baja un poco
+const TIEMPOS_POR_CATEGORIA: { categoria: string; rotulo: string; extra: string; quitar: string }[] = [
+  { categoria: 'entrada', rotulo: 'Entrada o sopa', extra: '3.00', quitar: '1.00' },
+  { categoria: 'fondo', rotulo: 'Segundo', extra: '', quitar: '' },
+  { categoria: 'bebida', rotulo: 'Refresco', extra: '', quitar: '' },
+  { categoria: 'postre', rotulo: 'Postre', extra: '', quitar: '' },
 ]
 
 /**
@@ -2100,6 +2214,7 @@ function AsistenteMenu({
         rotulo: t.rotulo,
         obligatorio: true,
         precio_extra: t.categoria === 'entrada' ? extraEntrada : t.extra,
+        descuento_quitar: t.quitar,
         alternativas: activos
           .filter((p) => p.categoria === t.categoria && marcados.has(p.id))
           .map((p) => ({ plato_id: p.id, recargo: '' })),

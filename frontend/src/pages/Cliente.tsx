@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles, subtotalMenu } from '../api'
+import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles } from '../api'
 import type { ConfigOut, DatosLocal, Entrega, MenuHoy, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { ArmadoMenu, describirMenu } from '../components/ArmadoMenu'
+import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
@@ -19,6 +20,13 @@ export function Cliente() {
   const [menusHoy, setMenusHoy] = useState<MenuHoy[]>([])
   // Menú encadenado que se está armando (abre el modal de tiempos)
   const [armandoMenu, setArmandoMenu] = useState<MenuHoy | null>(null)
+  // Menú recién agregado con "Un menú": el botón confirma un momento
+  const [menuRecien, setMenuRecien] = useState<number | null>(null)
+  useEffect(() => {
+    if (menuRecien === null) return
+    const timer = setTimeout(() => setMenuRecien(null), 1600)
+    return () => clearTimeout(timer)
+  }, [menuRecien])
   const [config, setConfig] = useState<ConfigOut | null>(null)
   const carrito = useCarrito()
 
@@ -172,7 +180,9 @@ export function Cliente() {
         entregaEfectiva,
         carrito.menus.map((m) => ({
           menu_id: m.menu.id, cantidad: m.cantidad, elecciones: m.elecciones,
-          extras: m.extras, empaque: m.empaque, nota: m.nota.trim(),
+          extras: m.extras, omitidos: m.omitidos,
+          agregados: m.agregados.map((a) => ({ agregado_id: a.agregado.id, cantidad: a.cantidad })),
+          empaque: m.empaque, nota: m.nota.trim(),
         })),
       )
       setOrdenFinal(resultado)
@@ -350,47 +360,18 @@ export function Cliente() {
         </div>
         <div className="lista-resumen">
           {carrito.menus.map((m, idx) => (
-            <div className="linea-resumen linea-con-empaque" key={`menu-${idx}`}>
-              <div className="linea-resumen-fila">
-                <span>
-                  {m.cantidad} × {m.menu.nombre}
-                </span>
-                <span className="linea-resumen-precios">
-                  <strong>{soles(subtotalMenu(m))}</strong>
-                </span>
-              </div>
-              <div className="linea-menu-detalle">{describirMenu(m)}</div>
-              <div className="empaques-linea">
-                <button
-                  className="boton-servicio boton-empaque"
-                  onClick={() => carrito.cambiarCantidadMenu(idx, -1)}
-                >
-                  − Quitar uno
-                </button>
-                <button
-                  className="boton-servicio boton-empaque"
-                  onClick={() => carrito.cambiarCantidadMenu(idx, 1)}
-                >
-                  + Uno más
-                </button>
-                {EMPAQUES.map((e) => (
-                  <button
-                    key={e}
-                    className={`boton-servicio boton-empaque ${m.empaque === e ? 'servicio-activo' : ''}`}
-                    onClick={() => carrito.cambiarEmpaqueMenu(idx, e)}
-                  >
-                    {NOMBRE_EMPAQUE[e]}
-                  </button>
-                ))}
-              </div>
-              <input
-                className="input-nota-plato"
-                placeholder="📝 Algún cambio: sin arroz, sin frijoles…"
-                maxLength={150}
-                value={m.nota}
-                onChange={(e) => carrito.cambiarNotaMenu(idx, e.target.value)}
-              />
-            </div>
+            <TarjetaMenuCarrito
+              key={`menu-${idx}`}
+              linea={m}
+              numero={idx + 1}
+              onCambiarEleccion={(t, p) => carrito.cambiarEleccion(idx, t, p)}
+              onAlternarOmitido={(t) => carrito.alternarOmitido(idx, t)}
+              onCambiarAgregado={(a, d) => carrito.cambiarAgregado(idx, a, d)}
+              onCambiarCantidad={(d) => carrito.cambiarCantidadMenu(idx, d)}
+              onDuplicar={() => carrito.duplicarMenu(idx)}
+              onCambiarEmpaque={(e) => carrito.cambiarEmpaqueMenu(idx, e)}
+              onCambiarNota={(n) => carrito.cambiarNotaMenu(idx, n)}
+            />
           ))}
           {carrito.items.map((i) => (
             <div className="linea-resumen linea-con-empaque" key={i.plato.id}>
@@ -525,8 +506,14 @@ export function Cliente() {
                       </div>
                     ))}
                   </div>
-                  <button className="boton-armar" onClick={() => setArmandoMenu(m)}>
-                    🍽 ARMAR ESTE MENÚ
+                  <button
+                    className="boton-armar"
+                    onClick={() => { carrito.agregarMenuCompleto(m); setMenuRecien(m.id) }}
+                  >
+                    {menuRecien === m.id ? '✔ ¡Agregado! Toca para otro' : `🍽 UN MENÚ — ${soles(m.precio)}`}
+                  </button>
+                  <button className="boton-elegir-menu" onClick={() => setArmandoMenu(m)}>
+                    Prefiero elegir cada plato…
                   </button>
                 </div>
               ))}

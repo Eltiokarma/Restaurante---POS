@@ -48,12 +48,23 @@ export function Ticket({ orden, local }: Props) {
                   {menu.cantidad} × {menu.nombre}
                   {menu.nota && <div className="ticket-item-nota">→ {menu.nota}</div>}
                 </td>
-                <td className="ticket-subtotal">{soles(menu.precio * menu.cantidad)}</td>
+                <td className="ticket-subtotal">
+                  {soles((menu.precio - menu.omitidos.reduce((s, o) => s + o.descuento, 0)) * menu.cantidad)}
+                </td>
               </tr>
+              {menu.omitidos.map((o, i) => (
+                <tr key={`menu-${m}-sin-${i}`} className="ticket-item-tiempo ticket-item-sin">
+                  <td>** SIN {o.rotulo.toUpperCase()} **</td>
+                  <td className="ticket-subtotal">
+                    {o.descuento > 0 ? `−${soles(o.descuento * menu.cantidad)}` : ''}
+                  </td>
+                </tr>
+              ))}
               {menu.items.map((item, i) => (
-                <tr key={`menu-${m}-item-${i}`} className="ticket-item-tiempo">
+                <tr key={`menu-${m}-item-${i}`} className={`ticket-item-tiempo ${item.es_agregado ? 'ticket-item-agregado' : ''}`}>
                   <td>
-                    · {item.cantidad} × {item.nombre}
+                    {item.es_agregado ? `** +${item.cantidad} ${item.nombre.toUpperCase()} **`
+                      : <>· {item.cantidad} × {item.nombre}</>}
                     {item.es_extra && ' (EXTRA)'}
                     {item.empaque !== 'mesa' && (
                       <span className="ticket-item-empaque"> [{item.empaque.toUpperCase()}]</span>

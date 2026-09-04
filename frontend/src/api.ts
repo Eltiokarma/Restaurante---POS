@@ -57,7 +57,16 @@ export interface MenuTiempoHoy {
   obligatorio: boolean
   // Precio de UNA porción adicional pedida con el menú (0 = no se ofrece)
   precio_extra: number
+  // Cuánto baja el menú si el cliente quita este tiempo (0 = no baja)
+  descuento_si_se_quita: number
   alternativas: MenuAlternativaHoy[]
+}
+
+// Porción suelta que se suma a un menú: + presa, + refresco, + arroz…
+export interface AgregadoHoy {
+  id: number
+  nombre: string
+  precio: number
 }
 
 export interface MenuHoy {
@@ -65,6 +74,7 @@ export interface MenuHoy {
   nombre: string
   precio: number
   tiempos: MenuTiempoHoy[]
+  agregados: AgregadoHoy[]
 }
 
 export interface ExtraMenu {
@@ -79,6 +89,8 @@ export interface MenuCarrito {
   cantidad: number
   elecciones: Record<number, number> // tiempo_orden → plato_id
   extras: ExtraMenu[]
+  omitidos: number[] // tiempos quitados ("sin sopa")
+  agregados: { agregado: AgregadoHoy; cantidad: number }[] // +1 presa…
   empaque: Empaque
   nota: string
 }
@@ -99,6 +111,7 @@ export interface OrdenItemOut {
 export interface OrdenMenuItemOut extends OrdenItemOut {
   tiempo_orden: number | null
   es_extra: boolean
+  es_agregado: boolean
 }
 
 export interface OrdenMenuOut {
@@ -107,6 +120,8 @@ export interface OrdenMenuOut {
   cantidad: number
   nota: string
   subtotal: number
+  // Tiempos que el cliente quitó ("Sin sopa"), con el descuento aplicado
+  omitidos: { rotulo: string; descuento: number }[]
   items: OrdenMenuItemOut[]
 }
 
@@ -347,6 +362,8 @@ export interface MenuOrdenIn {
   cantidad: number
   elecciones: Record<number, number>
   extras: ExtraMenu[]
+  omitidos: number[]
+  agregados: { agregado_id: number; cantidad: number }[]
   empaque: Empaque
   nota?: string
 }
@@ -657,6 +674,17 @@ export const api = {
   descargarVentasCsv: (desde?: string, hasta?: string) =>
     descargarCsv(`/api/stats/export${rangoEnUrl(desde, hasta)}`, 'ventas.csv'),
 
+  // Agregados comunes de los menús (+presa, +refresco…), solo admin
+  agregadosMenu: () =>
+    request<{ agregados: AgregadoAdmin[] }>('/api/menu/agregados', {}, true),
+
+  guardarAgregadosMenu: (agregados: (Omit<AgregadoAdmin, 'id'> & { id?: number })[]) =>
+    request<{ agregados: AgregadoAdmin[] }>(
+      '/api/menu/agregados',
+      { method: 'PUT', body: JSON.stringify({ agregados }) },
+      true,
+    ),
+
   // Reporte de consumo del kardex. Sin fechas: últimos 7 días.
   consumoKardex: (desde?: string, hasta?: string) =>
     request<ReporteConsumo>(`/api/insumos/consumo${rangoEnUrl(desde, hasta)}`, {}, true),
@@ -684,6 +712,13 @@ async function descargarCsv(ruta: string, nombrePorDefecto: string) {
   a.download = nombre
   a.click()
   URL.revokeObjectURL(url)
+}
+
+export interface AgregadoAdmin {
+  id: number
+  nombre: string
+  precio: number
+  activo: boolean
 }
 
 export interface ConsumoInsumo {
@@ -739,6 +774,7 @@ export interface PlantillaMenu {
     rotulo: string
     obligatorio: boolean
     precio_extra: number
+    descuento_si_se_quita: number
     alternativas: { plato_id: number; nombre: string; recargo: number }[]
   }[]
 }
@@ -752,15 +788,23 @@ export interface PlantillaMenuIn {
     rotulo: string
     obligatorio: boolean
     precio_extra: number
+    descuento_si_se_quita: number
     alternativas: { plato_id: number; recargo: number }[]
   }[]
 }
 
 // Lo que suma UNA unidad del menú armado (precio + recargos elegidos);
 // los extras van aparte porque no se multiplican por la cantidad de menús
+// Precio de UNA unidad del menú: precio base + recargos de las elecciones
+// − descuentos por los tiempos quitados ("sin sopa"). El backend hace el
+// mismo cálculo y es la autoridad; esto es solo para mostrar en pantalla.
 export function precioUnitarioMenu(linea: MenuCarrito): number {
   let unitario = linea.menu.precio
   for (const tiempo of linea.menu.tiempos) {
+    if (linea.omitidos.includes(tiempo.orden)) {
+      unitario -= tiempo.descuento_si_se_quita
+      continue
+    }
     const elegido = linea.elecciones[tiempo.orden]
     const alternativa = tiempo.alternativas.find((a) => a.plato_id === elegido)
     if (alternativa) unitario += alternativa.recargo
@@ -778,8 +822,14 @@ export function subtotalExtras(linea: MenuCarrito): number {
   return total
 }
 
+export function subtotalAgregados(linea: MenuCarrito): number {
+  return linea.agregados.reduce((s, a) => s + a.agregado.precio * a.cantidad, 0)
+}
+
 export function subtotalMenu(linea: MenuCarrito): number {
-  return precioUnitarioMenu(linea) * linea.cantidad + subtotalExtras(linea)
+  return (
+    precioUnitarioMenu(linea) * linea.cantidad + subtotalExtras(linea) + subtotalAgregados(linea)
+  )
 }
 
 export function soles(monto: number): string {

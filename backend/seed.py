@@ -64,7 +64,7 @@ def main() -> None:
                 plantilla = MenuPlantilla(nombre="Menú del día", precio=11.00,
                                           activo_hoy=True, en_catalogo=True)
                 t1 = MenuTiempo(orden=1, rotulo="Entrada o sopa", obligatorio=True,
-                                precio_extra=3.00)
+                                precio_extra=3.00, descuento_si_se_quita=1.00)
                 t1.alternativas = [MenuAlternativa(plato_id=p.id) for p in entradas]
                 t2 = MenuTiempo(orden=2, rotulo="Segundo", obligatorio=True)
                 t2.alternativas = [MenuAlternativa(plato_id=p.id) for p in segundos]

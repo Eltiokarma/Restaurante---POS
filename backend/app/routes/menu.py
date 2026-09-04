@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from ..auth import requiere_admin
 from ..db import get_db
-from ..models import MenuAlternativa, MenuPlantilla, MenuTiempo, Plato, hoy_lima
+from ..models import MenuAgregado, MenuAlternativa, MenuPlantilla, MenuTiempo, Plato, hoy_lima
 
 router = APIRouter(prefix="/api/menu", tags=["menu"])
 
@@ -72,6 +72,10 @@ def _menus_activos(db: Session) -> list[dict]:
         .order_by(MenuPlantilla.precio, MenuPlantilla.nombre)
     ).all()
     platos = {p.id: p for p in db.scalars(select(Plato)).all()}
+    agregados = db.scalars(
+        select(MenuAgregado).where(MenuAgregado.activo == True)  # noqa: E712
+        .order_by(MenuAgregado.orden, MenuAgregado.nombre)
+    ).all()
     menus = []
     for plantilla in plantillas:
         tiempos = []
@@ -96,6 +100,7 @@ def _menus_activos(db: Session) -> list[dict]:
                 "rotulo": tiempo.rotulo,
                 "obligatorio": tiempo.obligatorio,
                 "precio_extra": tiempo.precio_extra,
+                "descuento_si_se_quita": tiempo.descuento_si_se_quita,
                 "alternativas": alternativas,
             })
         if vendible:
@@ -104,6 +109,13 @@ def _menus_activos(db: Session) -> list[dict]:
                 "nombre": plantilla.nombre,
                 "precio": plantilla.precio,
                 "tiempos": tiempos,
+                # Porciones que se pueden sumar (+presa, +refresco): las de
+                # todos los menús (menu_id NULL) y las propias de este
+                "agregados": [
+                    {"id": a.id, "nombre": a.nombre, "precio": a.precio}
+                    for a in agregados
+                    if a.menu_id is None or a.menu_id == plantilla.id
+                ],
             })
     return menus
 
@@ -287,6 +299,8 @@ class TiempoIn(BaseModel):
     obligatorio: bool = True
     # Precio de UNA porción adicional pedida con el menú (0 = no se ofrece)
     precio_extra: float = Field(default=0.0, ge=0)
+    # Cuánto baja el menú si el cliente quita este tiempo (0 = no baja)
+    descuento_si_se_quita: float = Field(default=0.0, ge=0)
     alternativas: list[AlternativaIn] = Field(default_factory=list, max_length=30)
 
 
@@ -314,6 +328,7 @@ def _plantilla_a_dict(plantilla: MenuPlantilla, platos: dict[int, Plato]) -> dic
                 "rotulo": t.rotulo,
                 "obligatorio": t.obligatorio,
                 "precio_extra": t.precio_extra,
+                "descuento_si_se_quita": t.descuento_si_se_quita,
                 "alternativas": [
                     {
                         "plato_id": a.plato_id,
@@ -372,6 +387,7 @@ def guardar_plantillas(payload: PlantillasUpdate, db: Session = Depends(get_db))
                 rotulo=t.rotulo.strip(),
                 obligatorio=t.obligatorio,
                 precio_extra=round(t.precio_extra, 2),
+                descuento_si_se_quita=round(t.descuento_si_se_quita, 2),
             )
             for a in t.alternativas:
                 tiempo.alternativas.append(
@@ -390,3 +406,64 @@ def guardar_plantillas(payload: PlantillasUpdate, db: Session = Depends(get_db))
 
     db.commit()
     return plantillas(db)
+
+
+# ---------- Agregados del menú (+presa, +refresco…) ----------
+
+
+class AgregadoIn(BaseModel):
+    id: int | None = None
+    nombre: str = Field(min_length=1, max_length=60)
+    precio: float = Field(gt=0)
+    activo: bool = True
+
+
+class AgregadosUpdate(BaseModel):
+    agregados: list[AgregadoIn] = Field(max_length=30)
+
+
+def _listar_agregados(db: Session) -> dict:
+    lista = db.scalars(
+        select(MenuAgregado).where(MenuAgregado.menu_id == None)  # noqa: E711
+        .order_by(MenuAgregado.orden, MenuAgregado.nombre)
+    ).all()
+    return {"agregados": [
+        {"id": a.id, "nombre": a.nombre, "precio": a.precio, "activo": a.activo}
+        for a in lista
+    ]}
+
+
+@router.get("/agregados", dependencies=[Depends(requiere_admin)])
+def agregados(db: Session = Depends(get_db)):
+    """Los agregados comunes a todos los menús, para el admin."""
+    return _listar_agregados(db)
+
+
+@router.put("/agregados", dependencies=[Depends(requiere_admin)])
+def guardar_agregados(payload: AgregadosUpdate, db: Session = Depends(get_db)):
+    """Reemplaza la lista de agregados comunes (mismo criterio que las
+    plantillas). Las órdenes históricas no cambian: guardan snapshot."""
+    ids_enviados: set[int] = set()
+    for numero, a in enumerate(payload.agregados, start=1):
+        if a.id is not None:
+            agregado = db.get(MenuAgregado, a.id)
+            if agregado is None or agregado.menu_id is not None:
+                continue
+        else:
+            agregado = MenuAgregado(menu_id=None)
+            db.add(agregado)
+        agregado.nombre = a.nombre.strip()
+        agregado.precio = round(a.precio, 2)
+        agregado.activo = a.activo
+        agregado.orden = numero
+        db.flush()
+        ids_enviados.add(agregado.id)
+
+    for agregado in db.scalars(
+        select(MenuAgregado).where(MenuAgregado.menu_id == None)  # noqa: E711
+    ).all():
+        if agregado.id not in ids_enviados:
+            db.delete(agregado)
+
+    db.commit()
+    return _listar_agregados(db)

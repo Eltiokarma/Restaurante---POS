@@ -9,12 +9,13 @@ con precio 0 (o el recargo de la alternativa, o el precio de una porción
 extra). El total nunca suma el precio de carta de esos platos: el precio
 ya está en el menú.
 """
+import json
 import threading
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import MenuPlantilla, Orden, OrdenItem, OrdenMenu, Plato, ahora_lima
+from ..models import MenuAgregado, MenuPlantilla, Orden, OrdenItem, OrdenMenu, Plato, ahora_lima
 
 # Serializa la asignación del correlativo del día: sin esto, dos
 # confirmaciones simultáneas (p. ej. dos terminales) podrían leer el mismo
@@ -101,18 +102,46 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
     empaque = pedido.get("empaque", "mesa")
     elecciones = {int(k): int(v) for k, v in (pedido.get("elecciones") or {}).items()}
 
+    # Tiempos que el cliente quitó ("sin sopa"): descuentan lo configurado
+    # en el tiempo y no generan item. Quitar y elegir a la vez no tiene
+    # sentido; una porción EXTRA del mismo tiempo sí (quitó la sopa del
+    # menú pero pide una entrada aparte: esa se cobra a precio de extra).
+    tiempos_por_orden = {t.orden: t for t in plantilla.tiempos}
+    omitidos: list[dict] = []
+    for numero in {int(n) for n in pedido.get("omitidos") or []}:
+        tiempo = tiempos_por_orden.get(numero)
+        if tiempo is None:
+            raise EleccionInvalida(f"El {plantilla.nombre} no tiene ese tiempo")
+        if numero in elecciones:
+            raise EleccionInvalida(
+                f"Quitaste {tiempo.rotulo} del {plantilla.nombre} y a la vez lo elegiste"
+            )
+        omitidos.append({
+            "tiempo_orden": numero,
+            "rotulo": tiempo.rotulo,
+            "descuento": tiempo.descuento_si_se_quita,
+        })
+    omitidos.sort(key=lambda o: o["tiempo_orden"])
+
     orden_menu = OrdenMenu(
         menu_id=plantilla.id,
         nombre_snapshot=plantilla.nombre,
         precio_snapshot=plantilla.precio,
         cantidad=cantidad,
         nota=pedido.get("nota", "").strip(),
+        omitidos_json=json.dumps(omitidos, ensure_ascii=False),
     )
     orden.menus.append(orden_menu)
+    if plantilla.precio - sum(o["descuento"] for o in omitidos) < 0:
+        # Un descuento mal configurado no puede dejar el menú en negativo
+        raise EleccionInvalida(f"El descuento del {plantilla.nombre} deja el precio en negativo")
     subtotal = plantilla.precio * cantidad
+    subtotal -= sum(o["descuento"] for o in omitidos) * cantidad
+    numeros_omitidos = {o["tiempo_orden"] for o in omitidos}
 
-    tiempos_por_orden = {t.orden: t for t in plantilla.tiempos}
     for tiempo in plantilla.tiempos:
+        if tiempo.orden in numeros_omitidos:
+            continue
         todas = {a.plato_id: a for a in tiempo.alternativas}
         # Solo cuentan las alternativas con plato disponible hoy
         alternativas = {
@@ -188,6 +217,33 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
             nota="",
             tiempo_orden=tiempo.orden,
             es_extra=True,
+        )
+        item.orden_menu = orden_menu
+        orden.items.append(item)
+
+    # Agregados: porciones sueltas (+1 presa, +1 refresco) con su propio
+    # precio; no son platos de carta, así que van sin plato_id y con
+    # snapshot de nombre y precio del agregado.
+    for pedido_agregado in pedido.get("agregados") or []:
+        agregado = db.get(MenuAgregado, int(pedido_agregado["agregado_id"]))
+        if (
+            agregado is None
+            or not agregado.activo
+            or (agregado.menu_id is not None and agregado.menu_id != plantilla.id)
+        ):
+            raise EleccionInvalida(f"El {plantilla.nombre} no ofrece ese agregado")
+        cantidad_agregado = int(pedido_agregado["cantidad"])
+        if cantidad_agregado <= 0:
+            continue
+        subtotal += agregado.precio * cantidad_agregado
+        item = OrdenItem(
+            plato_id=None,
+            nombre_snapshot=agregado.nombre,
+            precio_snapshot=agregado.precio,
+            cantidad=cantidad_agregado,
+            empaque=empaque,
+            nota="",
+            es_agregado=True,
         )
         item.orden_menu = orden_menu
         orden.items.append(item)

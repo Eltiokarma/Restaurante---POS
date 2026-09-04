@@ -158,9 +158,17 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       comprado, la merma, el stock de hoy y para cuántos días alcanza; y export CSV
       (`GET /api/insumos/consumo` y `/consumo.csv`). Lo usado se valoriza al costo promedio
       vigente y la devolución de una orden anulada descuenta del consumo sin bajar de cero.
-- [ ] Pedido "desde el menú" y auditoría de tamaños de tablet: **plan en `CONTINUAR.md`**
-      (empezar por "Un menú" completo y quitarle/agregarle: sin sopa, + presa, + refresco…,
-      cada menú editable en una lista con sus costos).
+- [x] **Pedido "desde el menú"** (pedido del dueño tras probar en sala): el flujo arranca
+      con el botón "UN MENÚ — S/ 11" que agrega el combo completo con la opción por defecto
+      de cada tiempo (la primera sin recargo); en el resumen cada menú es una tarjeta
+      desplegable ("Menú 1, Menú 2…") donde se cambia la elección, se quita un tiempo
+      ("Sin sopa", con descuento configurable por tiempo — decisión del dueño: S/ 1 la
+      entrada) y se suman agregados (+presa S/ 4, +refresco S/ 1.50, +arroz S/ 1.50,
+      +ensalada S/ 2, +guarnición S/ 2 — editables en Admin → Menú del día), con lo quitado
+      y agregado, su costo y el total por tarjeta. Cocina y ticket destacan "SIN SOPA" y
+      "+1 PRESA"; el CSV y el Resumen descuentan lo quitado. Los agregados NO descuentan
+      kardex (no tienen receta): pendiente decidir si se les cuelga una.
+- [ ] Auditoría de tamaños de tablet: **plan en `CONTINUAR.md`** (bloque 3).
 - [ ] **App propia de Android para imprimir** (reemplazo de RawBT): decisión del dueño —
       se hace en la fase final del prototipo, no ahora. Llevaría dentro el mismo driver
       ESC/POS que hoy pone RawBT, se compilaría en GitHub Actions y se instalaría en la
@@ -222,3 +230,4 @@ Pagos integrados (Yape/tarjeta), control de stock y mermas, app nativa, multi-lo
 | 14b | Avanzar la ORDEN solo empuja ítems hacia adelante, nunca los retrocede | Encontrado en la revisión de la sesión: con estado por ítem, "empezar a preparar" en la tarjeta devolvía a la cola porciones ya tachadas por bulk y se cocinaban dos veces. El bulk y el avance por orden conviven solo si ambos respetan el rango del estado. |
 | 14c | Los trabajos de impresión (ticket de prueba incluido) salen de la cola al CONFIRMARSE, nunca al servirse | El ticket de prueba se consumía al entregarse a quien imprime: si la impresora no respondía — el caso exacto que el botón diagnostica — el trabajo se perdía y el admin veía "encolado ✔" sin que saliera nada. |
 | 14 | El local NO debe depender de una PC: /ticketera en una tablet Android con la app RawBT también atiende la cola ESC/POS (rawbt:base64 vía iframe + enlace con gesto como respaldo) | Decisión del dueño: solo tablets. RawBT hace de driver de la impresora de red en la propia tablet; la misma cola sirve para tablet (RawBT) o PC (puente) — se usa una de las dos. El lanzamiento va por iframe oculto porque navegar la página a un esquema bloqueado la deja "colgada". |
+| 15 | Menú editable: quitar un tiempo descuenta lo configurado en `menu_tiempos.descuento_si_se_quita` (snapshot en `orden_menus.omitidos_json`); los agregados (+presa…) viven en `menu_agregados` y entran como `OrdenItem`s con `es_agregado=True` y `plato_id NULL` | Decisión del dueño (2026-09-04): "sin sopa" sí baja un poco el precio, y pedir una sopa aparte cuesta el precio de porción extra (S/ 3). El total sigue siendo del backend: base − descuentos + recargos + extras + agregados, nunca negativo por unidad. Al no ser platos, los agregados no descuentan kardex todavía. |

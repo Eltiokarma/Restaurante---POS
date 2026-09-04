@@ -73,6 +73,10 @@ class MenuTiempo(Base):
     # menú ("una entrada más" a S/ 3 aunque dentro del menú vaya a S/ 1).
     # 0 = no se ofrecen porciones extra de este tiempo.
     precio_extra: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    # Cuánto BAJA el menú si el cliente quita este tiempo ("sin sopa").
+    # 0 = quitarlo no descuenta (decisión del dueño: sí descuenta un poco,
+    # el monto lo pone él por tiempo en el editor de plantillas).
+    descuento_si_se_quita: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
 
     menu: Mapped[MenuPlantilla] = relationship(back_populates="tiempos")
     alternativas: Mapped[list["MenuAlternativa"]] = relationship(
@@ -91,6 +95,29 @@ class MenuAlternativa(Base):
     recargo: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # 0 = sin costo extra
 
     tiempo: Mapped[MenuTiempo] = relationship(back_populates="alternativas")
+
+
+class MenuAgregado(Base):
+    """Porción suelta que se suma a un menú: + presa, + refresco, + arroz…
+
+    No es un plato de la carta: es un componente con su precio propio.
+    ``menu_id`` NULL = se ofrece con todos los menús (el caso normal)."""
+
+    __tablename__ = "menu_agregados"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    menu_id: Mapped[int | None] = mapped_column(ForeignKey("menu_plantillas.id"), nullable=True)
+    nombre: Mapped[str] = mapped_column(String(60), nullable=False)
+    precio: Mapped[float] = mapped_column(Float, nullable=False)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    orden: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+# Agregados con los que arranca una instalación (editables en Admin →
+# Menú del día); precios acordados con el dueño el 2026-09-04
+AGREGADOS_INICIALES = [
+    ("Presa", 4.0), ("Refresco", 1.5), ("Arroz", 1.5), ("Ensalada", 2.0), ("Guarnición", 2.0),
+]
 
 
 class Orden(Base):
@@ -153,9 +180,28 @@ class OrdenMenu(Base):
     precio_snapshot: Mapped[float] = mapped_column(Float, nullable=False)
     cantidad: Mapped[int] = mapped_column(Integer, nullable=False)
     nota: Mapped[str] = mapped_column(String(150), default="", nullable=False)
+    # Tiempos que el cliente quitó ("sin sopa"): JSON de
+    # [{"tiempo_orden", "rotulo", "descuento"}] — snapshot, con el
+    # descuento POR UNIDAD de menú que se aplicó al cobrar
+    omitidos_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
 
     orden: Mapped[Orden] = relationship(back_populates="menus")
     items: Mapped[list["OrdenItem"]] = relationship(back_populates="orden_menu")
+
+    def omitidos(self) -> list[dict]:
+        import json
+
+        return json.loads(self.omitidos_json or "[]")
+
+    @property
+    def descuento_omitidos(self) -> float:
+        """Descuento POR UNIDAD por los tiempos quitados."""
+        return sum(o["descuento"] for o in self.omitidos())
+
+    @property
+    def precio_cobrado(self) -> float:
+        """Precio por unidad realmente cobrado (snapshot − descuentos)."""
+        return self.precio_snapshot - self.descuento_omitidos
 
 
 class OrdenItem(Base):
@@ -181,6 +227,9 @@ class OrdenItem(Base):
     tiempo_orden: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # True = porción adicional pedida junto al menú ("una entrada más")
     es_extra: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # True = agregado del menú ("+1 presa"): no es plato de carta
+    # (plato_id NULL) y su snapshot viene de menu_agregados
+    es_agregado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Estado POR ÍTEM (§3): la cocina cocina por bulks (4 asados de un
     # toque), no ticket por ticket. ordenes.estado queda como caché
     # derivada = el estado MÍNIMO de sus ítems (ver services/cocina.py).

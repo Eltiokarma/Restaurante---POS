@@ -64,7 +64,13 @@ Frontend (`frontend/src/pages/Admin.tsx`, pestaña Insumos → subpestaña nueva
 - Tipos y métodos nuevos en `src/api.ts` (`ConsumoInsumo`, `ResumenConsumo`,
   `api.consumoKardex`, `api.consumoKardexCsv`).
 
-## Bloque 2 — Pedido "desde el menú": empezar por "Un menú" y editar cada uno
+## Bloque 2 — Pedido "desde el menú" — HECHO
+
+> Mergeado en la sesión 2 (con las respuestas del dueño: quitar SÍ descuenta —
+> configurable por tiempo—, agregados a S/ 4 / 1.50 / 1.50 / 2 / 2, y cocina ve
+> SIN SOPA / +1 PRESA destacados). Queda solo el bloque 3. Detalle abajo.
+
+## (referencia) Bloque 2 — Pedido "desde el menú": empezar por "Un menú" y editar cada uno
 
 Pedido del dueño (textual): *"algo más lógico para el comensal es empezar desde pedir
 'Un menú', todo el combo completo y después restarle sopa o añadirle más refresco, más
@@ -140,6 +146,6 @@ tablets 8" y 10", vertical y horizontal). Hoy `styles.css` solo tiene un breakpo
 
 ## Orden y cierre
 
-2 → 3, un PR por bloque (el 1 ya está mergeado). Al terminar los tres: actualizar `ROADMAP.md` (Kardex fase 2
+Queda solo el bloque 3 (los bloques 1 y 2 ya están mergeados). Al terminar los tres: actualizar `ROADMAP.md` (Kardex fase 2
 tachado, decisión nueva sobre menú editable y agregados en el registro, nota de
 responsive), borrar este archivo y dar al dueño el resumen corto en su idioma.
