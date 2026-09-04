@@ -158,6 +158,13 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       comprado, la merma, el stock de hoy y para cuántos días alcanza; y export CSV
       (`GET /api/insumos/consumo` y `/consumo.csv`). Lo usado se valoriza al costo promedio
       vigente y la devolución de una orden anulada descuenta del consumo sin bajar de cero.
+- [x] **Pantalla única del pedido** (pedido del dueño tras probar): tocar la pantalla de
+      inicio lleva DIRECTO a "Tu pedido" — la oferta del menú con su botón "UN MENÚ"
+      arriba y las tarjetas editables abajo; sin pantalla intermedia y sin "Prefiero
+      elegir cada plato" (todo se cambia en la tarjeta: elección, sin sopa, empaque por
+      plato, extras, agregados, nota). "Cancelar todo" y la voz viven en la misma
+      cabecera. Con el interruptor de solo-menús apagado, o si hoy no hay menú activo,
+      el flujo de carta de dos pantallas sigue igual.
 - [x] **Menú para varios, cada uno a su manera** (caso real del dueño: "una señora quiere
       algo para 4 — uno segundo solo, otro con sopa acá y segundo para llevar, otro sin
       frijoles, otro todo en bolsa y lonchera"): el armado "para N" entra como N tarjetas

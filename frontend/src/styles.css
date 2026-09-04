@@ -3864,3 +3864,37 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+
+/* ---- Pantalla única del pedido: la oferta del menú arriba de las tarjetas ---- */
+
+.oferta-menus {
+  margin-bottom: 18px;
+}
+
+.combo-oferta {
+  max-width: none; /* aquí la tarjeta ocupa el ancho de la lista del pedido */
+}
+
+.nota-oferta {
+  margin-top: 10px;
+  font-size: 1.05rem;
+  color: var(--tinta-media);
+}
+
+.oferta-menus {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* La cabecera dentro de la pantalla del pedido (que ya tiene padding):
+   se estira hasta los bordes para que nada se le escurra por los costados */
+.cabecera-en-pedido {
+  /* compensa el padding de .pantalla-resumen (34px arriba, 24px lados) */
+  margin: -34px -24px 0;
+  width: auto;
+}
+
+.cabecera-en-pedido h1 {
+  font-size: 2rem;
+}
