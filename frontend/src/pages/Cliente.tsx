@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles } from '../api'
 import type { ConfigOut, DatosLocal, Entrega, MenuHoy, OrdenOut, Plato, VozItemResuelto } from '../api'
-import { ArmadoMenu, describirMenu } from '../components/ArmadoMenu'
+import { describirMenu } from '../components/ArmadoMenu'
 import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { BarraCarrito } from '../components/BarraCarrito'
@@ -12,6 +12,53 @@ import { Ticket } from '../components/Ticket'
 import { useCarrito } from '../hooks/useCarrito'
 import { useInactividad } from '../hooks/useInactividad'
 
+// La tarjeta que ofrece el menú del día (pantalla única y pantalla de carta)
+function TarjetaOfertaMenu({ menu, etiqueta, onAgregar }: {
+  menu: MenuHoy
+  etiqueta: string
+  onAgregar: () => void
+}) {
+  return (
+    <div className="combo">
+      <div className="combo-cabecera">
+        <span className="combo-titulo">{menu.nombre}</span>
+        <span className="combo-precio">{soles(menu.precio)}</span>
+      </div>
+      <div className="combo-resumen-tiempos">
+        {menu.tiempos.map((t) => (
+          <div key={t.orden}>
+            <strong>{t.rotulo}:</strong>{' '}
+            {t.alternativas.length === 1
+              ? `${t.alternativas[0].nombre} (incluido)`
+              : t.alternativas.map((a) => a.nombre).join(' / ')}
+          </div>
+        ))}
+      </div>
+      <button className="boton-armar" onClick={onAgregar}>
+        {etiqueta}
+      </button>
+    </div>
+  )
+}
+
+function ModalCancelarTodo({ onSeguir, onCancelar }: { onSeguir: () => void; onCancelar: () => void }) {
+  return (
+    <div className="modal-fondo">
+      <div className="modal">
+        <h2>¿Cancelar todo el pedido?</h2>
+        <div className="modal-botones">
+          <button className="boton-grande boton-secundario" onClick={onSeguir}>
+            No, seguir pidiendo
+          </button>
+          <button className="boton-grande boton-cancelar-rojo" onClick={onCancelar}>
+            Sí, cancelar todo
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 type Pantalla = 'inicio' | 'menu' | 'resumen' | 'countdown' | 'final'
 
 export function Cliente() {
@@ -19,7 +66,6 @@ export function Cliente() {
   const [platos, setPlatos] = useState<Plato[]>([])
   const [menusHoy, setMenusHoy] = useState<MenuHoy[]>([])
   // Menú encadenado que se está armando (abre el modal de tiempos)
-  const [armandoMenu, setArmandoMenu] = useState<MenuHoy | null>(null)
   // Menú recién agregado con "Un menú": el botón confirma un momento
   const [menuRecien, setMenuRecien] = useState<number | null>(null)
   useEffect(() => {
@@ -67,8 +113,10 @@ export function Cliente() {
       // Si el admin cambió un precio a mitad de pedido, el carrito se
       // actualiza para que el total mostrado coincida con lo que se cobra.
       sincronizarConMenu(data.platos, data.menus)
+      return data.menus
     } catch {
       // Si el polling falla se mantiene el último menú conocido
+      return undefined
     }
   }, [sincronizarConMenu])
 
@@ -80,7 +128,7 @@ export function Cliente() {
   // Si un plato se agota, el admin lo desactiva y desaparece de la terminal
   // en el siguiente refresco: polling cada 30s mientras se arma el pedido.
   useEffect(() => {
-    if (pantalla !== 'menu') return
+    if (pantalla !== 'menu' && pantalla !== 'resumen') return
     const intervalo = window.setInterval(cargarMenu, 30_000)
     return () => window.clearInterval(intervalo)
   }, [pantalla, cargarMenu])
@@ -112,11 +160,30 @@ export function Cliente() {
   // Para medir cuánto demora un cliente de punta a punta (métrica del admin)
   const inicioPedidoTs = useRef<number | null>(null)
 
-  const empezarPedido = () => {
+  // Pedido del dueño: con solo menús, UNA pantalla — el botón "UN MENÚ"
+  // arriba y las tarjetas editables abajo (sin pantalla intermedia de carta).
+  // Si hoy no hay ningún menú activo, la carta aparece como respaldo.
+  const soloMenusConfig = config?.terminal_solo_menus ?? true
+  // Mientras el carrito tenga menús, la pantalla única no cambia de forma
+  // aunque el menú del día se agote a mitad de pedido
+  const soloMenus = soloMenusConfig && (menusHoy.length > 0 || carrito.menus.length > 0)
+
+  // La voz solo SUMA items al carrito; todo lo demás es el flujo de siempre
+  const agregarItemsVoz = (items: VozItemResuelto[]) => {
+    for (const item of items) {
+      const plato = platos.find((p) => p.id === item.plato_id)
+      if (plato) carrito.cambiarCantidad(plato, item.cantidad)
+    }
+    if (items.length > 0) usoVoz.current = true
+  }
+
+  const empezarPedido = async () => {
     setMensajeInicio('')
     inicioPedidoTs.current = Date.now()
-    cargarMenu() // refresco al iniciar un pedido nuevo
-    setPantalla('menu')
+    // Se espera el menú fresco: así la primera pantalla se decide con datos
+    // reales aunque la tablet recién cargue la página
+    const menus = (await cargarMenu()) ?? menusHoy
+    setPantalla(soloMenusConfig && menus.length > 0 ? 'resumen' : 'menu')
   }
 
   const cancelarPedidoEnVentana = async () => {
@@ -344,9 +411,42 @@ export function Cliente() {
   if (pantalla === 'resumen') {
     return (
       <div className="pantalla pantalla-resumen">
-        <h1>Tu pedido</h1>
+        {soloMenus ? (
+          <div className="cabecera-menu cabecera-en-pedido">
+            <button className="boton-cancelar-todo" onClick={() => setConfirmandoCancelarTodo(true)}>
+              ← Cancelar todo
+            </button>
+            <h1>Tu pedido</h1>
+            {config?.voz_disponible && (
+              <button className="boton-pedir-voz" onClick={() => setVozAbierta(true)}>
+                🎤 PEDIR POR VOZ
+              </button>
+            )}
+          </div>
+        ) : (
+          <h1>Tu pedido</h1>
+        )}
         {errorConexion && <div className="banner-error">{errorConexion}</div>}
+        {soloMenus && (
+          <div className="oferta-menus">
+            {menusHoy.map((m) => (
+              <TarjetaOfertaMenu
+                key={m.id}
+                menu={m}
+                etiqueta={`➕ UN MENÚ — ${soles(m.precio)}`}
+                onAgregar={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m) }}
+              />
+            ))}
+            {carrito.totalItems === 0 && (
+              <p className="nota-oferta">
+                Toca el botón por cada menú que quieras; abajo puedes cambiar cada uno a su
+                gusto (sin sopa, para llevar, con una presa más…).
+              </p>
+            )}
+          </div>
+        )}
         <SugerenciaMenu items={carrito.items} menus={menusHoy} onConvertir={carrito.convertirEnMenu} />
+        {carrito.totalItems > 0 && (
         <div className="selector-servicio">
           <span className="selector-servicio-titulo">¿Cómo va cada plato?</span>
           <div className="selector-servicio-botones fila-todos">
@@ -358,6 +458,7 @@ export function Cliente() {
             ))}
           </div>
         </div>
+        )}
         <div className="lista-resumen">
           {carrito.menus.map((m, idx) => (
             <TarjetaMenuCarrito
@@ -430,11 +531,15 @@ export function Cliente() {
             )}
           </div>
         )}
-        <div className="total-grande">TOTAL: {soles(carrito.totalSoles)}</div>
+        {carrito.totalItems > 0 && (
+          <div className="total-grande">TOTAL: {soles(carrito.totalSoles)}</div>
+        )}
         <div className="botones-resumen">
-          <button className="boton-grande boton-secundario" onClick={() => setPantalla('menu')}>
-            ← Modificar
-          </button>
+          {!soloMenus && (
+            <button className="boton-grande boton-secundario" onClick={() => setPantalla('menu')}>
+              ← Modificar
+            </button>
+          )}
           <button
             className="boton-grande boton-confirmar"
             disabled={carrito.totalItems === 0 || guardando}
@@ -443,6 +548,20 @@ export function Cliente() {
             ✅ CONFIRMAR PEDIDO
           </button>
         </div>
+        {confirmandoCancelarTodo && (
+          <ModalCancelarTodo
+            onSeguir={() => setConfirmandoCancelarTodo(false)}
+            onCancelar={() => volverAlInicio()}
+          />
+        )}
+        {vozAbierta && (
+          <PedidoPorVoz
+            platos={platos}
+            onContinuar={(items) => { agregarItemsVoz(items); setVozAbierta(false) }}
+            onUsarBotones={(items) => { agregarItemsVoz(items); setVozAbierta(false) }}
+            onCerrar={() => setVozAbierta(false)}
+          />
+        )}
         <AvisoInactividad {...inactividad} />
       </div>
     )
@@ -452,19 +571,9 @@ export function Cliente() {
   // Pedido del dueño: repetir abajo los platos sueltos (entradas, segundos…)
   // confundía — el cliente pide "un menú" y lo edita. Los platos sueltos se
   // venden en caja; el interruptor vive en Admin → Configuración.
-  const soloMenus = (config?.terminal_solo_menus ?? true) && menusHoy.length > 0
   const categoriasConPlatos = soloMenus
     ? []
     : ['entrada', 'fondo', 'bebida', 'postre'].filter((c) => platos.some((p) => p.categoria === c))
-
-  // La voz solo SUMA items al carrito; todo lo demás es el flujo de siempre
-  const agregarItemsVoz = (items: VozItemResuelto[]) => {
-    for (const item of items) {
-      const plato = platos.find((p) => p.id === item.plato_id)
-      if (plato) carrito.cambiarCantidad(plato, item.cantidad)
-    }
-    if (items.length > 0) usoVoz.current = true
-  }
 
   const marcarTactil = (plato: Plato, delta: number) => {
     usoTactil.current = true
@@ -497,31 +606,12 @@ export function Cliente() {
             <h2 className="titulo-categoria">Menús</h2>
             <div className="combo-lista">
               {menusHoy.map((m) => (
-                <div className="combo" key={m.id}>
-                  <div className="combo-cabecera">
-                    <span className="combo-titulo">{m.nombre}</span>
-                    <span className="combo-precio">{soles(m.precio)}</span>
-                  </div>
-                  <div className="combo-resumen-tiempos">
-                    {m.tiempos.map((t) => (
-                      <div key={t.orden}>
-                        <strong>{t.rotulo}:</strong>{' '}
-                        {t.alternativas.length === 1
-                          ? `${t.alternativas[0].nombre} (incluido)`
-                          : t.alternativas.map((a) => a.nombre).join(' / ')}
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    className="boton-armar"
-                    onClick={() => { carrito.agregarMenuCompleto(m); setMenuRecien(m.id) }}
-                  >
-                    {menuRecien === m.id ? '✔ ¡Agregado! Toca para otro' : `🍽 UN MENÚ — ${soles(m.precio)}`}
-                  </button>
-                  <button className="boton-elegir-menu" onClick={() => setArmandoMenu(m)}>
-                    Prefiero elegir cada plato…
-                  </button>
-                </div>
+                <TarjetaOfertaMenu
+                  key={m.id}
+                  menu={m}
+                  etiqueta={menuRecien === m.id ? '✔ ¡Agregado! Toca para otro' : `🍽 UN MENÚ — ${soles(m.precio)}`}
+                  onAgregar={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m); setMenuRecien(m.id) }}
+                />
               ))}
             </div>
           </section>
@@ -552,35 +642,12 @@ export function Cliente() {
       />
 
       {confirmandoCancelarTodo && (
-        <div className="modal-fondo">
-          <div className="modal">
-            <h2>¿Cancelar todo el pedido?</h2>
-            <div className="modal-botones">
-              <button className="boton-grande boton-secundario" onClick={() => setConfirmandoCancelarTodo(false)}>
-                No, seguir pidiendo
-              </button>
-              <button className="boton-grande boton-cancelar-rojo" onClick={() => volverAlInicio()}>
-                Sí, cancelar todo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {armandoMenu && (
-        <ArmadoMenu
-          menu={armandoMenu}
-          onAgregar={(linea) => {
-            usoTactil.current = true
-            carrito.agregarMenu(linea)
-            setArmandoMenu(null)
-            // Un armado "para 4" salta directo a la lista: ahí cada menú es
-            // su tarjeta y la señora configura uno por uno
-            if (linea.cantidad > 1) setPantalla('resumen')
-          }}
-          onCerrar={() => setArmandoMenu(null)}
+        <ModalCancelarTodo
+          onSeguir={() => setConfirmandoCancelarTodo(false)}
+          onCancelar={() => volverAlInicio()}
         />
       )}
+
 
       {vozAbierta && (
         <PedidoPorVoz
