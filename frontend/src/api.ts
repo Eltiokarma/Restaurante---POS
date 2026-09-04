@@ -252,6 +252,8 @@ export interface ConfigOut {
   voz_habilitada: boolean
   voz_disponible: boolean
   exigir_caja_abierta: boolean
+  // La terminal del cliente muestra solo los menús (la caja siempre ve todo)
+  terminal_solo_menus: boolean
   // Ventana de la tanda en cocina (minutos); 0 = apagada
   cocina_bulk_min: number
 }

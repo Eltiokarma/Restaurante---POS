@@ -22,6 +22,7 @@ class ConfigIn(BaseModel):
     impresora_columnas: int | None = None
     voz_habilitada: bool | None = None  # kill switch del pedido por voz
     exigir_caja_abierta: bool | None = None  # bloquear ventas sin apertura de caja
+    terminal_solo_menus: bool | None = None  # la terminal muestra solo los menús
     cocina_bulk_min: int | None = None  # ventana de la tanda en cocina (0 = apagado)
 
 
@@ -48,6 +49,7 @@ def leer_config(db: Session) -> dict:
         "voz_habilitada": voz_habilitada,
         "voz_disponible": voz_habilitada and claves_configuradas(),
         "exigir_caja_abierta": valores["exigir_caja_abierta"] in ("1", "true", "True"),
+        "terminal_solo_menus": valores["terminal_solo_menus"] in ("1", "true", "True"),
         "cocina_bulk_min": max(0, int(valores["cocina_bulk_min"])),
     }
 
@@ -62,7 +64,7 @@ def obtener(db: Session = Depends(get_db)):
 @router.put("", dependencies=[Depends(requiere_admin)])
 def actualizar(payload: ConfigIn, db: Session = Depends(get_db)):
     for clave, valor in payload.model_dump(exclude_none=True).items():
-        if clave in ("voz_habilitada", "exigir_caja_abierta"):
+        if clave in ("voz_habilitada", "exigir_caja_abierta", "terminal_solo_menus"):
             valor = "1" if valor else "0"
         registro = db.get(Config, clave)
         if registro is None:

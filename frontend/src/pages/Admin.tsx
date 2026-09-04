@@ -2127,6 +2127,14 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
       <label className="config-toggle">
         <input
           type="checkbox"
+          checked={config.terminal_solo_menus}
+          onChange={(e) => setConfig({ ...config, terminal_solo_menus: e.target.checked })}
+        />
+        🍽 La terminal muestra SOLO los menús (los platos sueltos se venden en caja)
+      </label>
+      <label className="config-toggle">
+        <input
+          type="checkbox"
           checked={config.voz_habilitada}
           onChange={(e) => setConfig({ ...config, voz_habilitada: e.target.checked })}
         />
