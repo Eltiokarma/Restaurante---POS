@@ -447,9 +447,13 @@ export function Cliente() {
   }
 
   // pantalla === 'menu'
-  const categoriasConPlatos = ['entrada', 'fondo', 'bebida', 'postre'].filter((c) =>
-    platos.some((p) => p.categoria === c),
-  )
+  // Pedido del dueño: repetir abajo los platos sueltos (entradas, segundos…)
+  // confundía — el cliente pide "un menú" y lo edita. Los platos sueltos se
+  // venden en caja; el interruptor vive en Admin → Configuración.
+  const soloMenus = (config?.terminal_solo_menus ?? true) && menusHoy.length > 0
+  const categoriasConPlatos = soloMenus
+    ? []
+    : ['entrada', 'fondo', 'bebida', 'postre'].filter((c) => platos.some((p) => p.categoria === c))
 
   // La voz solo SUMA items al carrito; todo lo demás es el flujo de siempre
   const agregarItemsVoz = (items: VozItemResuelto[]) => {
@@ -483,7 +487,7 @@ export function Cliente() {
       </div>
 
       <div className="contenido-menu">
-        {platos.length === 0 && menusHoy.length === 0 && (
+        {(soloMenus ? menusHoy.length === 0 : platos.length === 0 && menusHoy.length === 0) && (
           <p className="menu-vacio">Todavía no hay menú cargado. Pregunta en caja, por favor.</p>
         )}
         {menusHoy.length > 0 && (

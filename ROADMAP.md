@@ -158,6 +158,11 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       comprado, la merma, el stock de hoy y para cuántos días alcanza; y export CSV
       (`GET /api/insumos/consumo` y `/consumo.csv`). Lo usado se valoriza al costo promedio
       vigente y la devolución de una orden anulada descuenta del consumo sin bajar de cero.
+- [x] **La terminal muestra SOLO los menús** (pedido del dueño tras probar el pedido
+      "desde el menú"): las secciones de platos sueltos (entradas, segundos…) ya no salen
+      en la terminal — repetían lo del menú y confundían. Interruptor en Admin →
+      Configuración por si algún día se quiere volver a mostrar la carta (y si no hay
+      ningún menú activo, la carta aparece sola como respaldo); la caja siempre ve todo.
 - [x] **Pedido "desde el menú"** (pedido del dueño tras probar en sala): el flujo arranca
       con el botón "UN MENÚ — S/ 11" que agrega el combo completo con la opción por defecto
       de cada tiempo (la primera sin recargo); en el resumen cada menú es una tarjeta

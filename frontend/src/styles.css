@@ -2689,9 +2689,17 @@ select:focus-visible {
 /* La franja de menús va arriba del menú por categorías */
 .combo-lista {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 18px;
   margin-bottom: 26px;
+}
+
+/* Cuando la terminal muestra solo los menús, la tarjeta es la protagonista:
+   llena el ancho de la tablet, pero sin desparramarse en pantallas grandes */
+.combo {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
 }
 
 .combo-resumen-tiempos {

@@ -386,6 +386,10 @@ CONFIG_DEFAULTS: dict[str, str] = {
     # Si está en 1, no se pueden registrar ventas hasta abrir la caja del
     # día con su fondo inicial
     "exigir_caja_abierta": "1",
+    # Si está en 1, la terminal del cliente muestra SOLO los menús (pedido
+    # del dueño: repetir abajo los platos sueltos confundía). La caja
+    # siempre ve la carta completa.
+    "terminal_solo_menus": "1",
     # Ventana de la tanda en cocina (minutos): "Por salir" resalta cuántas
     # porciones pertenecen a la tanda actual (la orden activa más antigua
     # + los pedidos que llegaron en los siguientes X minutos). 0 = apagado.
