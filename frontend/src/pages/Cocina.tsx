@@ -4,6 +4,13 @@ import type { EstadoItem, ImpresionPendiente, OrdenOut } from '../api'
 import { AvisoImpresion } from '../components/AvisoImpresion'
 import { IconoProhibido, IconoReloj, IconoSarten, IconoSilla } from '../components/Iconos'
 
+// La comanda muestra solo lo que cocina PREPARA: fuera los cargos (táper)
+// y las bebidas (se sirven en mesa; el refresco interrumpía la lectura)
+function vaACocina(item: { es_cargo?: boolean; categoria?: string | null }): boolean {
+  return !item.es_cargo && item.categoria !== 'bebida'
+}
+
+
 const SIGUIENTE_ESTADO: Record<string, string> = {
   pendiente: 'preparando',
   preparando: 'listo',
@@ -138,7 +145,10 @@ export function Cocina() {
     esperaMax: number
   }>()
   for (const o of activas) {
-    const lineas = [...o.items.filter((i) => !i.es_cargo), ...o.menus.flatMap((m) => m.items)]
+    const lineas = [
+      ...o.items.filter(vaACocina),
+      ...o.menus.flatMap((m) => m.items.filter(vaACocina)),
+    ]
     const espera = esperaSegundos(o)
     for (const item of lineas) {
       if (RANGO_ESTADO[item.estado] >= RANGO_ESTADO.listo) continue
@@ -258,7 +268,7 @@ export function Cocina() {
                   <strong>{menu.cantidad} ×</strong> {menu.nombre}
                 </li>
               ))}
-              {orden.items.filter((item) => !item.es_cargo).map((item, i) => (
+              {orden.items.filter(vaACocina).map((item, i) => (
                 <li key={i} className="item-tachado">
                   <strong>{item.cantidad} ×</strong> {item.nombre}
                 </li>
@@ -319,7 +329,7 @@ export function Cocina() {
                           ⛔ SIN {o.rotulo.toUpperCase()}
                         </li>
                       ))}
-                      {menu.items.map((item, i) => (
+                      {menu.items.filter(vaACocina).map((item, i) => (
                         <li key={i} className={`${claseItem(item.estado)} ${item.es_agregado ? 'item-agregado' : ''}`}>
                           {item.es_agregado ? <strong>＋{item.cantidad} {item.nombre.toUpperCase()}</strong>
                             : <>{item.cantidad} × {item.nombre}</>}
@@ -333,7 +343,7 @@ export function Cocina() {
                     {menu.nota && <div className="nota-cocina">⚠ {menu.nota}</div>}
                   </li>
                 ))}
-                {orden.items.filter((item) => !item.es_cargo).map((item, i) => (
+                {orden.items.filter(vaACocina).map((item, i) => (
                   <li key={i} className={claseItem(item.estado)}>
                     <strong>{item.cantidad} ×</strong> {item.nombre}
                     {item.empaque !== 'mesa' && (

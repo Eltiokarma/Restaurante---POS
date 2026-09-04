@@ -158,6 +158,12 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       comprado, la merma, el stock de hoy y para cuántos días alcanza; y export CSV
       (`GET /api/insumos/consumo` y `/consumo.csv`). Lo usado se valoriza al costo promedio
       vigente y la devolución de una orden anulada descuenta del consumo sin bajar de cero.
+- [x] **Comanda de cocina legible de lejos** (feedback del primer servicio real): las
+      bebidas no salen en la comanda ni en "Por salir" — se sirven en mesa, el refresco
+      interrumpía la lectura (cada ítem viaja con su categoría; un plato borrado del
+      catálogo se muestra por si acaso) — y la letra de los platos va al doble (3.1rem)
+      con tarjetas más anchas para que quepan los nombres largos. El ticket y la caja
+      siguen mostrando todo.
 - [x] **Táper con precio y empaques configurables** (reglas del dueño para el servicio
       real: "táper cuesta un sol más; bolsa y lonchera no"): `precio_taper` en Admin →
       Configuración cobra cada porción en táper como línea "Táper × N" (item `es_cargo`,
