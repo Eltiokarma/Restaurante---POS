@@ -47,6 +47,11 @@ class MenuExtraIn(BaseModel):
     cantidad: int = Field(gt=0, le=50)
 
 
+class MenuAgregadoIn(BaseModel):
+    agregado_id: int
+    cantidad: int = Field(gt=0, le=50)
+
+
 class MenuIn(BaseModel):
     menu_id: int
     cantidad: int = Field(gt=0, le=50)
@@ -54,6 +59,9 @@ class MenuIn(BaseModel):
     # completa solo en el backend (viene incluido, no se elige)
     elecciones: dict[int, int] = Field(default_factory=dict)
     extras: list[MenuExtraIn] = Field(default_factory=list, max_length=10)
+    # Tiempos quitados ("sin sopa") y porciones agregadas ("+1 presa")
+    omitidos: list[int] = Field(default_factory=list, max_length=6)
+    agregados: list[MenuAgregadoIn] = Field(default_factory=list, max_length=10)
     empaque: str = "mesa"
     nota: str = Field(default="", max_length=150)
 
@@ -173,21 +181,26 @@ def _item_a_dict(item) -> dict:
 
 
 def _orden_menu_a_dict(orden: Orden, om) -> dict:
-    """Un menú vendido con sus platos (elegidos y extras) indentados."""
+    """Un menú vendido con sus platos (elegidos, extras y agregados) y
+    los tiempos que el cliente quitó ("sin sopa")."""
     items_menu = [i for i in orden.items if i.orden_menu_id == om.id]
-    items_menu.sort(key=lambda i: (i.es_extra, i.tiempo_orden or 0))
+    items_menu.sort(key=lambda i: (i.es_agregado, i.es_extra, i.tiempo_orden or 0))
+    omitidos = om.omitidos()
     return {
         "nombre": om.nombre_snapshot,
         "precio": om.precio_snapshot,
         "cantidad": om.cantidad,
         "nota": om.nota,
+        "omitidos": [{"rotulo": o["rotulo"], "descuento": o["descuento"]} for o in omitidos],
         "items": [
-            {**_item_a_dict(i), "tiempo_orden": i.tiempo_orden, "es_extra": i.es_extra}
+            {**_item_a_dict(i), "tiempo_orden": i.tiempo_orden,
+             "es_extra": i.es_extra, "es_agregado": i.es_agregado}
             for i in items_menu
         ],
-        # Precio del menú × cantidad + recargos y porciones extra
+        # Precio del menú × cantidad − descuentos por quitar tiempos
+        # + recargos, porciones extra y agregados
         "subtotal": round(
-            om.precio_snapshot * om.cantidad
+            om.precio_cobrado * om.cantidad
             + sum(i.precio_snapshot * i.cantidad for i in items_menu),
             2,
         ),

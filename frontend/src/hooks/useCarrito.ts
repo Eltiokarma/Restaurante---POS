@@ -1,7 +1,15 @@
 import { useCallback, useMemo, useState } from 'react'
 import { subtotalMenu } from '../api'
-import type { Empaque, ItemCarrito, MenuCarrito, MenuHoy, Plato } from '../api'
+import type { AgregadoHoy, Empaque, ItemCarrito, MenuCarrito, MenuHoy, Plato } from '../api'
 import type { SugerenciaMenu } from '../menuSugerido'
+
+// La opción con la que arranca un tiempo: la primera sin recargo (para
+// que "Un menú — S/ 11" cueste eso) o, si todas recargan, la más barata
+function eleccionPorDefecto(tiempo: MenuHoy['tiempos'][number]): number {
+  const sinRecargo = tiempo.alternativas.find((a) => a.recargo === 0)
+  if (sinRecargo) return sinRecargo.plato_id
+  return [...tiempo.alternativas].sort((a, b) => a.recargo - b.recargo)[0].plato_id
+}
 
 // El carrito vive SOLO en el estado del frontend hasta que termina la
 // ventana de cancelación; recién ahí se persiste en el backend.
@@ -47,16 +55,69 @@ export function useCarrito() {
 
   // ---------- Menús encadenados ----------
 
+  // Cada menú entra como SU PROPIA línea (no se juntan iguales): el
+  // cliente ve "Menú 1, Menú 2…" y edita cada uno por separado
   const agregarMenu = useCallback((linea: MenuCarrito) => {
-    setMenus((prev) => {
-      // Dos menús armados igual (mismas elecciones, sin extras) se juntan
-      const clave = (m: MenuCarrito) => JSON.stringify([m.menu.id, m.elecciones, m.empaque])
-      const idx = prev.findIndex(
-        (m) => m.extras.length === 0 && linea.extras.length === 0 && clave(m) === clave(linea),
-      )
-      if (idx === -1) return [...prev, linea]
-      return prev.map((m, i) => (i === idx ? { ...m, cantidad: m.cantidad + linea.cantidad } : m))
-    })
+    setMenus((prev) => [...prev, linea])
+  }, [])
+
+  // "Un menú" al toque: entra completo con la opción por defecto de cada
+  // tiempo; después el cliente lo afina en su tarjeta si quiere
+  const agregarMenuCompleto = useCallback((menu: MenuHoy) => {
+    const elecciones: Record<number, number> = {}
+    for (const t of menu.tiempos) {
+      if (t.alternativas.length > 0) elecciones[t.orden] = eleccionPorDefecto(t)
+    }
+    setMenus((prev) => [...prev, {
+      menu, cantidad: 1, elecciones, extras: [], omitidos: [], agregados: [],
+      empaque: 'mesa' as Empaque, nota: '',
+    }])
+  }, [])
+
+  // Cambiar el plato de un tiempo del menú idx (y des-quitarlo si estaba quitado)
+  const cambiarEleccion = useCallback((idx: number, tiempoOrden: number, platoId: number) => {
+    setMenus((prev) => prev.map((m, i) => (i === idx ? {
+      ...m,
+      elecciones: { ...m.elecciones, [tiempoOrden]: platoId },
+      omitidos: m.omitidos.filter((o) => o !== tiempoOrden),
+    } : m)))
+  }, [])
+
+  // "Sin sopa": quitar (o devolver) un tiempo del menú idx. Al devolverlo
+  // vuelve con la primera alternativa elegida (quitarlo borró la elección):
+  // sin esto, un tiempo obligatorio quedaría sin elegir y el backend
+  // rechazaría el pedido recién al confirmar
+  const alternarOmitido = useCallback((idx: number, tiempoOrden: number) => {
+    setMenus((prev) => prev.map((m, i) => {
+      if (i !== idx) return m
+      if (m.omitidos.includes(tiempoOrden)) {
+        const elecciones = { ...m.elecciones }
+        const tiempo = m.menu.tiempos.find((t) => t.orden === tiempoOrden)
+        if (!(tiempoOrden in elecciones) && tiempo && tiempo.alternativas.length > 0) {
+          elecciones[tiempoOrden] = eleccionPorDefecto(tiempo)
+        }
+        return { ...m, elecciones, omitidos: m.omitidos.filter((o) => o !== tiempoOrden) }
+      }
+      const elecciones = { ...m.elecciones }
+      delete elecciones[tiempoOrden]
+      return { ...m, elecciones, omitidos: [...m.omitidos, tiempoOrden] }
+    }))
+  }, [])
+
+  // +1 presa / −1 presa en el menú idx
+  const cambiarAgregado = useCallback((idx: number, agregado: AgregadoHoy, delta: number) => {
+    setMenus((prev) => prev.map((m, i) => {
+      if (i !== idx) return m
+      const pos = m.agregados.findIndex((a) => a.agregado.id === agregado.id)
+      if (pos === -1) {
+        return delta > 0 ? { ...m, agregados: [...m.agregados, { agregado, cantidad: delta }] } : m
+      }
+      const cantidad = m.agregados[pos].cantidad + delta
+      const agregados = cantidad <= 0
+        ? m.agregados.filter((_, j) => j !== pos)
+        : m.agregados.map((a, j) => (j === pos ? { ...a, cantidad } : a))
+      return { ...m, agregados }
+    }))
   }, [])
 
   // "Sopa + lomo + chicha" a la carta → una línea de menú: sale UNA unidad de
@@ -69,7 +130,8 @@ export function useCarrito() {
     const nota = usados.map((i) => i.nota.trim()).filter(Boolean).join(' / ')
     const empaque = usados[0]?.empaque ?? ('mesa' as Empaque)
     setMenus((m) => [...m, {
-      menu: s.menu, cantidad: 1, elecciones: s.elecciones, extras: [], empaque, nota,
+      menu: s.menu, cantidad: 1, elecciones: s.elecciones, extras: [],
+      omitidos: [], agregados: [], empaque, nota,
     }])
     setItems((prev) =>
       prev
@@ -77,6 +139,25 @@ export function useCarrito() {
         .filter((i) => i.cantidad > 0),
     )
   }, [items])
+
+  // "+ Otro igual": copia la línea entera (elecciones, quitados, agregados,
+  // extras, nota) como una tarjeta nueva — cantidad+1 no duplicaría los
+  // agregados, que van por línea y no por unidad
+  const duplicarMenu = useCallback((idx: number) => {
+    setMenus((prev) => {
+      const original = prev[idx]
+      if (!original) return prev
+      const copia: MenuCarrito = {
+        ...original,
+        cantidad: 1,
+        elecciones: { ...original.elecciones },
+        omitidos: [...original.omitidos],
+        agregados: original.agregados.map((a) => ({ ...a })),
+        extras: original.extras.map((e) => ({ ...e })),
+      }
+      return [...prev.slice(0, idx + 1), copia, ...prev.slice(idx + 1)]
+    })
+  }, [])
 
   const cambiarCantidadMenu = useCallback((idx: number, delta: number) => {
     setMenus((prev) =>
@@ -135,7 +216,17 @@ export function useCarrito() {
       setMenus((prev) =>
         prev.map((m) => {
           const nuevo = menuPorId.get(m.menu.id)
-          return nuevo ? { ...m, menu: nuevo } : m
+          if (!nuevo) return m
+          const tiempos = new Set(nuevo.tiempos.map((t) => t.orden))
+          return {
+            ...m,
+            menu: nuevo,
+            omitidos: m.omitidos.filter((o) => tiempos.has(o)),
+            agregados: m.agregados.flatMap((a) => {
+              const vigente = nuevo.agregados.find((x) => x.id === a.agregado.id)
+              return vigente ? [{ ...a, agregado: vigente }] : []
+            }),
+          }
         }),
       )
     }
@@ -161,6 +252,11 @@ export function useCarrito() {
     cambiarNota,
     cantidadDe,
     agregarMenu,
+    agregarMenuCompleto,
+    cambiarEleccion,
+    alternarOmitido,
+    cambiarAgregado,
+    duplicarMenu,
     convertirEnMenu,
     cambiarCantidadMenu,
     quitarMenu,

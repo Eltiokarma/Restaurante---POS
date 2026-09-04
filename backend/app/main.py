@@ -120,6 +120,49 @@ def _migrar(engine_) -> None:
             ))
             conn.commit()
 
+        # Menú editable: quitar tiempos con descuento y agregados (+presa…)
+        columnas_tiempos = [fila[1] for fila in conn.execute(text("PRAGMA table_info(menu_tiempos)"))]
+        if columnas_tiempos and "descuento_si_se_quita" not in columnas_tiempos:
+            conn.execute(text(
+                "ALTER TABLE menu_tiempos ADD COLUMN descuento_si_se_quita FLOAT NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
+        columnas_menus = [fila[1] for fila in conn.execute(text("PRAGMA table_info(orden_menus)"))]
+        if columnas_menus and "omitidos_json" not in columnas_menus:
+            conn.execute(text(
+                "ALTER TABLE orden_menus ADD COLUMN omitidos_json TEXT NOT NULL DEFAULT '[]'"
+            ))
+            conn.commit()
+        if columnas_items and "es_agregado" not in columnas_items:
+            conn.execute(text(
+                "ALTER TABLE orden_items ADD COLUMN es_agregado BOOLEAN NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
+
+
+def _sembrar_agregados(engine_) -> None:
+    """Los agregados de arranque (+presa, +refresco…) se crean UNA vez.
+
+    Solo si la tabla está vacía: si el dueño los editó o borró, se respeta.
+    Se distingue "nunca hubo" de "los borró" con la marca en config."""
+    from sqlalchemy import select
+
+    from .db import SessionLocal
+    from .models import AGREGADOS_INICIALES, Config, MenuAgregado
+
+    db = SessionLocal()
+    try:
+        if db.get(Config, "agregados_sembrados") is not None:
+            return
+        if not db.scalars(select(MenuAgregado)).first():
+            for numero, (nombre, precio) in enumerate(AGREGADOS_INICIALES, start=1):
+                db.add(MenuAgregado(nombre=nombre, precio=precio, orden=numero))
+        db.add(Config(clave="agregados_sembrados", valor="1"))
+        db.commit()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def _ciclo_de_vida(app_: FastAPI):
     # Backup automático mientras el servidor corre (ver services/backup.py).
@@ -163,6 +206,7 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 _migrar(engine)
+_sembrar_agregados(engine)
 
 # --- Candado del local (para despliegues en internet, ej. Railway) ---
 # Si la variable de entorno PIN_LOCAL está definida, TODA la API (salvo
