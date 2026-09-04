@@ -153,6 +153,9 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       típicos de fonda (unidad, costo referencial, mínimo sugerido) y 47 recetas base por
       porción; se cargan sin duplicar y todo queda editable.
 - [ ] Kardex fase 2 (lo que queda): reporte de consumo semanal y export CSV del kardex.
+      **Siguiente sesión (plan en `CONTINUAR.md`)**, junto con el pedido "desde el menú"
+      (empezar por "Un menú" completo y quitarle/agregarle: sin sopa, + presa, + refresco…,
+      cada menú editable en una lista con sus costos) y la auditoría de tamaños de tablet.
 - [ ] **App propia de Android para imprimir** (reemplazo de RawBT): decisión del dueño —
       se hace en la fase final del prototipo, no ahora. Llevaría dentro el mismo driver
       ESC/POS que hoy pone RawBT, se compilaría en GitHub Actions y se instalaría en la
