@@ -304,8 +304,12 @@ function HistorialCierres({ onSesionVencida }: { onSesionVencida: () => void }) 
         </thead>
         <tbody>
           {cierres.map((c) => (
-            <tr key={c.fecha}>
-              <td>{c.fecha}{!c.cerrada && ' (sin cerrar)'}</td>
+            <tr key={`${c.fecha}-${c.turno ?? 1}`}>
+              <td>
+                {c.fecha}
+                {(c.turno ?? 1) > 1 && ` · caja ${c.turno}`}
+                {!c.cerrada && ' (sin cerrar)'}
+              </td>
               <td className="col-cantidad">{soles(c.monto_apertura ?? 0)}</td>
               <td className="col-cantidad">{soles(c.ventas_efectivo)}</td>
               <td className="col-cantidad">{soles(c.ventas_tarjeta)}</td>

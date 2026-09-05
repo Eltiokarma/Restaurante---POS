@@ -276,13 +276,18 @@ class VozLog(Base):
 
 
 class CierreCaja(Base):
-    """Apertura y cierre de caja del día: fondo inicial, conteo final y
-    diferencia contra lo que el sistema dice que se vendió."""
+    """Apertura y cierre de una caja: fondo inicial, conteo final y
+    diferencia contra lo que el sistema dice que se vendió. Puede haber
+    varias en un mismo día (turnos): cada una cuadra su tramo."""
 
     __tablename__ = "cierres_caja"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    fecha: Mapped[date] = mapped_column(Date, unique=True, nullable=False)
+    fecha: Mapped[date] = mapped_column(Date, nullable=False)
+    # Las ventas de esta caja son las órdenes del día con id MAYOR a este
+    # (NULL = todas: la primera caja del día también cuadra lo vendido
+    # antes de abrirla, como siempre fue).
+    desde_orden_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     hora_apertura: Mapped[str] = mapped_column(String(8), nullable=False)
     monto_apertura: Mapped[float] = mapped_column(Float, nullable=False)
     hora_cierre: Mapped[str | None] = mapped_column(String(8), nullable=True)

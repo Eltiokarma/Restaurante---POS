@@ -1,13 +1,15 @@
-"""Apertura y cierre de caja del día.
+"""Apertura y cierre de caja.
 
 Flujo: al empezar el servicio, el cajero abre la caja con el fondo
 inicial (sencillo para vueltos). Al terminar, cuenta el efectivo y
-cierra: el sistema calcula lo esperado (fondo + ventas del día) y la
-diferencia. Un registro por día; el cierre se puede corregir re-cerrando.
+cierra: el sistema calcula lo esperado (fondo + ventas del tramo) y la
+diferencia. Puede haber VARIAS cajas en un mismo día (turnos): cerrada
+una, se puede abrir la siguiente, y cada una cuadra solo con las ventas
+de su tramo del día. El cierre se puede corregir re-cerrando.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..auth import requiere_admin
@@ -27,8 +29,12 @@ class CierreIn(BaseModel):
     notas: str = ""
 
 
-def _ventas_de_hoy(db: Session) -> dict:
+def _ventas_de_hoy(db: Session, desde_id: int | None = None) -> dict:
     """Ventas del día desglosadas por método de pago.
+
+    `desde_id` acota a las órdenes posteriores a una caja anterior del
+    día (turnos): así cada caja cuadra solo con las ventas de su tramo y
+    ninguna venta queda fuera. None = todo el día (la primera caja).
 
     Una orden sin método registrado se asume EFECTIVO (comportamiento
     histórico: si la caja no usa los botones de cobro, el cierre sigue
@@ -36,7 +42,7 @@ def _ventas_de_hoy(db: Session) -> dict:
     """
     ordenes = [
         o for o in db.scalars(select(Orden).where(Orden.fecha == hoy_lima())).all()
-        if o.estado != "anulada"
+        if o.estado != "anulada" and (desde_id is None or o.id > desde_id)
     ]
     efectivo = sum(o.total for o in ordenes if o.metodo_pago in (None, "efectivo"))
     tarjeta = sum(o.total for o in ordenes if o.metodo_pago == "tarjeta")
@@ -50,7 +56,7 @@ def _ventas_de_hoy(db: Session) -> dict:
     }
 
 
-def _a_dict(registro: CierreCaja | None, ventas: dict) -> dict:
+def _a_dict(registro: CierreCaja | None, ventas: dict, turno: int = 1) -> dict:
     base = {"abierta": False, "cerrada": False, "ventas_despues_del_cierre": False, **ventas}
     if registro is None:
         return base
@@ -92,6 +98,7 @@ def _a_dict(registro: CierreCaja | None, ventas: dict) -> dict:
         **base,
         "abierta": not cerrada,
         "cerrada": cerrada,
+        "turno": turno,
         "fecha": registro.fecha.isoformat(),
         "hora_apertura": registro.hora_apertura,
         "monto_apertura": registro.monto_apertura,
@@ -104,41 +111,68 @@ def _a_dict(registro: CierreCaja | None, ventas: dict) -> dict:
     }
 
 
-def _registro_de_hoy(db: Session) -> CierreCaja | None:
-    return db.scalar(select(CierreCaja).where(CierreCaja.fecha == hoy_lima()))
+def _registros_de_hoy(db: Session) -> list[CierreCaja]:
+    return list(db.scalars(
+        select(CierreCaja).where(CierreCaja.fecha == hoy_lima()).order_by(CierreCaja.id)
+    ))
+
+
+def _turno_actual(db: Session) -> tuple[CierreCaja | None, int]:
+    """La caja vigente del día (la última) y su número de turno.
+
+    Las cajas anteriores ya quedaron cuadradas: su tramo termina donde
+    empieza el de la siguiente (desde_orden_id).
+    """
+    registros = _registros_de_hoy(db)
+    if not registros:
+        return None, 0
+    return registros[-1], len(registros)
 
 
 @router.get("/hoy")
 def estado_de_hoy(db: Session = Depends(get_db)):
-    return _a_dict(_registro_de_hoy(db), _ventas_de_hoy(db))
+    registro, turno = _turno_actual(db)
+    desde_id = registro.desde_orden_id if registro is not None else None
+    return _a_dict(registro, _ventas_de_hoy(db, desde_id), turno)
 
 
 @router.post("/abrir", status_code=201)
 def abrir(payload: AperturaIn, db: Session = Depends(get_db)):
-    if _registro_de_hoy(db) is not None:
-        raise HTTPException(status_code=409, detail="La caja de hoy ya fue abierta")
+    ultimo, turnos = _turno_actual(db)
+    if ultimo is not None and ultimo.hora_cierre is None:
+        raise HTTPException(
+            status_code=409, detail="La caja ya está abierta; ciérrala antes de abrir otra"
+        )
     ahora = ahora_lima()
+    # Segunda caja del día en adelante: lo vendido hasta ahora quedó
+    # cuadrado en la anterior; esta arranca desde la última orden del día
+    desde_id = None
+    if ultimo is not None:
+        desde_id = db.scalar(
+            select(func.max(Orden.id)).where(Orden.fecha == hoy_lima())
+        )
     registro = CierreCaja(
         fecha=ahora.date(),
+        desde_orden_id=desde_id,
         hora_apertura=ahora.strftime("%H:%M:%S"),
         monto_apertura=round(payload.monto_apertura, 2),
         notas=payload.notas.strip(),
     )
     db.add(registro)
     db.commit()
-    return _a_dict(registro, _ventas_de_hoy(db))
+    return _a_dict(registro, _ventas_de_hoy(db, desde_id), turnos + 1)
 
 
 @router.post("/cerrar")
 def cerrar(payload: CierreIn, db: Session = Depends(get_db)):
     """Cierra la caja del día. El conteo de efectivo se cuadra SOLO contra
-    el efectivo esperado (fondo + ventas en efectivo); tarjeta y Yape se
-    reportan aparte. Re-cerrar actualiza el conteo (corrección)."""
-    registro = _registro_de_hoy(db)
+    el efectivo esperado (fondo + ventas en efectivo del tramo); tarjeta y
+    Yape se reportan aparte. Re-cerrar actualiza el conteo (corrección)."""
+    registro, turno = _turno_actual(db)
     if registro is None:
         raise HTTPException(status_code=409, detail="La caja de hoy no está abierta todavía")
 
-    ventas = _ventas_de_hoy(db)
+    ventas = _ventas_de_hoy(db, registro.desde_orden_id)
     esperado_efectivo = round(registro.monto_apertura + ventas["ventas_efectivo"], 2)
     registro.hora_cierre = ahora_lima().strftime("%H:%M:%S")
     registro.monto_contado = round(payload.monto_contado, 2)
@@ -150,7 +184,7 @@ def cerrar(payload: CierreIn, db: Session = Depends(get_db)):
     if payload.notas.strip():
         registro.notas = payload.notas.strip()
     db.commit()
-    return _a_dict(registro, ventas)
+    return _a_dict(registro, ventas, turno)
 
 
 class FondoIn(BaseModel):
@@ -163,8 +197,9 @@ def reabrir(db: Session = Depends(get_db)):
 
     Para el caso real del local: se cerró por error (o en una demo) y hay
     que seguir operando el día normal. Las ventas nunca se tocan; solo se
-    borra el conteo, que se vuelve a hacer al cierre de verdad."""
-    registro = _registro_de_hoy(db)
+    borra el conteo, que se vuelve a hacer al cierre de verdad. Con varias
+    cajas en el día, se reabre la última."""
+    registro, turno = _turno_actual(db)
     if registro is None:
         raise HTTPException(status_code=409, detail="La caja de hoy no está abierta todavía")
     if registro.hora_cierre is None:
@@ -177,7 +212,7 @@ def reabrir(db: Session = Depends(get_db)):
     registro.ventas_yape = None
     registro.diferencia = None
     db.commit()
-    return _a_dict(registro, _ventas_de_hoy(db))
+    return _a_dict(registro, _ventas_de_hoy(db, registro.desde_orden_id), turno)
 
 
 @router.put("/apertura")
@@ -186,7 +221,7 @@ def corregir_fondo(payload: FondoIn, db: Session = Depends(get_db)):
 
     Si ya se cerró, el descuadre se recalcula con el fondo nuevo sobre el
     snapshot del cierre (el conteo hecho no se pierde)."""
-    registro = _registro_de_hoy(db)
+    registro, turno = _turno_actual(db)
     if registro is None:
         raise HTTPException(status_code=409, detail="La caja de hoy no está abierta todavía")
     registro.monto_apertura = round(payload.monto_apertura, 2)
@@ -196,15 +231,26 @@ def corregir_fondo(payload: FondoIn, db: Session = Depends(get_db)):
         )
         registro.diferencia = round(registro.monto_contado - esperado_efectivo, 2)
     db.commit()
-    return _a_dict(registro, _ventas_de_hoy(db))
+    return _a_dict(registro, _ventas_de_hoy(db, registro.desde_orden_id), turno)
 
 
 @router.get("/historial", dependencies=[Depends(requiere_admin)])
 def historial(db: Session = Depends(get_db)):
-    """Últimos 30 cierres, para el admin."""
+    """Últimos 30 cierres, para el admin. Un día con varias cajas sale
+    con una fila por caja, numeradas por turno."""
     registros = db.scalars(
-        select(CierreCaja).order_by(CierreCaja.fecha.desc()).limit(30)
+        select(CierreCaja).order_by(CierreCaja.fecha.desc(), CierreCaja.id.desc()).limit(30)
     ).all()
+    # Número de turno dentro de su día (1 = la primera caja de esa fecha)
+    pares = db.execute(
+        select(CierreCaja.fecha, CierreCaja.id)
+        .where(CierreCaja.fecha.in_({r.fecha for r in registros}))
+    ).all()
+    turno_de: dict[int, int] = {}
+    visto: dict = {}
+    for fecha, id_ in sorted(pares):
+        visto[fecha] = visto.get(fecha, 0) + 1
+        turno_de[id_] = visto[fecha]
     return {"cierres": [
         _a_dict(r, {
             "total_vendido": r.total_sistema or 0.0,
@@ -216,6 +262,6 @@ def historial(db: Session = Depends(get_db)):
             "ventas_tarjeta": r.ventas_tarjeta or 0.0,
             "ventas_yape": r.ventas_yape or 0.0,
             "sin_registrar": 0,
-        })
+        }, turno_de.get(r.id, 1))
         for r in registros
     ]}

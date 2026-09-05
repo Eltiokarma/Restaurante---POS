@@ -145,6 +145,25 @@ def _migrar(engine_) -> None:
             ))
             conn.commit()
 
+        # Varias cajas por día (turnos): la tabla nació con fecha UNIQUE y
+        # SQLite no permite soltar esa restricción con ALTER, así que se
+        # reconstruye una sola vez copiando los registros tal cual.
+        ddl_cierres = conn.execute(text(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='cierres_caja'"
+        )).scalar()
+        if ddl_cierres and "UNIQUE" in ddl_cierres.upper():
+            conn.execute(text("ALTER TABLE cierres_caja RENAME TO cierres_caja_unica"))
+            Base.metadata.tables["cierres_caja"].create(bind=conn)
+            cols = ", ".join(
+                fila[1]
+                for fila in conn.execute(text("PRAGMA table_info(cierres_caja_unica)"))
+            )
+            conn.execute(text(
+                f"INSERT INTO cierres_caja ({cols}) SELECT {cols} FROM cierres_caja_unica"
+            ))
+            conn.execute(text("DROP TABLE cierres_caja_unica"))
+            conn.commit()
+
 
 def _sembrar_agregados(engine_) -> None:
     """Los agregados de arranque (+presa, +refresco…) se crean UNA vez.
