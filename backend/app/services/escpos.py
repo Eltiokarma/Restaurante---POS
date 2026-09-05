@@ -82,13 +82,20 @@ def render_orden(
     elif orden.tipo_servicio == "mixto":
         partes.append(_texto("* MIXTO - parte para llevar *"))
     mesas = json.loads(orden.mesa_ids or "[]")
+    partes.append(NEGRITA_ON)
     if mesas and not orden.mesa_liberada:
         nombres = local.get("mesas") or {}
         partes.append(_texto("MESA: " + " + ".join(nombres.get(m, f"#{m}") for m in mesas)))
+    elif orden.tipo_servicio != "llevar":
+        # Pedido del dueño: si nadie eligió mesa, que el ticket lo diga
+        partes.append(_texto("SIN MESA"))
+    partes.append(NEGRITA_OFF)
     if len(orden.items) + len(orden.menus) >= 2 or orden.menus:
-        partes.append(_texto(
+        # La entrega en letra grande: es la instrucción que cocina y el
+        # mozo tienen que ver primero (pedido del dueño)
+        partes += [DOBLE_ALTO, NEGRITA_ON, _texto(
             "ENTREGA: POR TIEMPOS" if orden.entrega == "separado" else "ENTREGA: TODO JUNTO"
-        ))
+        ), NEGRITA_OFF, TAMANO_NORMAL]
     partes.append(_texto(f"{orden.fecha.isoformat()} - {orden.hora}"))
 
     partes += [ALINEAR_IZQ, _texto("-" * columnas)]
@@ -98,50 +105,93 @@ def render_orden(
     # que viaja a cocina, se lee de un vistazo)
     partes.append(DOBLE_ALTO)
 
-    # Menús encadenados: la comanda va directo a los platos (sin la línea
-    # "1 x Menú del día" ni su precio — decisión del dueño); lo quitado
-    # sale destacado (SIN SOPA) y los agregados como +1 PRESA. Entre un
-    # menú y otro, una línea en blanco: cocina ve qué va con qué.
-    for numero_menu, om in enumerate(orden.menus):
-        if numero_menu > 0:
-            partes.append(_texto(""))
-        for omitido in om.omitidos():
-            nombre = f"** SIN {omitido['rotulo'].upper()} **"
-            partes.append(_texto(_fila(nombre, "", columnas)))
-        items_menu = sorted(
-            (i for i in orden.items if i.orden_menu_id == om.id and not es_bebida(i)),
-            key=lambda i: (i.es_agregado, i.es_extra, i.tiempo_orden or 0),
-        )
-        for item in items_menu:
-            if item.es_agregado:
-                nombre = f"** +{item.cantidad} {item.nombre_snapshot.upper()} **"
-            else:
-                nombre = f"{item.cantidad} x {item.nombre_snapshot}"
-                if item.es_extra:
-                    nombre += " (EXTRA)"
-            if item.empaque != "mesa":
-                nombre += f" [{item.empaque.upper()}]"
-            monto = _soles(item.precio_snapshot * item.cantidad) if item.precio_snapshot > 0 else ""
-            partes.append(_texto(_fila(nombre, monto, columnas)))
-        if om.nota:
-            partes.append(_texto(f"-> {om.nota}"))
+    # La comanda va POR GRUPOS (pedido del dueño tras el servicio real):
+    # las entradas arriba, los segundos abajo, cada plato con su
+    # observación al costado. Se juntan iguales (2 x Sopa) sin importar de
+    # qué menú salieron; los agregados (+1 UNA CARNE MAS) van con los
+    # segundos y lo quitado (SIN SOPA) destacado arriba.
+    def _nota_de(item) -> str:
+        return (item.nota or "").strip()
 
-    # Venta a la carta
-    primera_carta = True
-    for item in orden.items:
-        if item.orden_menu_id is not None or es_bebida(item):
+    # La nota de un menú se le pega a su segundo (ahí van los "sin
+    # frijoles"); si el menú no tiene segundo, al primer plato del menú.
+    nota_por_item: dict[int, str] = {}
+    for om in orden.menus:
+        if not om.nota:
             continue
-        if primera_carta and orden.menus:
+        propios = [
+            i for i in orden.items
+            if i.orden_menu_id == om.id and not i.es_agregado and not es_bebida(i)
+        ]
+        destino = next(
+            (i for i in propios if categorias.get(i.plato_id) == "fondo" and not i.es_extra),
+            propios[0] if propios else None,
+        )
+        if destino is not None:
+            nota_por_item[destino.id] = om.nota.strip()
+
+    # Omitidos de todos los menús, juntados por rótulo
+    sin_por_rotulo: dict[str, int] = {}
+    for om in orden.menus:
+        for omitido in om.omitidos():
+            rotulo = omitido["rotulo"].upper()
+            sin_por_rotulo[rotulo] = sin_por_rotulo.get(rotulo, 0) + 1
+    for rotulo, veces in sin_por_rotulo.items():
+        cuantos = f"{veces} " if veces > 1 else ""
+        partes.append(_texto(f"** {cuantos}SIN {rotulo} **"))
+    if sin_por_rotulo:
+        partes.append(_texto(""))
+
+    # Juntar iguales: mismo plato + mismo empaque + misma observación
+    grupos: dict[tuple, dict] = {}
+    for item in orden.items:
+        if es_bebida(item):
+            continue
+        bucket = "fondo" if item.es_agregado else categorias.get(item.plato_id)
+        clave = (
+            bucket, item.nombre_snapshot, item.empaque,
+            _nota_de(item) or nota_por_item.get(item.id, ""),
+            item.es_extra, item.es_agregado,
+        )
+        grupo = grupos.setdefault(clave, {"cantidad": 0, "monto": 0.0})
+        grupo["cantidad"] += item.cantidad
+        grupo["monto"] += item.precio_snapshot * item.cantidad
+
+    SECCIONES = [("entrada", "ENTRADAS"), ("fondo", "SEGUNDOS"), ("postre", "POSTRES"), (None, "OTROS")]
+    primera_seccion = True
+    for bucket, titulo in SECCIONES:
+        del_grupo = sorted(
+            (c for c in grupos if c[0] == bucket),
+            key=lambda c: (c[5], c[4], c[1]),  # platos, extras y al final agregados
+        )
+        if not del_grupo:
+            continue
+        if not primera_seccion:
             partes.append(_texto(""))
-            primera_carta = False
-        nombre = f"{item.cantidad} x {item.nombre_snapshot}"
-        if item.empaque != "mesa":
-            nombre += f" [{item.empaque.upper()}]"
-        partes.append(_texto(_fila(
-            nombre, _soles(item.precio_snapshot * item.cantidad), columnas,
-        )))
-        if item.nota:
-            partes.append(_texto(f"  -> {item.nota}"))
+        primera_seccion = False
+        partes += [NEGRITA_ON, _texto(titulo), NEGRITA_OFF]
+        for clave in del_grupo:
+            _, nombre_plato, empaque, nota, es_extra, es_agregado = clave
+            datos = grupos[clave]
+            if es_agregado:
+                nombre = f"** +{datos['cantidad']} {nombre_plato.upper()} **"
+            else:
+                nombre = f"{datos['cantidad']} x {nombre_plato}"
+                if es_extra:
+                    nombre += " (EXTRA)"
+            if empaque != "mesa":
+                nombre += f" [{empaque.upper()}]"
+            monto = _soles(datos["monto"]) if datos["monto"] > 0 else ""
+            if nota:
+                # La observación al costado si entra; si no, debajo
+                con_nota = f"{nombre} -> {nota}"
+                if len(con_nota) + (len(monto) + 1 if monto else 0) <= columnas:
+                    partes.append(_texto(_fila(con_nota, monto, columnas)))
+                else:
+                    partes.append(_texto(_fila(nombre, monto, columnas)))
+                    partes.append(_texto(f"  -> {nota}"))
+            else:
+                partes.append(_texto(_fila(nombre, monto, columnas)))
 
     partes += [TAMANO_NORMAL, _texto("-" * columnas)]
     partes += [CENTRAR, _texto(""), _texto("Paga en caja con este ticket."), _texto("Gracias!")]

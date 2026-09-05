@@ -153,6 +153,15 @@ export function Caja() {
       setAsignandoMesa(null)
       cargarOrdenes()
       cargarMesas()
+      if (mesaIds.length > 0) {
+        // El ticket ya impreso no dice la mesa: se reimprime con ella
+        // (pedido del dueño; el mozo sabe adónde llevarlo)
+        const nombres = mesas.filter((m) => mesaIds.includes(m.id)).map((m) => m.nombre)
+        await reimprimir({ ...orden, mesa_ids: mesaIds, mesas: nombres, mesa_liberada: false })
+        setMensaje(
+          `Ticket #${String(orden.numero_orden_dia).padStart(3, '0')} va de nuevo a imprimir con su mesa`,
+        )
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo asignar la mesa')
     }

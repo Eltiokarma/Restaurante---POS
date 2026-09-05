@@ -182,6 +182,34 @@ def test_ticket_escpos_con_sin_sopa_y_agregado(client, db, fonda):
     assert "Menú del día".encode("cp850") not in datos
 
 
+def test_comanda_agrupada_por_tiempos(client, db, fonda):
+    """La comanda sale por grupos: ENTRADAS arriba, SEGUNDOS abajo con la
+    observación al costado, y los iguales juntados (3 x Sopa)."""
+    from app.models import Config
+
+    db.add(Config(clave="modo_impresion", valor="puente"))
+    db.add(Config(clave="impresora_ip", valor="192.168.1.77"))
+    db.commit()
+
+    r = client.post("/api/orders", json={
+        "menus": [{"menu_id": fonda["menu_id"], "cantidad": 2, "nota": "sin frijoles"}],
+        "items": [{"plato_id": fonda["platos"]["Sopa criolla"], "cantidad": 1}],
+        "entrega": "separado",
+    })
+    assert r.status_code == 201
+
+    trabajo = client.get("/api/print/cola").json()["trabajos"][0]
+    datos = base64.b64decode(trabajo["datos_b64"])
+    assert datos.index(b"ENTRADAS") < datos.index(b"SEGUNDOS")
+    # Las 2 sopas del menú y la de la carta salen juntadas
+    assert b"3 x Sopa criolla" in datos
+    # La nota del menú va al costado de su segundo
+    assert "2 x Asado con puré -> sin frijoles".encode("cp850") in datos
+    # Sin mesa elegida, el ticket lo dice; y la entrega va en el impreso
+    assert b"SIN MESA" in datos
+    assert b"ENTREGA: POR TIEMPOS" in datos
+
+
 def test_csv_marca_lo_quitado_y_los_agregados(client, admin_headers, fonda):
     pedir(client, fonda, omitidos=[1],
           agregados=[{"agregado_id": fonda["presa_id"], "cantidad": 1}])
