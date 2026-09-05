@@ -39,6 +39,9 @@ export function Caja() {
   const [estadoCaja, setEstadoCaja] = useState<CajaEstado | null>(null)
   const [montoCaja, setMontoCaja] = useState('')
   const [cerrandoCaja, setCerrandoCaja] = useState(false)
+  // Doble check del cierre: primero se escribe el conteo, luego se confirma
+  const [confirmandoCierre, setConfirmandoCierre] = useState(false)
+  const [abriendoNueva, setAbriendoNueva] = useState(false)
   const [corrigiendoFondo, setCorrigiendoFondo] = useState(false)
   const [montoFondo, setMontoFondo] = useState('')
   const [mesas, setMesas] = useState<MesaEstado[]>([])
@@ -162,13 +165,31 @@ export function Caja() {
       return
     }
     try {
-      setEstadoCaja(await api.abrirCaja(monto))
+      const resultado = await api.abrirCaja(monto)
+      setEstadoCaja(resultado)
       setMontoCaja('')
-      setMensaje(`✔ Caja abierta con ${soles(monto)} de fondo`)
+      setAbriendoNueva(false)
+      const n = resultado.turno ?? 1
+      setMensaje(
+        n > 1
+          ? `✔ Caja ${n} del día abierta con ${soles(monto)} de fondo`
+          : `✔ Caja abierta con ${soles(monto)} de fondo`,
+      )
       setError('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo abrir la caja')
     }
+  }
+
+  // Paso 1 del cierre: valida el conteo y pide el doble check
+  const revisarCierre = () => {
+    const monto = parseFloat(montoCaja)
+    if (!(monto >= 0)) {
+      setError('Pon cuánto efectivo contaste en caja')
+      return
+    }
+    setError('')
+    setConfirmandoCierre(true)
   }
 
   const cerrarCaja = async () => {
@@ -182,6 +203,7 @@ export function Caja() {
       setEstadoCaja(resultado)
       setMontoCaja('')
       setCerrandoCaja(false)
+      setConfirmandoCierre(false)
       const dif = resultado.diferencia ?? 0
       setMensaje(
         dif === 0
@@ -386,7 +408,8 @@ export function Caja() {
       {estadoCaja?.abierta && (
         <div className="caja-panel">
           <span>
-            🔓 Caja abierta a las {estadoCaja.hora_apertura?.slice(0, 5)} con{' '}
+            🔓 {(estadoCaja.turno ?? 1) > 1 ? `Caja ${estadoCaja.turno} del día` : 'Caja'}{' '}
+            abierta a las {estadoCaja.hora_apertura?.slice(0, 5)} con{' '}
             <strong>{soles(estadoCaja.monto_apertura ?? 0)}</strong> de fondo · esperado en
             EFECTIVO: <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo)}</strong>
             {' '}· 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)}
@@ -416,7 +439,7 @@ export function Caja() {
             <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(true)}>
               🔒 Cerrar caja
             </button>
-          ) : cerrandoCaja ? (
+          ) : cerrandoCaja && !confirmandoCierre ? (
             <span className="caja-cierre-form">
               <label>
                 Efectivo contado
@@ -425,8 +448,27 @@ export function Caja() {
                   value={montoCaja} onChange={(e) => setMontoCaja(e.target.value)}
                 />
               </label>
-              <button className="boton-grande boton-confirmar" onClick={cerrarCaja}>Confirmar cierre</button>
+              <button className="boton-grande boton-confirmar" onClick={revisarCierre}>Confirmar cierre</button>
               <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(false)}>Cancelar</button>
+            </span>
+          ) : cerrandoCaja ? (
+            <span className="caja-cierre-form">
+              {/* Doble check: se ve el resultado ANTES de cerrar */}
+              <span>
+                ¿Cerrar la caja con <strong>{soles(parseFloat(montoCaja) || 0)}</strong> contados?{' '}
+                {(() => {
+                  const dif = (parseFloat(montoCaja) || 0) -
+                    ((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo)
+                  return dif === 0
+                    ? 'Cuadra exacto 🎯'
+                    : dif > 0
+                      ? `Sobrarían ${soles(dif)}`
+                      : `Faltarían ${soles(-dif)}`
+                })()}
+                {' '}Después puedes reabrirla o abrir una caja nueva.
+              </span>
+              <button className="boton-grande boton-confirmar" onClick={cerrarCaja}>✅ SÍ, CERRAR</button>
+              <button className="boton-cerrar-caja" onClick={() => setConfirmandoCierre(false)}>↩ Volver</button>
             </span>
           ) : null}
         </div>
@@ -453,7 +495,8 @@ export function Caja() {
             </div>
           )}
           <span>
-            🔒 Caja cerrada a las {estadoCaja.hora_cierre?.slice(0, 5)} — efectivo esperado:{' '}
+            🔒 {(estadoCaja.turno ?? 1) > 1 ? `Caja ${estadoCaja.turno} del día` : 'Caja'}{' '}
+            cerrada a las {estadoCaja.hora_cierre?.slice(0, 5)} — efectivo esperado:{' '}
             <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo)}</strong>{' '}
             · contado: <strong>{soles(estadoCaja.monto_contado ?? 0)}</strong>{' '}
             · 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)}
@@ -461,17 +504,24 @@ export function Caja() {
               <strong> · ⚠ hubo ventas o cambios después del cierre: corrige el conteo</strong>
             )}
           </span>
-          {!cerrandoCaja && (
+          {!cerrandoCaja && !abriendoNueva && (
             <button className="boton-cerrar-caja" onClick={reabrirCaja}
                     title="Se cerró por error: deshace el cierre y el día sigue normal">
               🔓 Reabrir caja
             </button>
           )}
-          {!cerrandoCaja ? (
+          {!cerrandoCaja && !abriendoNueva && (
             <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(true)}>
               Corregir conteo
             </button>
-          ) : (
+          )}
+          {!cerrandoCaja && !abriendoNueva && (
+            <button className="boton-cerrar-caja" onClick={() => setAbriendoNueva(true)}
+                    title="Empieza otra caja hoy mismo: la cerrada queda cuadrada tal cual">
+              🆕 Abrir caja nueva
+            </button>
+          )}
+          {cerrandoCaja && (
             <span className="caja-cierre-form">
               <label>
                 Efectivo contado
@@ -482,6 +532,19 @@ export function Caja() {
               </label>
               <button className="boton-grande boton-confirmar" onClick={cerrarCaja}>Guardar corrección</button>
               <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(false)}>Cancelar</button>
+            </span>
+          )}
+          {abriendoNueva && (
+            <span className="caja-cierre-form">
+              <label>
+                Fondo inicial de la caja nueva
+                <input
+                  type="number" step="0.50" min="0" autoFocus placeholder="50.00"
+                  value={montoCaja} onChange={(e) => setMontoCaja(e.target.value)}
+                />
+              </label>
+              <button className="boton-grande boton-confirmar" onClick={abrirCaja}>🔓 Abrir caja nueva</button>
+              <button className="boton-cerrar-caja" onClick={() => setAbriendoNueva(false)}>Cancelar</button>
             </span>
           )}
         </div>

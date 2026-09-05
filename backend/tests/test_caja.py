@@ -125,8 +125,37 @@ def test_reabrir_y_corregir_fondo(client, menu_ejemplo):
     r = client.put("/api/caja/apertura", json={"monto_apertura": 110})
     assert r.json()["descuadre"] == {"tipo": "falta", "monto": 10.0}
 
-    # Y abrir de nuevo el mismo día sigue bloqueado (un registro por día)
-    assert client.post("/api/caja/abrir", json={"monto_apertura": 50}).status_code == 409
+
+def test_varias_cajas_el_mismo_dia(client, admin_headers, menu_ejemplo):
+    """Cerrada una caja se puede abrir la siguiente (turnos), y cada una
+    cuadra solo con las ventas de su tramo del día."""
+    # Turno 1: fondo 50, una venta de 15, cierre exacto
+    client.post("/api/caja/abrir", json={"monto_apertura": 50})
+    crear_orden(client, menu_ejemplo)
+    r = client.post("/api/caja/cerrar", json={"monto_contado": 65})
+    assert r.json()["descuadre"] == {"tipo": "exacta", "monto": 0.0}
+
+    # Abrir de nuevo el mismo día: caja 2 arranca limpia, sin arrastrar
+    # las ventas ya cuadradas del turno 1
+    r = client.post("/api/caja/abrir", json={"monto_apertura": 80})
+    assert r.status_code == 201
+    datos = r.json()
+    assert datos["abierta"] is True and datos["turno"] == 2
+    assert datos["total_vendido"] == 0.0
+
+    # Con la caja 2 abierta, abrir otra más sí está bloqueado
+    assert client.post("/api/caja/abrir", json={"monto_apertura": 10}).status_code == 409
+
+    # Venta del turno 2 y cierre: cuadra solo con SU venta (80 + 30)
+    crear_orden(client, menu_ejemplo, cantidad=2)
+    r = client.post("/api/caja/cerrar", json={"monto_contado": 110})
+    datos = r.json()
+    assert datos["descuadre"] == {"tipo": "exacta", "monto": 0.0}
+    assert datos["total_sistema"] == 30.0 and datos["turno"] == 2
+
+    # El historial del admin muestra las dos cajas del día, numeradas
+    cierres = client.get("/api/caja/historial", headers=admin_headers).json()["cierres"]
+    assert [(c["turno"], c["total_sistema"]) for c in cierres] == [(2, 30.0), (1, 15.0)]
 
 
 def test_reabrir_sin_caja_o_sin_cierre_es_409(client):

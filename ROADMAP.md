@@ -161,8 +161,15 @@ Especificación completa entregada junto al rediseño. Orden acordado:
 - [x] **La caja se puede reabrir y corregir** (caso real: se abrió una caja de prueba y el
       día quedó amarrado): botón "Reabrir caja" (deshace el cierre, las ventas no se tocan,
       el conteo se repite al cierre de verdad) y "Corregir fondo inicial" (abierta o
-      cerrada; si ya cerró, el descuadre se recalcula con el fondo nuevo). Sigue habiendo
-      un solo registro de caja por día.
+      cerrada; si ya cerró, el descuadre se recalcula con el fondo nuevo).
+- [x] **Varias cajas por día y doble check al cerrar** (pedido del dueño): cerrada una
+      caja se puede abrir la siguiente ("🆕 Abrir caja nueva"), y cada una cuadra SOLO
+      con las ventas de su tramo — el registro guarda `desde_orden_id` (la última orden
+      del día al abrirla; NULL = todo el día, como los cierres históricos), así el corte
+      es por orden y no por hora. El cierre ahora pide confirmación en dos pasos
+      mostrando el resultado antes ("¿Cerrar con S/ X? Faltarían S/ Y"). El historial
+      del admin numera las cajas del día ("· caja 2"). La tabla `cierres_caja` perdió el
+      UNIQUE de fecha (migración que la reconstruye una sola vez, datos intactos).
 - [x] **Comanda de cocina legible de lejos** (feedback del primer servicio real): las
       bebidas no salen en la comanda ni en "Por salir" — se sirven en mesa, el refresco
       interrumpía la lectura (cada ítem viaja con su categoría; un plato borrado del

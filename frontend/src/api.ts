@@ -224,6 +224,8 @@ export interface CajaEstado {
   ventas_yape: number
   sin_registrar: number
   ventas_despues_del_cierre: boolean
+  // Número de caja dentro del día (1 = la primera; puede haber varias)
+  turno?: number
   fecha?: string
   hora_apertura?: string
   monto_apertura?: number
