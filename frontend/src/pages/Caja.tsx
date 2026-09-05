@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, unidadesEnTaper } from '../api'
-import type { CajaEstado, ConfigOut, DatosLocal, Entrega, ImpresionPendiente, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
 import { ArmadoMenu } from '../components/ArmadoMenu'
@@ -9,7 +9,7 @@ import { AvisoImpresion } from '../components/AvisoImpresion'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { IconoBillete, IconoSilla } from '../components/Iconos'
 import { TarjetaPlato } from '../components/TarjetaPlato'
-import { Ticket } from '../components/Ticket'
+import { Ticket, TicketCierre } from '../components/Ticket'
 import { useCarrito } from '../hooks/useCarrito'
 
 const SIGUIENTE_ESTADO: Record<string, string> = {
@@ -44,6 +44,15 @@ export function Caja() {
   const [abriendoNueva, setAbriendoNueva] = useState(false)
   const [corrigiendoFondo, setCorrigiendoFondo] = useState(false)
   const [montoFondo, setMontoFondo] = useState('')
+  // Egresos del turno ("salió plata del cajón")
+  const [egresos, setEgresos] = useState<EgresoOut[]>([])
+  const [agregandoEgreso, setAgregandoEgreso] = useState(false)
+  const [conceptoEgreso, setConceptoEgreso] = useState('')
+  const [montoEgreso, setMontoEgreso] = useState('')
+  // Resumen de cierre que se imprime desde esta pantalla (modo no-puente)
+  const [ticketCierre, setTicketCierre] = useState<{
+    estado: CajaEstado; egresos: EgresoOut[]; local: DatosLocal
+  } | null>(null)
   const [mesas, setMesas] = useState<MesaEstado[]>([])
   const [mesasNuevoPedido, setMesasNuevoPedido] = useState<number[]>([])
   // Orden a la que se le está eligiendo mesa (muestra los chips inline)
@@ -66,10 +75,12 @@ export function Caja() {
   const cargarCaja = useCallback(async () => {
     try {
       setEstadoCaja(await api.cajaHoy())
+      setEgresos((await api.egresosTurno()).egresos)
     } catch {
       /* el banner de conexión ya lo maneja cargarOrdenes */
     }
   }, [])
+  const totalEgresos = egresos.reduce((s, e) => s + e.monto, 0)
 
   const cargarMenu = useCallback(async () => {
     try {
@@ -216,14 +227,55 @@ export function Caja() {
       const dif = resultado.diferencia ?? 0
       setMensaje(
         dif === 0
-          ? '✔ Caja cerrada: cuadró exacto 🎯'
+          ? '✔ Caja cerrada: cuadró exacto 🎯 — imprimiendo el resumen'
           : dif > 0
-            ? `✔ Caja cerrada: sobran ${soles(dif)}`
-            : `✔ Caja cerrada: faltan ${soles(-dif)}`,
+            ? `✔ Caja cerrada: sobran ${soles(dif)} — imprimiendo el resumen`
+            : `✔ Caja cerrada: faltan ${soles(-dif)} — imprimiendo el resumen`,
       )
       setError('')
+      // El resumen impreso del cierre: en modo puente lo saca la
+      // ticketera (lo encola el backend); si no, se imprime aquí mismo
+      const cfg = config ?? (await api.config())
+      if (cfg.modo_impresion !== 'puente') {
+        setTicketCierre({
+          estado: resultado,
+          egresos,
+          local: { nombre: cfg.nombre_local, direccion: cfg.direccion, ruc: cfg.ruc },
+        })
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cerrar la caja')
+    }
+  }
+
+  const registrarEgreso = async () => {
+    const monto = parseFloat(montoEgreso)
+    if (!conceptoEgreso.trim() || !(monto > 0)) {
+      setError('Pon en qué se gastó y cuánto salió del cajón')
+      return
+    }
+    try {
+      const datos = await api.registrarEgreso(conceptoEgreso.trim(), monto)
+      setEgresos(datos.egresos)
+      setConceptoEgreso('')
+      setMontoEgreso('')
+      setAgregandoEgreso(false)
+      setMensaje(`✔ Egreso registrado: −${soles(monto)}`)
+      setError('')
+      cargarCaja()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo registrar el egreso')
+    }
+  }
+
+  const borrarEgreso = async (egreso: EgresoOut) => {
+    if (!window.confirm(`¿Borrar el egreso "${egreso.concepto}" (−${soles(egreso.monto)})?`)) return
+    try {
+      const datos = await api.borrarEgreso(egreso.id)
+      setEgresos(datos.egresos)
+      cargarCaja()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo borrar el egreso')
     }
   }
 
@@ -265,6 +317,16 @@ export function Caja() {
     }, 150)
     return () => window.clearTimeout(timer)
   }, [ticket])
+
+  // El resumen de cierre se imprime igual: montado oculto y print
+  useEffect(() => {
+    if (!ticketCierre) return
+    const timer = window.setTimeout(() => {
+      window.print()
+      setTicketCierre(null)
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [ticketCierre])
 
   const imprimeAqui = (config?.modo_impresion ?? 'terminal') === 'terminal'
 
@@ -420,7 +482,8 @@ export function Caja() {
             🔓 {(estadoCaja.turno ?? 1) > 1 ? `Caja ${estadoCaja.turno} del día` : 'Caja'}{' '}
             abierta a las {estadoCaja.hora_apertura?.slice(0, 5)} con{' '}
             <strong>{soles(estadoCaja.monto_apertura ?? 0)}</strong> de fondo · esperado en
-            EFECTIVO: <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo)}</strong>
+            EFECTIVO: <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo - (estadoCaja.egresos ?? 0))}</strong>
+            {(estadoCaja.egresos ?? 0) > 0 && <> · 💸 egresos −{soles(estadoCaja.egresos ?? 0)}</>}
             {' '}· 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)}
             {estadoCaja.sin_registrar > 0 && (
               <em> · {estadoCaja.sin_registrar} sin registrar (se asumen efectivo)</em>
@@ -467,7 +530,7 @@ export function Caja() {
                 ¿Cerrar la caja con <strong>{soles(parseFloat(montoCaja) || 0)}</strong> contados?{' '}
                 {(() => {
                   const dif = (parseFloat(montoCaja) || 0) -
-                    ((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo)
+                    ((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo - (estadoCaja.egresos ?? 0))
                   return dif === 0
                     ? 'Cuadra exacto 🎯'
                     : dif > 0
@@ -506,7 +569,8 @@ export function Caja() {
           <span>
             🔒 {(estadoCaja.turno ?? 1) > 1 ? `Caja ${estadoCaja.turno} del día` : 'Caja'}{' '}
             cerrada a las {estadoCaja.hora_cierre?.slice(0, 5)} — efectivo esperado:{' '}
-            <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo)}</strong>{' '}
+            <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo - (estadoCaja.egresos ?? 0))}</strong>{' '}
+            {(estadoCaja.egresos ?? 0) > 0 && <>· 💸 egresos −{soles(estadoCaja.egresos ?? 0)} </>}
             · contado: <strong>{soles(estadoCaja.monto_contado ?? 0)}</strong>{' '}
             · 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)}
             {estadoCaja.ventas_despues_del_cierre && (
@@ -554,6 +618,50 @@ export function Caja() {
               </label>
               <button className="boton-grande boton-confirmar" onClick={abrirCaja}>🔓 Abrir caja nueva</button>
               <button className="boton-cerrar-caja" onClick={() => setAbriendoNueva(false)}>Cancelar</button>
+            </span>
+          )}
+        </div>
+      )}
+
+      {estadoCaja && (estadoCaja.abierta || (estadoCaja.cerrada && egresos.length > 0)) && (
+        <div className="caja-panel caja-egresos">
+          <span>
+            💸 Egresos del turno{egresos.length > 0 && <>: <strong>−{soles(totalEgresos)}</strong></>}
+            {egresos.length === 0 && ' (salió plata del cajón: gas, verduras…)'}
+          </span>
+          {egresos.map((e) => (
+            <span className="chip-egreso" key={e.id}>
+              {e.hora.slice(0, 5)} {e.concepto} <strong>−{soles(e.monto)}</strong>
+              {estadoCaja.abierta && (
+                <button className="chip-egreso-x" onClick={() => borrarEgreso(e)} title="Borrar egreso">
+                  ✕
+                </button>
+              )}
+            </span>
+          ))}
+          {estadoCaja.abierta && !agregandoEgreso && (
+            <button className="boton-cerrar-caja" onClick={() => setAgregandoEgreso(true)}>
+              + Registrar egreso
+            </button>
+          )}
+          {agregandoEgreso && (
+            <span className="caja-cierre-form">
+              <label>
+                ¿En qué se gastó?
+                <input
+                  autoFocus placeholder="balón de gas" maxLength={120}
+                  value={conceptoEgreso} onChange={(e) => setConceptoEgreso(e.target.value)}
+                />
+              </label>
+              <label>
+                S/
+                <input
+                  type="number" step="0.10" min="0" placeholder="20.00"
+                  value={montoEgreso} onChange={(e) => setMontoEgreso(e.target.value)}
+                />
+              </label>
+              <button className="boton-grande boton-confirmar" onClick={registrarEgreso}>Guardar</button>
+              <button className="boton-cerrar-caja" onClick={() => setAgregandoEgreso(false)}>Cancelar</button>
             </span>
           )}
         </div>
@@ -853,6 +961,16 @@ export function Caja() {
       {ticket && (
         <div className="solo-impresion">
           <Ticket orden={ticket.orden} local={ticket.local} />
+        </div>
+      )}
+
+      {ticketCierre && (
+        <div className="solo-impresion">
+          <TicketCierre
+            estado={ticketCierre.estado}
+            egresos={ticketCierre.egresos}
+            local={ticketCierre.local}
+          />
         </div>
       )}
     </div>

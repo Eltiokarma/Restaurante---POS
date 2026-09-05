@@ -3962,6 +3962,29 @@ select:focus-visible {
   gap: 14px;
 }
 
+/* ---------- Egresos del turno (pantalla de caja) ---------- */
+
+.chip-egreso {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #d8c9b0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.95rem;
+}
+
+.chip-egreso-x {
+  border: none;
+  background: none;
+  color: #b3261e;
+  font-weight: 800;
+  font-size: 1rem;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
 /* ---------- Menús guardados (Admin → Menú del día) ---------- */
 
 .seccion-guardados {

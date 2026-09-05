@@ -4,7 +4,7 @@ import type { DatosLocal, OrdenOut } from '../api'
 import { Ticket } from '../components/Ticket'
 
 interface TrabajoImpresion {
-  tipo: 'orden' | 'prueba'
+  tipo: 'orden' | 'prueba' | 'cierre'
   orden_id: number | null
   numero: string
   datos_b64: string
@@ -135,6 +135,9 @@ export function Ticketera() {
     } else if (trabajo.tipo === 'prueba') {
       // El ticket de prueba también espera en cola hasta confirmarse
       await api.confirmarPruebaImpresa().catch(() => {})
+    } else if (trabajo.tipo === 'cierre') {
+      // El resumen de cierre de caja: misma mecánica que la prueba
+      await api.confirmarCierreImpreso().catch(() => {})
     }
     setImpresos((n) => n + 1)
     setEnCola((n) => Math.max(0, n - 1))

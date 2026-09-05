@@ -199,6 +199,59 @@ def render_orden(
     return b"".join(partes)
 
 
+def render_cierre(datos: dict, local: dict, columnas: int = 42) -> bytes:
+    """Resumen impreso del cierre de caja (pedido del dueño): queda un
+    papel con el cuadre del turno — fondo, ventas por método, egresos,
+    esperado, contado y el descuadre en grande."""
+    partes: list[bytes] = [INICIALIZAR, CODEPAGE_CP850, CENTRAR]
+    partes += [NEGRITA_ON, _texto(local.get("nombre") or "Restaurante"), NEGRITA_OFF]
+    partes += [DOBLE_TAMANO, _texto("CIERRE DE CAJA"), TAMANO_NORMAL]
+    turno = datos.get("turno", 1)
+    linea_dia = datos["fecha"]
+    if datos.get("turnos_del_dia", 1) > 1 or turno > 1:
+        linea_dia += f" - caja {turno} del dia"
+    partes.append(_texto(linea_dia))
+    partes.append(_texto(
+        f"Abierta {datos['hora_apertura'][:5]} - Cerrada {(datos['hora_cierre'] or '')[:5]}"
+    ))
+
+    partes += [ALINEAR_IZQ, _texto("-" * columnas)]
+    partes.append(_texto(_fila("Fondo inicial", _soles(datos["monto_apertura"]), columnas)))
+    partes.append(_texto(_fila("Ventas efectivo", _soles(datos["ventas_efectivo"]), columnas)))
+    partes.append(_texto(_fila("Ventas tarjeta", _soles(datos["ventas_tarjeta"]), columnas)))
+    partes.append(_texto(_fila("Ventas Yape", _soles(datos["ventas_yape"]), columnas)))
+    partes += [NEGRITA_ON, _texto(_fila(
+        "TOTAL VENDIDO", _soles(datos["total_sistema"]), columnas
+    )), NEGRITA_OFF]
+
+    if datos["egresos"]:
+        partes.append(_texto("-" * columnas))
+        partes.append(_texto("EGRESOS (salio del cajon):"))
+        for e in datos["egresos"]:
+            partes.append(_texto(_fila(f"  {e['concepto']}", f"-{_soles(e['monto'])}", columnas)))
+        partes += [NEGRITA_ON, _texto(_fila(
+            "TOTAL EGRESOS", f"-{_soles(datos['egresos_total'] or 0.0)}", columnas
+        )), NEGRITA_OFF]
+
+    esperado = round(
+        datos["monto_apertura"] + datos["ventas_efectivo"] - (datos["egresos_total"] or 0.0), 2
+    )
+    partes.append(_texto("-" * columnas))
+    partes.append(_texto(_fila("Esperado en caja", _soles(esperado), columnas)))
+    partes.append(_texto(_fila("Contado", _soles(datos["monto_contado"]), columnas)))
+
+    diferencia = datos["diferencia"]
+    veredicto = (
+        "CUADRO EXACTO" if diferencia == 0
+        else f"SOBRAN {_soles(diferencia)}" if diferencia > 0
+        else f"FALTAN {_soles(-diferencia)}"
+    )
+    partes += [CENTRAR, DOBLE_TAMANO, NEGRITA_ON, _texto(veredicto),
+               NEGRITA_OFF, TAMANO_NORMAL]
+    partes.append(CORTAR)
+    return b"".join(partes)
+
+
 def render_prueba(local: dict, columnas: int = 42) -> bytes:
     """Ticket de prueba del botón de Admin → Configuración."""
     partes = [

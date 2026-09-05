@@ -176,6 +176,15 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       catálogo se muestra por si acaso) — y la letra de los platos va al doble (3.1rem)
       con tarjetas más anchas para que quepan los nombres largos. El ticket y la caja
       siguen mostrando todo.
+- [x] **Egresos del turno y resumen impreso del cierre**: en Caja se registra la plata
+      que sale del cajón (gas, verduras…) con concepto y monto — cada egreso pertenece a
+      SU caja (tabla `egresos_caja` amarrada al registro) y baja el efectivo esperado del
+      cierre (snapshot en `cierres_caja.egresos`; se borran solo con la caja abierta). Al
+      cerrar, se imprime un resumen del turno (fondo, ventas por método, egresos,
+      esperado, contado y el descuadre en grande): en modo puente lo saca la ticketera
+      (trabajo tipo "cierre", confirma con `POST /api/print/cierre/impresa`) y en los
+      demás modos lo imprime la propia pantalla de caja. El historial del admin ganó la
+      columna 💸 Egresos.
 - [x] **Menús guardados por día** ("el menú de los jueves"): en Admin → Menú del día se
       guarda el menú de hoy con un nombre (chips Lunes…Domingo o texto libre; el mismo
       nombre actualiza) y otro día se carga con un toque — restaura platos activos Y las

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import requiere_admin
 from ..db import get_db
-from ..models import CierreCaja, Orden, ahora_lima, hoy_lima
+from ..models import CierreCaja, EgresoCaja, Orden, ahora_lima, hoy_lima
 
 router = APIRouter(prefix="/api/caja", tags=["caja"])
 
@@ -56,12 +56,21 @@ def _ventas_de_hoy(db: Session, desde_id: int | None = None) -> dict:
     }
 
 
-def _a_dict(registro: CierreCaja | None, ventas: dict, turno: int = 1) -> dict:
-    base = {"abierta": False, "cerrada": False, "ventas_despues_del_cierre": False, **ventas}
+def _a_dict(
+    registro: CierreCaja | None, ventas: dict, turno: int = 1, egresos: float = 0.0
+) -> dict:
+    base = {
+        "abierta": False, "cerrada": False, "ventas_despues_del_cierre": False,
+        "egresos": 0.0, **ventas,
+    }
     if registro is None:
         return base
 
     cerrada = registro.hora_cierre is not None
+    # Con la caja cerrada manda el snapshot del cierre; abierta, lo vivo
+    base["egresos"] = (
+        registro.egresos if cerrada and registro.egresos is not None else round(egresos, 2)
+    )
     if cerrada:
         # Con la caja cerrada se muestra el SNAPSHOT del cierre (lo que se
         # cuadró), no las ventas vivas: así los números son consistentes
@@ -111,6 +120,18 @@ def _a_dict(registro: CierreCaja | None, ventas: dict, turno: int = 1) -> dict:
     }
 
 
+def _egresos_de(db: Session, registro: CierreCaja | None) -> list[EgresoCaja]:
+    if registro is None:
+        return []
+    return list(db.scalars(
+        select(EgresoCaja).where(EgresoCaja.cierre_id == registro.id).order_by(EgresoCaja.id)
+    ))
+
+
+def _total_egresos(egresos: list[EgresoCaja]) -> float:
+    return round(sum(e.monto for e in egresos), 2)
+
+
 def _registros_de_hoy(db: Session) -> list[CierreCaja]:
     return list(db.scalars(
         select(CierreCaja).where(CierreCaja.fecha == hoy_lima()).order_by(CierreCaja.id)
@@ -133,7 +154,8 @@ def _turno_actual(db: Session) -> tuple[CierreCaja | None, int]:
 def estado_de_hoy(db: Session = Depends(get_db)):
     registro, turno = _turno_actual(db)
     desde_id = registro.desde_orden_id if registro is not None else None
-    return _a_dict(registro, _ventas_de_hoy(db, desde_id), turno)
+    egresos = _total_egresos(_egresos_de(db, registro))
+    return _a_dict(registro, _ventas_de_hoy(db, desde_id), turno, egresos)
 
 
 @router.post("/abrir", status_code=201)
@@ -173,18 +195,127 @@ def cerrar(payload: CierreIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="La caja de hoy no está abierta todavía")
 
     ventas = _ventas_de_hoy(db, registro.desde_orden_id)
-    esperado_efectivo = round(registro.monto_apertura + ventas["ventas_efectivo"], 2)
+    egresos = _total_egresos(_egresos_de(db, registro))
+    # Los egresos salieron del cajón: bajan el efectivo esperado
+    esperado_efectivo = round(registro.monto_apertura + ventas["ventas_efectivo"] - egresos, 2)
     registro.hora_cierre = ahora_lima().strftime("%H:%M:%S")
     registro.monto_contado = round(payload.monto_contado, 2)
     registro.total_sistema = ventas["total_vendido"]
     registro.ventas_efectivo = ventas["ventas_efectivo"]
     registro.ventas_tarjeta = ventas["ventas_tarjeta"]
     registro.ventas_yape = ventas["ventas_yape"]
+    registro.egresos = egresos
     registro.diferencia = round(registro.monto_contado - esperado_efectivo, 2)
     if payload.notas.strip():
         registro.notas = payload.notas.strip()
     db.commit()
-    return _a_dict(registro, ventas, turno)
+    _encolar_resumen_de_cierre(db, registro)
+    return _a_dict(registro, ventas, turno, egresos)
+
+
+def _encolar_resumen_de_cierre(db: Session, registro: CierreCaja) -> None:
+    """En modo puente, el cierre imprime su resumen por la ticketera.
+
+    Se marca en config qué cierre imprimir; la cola lo renderiza y quien
+    imprime confirma con POST /api/print/cierre/impresa (misma mecánica
+    que el ticket de prueba). En modo terminal imprime la propia caja."""
+    from ..models import Config
+    from .config import leer_config
+
+    if leer_config(db)["modo_impresion"] != "puente":
+        return
+    marca = db.get(Config, "imprimir_cierre")
+    if marca is None:
+        db.add(Config(clave="imprimir_cierre", valor=str(registro.id)))
+    else:
+        marca.valor = str(registro.id)
+    db.commit()
+
+
+def resumen_de_cierre(db: Session, registro: CierreCaja) -> dict:
+    """Datos del ticket de resumen de un cierre (para la impresión)."""
+    registros = _registros_de_hoy(db) if registro.fecha == hoy_lima() else []
+    turno = next(
+        (n for n, r in enumerate(registros, start=1) if r.id == registro.id), 1
+    )
+    egresos = _egresos_de(db, registro)
+    return {
+        "fecha": registro.fecha.isoformat(),
+        "turno": turno,
+        "turnos_del_dia": max(len(registros), turno),
+        "hora_apertura": registro.hora_apertura,
+        "hora_cierre": registro.hora_cierre,
+        "monto_apertura": registro.monto_apertura,
+        "ventas_efectivo": registro.ventas_efectivo or 0.0,
+        "ventas_tarjeta": registro.ventas_tarjeta or 0.0,
+        "ventas_yape": registro.ventas_yape or 0.0,
+        "total_sistema": registro.total_sistema or 0.0,
+        "egresos": [
+            {"hora": e.hora, "concepto": e.concepto, "monto": e.monto} for e in egresos
+        ],
+        "egresos_total": registro.egresos if registro.egresos is not None else _total_egresos(egresos),
+        "monto_contado": registro.monto_contado or 0.0,
+        "diferencia": registro.diferencia or 0.0,
+    }
+
+
+# ---------- Egresos del turno ("salió plata del cajón") ----------
+
+
+class EgresoIn(BaseModel):
+    concepto: str = Field(min_length=1, max_length=120)
+    monto: float = Field(gt=0, le=10_000)
+
+
+def _egresos_a_dict(egresos: list[EgresoCaja]) -> dict:
+    return {
+        "egresos": [
+            {"id": e.id, "hora": e.hora, "concepto": e.concepto, "monto": e.monto}
+            for e in egresos
+        ],
+        "total": _total_egresos(egresos),
+    }
+
+
+@router.get("/egresos")
+def egresos_del_turno(db: Session = Depends(get_db)):
+    registro, _ = _turno_actual(db)
+    return _egresos_a_dict(_egresos_de(db, registro))
+
+
+@router.post("/egresos", status_code=201)
+def registrar_egreso(payload: EgresoIn, db: Session = Depends(get_db)):
+    registro, _ = _turno_actual(db)
+    if registro is None or registro.hora_cierre is not None:
+        raise HTTPException(
+            status_code=409, detail="Abre la caja antes de registrar un egreso"
+        )
+    ahora = ahora_lima()
+    db.add(EgresoCaja(
+        cierre_id=registro.id,
+        fecha=ahora.date(),
+        hora=ahora.strftime("%H:%M:%S"),
+        concepto=payload.concepto.strip(),
+        monto=round(payload.monto, 2),
+    ))
+    db.commit()
+    return _egresos_a_dict(_egresos_de(db, registro))
+
+
+@router.delete("/egresos/{egreso_id}")
+def borrar_egreso(egreso_id: int, db: Session = Depends(get_db)):
+    egreso = db.get(EgresoCaja, egreso_id)
+    if egreso is None:
+        raise HTTPException(status_code=404, detail="Ese egreso ya no existe")
+    registro, _ = _turno_actual(db)
+    if registro is None or egreso.cierre_id != registro.id or registro.hora_cierre is not None:
+        # Con la caja cerrada el egreso ya entró al cuadre: no se toca
+        raise HTTPException(
+            status_code=409, detail="Solo se borran egresos de la caja abierta"
+        )
+    db.delete(egreso)
+    db.commit()
+    return _egresos_a_dict(_egresos_de(db, registro))
 
 
 class FondoIn(BaseModel):
@@ -210,9 +341,11 @@ def reabrir(db: Session = Depends(get_db)):
     registro.ventas_efectivo = None
     registro.ventas_tarjeta = None
     registro.ventas_yape = None
+    registro.egresos = None
     registro.diferencia = None
     db.commit()
-    return _a_dict(registro, _ventas_de_hoy(db, registro.desde_orden_id), turno)
+    egresos = _total_egresos(_egresos_de(db, registro))
+    return _a_dict(registro, _ventas_de_hoy(db, registro.desde_orden_id), turno, egresos)
 
 
 @router.put("/apertura")
@@ -227,11 +360,13 @@ def corregir_fondo(payload: FondoIn, db: Session = Depends(get_db)):
     registro.monto_apertura = round(payload.monto_apertura, 2)
     if registro.hora_cierre is not None and registro.monto_contado is not None:
         esperado_efectivo = round(
-            registro.monto_apertura + (registro.ventas_efectivo or 0.0), 2
+            registro.monto_apertura + (registro.ventas_efectivo or 0.0)
+            - (registro.egresos or 0.0), 2
         )
         registro.diferencia = round(registro.monto_contado - esperado_efectivo, 2)
     db.commit()
-    return _a_dict(registro, _ventas_de_hoy(db, registro.desde_orden_id), turno)
+    egresos = _total_egresos(_egresos_de(db, registro))
+    return _a_dict(registro, _ventas_de_hoy(db, registro.desde_orden_id), turno, egresos)
 
 
 @router.get("/historial", dependencies=[Depends(requiere_admin)])
@@ -251,6 +386,10 @@ def historial(db: Session = Depends(get_db)):
     for fecha, id_ in sorted(pares):
         visto[fecha] = visto.get(fecha, 0) + 1
         turno_de[id_] = visto[fecha]
+    egresos_por_cierre = dict(db.execute(
+        select(EgresoCaja.cierre_id, func.sum(EgresoCaja.monto))
+        .group_by(EgresoCaja.cierre_id)
+    ).all())
     return {"cierres": [
         _a_dict(r, {
             "total_vendido": r.total_sistema or 0.0,
@@ -262,6 +401,6 @@ def historial(db: Session = Depends(get_db)):
             "ventas_tarjeta": r.ventas_tarjeta or 0.0,
             "ventas_yape": r.ventas_yape or 0.0,
             "sin_registrar": 0,
-        }, turno_de.get(r.id, 1))
+        }, turno_de.get(r.id, 1), round(egresos_por_cierre.get(r.id, 0.0) or 0.0, 2))
         for r in registros
     ]}

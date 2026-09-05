@@ -312,7 +312,24 @@ class CierreCaja(Base):
     ventas_efectivo: Mapped[float | None] = mapped_column(Float, nullable=True)
     ventas_tarjeta: Mapped[float | None] = mapped_column(Float, nullable=True)
     ventas_yape: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Snapshot al cierre del total de egresos del turno (None = cierre
+    # anterior a la función de egresos, o caja aún abierta)
+    egresos: Mapped[float | None] = mapped_column(Float, nullable=True)
     notas: Mapped[str] = mapped_column(Text, default="", nullable=False)
+
+
+class EgresoCaja(Base):
+    """Plata que sale del cajón durante el turno (gas, verduras, un
+    encargo): baja el efectivo esperado al cierre de SU caja."""
+
+    __tablename__ = "egresos_caja"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cierre_id: Mapped[int] = mapped_column(ForeignKey("cierres_caja.id"), nullable=False)
+    fecha: Mapped[date] = mapped_column(Date, nullable=False)
+    hora: Mapped[str] = mapped_column(String(8), nullable=False)
+    concepto: Mapped[str] = mapped_column(String(120), nullable=False)
+    monto: Mapped[float] = mapped_column(Float, nullable=False)
 
 
 class Mesa(Base):
