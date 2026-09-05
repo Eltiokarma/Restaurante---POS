@@ -443,9 +443,15 @@ export function Caja() {
     }
   }
 
-  const categorias = ['entrada', 'fondo', 'bebida', 'postre'].filter((c) =>
-    platos.some((p) => p.categoria === c),
-  )
+  // Con "solo menús" encendido, la caja tampoco muestra los platos
+  // sueltos (pedido del dueño): todo se vende como menú armado. Si hoy
+  // no hay menú activo, la carta reaparece como respaldo.
+  const soloMenus = (config?.terminal_solo_menus ?? true) && menusHoy.length > 0
+  const categorias = soloMenus
+    ? []
+    : ['entrada', 'fondo', 'bebida', 'postre'].filter((c) =>
+        platos.some((p) => p.categoria === c),
+      )
   // Para la caja lo útil es lo más reciente arriba
   const ordenesRecientes = [...ordenes].reverse()
 

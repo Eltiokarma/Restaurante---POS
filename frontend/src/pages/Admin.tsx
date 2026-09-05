@@ -2278,7 +2278,7 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
           checked={config.terminal_solo_menus}
           onChange={(e) => setConfig({ ...config, terminal_solo_menus: e.target.checked })}
         />
-        🍽 La terminal muestra SOLO los menús (los platos sueltos se venden en caja)
+        🍽 Terminal y caja muestran SOLO los menús (sin lista de platos sueltos)
       </label>
       <label className="config-toggle">
         <input
