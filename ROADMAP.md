@@ -176,6 +176,11 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       catálogo se muestra por si acaso) — y la letra de los platos va al doble (3.1rem)
       con tarjetas más anchas para que quepan los nombres largos. El ticket y la caja
       siguen mostrando todo.
+- [x] **Menús guardados por día** ("el menú de los jueves"): en Admin → Menú del día se
+      guarda el menú de hoy con un nombre (chips Lunes…Domingo o texto libre; el mismo
+      nombre actualiza) y otro día se carga con un toque — restaura platos activos Y las
+      plantillas con sus alternativas (snapshot JSON en `menus_guardados`). Cargar pide
+      confirmación porque reemplaza el menú de HOY.
 - [x] **Contador de menús y "Volver" en la espera** (feedback del servicio): junto al
       botón "+ UN MENÚ" hay un box del mismo alto con el total de menús del pedido (se
       cuenta sin scrollear), y la pantalla de espera ganó "↩ VOLVER A CORREGIR" — antes
