@@ -2729,6 +2729,46 @@ select:focus-visible {
   box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.22);
 }
 
+/* Botón "UN MENÚ" + box con el total de menús del pedido al costado
+   (pedido del dueño: contar sin scrollear) */
+.fila-armar {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  margin: 0 20px 18px;
+}
+
+.fila-armar .boton-armar {
+  flex: 1;
+  margin: 0;
+}
+
+.contador-menus {
+  min-width: 96px;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--achiote);
+  border-radius: var(--r);
+  background: #fff;
+  color: var(--achiote);
+  line-height: 1.05;
+}
+
+.contador-menus-cifra {
+  font-size: 2.1rem;
+  font-weight: 900;
+}
+
+.contador-menus-texto {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 /* Modal de armado: más ancho que el modal estándar y alineado a la izquierda */
 .modal-armado {
   max-width: 860px;

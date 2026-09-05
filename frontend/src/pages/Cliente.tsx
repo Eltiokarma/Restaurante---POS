@@ -13,9 +13,10 @@ import { useCarrito } from '../hooks/useCarrito'
 import { useInactividad } from '../hooks/useInactividad'
 
 // La tarjeta que ofrece el menú del día (pantalla única y pantalla de carta)
-function TarjetaOfertaMenu({ menu, etiqueta, onAgregar }: {
+function TarjetaOfertaMenu({ menu, etiqueta, enPedido, onAgregar }: {
   menu: MenuHoy
   etiqueta: string
+  enPedido: number
   onAgregar: () => void
 }) {
   return (
@@ -34,9 +35,16 @@ function TarjetaOfertaMenu({ menu, etiqueta, onAgregar }: {
           </div>
         ))}
       </div>
-      <button className="boton-armar" onClick={onAgregar}>
-        {etiqueta}
-      </button>
+      {/* El total de menús al costado del botón: se ve sin scrollear */}
+      <div className="fila-armar">
+        <button className="boton-armar" onClick={onAgregar}>
+          {etiqueta}
+        </button>
+        <div className="contador-menus" aria-label={`${enPedido} en tu pedido`}>
+          <span className="contador-menus-cifra">{enPedido}</span>
+          <span className="contador-menus-texto">{enPedido === 1 ? 'menú' : 'menús'}</span>
+        </div>
+      </div>
     </div>
   )
 }
@@ -427,6 +435,10 @@ export function Cliente() {
         <button className="boton-grande boton-cancelar-rojo" onClick={cancelarPedidoEnVentana} disabled={guardando}>
           🛑 CANCELAR PEDIDO
         </button>
+        {/* Volver sin cancelar: faltaba el camino "me equivoqué en algo" */}
+        <button className="boton-grande boton-secundario" onClick={() => setPantalla('resumen')} disabled={guardando}>
+          ↩ VOLVER A CORREGIR
+        </button>
         <button className="boton-grande boton-secundario" onClick={confirmarDefinitivo} disabled={guardando}>
           {guardando ? 'Guardando…' : 'Confirmar ahora (saltar espera)'}
         </button>
@@ -460,6 +472,9 @@ export function Cliente() {
                 key={m.id}
                 menu={m}
                 etiqueta={`➕ UN MENÚ — ${soles(m.precio)}`}
+                enPedido={carrito.menus
+                  .filter((l) => l.menu.id === m.id)
+                  .reduce((s, l) => s + l.cantidad, 0)}
                 onAgregar={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m) }}
               />
             ))}
@@ -674,6 +689,9 @@ export function Cliente() {
                   key={m.id}
                   menu={m}
                   etiqueta={menuRecien === m.id ? '✔ ¡Agregado! Toca para otro' : `🍽 UN MENÚ — ${soles(m.precio)}`}
+                  enPedido={carrito.menus
+                    .filter((l) => l.menu.id === m.id)
+                    .reduce((s, l) => s + l.cantidad, 0)}
                   onAgregar={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m); setMenuRecien(m.id) }}
                 />
               ))}

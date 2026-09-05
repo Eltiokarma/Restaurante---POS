@@ -176,6 +176,10 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       catálogo se muestra por si acaso) — y la letra de los platos va al doble (3.1rem)
       con tarjetas más anchas para que quepan los nombres largos. El ticket y la caja
       siguen mostrando todo.
+- [x] **Contador de menús y "Volver" en la espera** (feedback del servicio): junto al
+      botón "+ UN MENÚ" hay un box del mismo alto con el total de menús del pedido (se
+      cuenta sin scrollear), y la pantalla de espera ganó "↩ VOLVER A CORREGIR" — antes
+      solo se podía cancelar todo o saltarse la espera.
 - [x] **Comanda por grupos y mesa desde el pedido** (feedback del servicio): la comanda
       impresa agrupa ENTRADAS arriba y SEGUNDOS abajo (junta iguales: "3 x Sopa"), con la
       observación al costado del plato (o debajo si no entra); la nota de un menú se pega
