@@ -558,6 +558,17 @@ export const api = {
       body: JSON.stringify({ monto_contado: montoContado, notas }),
     }),
 
+  // Deshace el cierre del día (se cerró por error o en una demo)
+  reabrirCaja: () =>
+    request<CajaEstado>('/api/caja/reabrir', { method: 'POST' }),
+
+  // Corrige el fondo inicial de la caja de hoy (abierta o cerrada)
+  corregirFondoCaja: (montoApertura: number) =>
+    request<CajaEstado>('/api/caja/apertura', {
+      method: 'PUT',
+      body: JSON.stringify({ monto_apertura: montoApertura }),
+    }),
+
   ordenesHoy: () =>
     request<{ ordenes: OrdenOut[]; total_vendido: number; impresion_pendiente: ImpresionPendiente }>(
       '/api/orders/today'),

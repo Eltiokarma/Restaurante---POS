@@ -39,6 +39,8 @@ export function Caja() {
   const [estadoCaja, setEstadoCaja] = useState<CajaEstado | null>(null)
   const [montoCaja, setMontoCaja] = useState('')
   const [cerrandoCaja, setCerrandoCaja] = useState(false)
+  const [corrigiendoFondo, setCorrigiendoFondo] = useState(false)
+  const [montoFondo, setMontoFondo] = useState('')
   const [mesas, setMesas] = useState<MesaEstado[]>([])
   const [mesasNuevoPedido, setMesasNuevoPedido] = useState<number[]>([])
   // Orden a la que se le está eligiendo mesa (muestra los chips inline)
@@ -191,6 +193,34 @@ export function Caja() {
       setError('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cerrar la caja')
+    }
+  }
+
+  const reabrirCaja = async () => {
+    try {
+      setEstadoCaja(await api.reabrirCaja())
+      setCerrandoCaja(false)
+      setMensaje('✔ Caja reabierta: el conteo se hace de nuevo al cierre de verdad')
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo reabrir la caja')
+    }
+  }
+
+  const corregirFondo = async () => {
+    const monto = parseFloat(montoFondo)
+    if (!(monto >= 0)) {
+      setError('Pon el fondo inicial correcto (puede ser 0)')
+      return
+    }
+    try {
+      setEstadoCaja(await api.corregirFondoCaja(monto))
+      setMontoFondo('')
+      setCorrigiendoFondo(false)
+      setMensaje(`✔ Fondo inicial corregido a ${soles(monto)}`)
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo corregir el fondo')
     }
   }
 
@@ -364,11 +394,29 @@ export function Caja() {
               <em> · {estadoCaja.sin_registrar} sin registrar (se asumen efectivo)</em>
             )}
           </span>
-          {!cerrandoCaja ? (
+          {!cerrandoCaja && !corrigiendoFondo && (
+            <button className="boton-cerrar-caja" onClick={() => setCorrigiendoFondo(true)}>
+              ✏️ Corregir fondo
+            </button>
+          )}
+          {corrigiendoFondo && (
+            <span className="caja-cierre-form">
+              <label>
+                Fondo inicial correcto
+                <input
+                  type="number" step="0.10" min="0" autoFocus
+                  value={montoFondo} onChange={(e) => setMontoFondo(e.target.value)}
+                />
+              </label>
+              <button className="boton-grande boton-confirmar" onClick={corregirFondo}>Guardar</button>
+              <button className="boton-cerrar-caja" onClick={() => setCorrigiendoFondo(false)}>Cancelar</button>
+            </span>
+          )}
+          {!cerrandoCaja && !corrigiendoFondo ? (
             <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(true)}>
               🔒 Cerrar caja
             </button>
-          ) : (
+          ) : cerrandoCaja ? (
             <span className="caja-cierre-form">
               <label>
                 Efectivo contado
@@ -380,7 +428,7 @@ export function Caja() {
               <button className="boton-grande boton-confirmar" onClick={cerrarCaja}>Confirmar cierre</button>
               <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(false)}>Cancelar</button>
             </span>
-          )}
+          ) : null}
         </div>
       )}
 
@@ -413,6 +461,12 @@ export function Caja() {
               <strong> · ⚠ hubo ventas o cambios después del cierre: corrige el conteo</strong>
             )}
           </span>
+          {!cerrandoCaja && (
+            <button className="boton-cerrar-caja" onClick={reabrirCaja}
+                    title="Se cerró por error: deshace el cierre y el día sigue normal">
+              🔓 Reabrir caja
+            </button>
+          )}
           {!cerrandoCaja ? (
             <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(true)}>
               Corregir conteo
