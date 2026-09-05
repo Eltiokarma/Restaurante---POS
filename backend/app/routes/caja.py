@@ -153,6 +153,52 @@ def cerrar(payload: CierreIn, db: Session = Depends(get_db)):
     return _a_dict(registro, ventas)
 
 
+class FondoIn(BaseModel):
+    monto_apertura: float = Field(ge=0, le=10_000)
+
+
+@router.post("/reabrir")
+def reabrir(db: Session = Depends(get_db)):
+    """Deshace el cierre del día: la caja queda abierta otra vez.
+
+    Para el caso real del local: se cerró por error (o en una demo) y hay
+    que seguir operando el día normal. Las ventas nunca se tocan; solo se
+    borra el conteo, que se vuelve a hacer al cierre de verdad."""
+    registro = _registro_de_hoy(db)
+    if registro is None:
+        raise HTTPException(status_code=409, detail="La caja de hoy no está abierta todavía")
+    if registro.hora_cierre is None:
+        raise HTTPException(status_code=409, detail="La caja de hoy no está cerrada")
+    registro.hora_cierre = None
+    registro.monto_contado = None
+    registro.total_sistema = None
+    registro.ventas_efectivo = None
+    registro.ventas_tarjeta = None
+    registro.ventas_yape = None
+    registro.diferencia = None
+    db.commit()
+    return _a_dict(registro, _ventas_de_hoy(db))
+
+
+@router.put("/apertura")
+def corregir_fondo(payload: FondoIn, db: Session = Depends(get_db)):
+    """Corrige el fondo inicial de la caja de hoy (abierta o cerrada).
+
+    Si ya se cerró, el descuadre se recalcula con el fondo nuevo sobre el
+    snapshot del cierre (el conteo hecho no se pierde)."""
+    registro = _registro_de_hoy(db)
+    if registro is None:
+        raise HTTPException(status_code=409, detail="La caja de hoy no está abierta todavía")
+    registro.monto_apertura = round(payload.monto_apertura, 2)
+    if registro.hora_cierre is not None and registro.monto_contado is not None:
+        esperado_efectivo = round(
+            registro.monto_apertura + (registro.ventas_efectivo or 0.0), 2
+        )
+        registro.diferencia = round(registro.monto_contado - esperado_efectivo, 2)
+    db.commit()
+    return _a_dict(registro, _ventas_de_hoy(db))
+
+
 @router.get("/historial", dependencies=[Depends(requiere_admin)])
 def historial(db: Session = Depends(get_db)):
     """Últimos 30 cierres, para el admin."""

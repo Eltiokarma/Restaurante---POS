@@ -158,6 +158,11 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       comprado, la merma, el stock de hoy y para cuántos días alcanza; y export CSV
       (`GET /api/insumos/consumo` y `/consumo.csv`). Lo usado se valoriza al costo promedio
       vigente y la devolución de una orden anulada descuenta del consumo sin bajar de cero.
+- [x] **La caja se puede reabrir y corregir** (caso real: se abrió una caja de prueba y el
+      día quedó amarrado): botón "Reabrir caja" (deshace el cierre, las ventas no se tocan,
+      el conteo se repite al cierre de verdad) y "Corregir fondo inicial" (abierta o
+      cerrada; si ya cerró, el descuadre se recalcula con el fondo nuevo). Sigue habiendo
+      un solo registro de caja por día.
 - [x] **Comanda de cocina legible de lejos** (feedback del primer servicio real): las
       bebidas no salen en la comanda ni en "Por salir" — se sirven en mesa, el refresco
       interrumpía la lectura (cada ítem viaja con su categoría; un plato borrado del
