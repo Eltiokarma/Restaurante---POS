@@ -226,6 +226,8 @@ export interface CajaEstado {
   ventas_despues_del_cierre: boolean
   // Número de caja dentro del día (1 = la primera; puede haber varias)
   turno?: number
+  // Total de egresos del turno (vivo con caja abierta; snapshot al cierre)
+  egresos?: number
   fecha?: string
   hora_apertura?: string
   monto_apertura?: number
@@ -237,6 +239,18 @@ export interface CajaEstado {
   descuadre?: { tipo: 'exacta' | 'sobra' | 'falta'; monto: number } | null
   notas?: string
   total_vendido: number
+}
+
+export interface EgresoOut {
+  id: number
+  hora: string
+  concepto: string
+  monto: number
+}
+
+export interface EgresosOut {
+  egresos: EgresoOut[]
+  total: number
 }
 
 export interface MenuGuardadoOut {
@@ -578,6 +592,22 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ monto_apertura: montoApertura }),
     }),
+
+  // --- Egresos del turno ("salió plata del cajón") ---
+  egresosTurno: () => request<EgresosOut>('/api/caja/egresos'),
+
+  registrarEgreso: (concepto: string, monto: number) =>
+    request<EgresosOut>('/api/caja/egresos', {
+      method: 'POST',
+      body: JSON.stringify({ concepto, monto }),
+    }),
+
+  borrarEgreso: (id: number) =>
+    request<EgresosOut>(`/api/caja/egresos/${id}`, { method: 'DELETE' }),
+
+  // El resumen de cierre salió por la impresora (modo puente)
+  confirmarCierreImpreso: () =>
+    request<{ confirmada: boolean }>('/api/print/cierre/impresa', { method: 'POST' }),
 
   ordenesHoy: () =>
     request<{ ordenes: OrdenOut[]; total_vendido: number; impresion_pendiente: ImpresionPendiente }>(

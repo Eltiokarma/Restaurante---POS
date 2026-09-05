@@ -158,6 +158,68 @@ def test_varias_cajas_el_mismo_dia(client, admin_headers, menu_ejemplo):
     assert [(c["turno"], c["total_sistema"]) for c in cierres] == [(2, 30.0), (1, 15.0)]
 
 
+def test_egresos_bajan_el_esperado(client, menu_ejemplo):
+    """Salió plata del cajón (gas, verduras): el cierre lo descuenta."""
+    # Sin caja abierta no hay de dónde sacar plata
+    r = client.post("/api/caja/egresos", json={"concepto": "gas", "monto": 20})
+    assert r.status_code == 409
+
+    client.post("/api/caja/abrir", json={"monto_apertura": 100})
+    crear_orden(client, menu_ejemplo)  # venta de 15
+    client.post("/api/caja/egresos", json={"concepto": "balón de gas", "monto": 20})
+    r = client.post("/api/caja/egresos", json={"concepto": "verduras", "monto": 5.5})
+    assert r.status_code == 201 and r.json()["total"] == 25.5
+    assert client.get("/api/caja/hoy").json()["egresos"] == 25.5
+
+    # Borrar un egreso equivocado (con la caja abierta sí se puede)
+    egreso_gas = r.json()["egresos"][0]["id"]
+    r = client.delete(f"/api/caja/egresos/{egreso_gas}")
+    assert r.json()["total"] == 5.5
+
+    # Cierre: esperado = 100 de fondo + 15 de ventas − 5.50 de egresos
+    r = client.post("/api/caja/cerrar", json={"monto_contado": 109.5})
+    datos = r.json()
+    assert datos["descuadre"] == {"tipo": "exacta", "monto": 0.0}
+    assert datos["egresos"] == 5.5
+
+    # Cerrada la caja, el egreso ya entró al cuadre: no se borra
+    quedado = client.get("/api/caja/egresos").json()["egresos"][0]["id"]
+    assert client.delete(f"/api/caja/egresos/{quedado}").status_code == 409
+
+    # La caja siguiente arranca sin egresos arrastrados
+    client.post("/api/caja/abrir", json={"monto_apertura": 50})
+    assert client.get("/api/caja/egresos").json() == {"egresos": [], "total": 0.0}
+
+
+def test_cierre_imprime_resumen_en_modo_puente(client, db, menu_ejemplo):
+    import base64
+
+    from app.models import Config
+
+    db.add(Config(clave="modo_impresion", valor="puente"))
+    db.add(Config(clave="impresora_ip", valor="192.168.1.77"))
+    db.commit()
+
+    client.post("/api/caja/abrir", json={"monto_apertura": 50})
+    orden = crear_orden(client, menu_ejemplo).json()["orden"]
+    client.post(f"/api/orders/{orden['id']}/printed")
+    client.post("/api/caja/egresos", json={"concepto": "gas", "monto": 20})
+    # Esperado 50 + 15 − 20 = 45; contado 40 → faltan 5
+    client.post("/api/caja/cerrar", json={"monto_contado": 40})
+
+    cola = client.get("/api/print/cola").json()
+    trabajo = next(t for t in cola["trabajos"] if t["tipo"] == "cierre")
+    datos = base64.b64decode(trabajo["datos_b64"])
+    assert b"CIERRE DE CAJA" in datos
+    assert b"gas" in datos and b"-20.00" in datos
+    assert b"45.00" in datos and b"FALTAN 5.00" in datos
+
+    # Espera en cola hasta que quien imprime confirme
+    assert any(t["tipo"] == "cierre" for t in client.get("/api/print/cola").json()["trabajos"])
+    client.post("/api/print/cierre/impresa")
+    assert all(t["tipo"] != "cierre" for t in client.get("/api/print/cola").json()["trabajos"])
+
+
 def test_reabrir_sin_caja_o_sin_cierre_es_409(client):
     assert client.post("/api/caja/reabrir").status_code == 409
     assert client.put("/api/caja/apertura", json={"monto_apertura": 50}).status_code == 409

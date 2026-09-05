@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import type { DatosLocal, OrdenOut } from '../api'
+import type { CajaEstado, DatosLocal, EgresoOut, OrdenOut } from '../api'
 import { soles } from '../api'
 
 interface Props {
@@ -97,6 +97,73 @@ export function Ticket({ orden, local }: Props) {
         <span>{soles(orden.total)}</span>
       </div>
       <div className="ticket-pie">Paga en caja con este ticket. ¡Gracias!</div>
+    </div>
+  )
+}
+
+/**
+ * Resumen impreso del cierre de caja (modo terminal/estación: lo imprime
+ * la propia pantalla de caja con window.print()).
+ */
+export function TicketCierre({ estado, egresos, local }: {
+  estado: CajaEstado
+  egresos: EgresoOut[]
+  local: DatosLocal
+}) {
+  const esperado =
+    (estado.monto_apertura ?? 0) + estado.ventas_efectivo - (estado.egresos ?? 0)
+  const dif = estado.diferencia ?? 0
+  return (
+    <div id="ticket-print" className="ticket">
+      <div className="ticket-cabecera">
+        <div className="ticket-local">{local.nombre}</div>
+      </div>
+      <div className="ticket-orden">CIERRE DE CAJA</div>
+      <div className="ticket-fecha">
+        {estado.fecha}
+        {(estado.turno ?? 1) > 1 && ` — caja ${estado.turno} del día`}
+      </div>
+      <div className="ticket-fecha">
+        Abierta {estado.hora_apertura?.slice(0, 5)} — Cerrada {estado.hora_cierre?.slice(0, 5)}
+      </div>
+      <hr />
+      <table className="ticket-items">
+        <tbody>
+          <tr><td>Fondo inicial</td><td className="ticket-subtotal">{soles(estado.monto_apertura ?? 0)}</td></tr>
+          <tr><td>Ventas efectivo</td><td className="ticket-subtotal">{soles(estado.ventas_efectivo)}</td></tr>
+          <tr><td>Ventas tarjeta</td><td className="ticket-subtotal">{soles(estado.ventas_tarjeta)}</td></tr>
+          <tr><td>Ventas Yape</td><td className="ticket-subtotal">{soles(estado.ventas_yape)}</td></tr>
+          <tr><td><strong>TOTAL VENDIDO</strong></td><td className="ticket-subtotal"><strong>{soles(estado.total_vendido)}</strong></td></tr>
+        </tbody>
+      </table>
+      {egresos.length > 0 && (
+        <>
+          <hr />
+          <table className="ticket-items">
+            <tbody>
+              <tr><td colSpan={2}>EGRESOS (salió del cajón):</td></tr>
+              {egresos.map((e) => (
+                <tr key={e.id}>
+                  <td>· {e.concepto}</td>
+                  <td className="ticket-subtotal">−{soles(e.monto)}</td>
+                </tr>
+              ))}
+              <tr><td><strong>TOTAL EGRESOS</strong></td><td className="ticket-subtotal"><strong>−{soles(estado.egresos ?? 0)}</strong></td></tr>
+            </tbody>
+          </table>
+        </>
+      )}
+      <hr />
+      <table className="ticket-items">
+        <tbody>
+          <tr><td>Esperado en caja</td><td className="ticket-subtotal">{soles(esperado)}</td></tr>
+          <tr><td>Contado</td><td className="ticket-subtotal">{soles(estado.monto_contado ?? 0)}</td></tr>
+        </tbody>
+      </table>
+      <div className="ticket-total">
+        <span>{dif === 0 ? 'CUADRÓ' : dif > 0 ? 'SOBRAN' : 'FALTAN'}</span>
+        <span>{dif === 0 ? 'EXACTO 🎯' : soles(Math.abs(dif))}</span>
+      </div>
     </div>
   )
 }

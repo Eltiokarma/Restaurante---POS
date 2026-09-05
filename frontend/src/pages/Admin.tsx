@@ -298,6 +298,7 @@ function HistorialCierres({ onSesionVencida }: { onSesionVencida: () => void }) 
             <th className="col-cantidad">💵 Efectivo</th>
             <th className="col-cantidad">💳 Tarjeta</th>
             <th className="col-cantidad">📱 Yape</th>
+            <th className="col-cantidad">💸 Egresos</th>
             <th className="col-cantidad">Contado</th>
             <th className="col-total">Diferencia</th>
           </tr>
@@ -314,6 +315,7 @@ function HistorialCierres({ onSesionVencida }: { onSesionVencida: () => void }) 
               <td className="col-cantidad">{soles(c.ventas_efectivo)}</td>
               <td className="col-cantidad">{soles(c.ventas_tarjeta)}</td>
               <td className="col-cantidad">{soles(c.ventas_yape)}</td>
+              <td className="col-cantidad">{(c.egresos ?? 0) > 0 ? `−${soles(c.egresos ?? 0)}` : '—'}</td>
               <td className="col-cantidad">{c.monto_contado != null ? soles(c.monto_contado) : '—'}</td>
               <td className={`col-total ${(c.diferencia ?? 0) < 0 ? 'stock-negativo' : ''}`}>
                 {c.diferencia != null
