@@ -176,6 +176,13 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       catálogo se muestra por si acaso) — y la letra de los platos va al doble (3.1rem)
       con tarjetas más anchas para que quepan los nombres largos. El ticket y la caja
       siguen mostrando todo.
+- [x] **Caja con "+ UN MENÚ" y cierre con resumen en pantalla**: la caja usa la misma
+      tarjeta de oferta que la terminal (lista de platos por tiempo sin precios, un toque
+      agrega el menú completo, contador al costado; adiós al modal "ARMAR MENÚ", ahora
+      código muerto eliminado). El doble check del cierre muestra EN PANTALLA el mismo
+      resumen que se imprime (TicketCierre en un modal) para chequearlo antes de
+      confirmar; los errores del cierre se ven dentro del modal. La fórmula del esperado
+      vive en un solo helper (`esperadoEnCaja`) usado por panel, modal y ticket.
 - [x] **Egresos del turno y resumen impreso del cierre**: en Caja se registra la plata
       que sale del cajón (gas, verduras…) con concepto y monto — cada egreso pertenece a
       SU caja (tabla `egresos_caja` amarrada al registro) y baja el efectivo esperado del

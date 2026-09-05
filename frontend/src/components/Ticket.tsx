@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import type { CajaEstado, DatosLocal, EgresoOut, OrdenOut } from '../api'
-import { soles } from '../api'
+import { esperadoEnCaja, soles } from '../api'
 
 interface Props {
   orden: OrdenOut
@@ -110,8 +110,7 @@ export function TicketCierre({ estado, egresos, local }: {
   egresos: EgresoOut[]
   local: DatosLocal
 }) {
-  const esperado =
-    (estado.monto_apertura ?? 0) + estado.ventas_efectivo - (estado.egresos ?? 0)
+  const esperado = esperadoEnCaja(estado)
   const dif = estado.diferencia ?? 0
   return (
     <div id="ticket-print" className="ticket">
@@ -124,7 +123,8 @@ export function TicketCierre({ estado, egresos, local }: {
         {(estado.turno ?? 1) > 1 && ` — caja ${estado.turno} del día`}
       </div>
       <div className="ticket-fecha">
-        Abierta {estado.hora_apertura?.slice(0, 5)} — Cerrada {estado.hora_cierre?.slice(0, 5)}
+        Abierta {estado.hora_apertura?.slice(0, 5)} — Cerrada{' '}
+        {estado.hora_cierre ? estado.hora_cierre.slice(0, 5) : 'ahora'}
       </div>
       <hr />
       <table className="ticket-items">

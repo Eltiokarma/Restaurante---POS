@@ -2769,25 +2769,6 @@ select:focus-visible {
   text-transform: uppercase;
 }
 
-/* Modal de armado: más ancho que el modal estándar y alineado a la izquierda */
-.modal-armado {
-  max-width: 860px;
-  text-align: left;
-  padding: 0;
-  gap: 0;
-  max-height: 92vh;
-  max-height: 92dvh; /* Android: la barra del navegador come del 100vh */
-  overflow-y: auto;
-}
-
-.armado-tiempos {
-  border-bottom: 2px solid var(--linea);
-}
-
-.armado-tiempos .tiempo {
-  align-items: flex-start;
-}
-
 .tiempo-cuerpo {
   flex: 1;
   min-width: 0;
@@ -2889,23 +2870,6 @@ select:focus-visible {
 .boton-mini:disabled {
   opacity: 0.3;
   cursor: default;
-}
-
-.armado-pie {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 20px;
-  flex-wrap: wrap;
-  /* Siempre a la vista aunque el armado scrollee (tablets bajitas) */
-  position: sticky;
-  bottom: 0;
-  background: var(--papel-alto);
-  border-top: 1.5px solid var(--linea);
-}
-
-.armado-pie .boton-confirmar {
-  flex: 1;
 }
 
 .armado-cantidad {
@@ -3960,6 +3924,19 @@ select:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: 14px;
+}
+
+/* Doble check del cierre: el resumen que se va a imprimir, en pantalla */
+.modal-cierre {
+  max-width: 440px;
+}
+
+.vista-previa-cierre {
+  max-height: 55dvh;
+  overflow-y: auto;
+  margin: 10px 0;
+  display: flex;
+  justify-content: center;
 }
 
 /* ---------- Egresos del turno (pantalla de caja) ---------- */

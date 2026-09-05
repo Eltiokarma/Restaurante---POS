@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, unidadesEnTaper } from '../api'
+import { api, esperadoEnCaja, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, unidadesEnTaper } from '../api'
 import type { CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
-import { ArmadoMenu } from '../components/ArmadoMenu'
 import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
+import { menusEnPedido, TarjetaOfertaMenu } from '../components/TarjetaOfertaMenu'
 import { AvisoImpresion } from '../components/AvisoImpresion'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { IconoBillete, IconoSilla } from '../components/Iconos'
@@ -26,7 +26,6 @@ const SIGUIENTE_ESTADO: Record<string, string> = {
 export function Caja() {
   const [platos, setPlatos] = useState<Plato[]>([])
   const [menusHoy, setMenusHoy] = useState<MenuHoy[]>([])
-  const [armandoMenu, setArmandoMenu] = useState<MenuHoy | null>(null)
   const [config, setConfig] = useState<ConfigOut | null>(null)
 
   const [ordenes, setOrdenes] = useState<OrdenOut[]>([])
@@ -488,7 +487,7 @@ export function Caja() {
             🔓 {(estadoCaja.turno ?? 1) > 1 ? `Caja ${estadoCaja.turno} del día` : 'Caja'}{' '}
             abierta a las {estadoCaja.hora_apertura?.slice(0, 5)} con{' '}
             <strong>{soles(estadoCaja.monto_apertura ?? 0)}</strong> de fondo · esperado en
-            EFECTIVO: <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo - (estadoCaja.egresos ?? 0))}</strong>
+            EFECTIVO: <strong>{soles(esperadoEnCaja(estadoCaja))}</strong>
             {(estadoCaja.egresos ?? 0) > 0 && <> · 💸 egresos −{soles(estadoCaja.egresos ?? 0)}</>}
             {' '}· 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)}
             {estadoCaja.sin_registrar > 0 && (
@@ -529,26 +528,49 @@ export function Caja() {
               <button className="boton-grande boton-confirmar" onClick={revisarCierre}>Confirmar cierre</button>
               <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(false)}>Cancelar</button>
             </span>
-          ) : cerrandoCaja ? (
-            <span className="caja-cierre-form">
-              {/* Doble check: se ve el resultado ANTES de cerrar */}
-              <span>
-                ¿Cerrar la caja con <strong>{soles(parseFloat(montoCaja) || 0)}</strong> contados?{' '}
-                {(() => {
-                  const dif = (parseFloat(montoCaja) || 0) -
-                    ((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo - (estadoCaja.egresos ?? 0))
-                  return dif === 0
-                    ? 'Cuadra exacto 🎯'
-                    : dif > 0
-                      ? `Sobrarían ${soles(dif)}`
-                      : `Faltarían ${soles(-dif)}`
-                })()}
-                {' '}Después puedes reabrirla o abrir una caja nueva.
-              </span>
-              <button className="boton-grande boton-confirmar" onClick={cerrarCaja}>✅ SÍ, CERRAR</button>
-              <button className="boton-cerrar-caja" onClick={() => setConfirmandoCierre(false)}>↩ Volver</button>
-            </span>
           ) : null}
+        </div>
+      )}
+
+      {/* Doble check del cierre: el MISMO resumen que va a salir impreso,
+          en pantalla, para revisarlo antes de cerrar */}
+      {confirmandoCierre && estadoCaja && (
+        <div className="modal-fondo">
+          <div className="modal modal-cierre">
+            <h2>Revisa antes de cerrar</h2>
+            <div className="vista-previa-cierre">
+              <TicketCierre
+                estado={{
+                  ...estadoCaja,
+                  cerrada: true,
+                  hora_cierre: null,
+                  monto_contado: parseFloat(montoCaja) || 0,
+                  diferencia:
+                    Math.round(((parseFloat(montoCaja) || 0) - esperadoEnCaja(estadoCaja)) * 100) / 100,
+                }}
+                egresos={egresos}
+                local={{
+                  nombre: config?.nombre_local ?? 'Restaurante',
+                  direccion: config?.direccion ?? '',
+                  ruc: config?.ruc ?? '',
+                }}
+              />
+            </div>
+            <p className="nota-admin">
+              Si algo no cuadra, vuelve y corrige el conteo. Después de cerrar también
+              puedes reabrir la caja o abrir una nueva.
+            </p>
+            {/* El banner del header queda tapado por el modal: el error va aquí */}
+            {error && <div className="banner-error">{error}</div>}
+            <div className="modal-botones">
+              <button className="boton-grande boton-secundario" onClick={() => setConfirmandoCierre(false)}>
+                ↩ Volver
+              </button>
+              <button className="boton-grande boton-confirmar" onClick={cerrarCaja}>
+                ✅ SÍ, CERRAR CAJA
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -575,7 +597,7 @@ export function Caja() {
           <span>
             🔒 {(estadoCaja.turno ?? 1) > 1 ? `Caja ${estadoCaja.turno} del día` : 'Caja'}{' '}
             cerrada a las {estadoCaja.hora_cierre?.slice(0, 5)} — efectivo esperado:{' '}
-            <strong>{soles((estadoCaja.monto_apertura ?? 0) + estadoCaja.ventas_efectivo - (estadoCaja.egresos ?? 0))}</strong>{' '}
+            <strong>{soles(esperadoEnCaja(estadoCaja))}</strong>{' '}
             {(estadoCaja.egresos ?? 0) > 0 && <>· 💸 egresos −{soles(estadoCaja.egresos ?? 0)} </>}
             · contado: <strong>{soles(estadoCaja.monto_contado ?? 0)}</strong>{' '}
             · 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)}
@@ -706,16 +728,16 @@ export function Caja() {
             <div>
               <h3 className="titulo-categoria">Menús</h3>
               <div className="combo-lista">
+                {/* Igual que la terminal: un toque agrega el menú completo
+                    y abajo cada tarjeta se edita a su gusto */}
                 {menusHoy.map((m) => (
-                  <div className="combo" key={m.id}>
-                    <div className="combo-cabecera">
-                      <span className="combo-titulo">{m.nombre}</span>
-                      <span className="combo-precio">{soles(m.precio)}</span>
-                    </div>
-                    <button className="boton-armar" onClick={() => setArmandoMenu(m)}>
-                      🍽 ARMAR MENÚ
-                    </button>
-                  </div>
+                  <TarjetaOfertaMenu
+                    key={m.id}
+                    menu={m}
+                    etiqueta={`➕ UN MENÚ — ${soles(m.precio)}`}
+                    enPedido={menusEnPedido(carrito.menus, m.id)}
+                    onAgregar={() => carrito.agregarMenuCompleto(m)}
+                  />
                 ))}
               </div>
             </div>
@@ -952,17 +974,6 @@ export function Caja() {
           </div>
         </section>
       </div>
-
-      {armandoMenu && (
-        <ArmadoMenu
-          menu={armandoMenu}
-          onAgregar={(linea) => {
-            carrito.agregarMenu(linea)
-            setArmandoMenu(null)
-          }}
-          onCerrar={() => setArmandoMenu(null)}
-        />
-      )}
 
       {ticket && (
         <div className="solo-impresion">
