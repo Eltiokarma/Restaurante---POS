@@ -284,7 +284,7 @@ export interface ConfigOut {
   voz_habilitada: boolean
   voz_disponible: boolean
   exigir_caja_abierta: boolean
-  // La terminal del cliente muestra solo los menús (la caja siempre ve todo)
+  // Terminal y caja muestran solo los menús (sin platos sueltos)
   terminal_solo_menus: boolean
   // S/ por porción que sale en táper (0 = gratis) y qué empaques se ofrecen
   precio_taper: number
