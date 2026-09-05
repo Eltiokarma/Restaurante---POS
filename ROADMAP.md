@@ -176,6 +176,13 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       catálogo se muestra por si acaso) — y la letra de los platos va al doble (3.1rem)
       con tarjetas más anchas para que quepan los nombres largos. El ticket y la caja
       siguen mostrando todo.
+- [x] **Comanda por grupos y mesa desde el pedido** (feedback del servicio): la comanda
+      impresa agrupa ENTRADAS arriba y SEGUNDOS abajo (junta iguales: "3 x Sopa"), con la
+      observación al costado del plato (o debajo si no entra); la nota de un menú se pega
+      a su segundo. "ENTREGA: POR TIEMPOS / TODO JUNTO" va en letra grande y negrita. La
+      mesa ahora se elige al tomar el pedido en la terminal (chips opcionales, se puede
+      marcar varias); si nadie la elige, el ticket dice "SIN MESA", y al asignarla después
+      desde Caja el ticket se reimprime solo con su mesa.
 - [x] **Táper con precio y empaques configurables** (reglas del dueño para el servicio
       real: "táper cuesta un sol más; bolsa y lonchera no"): `precio_taper` en Admin →
       Configuración cobra cada porción en táper como línea "Táper × N" (item `es_cargo`,

@@ -1293,6 +1293,12 @@ select:focus-visible {
   letter-spacing: 0.06em;
 }
 
+/* La entrega (por tiempos / todo junto) más grande: es la instrucción
+   que el mozo tiene que ver primero (pedido del dueño) */
+.ticket-entrega {
+  font-size: 19px;
+}
+
 /* Pedido especial dentro del ticket ("-> sin frijoles") */
 .ticket-item-nota {
   font-weight: 900;

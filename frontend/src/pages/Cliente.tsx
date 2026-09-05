@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles, unidadesEnTaper } from '../api'
-import type { ConfigOut, DatosLocal, Entrega, MenuHoy, OrdenOut, Plato, VozItemResuelto } from '../api'
+import type { ConfigOut, DatosLocal, Entrega, MenuHoy, MesaEstado, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { describirMenu } from '../components/ArmadoMenu'
 import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
@@ -83,6 +83,10 @@ export function Cliente() {
   const [ordenFinal, setOrdenFinal] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
   const [vozAbierta, setVozAbierta] = useState(false)
   const [entrega, setEntrega] = useState<Entrega>('junto')
+  // Mesa elegida al tomar el pedido (opcional): si no eligen, el ticket
+  // sale "SIN MESA" y en caja la asignan después
+  const [mesas, setMesas] = useState<MesaEstado[]>([])
+  const [mesasElegidas, setMesasElegidas] = useState<number[]>([])
   // Para el campo origen de la orden: qué canales llenaron el carrito
   const usoVoz = useRef(false)
   const usoTactil = useRef(false)
@@ -125,6 +129,15 @@ export function Cliente() {
     cargarMenu()
   }, [cargarMenu])
 
+  // Las mesas se refrescan mientras se arma el pedido (ocupación al día)
+  useEffect(() => {
+    const cargarMesas = () => api.mesas().then((d) => setMesas(d.mesas)).catch(() => {})
+    cargarMesas()
+    if (pantalla !== 'resumen') return
+    const intervalo = window.setInterval(cargarMesas, 30_000)
+    return () => window.clearInterval(intervalo)
+  }, [pantalla])
+
   // Si un plato se agota, el admin lo desactiva y desaparece de la terminal
   // en el siguiente refresco: polling cada 30s mientras se arma el pedido.
   useEffect(() => {
@@ -141,6 +154,7 @@ export function Cliente() {
       setMensajeInicio(mensaje)
       setVozAbierta(false)
       setEntrega('junto')
+      setMesasElegidas([])
       usoVoz.current = false
       usoTactil.current = false
       setPantalla('inicio')
@@ -249,7 +263,7 @@ export function Cliente() {
         })),
         duracion,
         origen,
-        [],
+        mesasElegidas,
         entregaEfectiva,
         carrito.menus.map((m) => ({
           menu_id: m.menu.id, cantidad: m.cantidad, elecciones: m.elecciones,
@@ -402,6 +416,12 @@ export function Cliente() {
               {i.cantidad} × {i.plato.nombre}
             </div>
           ))}
+          {mesasElegidas.length > 0 && (
+            <div>
+              🪑 Mesa:{' '}
+              {mesas.filter((m) => mesasElegidas.includes(m.id)).map((m) => m.nombre).join(' + ')}
+            </div>
+          )}
           <div className="resumen-breve-total">Total: {soles(totalConCargos)}</div>
         </div>
         <button className="boton-grande boton-cancelar-rojo" onClick={cancelarPedidoEnVentana} disabled={guardando}>
@@ -517,6 +537,32 @@ export function Cliente() {
             </div>
           ))}
         </div>
+        {carrito.totalItems > 0 && mesas.some((m) => m.activa) && (
+          <div className="selector-servicio">
+            <span className="selector-servicio-titulo">🪑 ¿En qué mesa van a estar?</span>
+            <div className="empaques-linea mesas-terminal">
+              {mesas.filter((m) => m.activa).map((m) => (
+                <button
+                  key={m.id}
+                  className={`boton-servicio boton-empaque ${mesasElegidas.includes(m.id) ? 'servicio-activo' : ''}`}
+                  onClick={() =>
+                    setMesasElegidas((prev) =>
+                      prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id],
+                    )
+                  }
+                >
+                  {m.nombre}
+                  {m.ocupada ? ' •' : ''}
+                </button>
+              ))}
+            </div>
+            <p className="aviso-entrega">
+              {mesasElegidas.length > 0
+                ? 'Puedes marcar varias si van a juntar mesas.'
+                : 'Si aún no eligen mesa, sigue nomás: en caja te la asignan.'}
+            </p>
+          </div>
+        )}
         {(carrito.items.length >= 2 || carrito.menus.length > 0 || hayAlMomento) && (
           <div className="selector-servicio">
             <span className="selector-servicio-titulo">¿Cómo sale tu pedido?</span>
