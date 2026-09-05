@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { precioUnitarioMenu, soles, subtotalMenu, EMPAQUES, NOMBRE_EMPAQUE } from '../api'
 import type { AgregadoHoy, Empaque, MenuCarrito } from '../api'
-import { describirMenu } from './ArmadoMenu'
+import { describirMenu } from './describirMenu'
 
 interface Props {
   linea: MenuCarrito

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles, unidadesEnTaper } from '../api'
 import type { ConfigOut, DatosLocal, Entrega, MenuHoy, MesaEstado, OrdenOut, Plato, VozItemResuelto } from '../api'
-import { describirMenu } from '../components/ArmadoMenu'
+import { describirMenu } from '../components/describirMenu'
 import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
+import { menusEnPedido, TarjetaOfertaMenu } from '../components/TarjetaOfertaMenu'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
@@ -11,43 +12,6 @@ import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket } from '../components/Ticket'
 import { useCarrito } from '../hooks/useCarrito'
 import { useInactividad } from '../hooks/useInactividad'
-
-// La tarjeta que ofrece el menú del día (pantalla única y pantalla de carta)
-function TarjetaOfertaMenu({ menu, etiqueta, enPedido, onAgregar }: {
-  menu: MenuHoy
-  etiqueta: string
-  enPedido: number
-  onAgregar: () => void
-}) {
-  return (
-    <div className="combo">
-      <div className="combo-cabecera">
-        <span className="combo-titulo">{menu.nombre}</span>
-        <span className="combo-precio">{soles(menu.precio)}</span>
-      </div>
-      <div className="combo-resumen-tiempos">
-        {menu.tiempos.map((t) => (
-          <div key={t.orden}>
-            <strong>{t.rotulo}:</strong>{' '}
-            {t.alternativas.length === 1
-              ? `${t.alternativas[0].nombre} (incluido)`
-              : t.alternativas.map((a) => a.nombre).join(' / ')}
-          </div>
-        ))}
-      </div>
-      {/* El total de menús al costado del botón: se ve sin scrollear */}
-      <div className="fila-armar">
-        <button className="boton-armar" onClick={onAgregar}>
-          {etiqueta}
-        </button>
-        <div className="contador-menus" aria-label={`${enPedido} en tu pedido`}>
-          <span className="contador-menus-cifra">{enPedido}</span>
-          <span className="contador-menus-texto">{enPedido === 1 ? 'menú' : 'menús'}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function ModalCancelarTodo({ onSeguir, onCancelar }: { onSeguir: () => void; onCancelar: () => void }) {
   return (
@@ -472,9 +436,7 @@ export function Cliente() {
                 key={m.id}
                 menu={m}
                 etiqueta={`➕ UN MENÚ — ${soles(m.precio)}`}
-                enPedido={carrito.menus
-                  .filter((l) => l.menu.id === m.id)
-                  .reduce((s, l) => s + l.cantidad, 0)}
+                enPedido={menusEnPedido(carrito.menus, m.id)}
                 onAgregar={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m) }}
               />
             ))}
@@ -689,9 +651,7 @@ export function Cliente() {
                   key={m.id}
                   menu={m}
                   etiqueta={menuRecien === m.id ? '✔ ¡Agregado! Toca para otro' : `🍽 UN MENÚ — ${soles(m.precio)}`}
-                  enPedido={carrito.menus
-                    .filter((l) => l.menu.id === m.id)
-                    .reduce((s, l) => s + l.cantidad, 0)}
+                  enPedido={menusEnPedido(carrito.menus, m.id)}
                   onAgregar={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m); setMenuRecien(m.id) }}
                 />
               ))}

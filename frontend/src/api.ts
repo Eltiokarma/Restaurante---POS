@@ -909,6 +909,15 @@ export function subtotalExtras(linea: MenuCarrito): number {
 
 // Porciones que salen en táper (para mostrar el cargo ANTES de confirmar;
 // el backend hace el mismo conteo y es la autoridad)
+/** Efectivo que debería haber en el cajón: fondo + ventas en efectivo −
+ * egresos. Espejo SOLO para pintar (panel, doble check y resumen): la
+ * autoridad del cuadre es el backend. */
+export function esperadoEnCaja(estado: CajaEstado): number {
+  return Math.round(
+    ((estado.monto_apertura ?? 0) + estado.ventas_efectivo - (estado.egresos ?? 0)) * 100,
+  ) / 100
+}
+
 export function unidadesEnTaper(items: ItemCarrito[], menus: MenuCarrito[]): number {
   let n = items.reduce((s, i) => s + (i.empaque === 'taper' ? i.cantidad : 0), 0)
   for (const m of menus) {
