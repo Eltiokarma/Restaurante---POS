@@ -120,6 +120,19 @@ AGREGADOS_INICIALES = [
 ]
 
 
+class MenuGuardado(Base):
+    """Un menú del día guardado con nombre ("Lunes", "Jueves de caldo"):
+    snapshot de los platos activos y las plantillas, para recargarlo con
+    un toque otro día. Guardar con el mismo nombre lo actualiza."""
+
+    __tablename__ = "menus_guardados"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(60), nullable=False)
+    datos_json: Mapped[str] = mapped_column(Text, nullable=False)
+    actualizado: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
+
+
 class Orden(Base):
     __tablename__ = "ordenes"
 

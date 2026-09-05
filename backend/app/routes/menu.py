@@ -13,7 +13,10 @@ from sqlalchemy.orm import selectinload
 
 from ..auth import requiere_admin
 from ..db import get_db
-from ..models import MenuAgregado, MenuAlternativa, MenuPlantilla, MenuTiempo, Plato, hoy_lima
+from ..models import (
+    MenuAgregado, MenuAlternativa, MenuGuardado, MenuPlantilla, MenuTiempo, Plato,
+    ahora_lima, hoy_lima,
+)
 
 router = APIRouter(prefix="/api/menu", tags=["menu"])
 
@@ -406,6 +409,134 @@ def guardar_plantillas(payload: PlantillasUpdate, db: Session = Depends(get_db))
 
     db.commit()
     return plantillas(db)
+
+
+# ---------- Menús guardados ("el menú de los jueves") ----------
+#
+# Snapshot con nombre del menú del día completo (platos activos + plantillas
+# con sus alternativas). Guardar con el mismo nombre lo actualiza; cargar
+# uno reemplaza el menú de hoy con un toque.
+
+
+class GuardadoIn(BaseModel):
+    nombre: str = Field(min_length=1, max_length=60)
+
+
+def _snapshot_de_hoy(db: Session) -> dict:
+    activos = db.scalars(
+        select(Plato).where(Plato.activo_hoy == True)  # noqa: E712
+    ).all()
+    plantillas_cat = db.scalars(
+        select(MenuPlantilla)
+        .options(selectinload(MenuPlantilla.tiempos).selectinload(MenuTiempo.alternativas))
+        .where(MenuPlantilla.en_catalogo == True)  # noqa: E712
+    ).all()
+    return {
+        "platos": [p.id for p in activos],
+        "plantillas": [
+            {
+                "id": pl.id,
+                "nombre": pl.nombre,
+                "precio": pl.precio,
+                "activo_hoy": pl.activo_hoy,
+                "tiempos": [
+                    {
+                        "rotulo": t.rotulo,
+                        "obligatorio": t.obligatorio,
+                        "precio_extra": t.precio_extra,
+                        "descuento_si_se_quita": t.descuento_si_se_quita,
+                        "alternativas": [
+                            {"plato_id": a.plato_id, "recargo": a.recargo}
+                            for a in t.alternativas
+                        ],
+                    }
+                    for t in pl.tiempos
+                ],
+            }
+            for pl in plantillas_cat
+        ],
+    }
+
+
+def _guardado_a_dict(g: MenuGuardado, platos: dict[int, Plato]) -> dict:
+    datos = json.loads(g.datos_json)
+    nombres = [platos[i].nombre for i in datos.get("platos", []) if i in platos]
+    resumen = ", ".join(nombres[:6]) + ("…" if len(nombres) > 6 else "")
+    return {
+        "id": g.id,
+        "nombre": g.nombre,
+        "actualizado": g.actualizado.date().isoformat(),
+        "cuantos_platos": len(nombres),
+        "resumen": resumen,
+    }
+
+
+@router.get("/guardados", dependencies=[Depends(requiere_admin)])
+def menus_guardados(db: Session = Depends(get_db)):
+    platos = {p.id: p for p in db.scalars(select(Plato)).all()}
+    lista = db.scalars(select(MenuGuardado).order_by(MenuGuardado.nombre)).all()
+    return {"guardados": [_guardado_a_dict(g, platos) for g in lista]}
+
+
+@router.post("/guardados", dependencies=[Depends(requiere_admin)], status_code=201)
+def guardar_menu_de_hoy(payload: GuardadoIn, db: Session = Depends(get_db)):
+    """Guarda el menú de hoy con un nombre; si ya existe, lo actualiza."""
+    snapshot = _snapshot_de_hoy(db)
+    if not snapshot["platos"]:
+        raise HTTPException(status_code=422, detail="Hoy no hay platos activos que guardar")
+    nombre = payload.nombre.strip()
+    registro = db.scalar(
+        select(MenuGuardado).where(MenuGuardado.nombre.ilike(nombre))
+    )
+    if registro is None:
+        registro = MenuGuardado(nombre=nombre)
+        db.add(registro)
+    registro.nombre = nombre
+    registro.datos_json = json.dumps(snapshot, ensure_ascii=False)
+    registro.actualizado = ahora_lima()
+    db.commit()
+    return menus_guardados(db)
+
+
+@router.post("/guardados/{guardado_id}/cargar", dependencies=[Depends(requiere_admin)])
+def cargar_menu_guardado(guardado_id: int, db: Session = Depends(get_db)):
+    """Convierte un menú guardado en el menú de HOY: activa sus platos
+    (desactiva el resto) y restaura las plantillas con sus alternativas."""
+    registro = db.get(MenuGuardado, guardado_id)
+    if registro is None:
+        raise HTTPException(status_code=404, detail="Ese menú guardado ya no existe")
+    datos = json.loads(registro.datos_json)
+
+    hoy = hoy_lima()
+    ids = set(datos.get("platos", []))
+    for plato in db.scalars(select(Plato)).all():
+        if plato.id in ids:
+            plato.activo_hoy = True
+            plato.ultima_vez_activo = hoy
+        elif plato.activo_hoy:
+            plato.activo_hoy = False
+
+    plantillas_in = []
+    for p in datos.get("plantillas", []):
+        obj = PlantillaIn(**p)
+        # La plantilla pudo borrarse desde que se guardó: se recrea
+        if obj.id is not None and db.get(MenuPlantilla, obj.id) is None:
+            obj.id = None
+        plantillas_in.append(obj)
+    if plantillas_in:
+        guardar_plantillas(PlantillasUpdate(plantillas=plantillas_in), db)
+
+    db.commit()
+    return menu_de_hoy(db)
+
+
+@router.delete("/guardados/{guardado_id}", dependencies=[Depends(requiere_admin)])
+def borrar_menu_guardado(guardado_id: int, db: Session = Depends(get_db)):
+    registro = db.get(MenuGuardado, guardado_id)
+    if registro is not None:
+        db.delete(registro)
+        db.commit()
+    return menus_guardados(db)
 
 
 # ---------- Agregados del menú (+presa, +refresco…) ----------

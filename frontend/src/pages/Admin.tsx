@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE } from '../api'
 import { IconoEngranaje } from '../components/Iconos'
-import type { CajaEstado, ConfigOut, DatosLocal, Empaque, Insumo, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
+import type { CajaEstado, ConfigOut, DatosLocal, Empaque, Insumo, MenuGuardadoOut, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
 type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'cancelaciones' | 'voz' | 'config'
@@ -328,6 +328,112 @@ function HistorialCierres({ onSesionVencida }: { onSesionVencida: () => void }) 
   )
 }
 
+// ---------- Menús guardados ("el menú de los jueves") ----------
+
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
+function SeccionMenusGuardados({ onSesionVencida, onCargado }: {
+  onSesionVencida: () => void
+  onCargado: (mensaje: string) => void
+}) {
+  const [guardados, setGuardados] = useState<MenuGuardadoOut[]>([])
+  const [nombre, setNombre] = useState('')
+  const [mensaje, setMensaje] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.menusGuardados()
+      .then((d) => setGuardados(d.guardados))
+      .catch((e) => setError(manejarError(e, onSesionVencida)))
+  }, [onSesionVencida])
+
+  const guardar = async (n: string) => {
+    const limpio = n.trim()
+    if (!limpio) {
+      setError('Ponle un nombre al menú (por ejemplo, el día de la semana)')
+      return
+    }
+    setError('')
+    try {
+      const data = await api.guardarMenuDeHoyComo(limpio)
+      setGuardados(data.guardados)
+      setNombre('')
+      setMensaje(`Menú de hoy guardado como "${limpio}" ✔`)
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const cargar = async (g: MenuGuardadoOut) => {
+    if (!window.confirm(
+      `¿Cargar "${g.nombre}"? Reemplaza el menú de HOY (platos activos y menú del día).`,
+    )) return
+    setError('')
+    try {
+      await api.cargarMenuGuardado(g.id)
+      setMensaje('')
+      onCargado(`Menú "${g.nombre}" cargado como menú de hoy ✔`)
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const borrar = async (g: MenuGuardadoOut) => {
+    if (!window.confirm(`¿Borrar el menú guardado "${g.nombre}"? El menú de hoy no cambia.`)) return
+    try {
+      const data = await api.borrarMenuGuardado(g.id)
+      setGuardados(data.guardados)
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const nombresUsados = new Set(guardados.map((g) => g.nombre.toLowerCase()))
+
+  return (
+    <div className="panel-config seccion-guardados">
+      <h3 className="subtitulo-resumen">📅 Menús guardados</h3>
+      <p className="nota-admin">
+        Guarda el menú de hoy con un nombre (por ejemplo "{DIAS_SEMANA[0]}") y otro día
+        cárgalo con un toque: platos y menú del día quedan listos.
+      </p>
+      {mensaje && <div className="banner-ok">{mensaje}</div>}
+      {error && <div className="banner-error">{error}</div>}
+      {guardados.length > 0 && (
+        <div className="lista-guardados">
+          {guardados.map((g) => (
+            <div className="fila-guardado" key={g.id}>
+              <div className="fila-guardado-datos">
+                <strong>{g.nombre}</strong>
+                <span className="nota-admin">
+                  {g.cuantos_platos} plato{g.cuantos_platos === 1 ? '' : 's'}: {g.resumen}
+                </span>
+              </div>
+              <button className="boton-primario" onClick={() => cargar(g)}>▶ Cargar hoy</button>
+              <button onClick={() => borrar(g)}>🗑</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="admin-acciones fila-guardar-menu">
+        <span>Guardar el menú de hoy como:</span>
+        {DIAS_SEMANA.map((d) => (
+          <button key={d} onClick={() => guardar(d)}>
+            {d}{nombresUsados.has(d.toLowerCase()) ? ' ↺' : ''}
+          </button>
+        ))}
+        <input
+          placeholder="u otro nombre…"
+          value={nombre}
+          maxLength={60}
+          onChange={(e) => setNombre(e.target.value)}
+        />
+        <button className="boton-primario" onClick={() => guardar(nombre)}>💾 Guardar</button>
+      </div>
+    </div>
+  )
+}
+
 // ---------- Menú del día ----------
 
 function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
@@ -444,6 +550,10 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
       </div>
       {mensaje && <div className="banner-ok">{mensaje}</div>}
       {error && <div className="banner-error">{error}</div>}
+      <SeccionMenusGuardados
+        onSesionVencida={onSesionVencida}
+        onCargado={(msg) => { cargar(); setMensaje(msg) }}
+      />
       <div className="tabla-desplazable"><table className="tabla-admin">
         <thead>
           <tr>

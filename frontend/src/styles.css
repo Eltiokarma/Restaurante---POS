@@ -3961,3 +3961,50 @@ select:focus-visible {
   align-items: center;
   gap: 14px;
 }
+
+/* ---------- Menús guardados (Admin → Menú del día) ---------- */
+
+.seccion-guardados {
+  margin: 14px 0;
+}
+
+.lista-guardados {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.fila-guardado {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.fila-guardado-datos {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fila-guardado button {
+  white-space: nowrap;
+  padding: 10px 14px;
+}
+
+.fila-guardar-menu {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.fila-guardar-menu input {
+  min-width: 170px;
+  padding: 8px 10px;
+}

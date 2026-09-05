@@ -239,6 +239,14 @@ export interface CajaEstado {
   total_vendido: number
 }
 
+export interface MenuGuardadoOut {
+  id: number
+  nombre: string
+  actualizado: string
+  cuantos_platos: number
+  resumen: string
+}
+
 export interface DatosLocal {
   nombre: string
   direccion: string
@@ -666,6 +674,26 @@ export const api = {
     request<{ categorias: string[]; platos: Plato[] }>('/api/menu/today', {
       method: 'PUT',
       body: JSON.stringify({ platos }),
+    }, true),
+
+  // --- Menús guardados ("el menú de los jueves") ---
+  menusGuardados: () =>
+    request<{ guardados: MenuGuardadoOut[] }>('/api/menu/guardados', {}, true),
+
+  guardarMenuDeHoyComo: (nombre: string) =>
+    request<{ guardados: MenuGuardadoOut[] }>('/api/menu/guardados', {
+      method: 'POST',
+      body: JSON.stringify({ nombre }),
+    }, true),
+
+  cargarMenuGuardado: (id: number) =>
+    request<{ categorias: string[]; platos: Plato[]; menus: MenuHoy[] }>(
+      `/api/menu/guardados/${id}/cargar`, { method: 'POST' }, true,
+    ),
+
+  borrarMenuGuardado: (id: number) =>
+    request<{ guardados: MenuGuardadoOut[] }>(`/api/menu/guardados/${id}`, {
+      method: 'DELETE',
     }, true),
 
   cancelacionesHoy: () =>
