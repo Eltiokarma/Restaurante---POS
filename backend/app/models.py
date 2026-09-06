@@ -167,6 +167,9 @@ class Orden(Base):
     # llevaban de memoria y descuadraban la caja.
     pago_pendiente: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     vuelto_pendiente: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # PRIMERA vez que la orden quedó lista completa (métrica de tiempo de
+    # servido: listo_en − hora del pedido). None = aún no sale
+    listo_en: Mapped[datetime | None] = mapped_column(nullable=True)
     # junto | separado — cómo sale el pedido: todo en una entrega, o por
     # tiempos (la sopa primero, el segundo cuando esté)
     entrega: Mapped[str] = mapped_column(String(10), default="junto", nullable=False)

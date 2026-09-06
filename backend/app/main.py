@@ -72,6 +72,9 @@ def _migrar(engine_) -> None:
             ))
             conn.execute(text("ALTER TABLE ordenes ADD COLUMN vuelto_pendiente FLOAT"))
             conn.commit()
+        if columnas and "listo_en" not in columnas:
+            conn.execute(text("ALTER TABLE ordenes ADD COLUMN listo_en DATETIME"))
+            conn.commit()
         columnas_movs = [fila[1] for fila in conn.execute(text("PRAGMA table_info(movimientos_insumo)"))]
         if columnas_movs and "orden_id" not in columnas_movs:
             conn.execute(text("ALTER TABLE movimientos_insumo ADD COLUMN orden_id INTEGER"))

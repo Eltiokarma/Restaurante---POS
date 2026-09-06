@@ -51,9 +51,11 @@ Qué quedó construido:
 
 ## La sesión 4 (propuesta)
 
-1. **Validar las tandas en servicio real**: mirar 2-3 días de
-   `tanda_logs` (composición vs. cuánto tardó cada tanda) y ajustar con
-   el dueño ventana/tope/capacidades reales de su cocina.
+1. **Validar las tandas en servicio real** (v2 ya aplicada tras la
+   primera prueba del dueño: sin "Por salir", sin botón Empezar, tachado
+   dentro de la tanda, métricas de servido y estimado "Sale ≈ en N min"):
+   mirar 2-3 días de `tanda_logs` + `ordenes.listo_en` y ajustar
+   ventana/tope/capacidades reales de su cocina.
 2. **Orquestador IA (fase siguiente, NO arrancar solos)**: reemplazar el
    cálculo determinista por una sugerencia inteligente usando los
    `tanda_logs` acumulados; la pantalla y los endpoints ya están.

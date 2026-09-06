@@ -107,6 +107,19 @@ def _minutos_espera(orden: Orden) -> float:
     return max(0.0, (ahora_lima() - creada).total_seconds() / 60)
 
 
+def _minutos_servido(orden: Orden) -> float | None:
+    """Cuánto tardó el ticket en salir completo (métrica registrada):
+    listo_en − hora del pedido. None si todavía no sale."""
+    if orden.listo_en is None:
+        return None
+    momento = orden.listo_en
+    if momento.tzinfo is None:  # SQLite guarda naive: es hora de Lima
+        momento = momento.replace(tzinfo=LIMA)
+    h, m, s = (int(x) for x in orden.hora.split(":"))
+    creada = datetime.combine(orden.fecha, time(h, m, s), tzinfo=LIMA)
+    return max(0.0, (momento - creada).total_seconds() / 60)
+
+
 ENTREGAS = ["junto", "separado"]
 
 
@@ -172,6 +185,7 @@ def _orden_a_dict(
         "mesas": [mapa_mesas.get(i, f"#{i}") for i in ids_mesa],
         "mesa_liberada": orden.mesa_liberada,
         "minutos_espera": round(_minutos_espera(orden), 1),
+        "servido_min": (lambda v: round(v, 1) if v is not None else None)(_minutos_servido(orden)),
         "anulada_hace_seg": _segundos_desde_anulacion(orden),
         # Solo la venta a la carta: los platos de un menú van agrupados en
         # "menus" (cocina y ticket muestran el menú como UN bloque)
@@ -359,13 +373,15 @@ def tandas_de_cocina(db: Session = Depends(get_db)):
     """Tablero de tandas de /cocina: lo pendiente partido en grupos de
     órdenes completas (pre-orquestador). Solo cálculo, no escribe."""
     config = leer_config(db)
-    if not config["cocina_tandas"]:
-        return {"habilitado": False, "tandas": []}
-    from ..services.tandas import calcular_tandas
+    from ..services.tandas import calcular_tandas, metricas_servido
 
+    metricas = metricas_servido(db)
+    if not config["cocina_tandas"]:
+        return {"habilitado": False, "tandas": [], "metricas": metricas}
     return {
         "habilitado": True,
-        "tandas": calcular_tandas(db, config, _mapa_mesas(db)),
+        "tandas": calcular_tandas(db, config, _mapa_mesas(db), metricas["promedio_min"]),
+        "metricas": metricas,
     }
 
 
@@ -521,12 +537,13 @@ def cambiar_estado(orden_id: int, payload: EstadoIn, db: Session = Depends(get_d
     # adelante: si cocina ya tachó porciones por bulk, "empezar a preparar"
     # no puede devolverlas a la cola y hacer que se cocinen dos veces.
     if payload.estado != "anulada":
-        from ..services.cocina import RANGO_ESTADO
+        from ..services.cocina import RANGO_ESTADO, sellar_listo
 
         destino = RANGO_ESTADO[payload.estado]
         for item in orden.items:
             if RANGO_ESTADO[item.estado] < destino:
                 item.estado = payload.estado
+        sellar_listo(orden)  # métrica de servido: primera vez en "listo"
     db.commit()
     return {"id": orden.id, "estado": orden.estado}
 
