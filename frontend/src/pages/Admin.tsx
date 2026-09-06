@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE } from '../api'
 import { IconoBillete, IconoEgreso, IconoEngranaje, IconoMovil, IconoTarjeta } from '../components/Iconos'
-import type { CajaEstado, ConfigOut, DatosLocal, Empaque, Insumo, MenuGuardadoOut, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
+import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, Insumo, MenuGuardadoOut, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
 type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'cancelaciones' | 'voz' | 'config'
@@ -968,9 +968,134 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
       )}
       <EditorPlantillas onSesionVencida={onSesionVencida} />
       <EditorAgregados onSesionVencida={onSesionVencida} />
+      <EditorBebidas onSesionVencida={onSesionVencida} />
     </div>
   )
 }
+
+// ---------- Bebidas de caja (gaseosas embotelladas) ----------
+
+function EditorBebidas({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [bebidas, setBebidas] = useState<Bebida[]>([])
+  const [nombre, setNombre] = useState('')
+  const [precio, setPrecio] = useState('')
+  const [mensaje, setMensaje] = useState('')
+  const [error, setError] = useState('')
+
+  const cargar = useCallback(async () => {
+    try {
+      setBebidas((await api.bebidas()).bebidas)
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }, [onSesionVencida])
+
+  useEffect(() => { cargar() }, [cargar])
+
+  const crear = async () => {
+    const p = parseFloat(precio)
+    if (!nombre.trim() || !(p > 0)) {
+      setError('Pon la marca con su tamano (ej. "Inca Kola 500 ml") y el precio')
+      return
+    }
+    try {
+      await api.crearBebida(nombre.trim(), p)
+      setNombre('')
+      setPrecio('')
+      setError('')
+      setMensaje('Bebida creada: ya sale en el boton "🥤 Gaseosa" de la caja y descuenta botellas del kardex')
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const guardarPrecio = async (b: Bebida, valor: string) => {
+    const p = parseFloat(valor)
+    if (!(p > 0) || p === b.precio) return
+    try {
+      await api.editarBebida(b.id, { precio: p })
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const alternar = async (b: Bebida) => {
+    try {
+      await api.editarBebida(b.id, { activa: !b.activa })
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const borrar = async (b: Bebida) => {
+    if (!window.confirm(`¿Borrar "${b.nombre}" de la lista? Lo ya vendido no cambia.`)) return
+    try {
+      await api.borrarBebida(b.id)
+      cargar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  return (
+    <div className="panel-config">
+      <h3 className="subtitulo-resumen">🥤 Bebidas de caja</h3>
+      <p className="nota-admin">
+        Lista fija de gaseosas y bebidas embotelladas con marca, tamano y precio. La caja las
+        agrega a un ticket ya registrado con el boton "🥤 Gaseosa" (sale un comprobante chico,
+        sin reimprimir la comanda) y cada venta descuenta botellas del kardex.
+      </p>
+      {mensaje && <div className="banner-ok">{mensaje}</div>}
+      {error && <div className="banner-error">{error}</div>}
+      {bebidas.length > 0 && (
+        <div className="tabla-desplazable"><table className="tabla-admin tabla-editable">
+          <thead>
+            <tr>
+              <th>Bebida</th>
+              <th className="col-cantidad">Precio S/</th>
+              <th>Se vende</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {bebidas.map((b) => (
+              <tr key={b.id} className={b.activa ? '' : 'fila-apagada'}>
+                <td>{b.nombre}</td>
+                <td className="col-cantidad">
+                  <input type="number" inputMode="decimal" step="0.50" min="0"
+                         defaultValue={b.precio.toFixed(2)}
+                         aria-label={`Precio de ${b.nombre}`}
+                         onBlur={(e) => guardarPrecio(b, e.target.value)} />
+                </td>
+                <td className="celda-centro">
+                  <input type="checkbox" checked={b.activa}
+                         aria-label={`${b.nombre} se vende`}
+                         onChange={() => alternar(b)} />
+                </td>
+                <td>
+                  <button className="boton-quitar" aria-label={`Borrar ${b.nombre}`}
+                          onClick={() => borrar(b)}>✕</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table></div>
+      )}
+      <div className="admin-acciones fila-guardar-menu">
+        <input placeholder="Inca Kola 500 ml" value={nombre} maxLength={80}
+               onChange={(e) => setNombre(e.target.value)} />
+        <input type="number" inputMode="decimal" step="0.50" min="0" placeholder="3.50"
+               className="input-precio-bebida" value={precio}
+               onChange={(e) => setPrecio(e.target.value)} />
+        <button className="boton-primario" onClick={crear}>+ Agregar bebida</button>
+      </div>
+    </div>
+  )
+}
+
 
 // ---------- Menús encadenados (plantillas) ----------
 

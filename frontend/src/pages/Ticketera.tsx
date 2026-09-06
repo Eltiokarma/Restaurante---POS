@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
-import type { DatosLocal, OrdenOut } from '../api'
-import { Ticket } from '../components/Ticket'
+import type { DatosLocal, OrdenOut, TicketBebidaOut } from '../api'
+import { Ticket, TicketBebidaImpreso } from '../components/Ticket'
 
 interface TrabajoImpresion {
-  tipo: 'orden' | 'prueba' | 'cierre'
+  tipo: 'orden' | 'prueba' | 'cierre' | 'bebida'
   orden_id: number | null
+  ticket_bebida_id?: number
   numero: string
   datos_b64: string
 }
@@ -44,16 +45,23 @@ export function Ticketera() {
 
   // ---------- Modo estación: window.print() de la orden más antigua ----------
 
+  // Ticket chico de gaseosas pendiente (modo estación, HTML)
+  const [ticketBebida, setTicketBebida] = useState<{ ticket: TicketBebidaOut; local: DatosLocal } | null>(null)
+
   useEffect(() => {
     const revisar = async () => {
       if (procesando.current || modo !== 'estacion') return
       try {
         const data = await api.pendientesImpresion()
         setConectado(true)
-        setEnCola(data.ordenes.length)
+        const bebidasPendientes = data.tickets_bebida ?? []
+        setEnCola(data.ordenes.length + bebidasPendientes.length)
         if (data.ordenes.length > 0) {
           procesando.current = true
           setTicket({ orden: data.ordenes[0], local: data.local })
+        } else if (bebidasPendientes.length > 0) {
+          procesando.current = true
+          setTicketBebida({ ticket: bebidasPendientes[0], local: data.local })
         }
       } catch {
         setConectado(false)
@@ -63,6 +71,26 @@ export function Ticketera() {
     const intervalo = window.setInterval(revisar, 3_000)
     return () => window.clearInterval(intervalo)
   }, [modo])
+
+  // Imprime el ticket de gaseosas montado y lo confirma (misma mecánica)
+  useEffect(() => {
+    if (!ticketBebida) return
+    const timer = window.setTimeout(async () => {
+      window.print()
+      if (ticketBebida.ticket.id !== undefined) {
+        try {
+          await api.confirmarBebidaImpresa(ticketBebida.ticket.id)
+          setImpresos((n) => n + 1)
+          setEnCola((n) => Math.max(0, n - 1))
+        } catch {
+          // Si no se pudo confirmar, el siguiente ciclo lo reintenta
+        }
+      }
+      setTicketBebida(null)
+      procesando.current = false
+    }, 200)
+    return () => window.clearTimeout(timer)
+  }, [ticketBebida])
 
   // Imprime cuando el ticket ya está montado y lo saca de la cola
   useEffect(() => {
@@ -138,6 +166,9 @@ export function Ticketera() {
     } else if (trabajo.tipo === 'cierre') {
       // El resumen de cierre de caja: misma mecánica que la prueba
       await api.confirmarCierreImpreso().catch(() => {})
+    } else if (trabajo.tipo === 'bebida' && trabajo.ticket_bebida_id !== undefined) {
+      // El ticket chico de gaseosas también espera hasta confirmarse
+      await api.confirmarBebidaImpresa(trabajo.ticket_bebida_id).catch(() => {})
     }
     setImpresos((n) => n + 1)
     setEnCola((n) => Math.max(0, n - 1))
@@ -274,6 +305,11 @@ export function Ticketera() {
       {ticket && (
         <div className="solo-impresion">
           <Ticket orden={ticket.orden} local={ticket.local} />
+        </div>
+      )}
+      {ticketBebida && (
+        <div className="solo-impresion">
+          <TicketBebidaImpreso ticket={ticketBebida.ticket} local={ticketBebida.local} />
         </div>
       )}
     </div>

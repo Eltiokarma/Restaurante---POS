@@ -301,6 +301,26 @@ export interface ConfigOut {
   cocina_bulk_min: number
 }
 
+// Bebida embotellada de la lista fija (Inca Kola 500 ml…): no es un
+// plato, se agrega desde caja a una orden ya creada
+export interface Bebida {
+  id: number
+  nombre: string
+  precio: number
+  activa: boolean
+  insumo_id: number | null
+}
+
+// Ticket chico de SOLO las gaseosas agregadas a una orden
+export interface TicketBebidaOut {
+  id?: number
+  numero: string
+  mesas: string[]
+  items: { nombre: string; precio: number; cantidad: number }[]
+  total: number
+  hora?: string
+}
+
 export interface MesaEstado {
   id: number
   nombre: string
@@ -650,9 +670,47 @@ export const api = {
       body: JSON.stringify({ confirmacion, reiniciar_stock: reiniciarStock }),
     }, true),
 
+  // --- Bebidas embotelladas (lista fija de caja) ---
+  bebidas: () => request<{ bebidas: Bebida[] }>('/api/bebidas'),
+
+  crearBebida: (nombre: string, precio: number) =>
+    request<Bebida>('/api/bebidas', {
+      method: 'POST',
+      body: JSON.stringify({ nombre, precio }),
+    }, true),
+
+  editarBebida: (id: number, cambios: { nombre?: string; precio?: number; activa?: boolean }) =>
+    request<Bebida>(`/api/bebidas/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(cambios),
+    }, true),
+
+  borrarBebida: (id: number) =>
+    request<{ borrada: boolean }>(`/api/bebidas/${id}`, { method: 'DELETE' }, true),
+
+  // Añade gaseosas a una orden YA creada (desde caja): el backend suma el
+  // total, descuenta el kardex y prepara el ticket chico de solo gaseosas
+  agregarBebidas: (ordenId: number, items: { bebida_id: number; cantidad: number }[]) =>
+    request<{ orden: OrdenOut; modo_impresion: string; ticket_bebida: TicketBebidaOut }>(
+      `/api/orders/${ordenId}/bebidas`, {
+        method: 'POST',
+        body: JSON.stringify({ items }),
+      }),
+
+  // Mueve TODOS los pedidos de hoy de una mesa a otra (el grupo se cambió)
+  trasladarMesa: (deMesaId: number, aMesaId: number, reimprimir: boolean) =>
+    request<{ trasladadas: number; ordenes: OrdenOut[] }>('/api/orders/trasladar-mesa', {
+      method: 'POST',
+      body: JSON.stringify({ de_mesa_id: deMesaId, a_mesa_id: aMesaId, reimprimir }),
+    }),
+
+  confirmarBebidaImpresa: (ticketId: number) =>
+    request<{ confirmada: boolean }>(`/api/print/bebida/${ticketId}/impresa`, { method: 'POST' }),
+
   // --- Estación de impresión (/ticketera) ---
   pendientesImpresion: () =>
-    request<{ ordenes: OrdenOut[]; local: DatosLocal }>('/api/orders/pending-print'),
+    request<{ ordenes: OrdenOut[]; tickets_bebida: TicketBebidaOut[]; local: DatosLocal }>(
+      '/api/orders/pending-print'),
 
   marcarImpreso: (id: number) =>
     request<{ id: number; impreso: boolean }>(`/api/orders/${id}/printed`, { method: 'POST' }),

@@ -199,6 +199,38 @@ def render_orden(
     return b"".join(partes)
 
 
+def render_bebida(datos: dict, local: dict, columnas: int = 42) -> bytes:
+    """Ticket chico de SOLO las gaseosas agregadas a una orden desde caja
+    (no se reimprime la comanda completa, pedido del dueño).
+
+    datos: {"numero", "mesas": [nombres], "items": [{nombre, precio,
+    cantidad}], "total", "hora" opcional}."""
+    partes: list[bytes] = [INICIALIZAR, CODEPAGE_CP850, CENTRAR]
+    partes += [NEGRITA_ON, _texto(local.get("nombre") or "Restaurante"), NEGRITA_OFF]
+    partes += [DOBLE_TAMANO, _texto("GASEOSAS"), TAMANO_NORMAL]
+    linea = f"Orden #{datos['numero']}"
+    if datos.get("mesas"):
+        linea += f" - Mesa {', '.join(datos['mesas'])}"
+    partes += [DOBLE_ALTO, NEGRITA_ON, _texto(linea), NEGRITA_OFF, TAMANO_NORMAL]
+    if datos.get("hora"):
+        partes.append(_texto(datos["hora"]))
+
+    partes += [ALINEAR_IZQ, _texto("-" * columnas), DOBLE_ALTO]
+    for item in datos["items"]:
+        partes.append(_texto(_fila(
+            f"{item['cantidad']} x {item['nombre']}",
+            _soles(item["precio"] * item["cantidad"]),
+            columnas,
+        )))
+    partes += [TAMANO_NORMAL, _texto("-" * columnas)]
+    partes += [NEGRITA_ON, DOBLE_ALTO,
+               _texto(_fila("TOTAL GASEOSAS", f"S/ {_soles(datos['total'])}", columnas)),
+               TAMANO_NORMAL, NEGRITA_OFF]
+    partes.append(_texto("Se suma al ticket de la orden"))
+    partes.append(CORTAR)
+    return b"".join(partes)
+
+
 def render_cierre(datos: dict, local: dict, columnas: int = 42) -> bytes:
     """Resumen impreso del cierre de caja (pedido del dueño): queda un
     papel con el cuadre del turno — fondo, ventas por método, egresos,
