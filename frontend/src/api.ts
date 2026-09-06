@@ -30,7 +30,9 @@ export type Empaque = 'mesa' | 'taper' | 'bolsa' | 'lonchera'
 export const EMPAQUES: Empaque[] = ['mesa', 'taper', 'bolsa', 'lonchera']
 
 export const NOMBRE_EMPAQUE: Record<Empaque, string> = {
-  mesa: '🍽 Mesa',
+  // "Mesa" chocaba con la selección de mesa de al lado (hallazgo 34):
+  // este empaque significa "se come acá, en vajilla", no pide número
+  mesa: '🍽 Comer acá',
   taper: '🥡 Táper',
   bolsa: '🛍 Bolsa',
   lonchera: '🍱 Lonchera',

@@ -262,6 +262,17 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       varias alternativas (el cliente arma SU menú guiado; antes se llevaba el default en
       silencio); en CAJA se mantiene el pre-elegido de un toque por velocidad, con los
       casilleros como aviso y un guard en REGISTRAR con el mismo lenguaje del 422.
+- [x] **Cierre del handoff 5 (guía del cliente, paquete completo)**: Claude Design revisó
+      la implementación de 4c + 4b en `main` y la validó ("no hay nada que parchar");
+      se aplicaron sus 3 detalles — transición ámbar→verde en `.barra-guia`, la flecha de
+      "IR AHÍ" rebota SOLO si la tarjeta pendiente está fuera de vista
+      (IntersectionObserver), y respira únicamente el casillero del PRIMER menú
+      incompleto (el que persigue la barra) — más el **hallazgo 34**: el empaque `mesa`
+      se renombra a "🍽 Comer acá" solo en la etiqueta visible (la clave, el backend, el
+      ticket y el histórico no cambian) porque chocaba con la selección de mesa de al
+      lado, y el título "¿En qué mesa van a estar?" dice "(opcional)" de entrada. La
+      opción 4a (riel de pasos) quedó documentada como alternativa NO implementada
+      (`riel-4a.css` del handoff), para si algún día el resumen se parte en pantallas.
 - [x] **Tandas de cocina: el pre-orquestador** (sesión 3; decisiones del dueño aplicadas —
       la tanda cierra con lo que se llene primero, capacidad opcional, el gating solo
       avisa): `services/tandas.py` parte las órdenes activas en tandas de ÓRDENES
