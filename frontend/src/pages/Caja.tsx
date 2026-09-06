@@ -10,6 +10,10 @@ import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { IconoBillete, IconoSilla } from '../components/Iconos'
 import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket, TicketCierre } from '../components/Ticket'
+import {
+  IconoAspa, IconoCandadoAbierto, IconoCandadoCerrado, IconoEgreso,
+  IconoImpresora, IconoLapiz,
+} from '../components/Iconos'
 import { useCarrito } from '../hooks/useCarrito'
 
 const SIGUIENTE_ESTADO: Record<string, string> = {
@@ -33,6 +37,8 @@ export function Caja() {
   const [impresion, setImpresion] = useState<ImpresionPendiente | undefined>()
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
+  // La conexión es un ESTADO (cintillo persistente), no un mensaje más
+  const [sinConexion, setSinConexion] = useState(false)
   const [registrando, setRegistrando] = useState(false)
   const [ticket, setTicket] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
   const [estadoCaja, setEstadoCaja] = useState<CajaEstado | null>(null)
@@ -98,11 +104,18 @@ export function Caja() {
       setOrdenes(data.ordenes)
       setTotalVendido(data.total_vendido)
       setImpresion(data.impresion_pendiente)
-      setError('')
+      setSinConexion(false)
     } catch {
-      setError('Sin conexión con el sistema')
+      setSinConexion(true)
     }
   }, [])
+
+  // El aviso de éxito se limpia solo; el de error espera una acción
+  useEffect(() => {
+    if (!mensaje) return
+    const timer = window.setTimeout(() => setMensaje(''), 6_000)
+    return () => window.clearTimeout(timer)
+  }, [mensaje])
 
   useEffect(() => {
     api.config().then(setConfig).catch(() => {})
@@ -191,8 +204,8 @@ export function Caja() {
       const n = resultado.turno ?? 1
       setMensaje(
         n > 1
-          ? `✔ Caja ${n} del día abierta con ${soles(monto)} de fondo`
-          : `✔ Caja abierta con ${soles(monto)} de fondo`,
+          ? `Caja ${n} del día abierta con ${soles(monto)} de fondo`
+          : `Caja abierta con ${soles(monto)} de fondo`,
       )
       setError('')
     } catch (e) {
@@ -226,10 +239,10 @@ export function Caja() {
       const dif = resultado.diferencia ?? 0
       setMensaje(
         dif === 0
-          ? '✔ Caja cerrada: cuadró exacto 🎯 — imprimiendo el resumen'
+          ? 'Caja cerrada: cuadró exacto — imprimiendo el resumen'
           : dif > 0
-            ? `✔ Caja cerrada: sobran ${soles(dif)} — imprimiendo el resumen`
-            : `✔ Caja cerrada: faltan ${soles(-dif)} — imprimiendo el resumen`,
+            ? `Caja cerrada: sobran ${soles(dif)} — imprimiendo el resumen`
+            : `Caja cerrada: faltan ${soles(-dif)} — imprimiendo el resumen`,
       )
       setError('')
       // El resumen impreso del cierre: en modo puente lo saca la
@@ -259,7 +272,7 @@ export function Caja() {
       setConceptoEgreso('')
       setMontoEgreso('')
       setAgregandoEgreso(false)
-      setMensaje(`✔ Egreso registrado: −${soles(monto)}`)
+      setMensaje(`Egreso registrado: −${soles(monto)}`)
       setError('')
       cargarCaja()
     } catch (e) {
@@ -282,7 +295,7 @@ export function Caja() {
     try {
       setEstadoCaja(await api.reabrirCaja())
       setCerrandoCaja(false)
-      setMensaje('✔ Caja reabierta: el conteo se hace de nuevo al cierre de verdad')
+      setMensaje('Caja reabierta: el conteo se hace de nuevo al cierre de verdad')
       setError('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo reabrir la caja')
@@ -299,7 +312,7 @@ export function Caja() {
       setEstadoCaja(await api.corregirFondoCaja(monto))
       setMontoFondo('')
       setCorrigiendoFondo(false)
-      setMensaje(`✔ Fondo inicial corregido a ${soles(monto)}`)
+      setMensaje(`Fondo inicial corregido a ${soles(monto)}`)
       setError('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo corregir el fondo')
@@ -375,9 +388,9 @@ export function Caja() {
       const numero = String(resultado.orden.numero_orden_dia).padStart(3, '0')
       if (imprimeAqui) {
         setTicket(resultado)
-        setMensaje(`✔ ORDEN #${numero} registrada — imprimiendo ticket`)
+        setMensaje(`ORDEN #${numero} registrada — imprimiendo ticket`)
       } else {
-        setMensaje(`✔ ORDEN #${numero} registrada — el ticket sale por la ticketera`)
+        setMensaje(`ORDEN #${numero} registrada — el ticket sale por la ticketera`)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error de conexión, intenta de nuevo')
@@ -459,9 +472,20 @@ export function Caja() {
       <header className="caja-cabecera">
         <h1><IconoBillete tam={30} /> Caja</h1>
         <span className="caja-total-dia">Vendido hoy: <strong>{soles(totalVendido)}</strong></span>
-        {mensaje && <span className="banner-ok caja-banner">{mensaje}</span>}
-        {error && <span className="banner-error caja-banner">{error}</span>}
       </header>
+
+      {sinConexion && (
+        <div className="cintillo-sin-conexion">Sin conexión con el sistema · reintentando…</div>
+      )}
+      {/* Franja con alto reservado: que aparezca un aviso no empuja lo
+          que el cajero está tocando. Un solo aviso a la vez. */}
+      <div className="franja-avisos" aria-live="polite">
+        {error ? (
+          <div className="banner-error">{error}</div>
+        ) : mensaje ? (
+          <div className="banner-ok">{mensaje}</div>
+        ) : null}
+      </div>
 
       <AvisoImpresion estado={impresion} />
 
@@ -476,59 +500,85 @@ export function Caja() {
             />
           </label>
           <button className="boton-grande boton-confirmar" onClick={abrirCaja}>
-            🔓 Abrir caja
+            <IconoCandadoAbierto tam={22} /> Abrir caja
           </button>
         </div>
       )}
 
       {estadoCaja?.abierta && (
-        <div className="caja-panel">
-          <span>
-            🔓 {(estadoCaja.turno ?? 1) > 1 ? `Caja ${estadoCaja.turno} del día` : 'Caja'}{' '}
-            abierta a las {estadoCaja.hora_apertura?.slice(0, 5)} con{' '}
-            <strong>{soles(estadoCaja.monto_apertura ?? 0)}</strong> de fondo · esperado en
-            EFECTIVO: <strong>{soles(esperadoEnCaja(estadoCaja))}</strong>
-            {(estadoCaja.egresos ?? 0) > 0 && <> · 💸 egresos −{soles(estadoCaja.egresos ?? 0)}</>}
-            {' '}· 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)}
+        <div className="caja-panel caja-panel-tablero">
+          {/* Tablero de cifras, no una frase: la que decide el cierre
+              (esperado en efectivo) manda; el resto acompaña */}
+          <div className="caja-panel-contexto">
+            <span className="caja-panel-estado">
+              <IconoCandadoAbierto tam={16} />
+              {(estadoCaja.turno ?? 1) > 1
+                ? `Caja ${estadoCaja.turno} abierta`
+                : 'Caja abierta'} · {estadoCaja.hora_apertura?.slice(0, 5)}
+            </span>
+            <span className="caja-panel-dato">fondo {soles(estadoCaja.monto_apertura ?? 0)}</span>
             {estadoCaja.sin_registrar > 0 && (
-              <em> · {estadoCaja.sin_registrar} sin registrar (se asumen efectivo)</em>
+              <span className="chip-aviso">
+                {estadoCaja.sin_registrar} sin registrar → efectivo
+              </span>
             )}
-          </span>
-          {!cerrandoCaja && !corrigiendoFondo && (
-            <button className="boton-cerrar-caja" onClick={() => setCorrigiendoFondo(true)}>
-              ✏️ Corregir fondo
-            </button>
-          )}
-          {corrigiendoFondo && (
-            <span className="caja-cierre-form">
-              <label>
-                Fondo inicial correcto
-                <input
-                  type="number" step="0.10" min="0" autoFocus
-                  value={montoFondo} onChange={(e) => setMontoFondo(e.target.value)}
-                />
-              </label>
-              <button className="boton-grande boton-confirmar" onClick={corregirFondo}>Guardar</button>
-              <button className="boton-cerrar-caja" onClick={() => setCorrigiendoFondo(false)}>Cancelar</button>
-            </span>
-          )}
-          {!cerrandoCaja && !corrigiendoFondo ? (
-            <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(true)}>
-              🔒 Cerrar caja
-            </button>
-          ) : cerrandoCaja && !confirmandoCierre ? (
-            <span className="caja-cierre-form">
-              <label>
-                Efectivo contado
-                <input
-                  type="number" step="0.10" min="0" autoFocus
-                  value={montoCaja} onChange={(e) => setMontoCaja(e.target.value)}
-                />
-              </label>
-              <button className="boton-grande boton-confirmar" onClick={revisarCierre}>Confirmar cierre</button>
-              <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(false)}>Cancelar</button>
-            </span>
-          ) : null}
+          </div>
+          <div className="caja-cifra-principal">
+            <span className="cifra-etiqueta">Esperado en efectivo</span>
+            <span className="cifra-valor">{soles(esperadoEnCaja(estadoCaja))}</span>
+          </div>
+          <div className="caja-cifras-grid">
+            <div className="caja-cifra">
+              <span className="cifra-etiqueta">Egresos</span>
+              <span className="cifra-chica cifra-egreso">−{soles(estadoCaja.egresos ?? 0)}</span>
+            </div>
+            <div className="caja-cifra">
+              <span className="cifra-etiqueta">Tarjeta</span>
+              <span className="cifra-chica">{soles(estadoCaja.ventas_tarjeta)}</span>
+            </div>
+            <div className="caja-cifra">
+              <span className="cifra-etiqueta">Yape</span>
+              <span className="cifra-chica">{soles(estadoCaja.ventas_yape)}</span>
+            </div>
+          </div>
+          <div className="caja-panel-acciones">
+            {!cerrandoCaja && !corrigiendoFondo && (
+              <>
+                <button className="boton boton--md boton--culantro" onClick={() => setCerrandoCaja(true)}>
+                  <IconoCandadoCerrado tam={20} /> Cerrar caja
+                </button>
+                <button className="boton boton--md boton--papel" onClick={() => setCorrigiendoFondo(true)}>
+                  <IconoLapiz tam={20} /> Corregir fondo
+                </button>
+              </>
+            )}
+            {corrigiendoFondo && (
+              <span className="caja-cierre-form">
+                <label>
+                  Fondo inicial correcto
+                  <input
+                    type="number" step="0.10" min="0" autoFocus
+                    value={montoFondo} onChange={(e) => setMontoFondo(e.target.value)}
+                  />
+                </label>
+                <button className="boton-grande boton-confirmar" onClick={corregirFondo}>Guardar</button>
+                <button className="boton boton--md boton--papel" onClick={() => setCorrigiendoFondo(false)}>Cancelar</button>
+              </span>
+            )}
+            {cerrandoCaja && !confirmandoCierre && (
+              <span className="caja-cierre-form">
+                <label>
+                  Efectivo contado
+                  <input
+                    type="number" step="0.10" min="0" autoFocus
+                    value={montoCaja} onChange={(e) => setMontoCaja(e.target.value)}
+                  />
+                </label>
+                <button className="boton-grande boton-confirmar" onClick={revisarCierre}>Confirmar cierre</button>
+                <button className="boton boton--md boton--papel" onClick={() => setCerrandoCaja(false)}>Cancelar</button>
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -575,14 +625,26 @@ export function Caja() {
       )}
 
       {estadoCaja?.cerrada && (
-        <div className={`caja-panel ${estadoCaja.diferencia ? 'caja-panel-descuadre' : ''}`}>
+        <div className={`caja-panel caja-panel-tablero ${estadoCaja.diferencia ? 'caja-panel-descuadre' : ''}`}>
+          <div className="caja-panel-contexto">
+            <span className="caja-panel-estado caja-panel-estado-neutro">
+              <IconoCandadoCerrado tam={16} />
+              {(estadoCaja.turno ?? 1) > 1
+                ? `Caja ${estadoCaja.turno} cerrada`
+                : 'Caja cerrada'} · {estadoCaja.hora_cierre?.slice(0, 5)}
+            </span>
+            <span className="caja-panel-dato">fondo {soles(estadoCaja.monto_apertura ?? 0)}</span>
+            {estadoCaja.ventas_despues_del_cierre && (
+              <span className="chip-aviso">ventas tras el cierre — corrige el conteo</span>
+            )}
+          </div>
           {/* El descuadre es LA cifra del cierre: grande y sin reconstruir signos */}
           {estadoCaja.descuadre && (
             <div className={`descuadre-grande descuadre-${estadoCaja.descuadre.tipo}`}>
               {estadoCaja.descuadre.tipo === 'exacta' ? (
                 <>
                   <span className="descuadre-etiqueta">Cuadró</span>
-                  <span className="descuadre-cifra">exacto 🎯</span>
+                  <span className="descuadre-cifra">exacto</span>
                 </>
               ) : (
                 <>
@@ -594,84 +656,110 @@ export function Caja() {
               )}
             </div>
           )}
-          <span>
-            🔒 {(estadoCaja.turno ?? 1) > 1 ? `Caja ${estadoCaja.turno} del día` : 'Caja'}{' '}
-            cerrada a las {estadoCaja.hora_cierre?.slice(0, 5)} — efectivo esperado:{' '}
-            <strong>{soles(esperadoEnCaja(estadoCaja))}</strong>{' '}
-            {(estadoCaja.egresos ?? 0) > 0 && <>· 💸 egresos −{soles(estadoCaja.egresos ?? 0)} </>}
-            · contado: <strong>{soles(estadoCaja.monto_contado ?? 0)}</strong>{' '}
-            · 💳 {soles(estadoCaja.ventas_tarjeta)} · 📱 {soles(estadoCaja.ventas_yape)}
-            {estadoCaja.ventas_despues_del_cierre && (
-              <strong> · ⚠ hubo ventas o cambios después del cierre: corrige el conteo</strong>
+          <div className="caja-cifras-grid">
+            <div className="caja-cifra">
+              <span className="cifra-etiqueta">Esperado</span>
+              <span className="cifra-chica">{soles(esperadoEnCaja(estadoCaja))}</span>
+            </div>
+            <div className="caja-cifra">
+              <span className="cifra-etiqueta">Contado</span>
+              <span className="cifra-chica">{soles(estadoCaja.monto_contado ?? 0)}</span>
+            </div>
+            <div className="caja-cifra">
+              <span className="cifra-etiqueta">Egresos</span>
+              <span className="cifra-chica cifra-egreso">−{soles(estadoCaja.egresos ?? 0)}</span>
+            </div>
+            <div className="caja-cifra">
+              <span className="cifra-etiqueta">Tarjeta</span>
+              <span className="cifra-chica">{soles(estadoCaja.ventas_tarjeta)}</span>
+            </div>
+            <div className="caja-cifra">
+              <span className="cifra-etiqueta">Yape</span>
+              <span className="cifra-chica">{soles(estadoCaja.ventas_yape)}</span>
+            </div>
+          </div>
+          <div className="caja-panel-acciones">
+            {!cerrandoCaja && !abriendoNueva && (
+              <>
+                <button className="boton boton--md boton--culantro" onClick={() => setCerrandoCaja(true)}>
+                  <IconoLapiz tam={20} /> Corregir conteo
+                </button>
+                <button className="boton boton--md boton--papel" onClick={reabrirCaja}
+                        title="Se cerró por error: deshace el cierre y el día sigue normal">
+                  <IconoCandadoAbierto tam={20} /> Reabrir caja
+                </button>
+                <button className="boton boton--md boton--papel" onClick={() => setAbriendoNueva(true)}
+                        title="Empieza otra caja hoy mismo: la cerrada queda cuadrada tal cual">
+                  Abrir caja nueva
+                </button>
+              </>
             )}
-          </span>
-          {!cerrandoCaja && !abriendoNueva && (
-            <button className="boton-cerrar-caja" onClick={reabrirCaja}
-                    title="Se cerró por error: deshace el cierre y el día sigue normal">
-              🔓 Reabrir caja
-            </button>
-          )}
-          {!cerrandoCaja && !abriendoNueva && (
-            <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(true)}>
-              Corregir conteo
-            </button>
-          )}
-          {!cerrandoCaja && !abriendoNueva && (
-            <button className="boton-cerrar-caja" onClick={() => setAbriendoNueva(true)}
-                    title="Empieza otra caja hoy mismo: la cerrada queda cuadrada tal cual">
-              🆕 Abrir caja nueva
-            </button>
-          )}
-          {cerrandoCaja && (
-            <span className="caja-cierre-form">
-              <label>
-                Efectivo contado
-                <input
-                  type="number" step="0.10" min="0" autoFocus
-                  value={montoCaja} onChange={(e) => setMontoCaja(e.target.value)}
-                />
-              </label>
-              <button className="boton-grande boton-confirmar" onClick={cerrarCaja}>Guardar corrección</button>
-              <button className="boton-cerrar-caja" onClick={() => setCerrandoCaja(false)}>Cancelar</button>
-            </span>
-          )}
-          {abriendoNueva && (
-            <span className="caja-cierre-form">
-              <label>
-                Fondo inicial de la caja nueva
-                <input
-                  type="number" step="0.50" min="0" autoFocus placeholder="50.00"
-                  value={montoCaja} onChange={(e) => setMontoCaja(e.target.value)}
-                />
-              </label>
-              <button className="boton-grande boton-confirmar" onClick={abrirCaja}>🔓 Abrir caja nueva</button>
-              <button className="boton-cerrar-caja" onClick={() => setAbriendoNueva(false)}>Cancelar</button>
-            </span>
-          )}
+            {cerrandoCaja && (
+              <span className="caja-cierre-form">
+                <label>
+                  Efectivo contado
+                  <input
+                    type="number" step="0.10" min="0" autoFocus
+                    value={montoCaja} onChange={(e) => setMontoCaja(e.target.value)}
+                  />
+                </label>
+                <button className="boton-grande boton-confirmar" onClick={cerrarCaja}>Guardar corrección</button>
+                <button className="boton boton--md boton--papel" onClick={() => setCerrandoCaja(false)}>Cancelar</button>
+              </span>
+            )}
+            {abriendoNueva && (
+              <span className="caja-cierre-form">
+                <label>
+                  Fondo inicial de la caja nueva
+                  <input
+                    type="number" step="0.50" min="0" autoFocus placeholder="50.00"
+                    value={montoCaja} onChange={(e) => setMontoCaja(e.target.value)}
+                  />
+                </label>
+                <button className="boton-grande boton-confirmar" onClick={abrirCaja}>
+                  <IconoCandadoAbierto tam={20} /> Abrir caja nueva
+                </button>
+                <button className="boton boton--md boton--papel" onClick={() => setAbriendoNueva(false)}>Cancelar</button>
+              </span>
+            )}
+          </div>
         </div>
       )}
 
       {estadoCaja && (estadoCaja.abierta || (estadoCaja.cerrada && egresos.length > 0)) && (
         <div className="caja-panel caja-egresos">
-          <span>
-            💸 Egresos del turno{egresos.length > 0 && <>: <strong>−{soles(totalEgresos)}</strong></>}
-            {egresos.length === 0 && ' (salió plata del cajón: gas, verduras…)'}
-          </span>
+          <div className="caja-egresos-cabecera">
+            <span className="caja-panel-estado caja-panel-estado-neutro">
+              <IconoEgreso tam={16} /> Egresos del turno
+            </span>
+            {egresos.length > 0 ? (
+              <span className="fila-egreso-monto">−{soles(totalEgresos)}</span>
+            ) : (
+              <span className="caja-panel-dato">salió plata del cajón: gas, verduras…</span>
+            )}
+            {estadoCaja.abierta && !agregandoEgreso && (
+              <button className="boton boton--md boton--papel" onClick={() => setAgregandoEgreso(true)}>
+                + Registrar egreso
+              </button>
+            )}
+          </div>
+          {/* Filas, no chips: los egresos se auditan de un barrido al cierre */}
           {egresos.map((e) => (
-            <span className="chip-egreso" key={e.id}>
-              {e.hora.slice(0, 5)} {e.concepto} <strong>−{soles(e.monto)}</strong>
+            <div className="fila-egreso" key={e.id}>
+              <span className="fila-egreso-hora">{e.hora.slice(0, 5)}</span>
+              <span className="fila-egreso-concepto">{e.concepto}</span>
+              <span className="fila-egreso-monto">−{soles(e.monto)}</span>
               {estadoCaja.abierta && (
-                <button className="chip-egreso-x" onClick={() => borrarEgreso(e)} title="Borrar egreso">
-                  ✕
+                <button
+                  className="boton boton--peligro boton-aspa"
+                  onClick={() => borrarEgreso(e)}
+                  title="Borrar egreso" aria-label={`Borrar egreso ${e.concepto}`}
+                >
+                  <IconoAspa tam={20} />
                 </button>
               )}
-            </span>
+            </div>
           ))}
-          {estadoCaja.abierta && !agregandoEgreso && (
-            <button className="boton-cerrar-caja" onClick={() => setAgregandoEgreso(true)}>
-              + Registrar egreso
-            </button>
-          )}
           {agregandoEgreso && (
             <span className="caja-cierre-form">
               <label>
@@ -689,7 +777,7 @@ export function Caja() {
                 />
               </label>
               <button className="boton-grande boton-confirmar" onClick={registrarEgreso}>Guardar</button>
-              <button className="boton-cerrar-caja" onClick={() => setAgregandoEgreso(false)}>Cancelar</button>
+              <button className="boton boton--md boton--papel" onClick={() => setAgregandoEgreso(false)}>Cancelar</button>
             </span>
           )}
         </div>
@@ -711,7 +799,7 @@ export function Caja() {
               onClick={() => (m.ocupada ? liberarMesa(m) : undefined)}
               title={m.ocupada ? `Ocupada por #${m.ordenes.join(', #')} — toca para liberar` : 'Libre'}
             >
-              🪑 {m.nombre}
+              <IconoSilla tam={18} /> {m.nombre}
               {m.ocupada && <span className="chip-mesa-tickets"> #{m.ordenes.join(' #')}</span>}
             </button>
           ))}
@@ -855,7 +943,7 @@ export function Caja() {
           <h2>Pedidos de hoy ({ordenes.length})</h2>
           <div className="caja-lista">
             {ordenesRecientes.map((o) => (
-              <div key={o.id} className={`caja-orden ${o.estado === 'anulada' ? 'caja-orden-anulada' : ''}`}>
+              <div key={o.id} className={`caja-orden estado-${o.estado} ${o.estado === 'anulada' ? 'caja-orden-anulada' : ''}`}>
                 <div className="caja-orden-info">
                   <span className="caja-orden-numero">#{String(o.numero_orden_dia).padStart(3, '0')}</span>
                   <span className={`etiqueta-estado etiqueta-${o.estado}`}>{o.estado}</span>
@@ -929,19 +1017,19 @@ export function Caja() {
                   {SIGUIENTE_ESTADO[o.estado] && (
                     <button onClick={() => avanzar(o)}>▶ {SIGUIENTE_ESTADO[o.estado]}</button>
                   )}
-                  <button onClick={() => reimprimir(o)}>🖨️ Ticket</button>
+                  <button onClick={() => reimprimir(o)}><IconoImpresora tam={18} /> Ticket</button>
                   {o.estado !== 'anulada' && (
                     <button onClick={() => setAsignandoMesa(asignandoMesa === o.id ? null : o.id)}>
-                      🪑 Mesa
+                      <IconoSilla tam={18} /> Mesa
                     </button>
                   )}
                   {o.estado !== 'anulada' && o.mesas.length > 0 && !o.mesa_liberada && (
                     <button onClick={() => seFue(o)} title="Libera solo la mesa de este ticket">
-                      🪑✔ Se fue
+                      <IconoSilla tam={18} /> Se fue
                     </button>
                   )}
                   {o.estado !== 'anulada' && o.estado !== 'entregado' && (
-                    <button className="boton-anular" onClick={() => anular(o)}>✖ Anular</button>
+                    <button className="boton-anular" onClick={() => anular(o)}><IconoAspa tam={18} /> Anular</button>
                   )}
                 </div>
                 {asignandoMesa === o.id && mesas.filter((m) => m.activa).length === 0 && (

@@ -176,6 +176,22 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       catálogo se muestra por si acaso) — y la letra de los platos va al doble (3.1rem)
       con tarjetas más anchas para que quepan los nombres largos. El ticket y la caja
       siguen mostrando todo.
+- [x] **Auditoría visual aplicada** (handoff de Claude Design, 12 hallazgos sobre /caja y
+      /admin, 5 transversales): token `--tinta-suave` ahora cumple AA (#6f6559; el viejo
+      quedó como `--tinta-decorativa`), cifras de dinero en sans con `lining-nums
+      tabular-nums` en TODAS las pantallas (terminal, caja, cocina, admin), piso táctil
+      `--toque-min: 48px` / `--toque: 56px`, panel de caja como tablero (esperado en
+      efectivo a 40px manda; egresos/tarjeta/Yape en grid; "sin registrar" como chip),
+      banda izquierda de la fila de pedido coloreada por estado como en cocina, avisos en
+      franja de alto reservado fuera del header + cintillo persistente de "sin conexión",
+      egresos como filas auditables con ✕ de 48px, tiles del resumen con jerarquía (el
+      total manda a 52px), tabs del admin en una línea con scroll, barras del resumen
+      fluidas con línea de base y "pico 13h · N órdenes" (achiote solo sobre el promedio),
+      tablas editables con inputs de 52px y precio a la derecha, 8 iconos SVG nuevos
+      reemplazan emoji (candados, egreso, tarjeta, móvil, impresora, lápiz, aspa) y los
+      mensajes de estado van sin emoji. Pendiente por decisión de producto: agrupar
+      acciones secundarias tras un "⋯" (hallazgos 01/02/07) y migrar todos los botones a
+      la clase base `.boton`. Reglas nuevas documentadas en `docs/NOTA-DE-DISENO.md`.
 - [x] **Caja con "+ UN MENÚ" y cierre con resumen en pantalla**: la caja usa la misma
       tarjeta de oferta que la terminal (lista de platos por tiempo sin precios, un toque
       agrega el menú completo, contador al costado; adiós al modal "ARMAR MENÚ", ahora
