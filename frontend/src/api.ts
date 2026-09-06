@@ -539,9 +539,15 @@ export const api = {
       body: JSON.stringify({ tipo, cantidad, costo_total: costoTotal, nota }),
     }, true),
 
-  kardex: (insumoId?: number) =>
-    request<{ movimientos: MovimientoKardex[] }>(
-      `/api/insumos/kardex${insumoId ? `?insumo_id=${insumoId}` : ''}`, {}, true),
+  kardex: (opts?: { desde?: string; hasta?: string; insumoId?: number }) => {
+    const params = new URLSearchParams()
+    if (opts?.desde) params.set('desde', opts.desde)
+    if (opts?.hasta) params.set('hasta', opts.hasta)
+    if (opts?.insumoId) params.set('insumo_id', String(opts.insumoId))
+    const q = params.toString()
+    return request<{ movimientos: MovimientoKardex[] }>(
+      `/api/insumos/kardex${q ? `?${q}` : ''}`, {}, true)
+  },
 
   receta: (platoId: number) => request<RecetaDetalle>(`/api/insumos/recetas/${platoId}`, {}, true),
 
