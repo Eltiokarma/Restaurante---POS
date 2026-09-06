@@ -247,6 +247,21 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       refresco manual, vacío redactado según la fecha, y reimprimir con texto + aria-label
       + confirmación que dice adónde va (estación o esta pantalla) y que NO imprime si la
       configuración del local no llega (antes salía un ticket sin nombre ni RUC).
+- [x] **Guía de progreso en la pantalla del cliente** (handoff 4 de Claude Design; se
+      implementó su recomendación 4c + 4b): cada menú del pedido "se llena" — cabecera con
+      "N de M elegidos" + barra, filete ámbar→verde al completarse, y los tiempos sin
+      elegir son casilleros punteados que respiran ("Toca para elegir segundo →", con
+      `prefers-reduced-motion` respetado). La barra fija de abajo nombra en palabras la
+      única cosa pendiente ("Falta elegir segundo del Menú 2 · y 1 más") con "IR AHÍ ↓"
+      que hace scroll, abre la tarjeta con las opciones listas y la hace latir; en verde
+      "Todo elegido" al llegar a cero. CONFIRMAR con pendientes LLEVA al hueco en vez de
+      dejar que el backend responda 422 — la validación del frontend es espejo exacto de
+      la del backend (obligatorio + >1 alternativa + no quitado + sin elección; mesa,
+      empaque y entrega NO cuentan como pendientes por decisión del handoff). Cambio de
+      flujo que esto habilita: en la TERMINAL "+ UN MENÚ" ya no pre-elige los tiempos con
+      varias alternativas (el cliente arma SU menú guiado; antes se llevaba el default en
+      silencio); en CAJA se mantiene el pre-elegido de un toque por velocidad, con los
+      casilleros como aviso y un guard en REGISTRAR con el mismo lenguaje del 422.
 - [x] **Tandas de cocina: el pre-orquestador** (sesión 3; decisiones del dueño aplicadas —
       la tanda cierra con lo que se llene primero, capacidad opcional, el gating solo
       avisa): `services/tandas.py` parte las órdenes activas en tandas de ÓRDENES

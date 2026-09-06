@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { precioUnitarioMenu, soles, subtotalMenu, EMPAQUES, NOMBRE_EMPAQUE } from '../api'
+import { useEffect, useState } from 'react'
+import { precioUnitarioMenu, soles, subtotalMenu, tiemposElegibles, tiemposPendientes, EMPAQUES, NOMBRE_EMPAQUE } from '../api'
 import type { AgregadoHoy, Empaque, MenuCarrito } from '../api'
 import { describirMenu } from './describirMenu'
 
@@ -18,6 +18,9 @@ interface Props {
   // Reglas del local: qué empaques se ofrecen y cuánto cuesta el táper
   empaquesOfrecidos?: Empaque[]
   precioTaper?: number
+  // Guía de progreso (4b): cuando cambia, la tarjeta se abre y late —
+  // la barra de abajo la "persigue" hasta el hueco pendiente
+  abrirTic?: number
 }
 
 /** Chip con stepper −/+: lo usan las porciones extra y los agregados */
@@ -60,11 +63,26 @@ function ChipStepper({ etiqueta, precio, cantidad, onCambiar }: {
 export function TarjetaMenuCarrito({
   linea, numero, onCambiarEleccion, onAlternarOmitido, onCambiarAgregado, onCambiarExtra,
   onCambiarCantidad, onDuplicar, onCambiarEmpaque, onCambiarEmpaqueTiempo, onCambiarNota,
-  empaquesOfrecidos = EMPAQUES, precioTaper = 0,
+  empaquesOfrecidos = EMPAQUES, precioTaper = 0, abrirTic = 0,
 }: Props) {
   const [abierta, setAbierta] = useState(false)
   const [cambiando, setCambiando] = useState<number | null>(null) // tiempo con las opciones abiertas
   const [empacando, setEmpacando] = useState<number | null>(null) // tiempo eligiendo su empaque
+
+  // "IR AHÍ" desde la barra: la tarjeta se abre con las opciones del
+  // primer hueco listas para tocar
+  useEffect(() => {
+    if (abrirTic === 0) return
+    setAbierta(true)
+    const pendiente = tiemposPendientes(linea)[0]
+    if (pendiente) setCambiando(pendiente.orden)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abrirTic])
+
+  // El menú "se llena": progreso de elecciones para la cabecera (4c)
+  const elegibles = tiemposElegibles(linea)
+  const pendientes = tiemposPendientes(linea).length
+  const completo = pendientes === 0
 
   const cantidadExtra = (tiempoOrden: number, platoId: number) =>
     linea.extras.find((e) => e.tiempo_orden === tiempoOrden && e.plato_id === platoId)?.cantidad ?? 0
@@ -75,7 +93,7 @@ export function TarjetaMenuCarrito({
   const descuento = quitados.reduce((s, t) => s + t.descuento_si_se_quita, 0)
 
   return (
-    <div className={`tarjeta-menu ${abierta ? 'tarjeta-menu-abierta' : ''}`}>
+    <div className={`tarjeta-menu ${abierta ? 'tarjeta-menu-abierta' : ''} ${completo ? 'menu-completo' : 'menu-incompleto'}`}>
       <button className="tarjeta-menu-cabecera" onClick={() => setAbierta((v) => !v)}>
         <span className="tarjeta-menu-nombre">
           <strong>Menú {numero}</strong>
@@ -85,6 +103,18 @@ export function TarjetaMenuCarrito({
         <span className="tarjeta-menu-precio">{soles(subtotalMenu(linea))}</span>
         <span className="tarjeta-menu-flecha">{abierta ? '▲' : '▼'}</span>
       </button>
+      {elegibles > 0 && (
+        <div className={`menu-progreso ${completo ? 'menu-progreso-listo' : ''}`}>
+          <span>
+            {completo
+              ? '✓ Listo para confirmar'
+              : `${elegibles - pendientes} de ${elegibles} elegido${elegibles === 1 ? '' : 's'}`}
+          </span>
+          <span className="menu-progreso-barra" aria-hidden="true">
+            <i style={{ width: `${elegibles > 0 ? ((elegibles - pendientes) / elegibles) * 100 : 100}%` }} />
+          </span>
+        </div>
+      )}
       {!abierta && <div className="linea-menu-detalle">{describirMenu(linea)}</div>}
 
       {abierta && (
@@ -96,13 +126,24 @@ export function TarjetaMenuCarrito({
               <div key={t.orden} className={`menu-tiempo-fila ${quitado ? 'tiempo-quitado' : ''}`}>
                 <div className="menu-tiempo-info">
                   <span className="tiempo-rotulo">{t.rotulo}</span>
-                  <span className="tiempo-eleccion">
-                    {quitado
-                      ? `Sin ${t.rotulo.toLowerCase()}${t.descuento_si_se_quita > 0 ? ` (−${soles(t.descuento_si_se_quita)})` : ''}`
-                      : elegida
-                        ? `${elegida.nombre}${elegida.recargo > 0 ? ` (+${soles(elegida.recargo)})` : ''}`
-                        : '—'}
-                  </span>
+                  {quitado || elegida || t.alternativas.length <= 1 ? (
+                    <span className="tiempo-eleccion">
+                      {quitado
+                        ? `Sin ${t.rotulo.toLowerCase()}${t.descuento_si_se_quita > 0 ? ` (−${soles(t.descuento_si_se_quita)})` : ''}`
+                        : elegida
+                          ? `${elegida.nombre}${elegida.recargo > 0 ? ` (+${soles(elegida.recargo)})` : ''}`
+                          : t.alternativas[0]
+                            ? t.alternativas[0].nombre
+                            : '—'}
+                    </span>
+                  ) : (
+                    <button
+                      className="casillero-vacio"
+                      onClick={() => { setEmpacando(null); setCambiando((c) => (c === t.orden ? null : t.orden)) }}
+                    >
+                      Toca para elegir {t.rotulo.toLowerCase()} →
+                    </button>
+                  )}
                 </div>
                 <div className="menu-tiempo-acciones">
                   {!quitado && t.alternativas.length > 1 && (

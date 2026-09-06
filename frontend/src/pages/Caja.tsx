@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, esperadoEnCaja, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, unidadesEnTaper } from '../api'
+import { api, esperadoEnCaja, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, tiemposPendientes, unidadesEnTaper } from '../api'
 import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, TicketBebidaOut } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
@@ -410,6 +410,15 @@ export function Caja() {
   const registrandoRef = useRef(false)
   const registrar = async () => {
     if (registrandoRef.current || carrito.totalItems === 0) return
+    // Guard espejo del backend: un menú con casillero vacío no se registra
+    // (mismo lenguaje que el 422, pero antes de intentarlo)
+    for (const [idx, m] of carrito.menus.entries()) {
+      const pendiente = tiemposPendientes(m)[0]
+      if (pendiente) {
+        setError(`Falta elegir ${pendiente.rotulo.toLowerCase()} del Menú ${idx + 1}`)
+        return
+      }
+    }
     registrandoRef.current = true
     setRegistrando(true)
     setError('')
