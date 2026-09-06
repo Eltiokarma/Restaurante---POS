@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE } from '../api'
-import { IconoEngranaje } from '../components/Iconos'
+import { IconoBillete, IconoEgreso, IconoEngranaje, IconoMovil, IconoTarjeta } from '../components/Iconos'
 import type { CajaEstado, ConfigOut, DatosLocal, Empaque, Insumo, MenuGuardadoOut, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
@@ -32,7 +32,7 @@ export function Admin() {
         <nav className="admin-tabs">
           <button className={tab === 'resumen' ? 'activa' : ''} onClick={() => setTab('resumen')}>Resumen</button>
           <button className={tab === 'menu' ? 'activa' : ''} onClick={() => setTab('menu')}>Menú del día</button>
-          <button className={tab === 'ordenes' ? 'activa' : ''} onClick={() => setTab('ordenes')}>Órdenes de hoy</button>
+          <button className={tab === 'ordenes' ? 'activa' : ''} onClick={() => setTab('ordenes')}>Órdenes</button>
           <button className={tab === 'insumos' ? 'activa' : ''} onClick={() => setTab('insumos')}>Insumos</button>
           <button className={tab === 'cancelaciones' ? 'activa' : ''} onClick={() => setTab('cancelaciones')}>Cancelaciones</button>
           <button className={tab === 'voz' ? 'activa' : ''} onClick={() => setTab('voz')}>Voz</button>
@@ -164,6 +164,21 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
   const maxCantidad = Math.max(1, ...stats.ventas_por_plato.map((v) => v.cantidad))
   const maxHora = Math.max(1, ...stats.ordenes_por_hora.map((h) => h.cantidad))
   const maxDia = Math.max(1, ...stats.ventas_por_dia.map((d) => d.total))
+  // El color marca lo que está por ENCIMA del promedio; el pico va rotulado
+  const promedioHora =
+    stats.ordenes_por_hora.reduce((s, h) => s + h.cantidad, 0) /
+    Math.max(1, stats.ordenes_por_hora.length)
+  const promedioDia =
+    stats.ventas_por_dia.reduce((s, d) => s + d.total, 0) /
+    Math.max(1, stats.ventas_por_dia.length)
+  const horaPico = stats.ordenes_por_hora.reduce(
+    (a, h) => (h.cantidad > a.cantidad ? h : a),
+    stats.ordenes_por_hora[0] ?? { hora: 0, cantidad: 0 },
+  )
+  const mejorDia = stats.ventas_por_dia.reduce(
+    (a, d) => (d.total > a.total ? d : a),
+    stats.ventas_por_dia[0] ?? { fecha: '', total: 0, ordenes: 0 },
+  )
 
   const descargar = () => {
     const { desde, hasta } = rangoDe(periodo)
@@ -237,18 +252,27 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
       {periodo !== 'hoy' && stats.ventas_por_dia.length > 0 && (
         <>
           <h3 className="subtitulo-resumen">Ventas por día</h3>
-          <div className="barras-horas">
-            {stats.ventas_por_dia.map((d) => (
-              <div
-                className="barra-hora barra-dia"
-                key={d.fecha}
-                title={`${d.fecha}: ${d.ordenes} órdenes — ${soles(d.total)}`}
-              >
-                <span className="barra-hora-valor">{soles(d.total)}</span>
-                <div className="barra-hora-relleno" style={{ height: `${(d.total / maxDia) * 100}%` }} />
-                <span className="barra-hora-etiqueta">{d.fecha.slice(5)}</span>
-              </div>
-            ))}
+          <div className="barras-horas barras-fluidas">
+            <p className="pico-grafico">
+              mejor día {mejorDia.fecha.slice(5)} · {soles(mejorDia.total)}
+            </p>
+            <div className="fila-barras">
+              {stats.ventas_por_dia.map((d) => (
+                <div
+                  className={`barra-hora barra-dia ${d.total > promedioDia ? 'sobre-promedio' : ''}`}
+                  key={d.fecha}
+                  title={`${d.fecha}: ${d.ordenes} órdenes — ${soles(d.total)}`}
+                >
+                  <span className="barra-hora-valor">{soles(d.total)}</span>
+                  <div className="barra-hora-relleno" style={{ height: `${(d.total / maxDia) * 100}%` }} />
+                </div>
+              ))}
+            </div>
+            <div className="fila-etiquetas">
+              {stats.ventas_por_dia.map((d) => (
+                <span className="barra-hora-etiqueta" key={d.fecha}>{d.fecha.slice(5)}</span>
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -258,14 +282,26 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
       {stats.ordenes_por_hora.length > 0 && (
         <>
           <h3 className="subtitulo-resumen">Órdenes por hora{periodo !== 'hoy' ? ' (acumulado del período)' : ''}</h3>
-          <div className="barras-horas">
-            {stats.ordenes_por_hora.map((h) => (
-              <div className="barra-hora" key={h.hora} title={`${h.cantidad} órdenes entre ${h.hora}:00 y ${h.hora}:59`}>
-                <span className="barra-hora-valor">{h.cantidad}</span>
-                <div className="barra-hora-relleno" style={{ height: `${(h.cantidad / maxHora) * 100}%` }} />
-                <span className="barra-hora-etiqueta">{h.hora}:00</span>
-              </div>
-            ))}
+          <div className="barras-horas barras-fluidas">
+            <p className="pico-grafico">
+              pico {horaPico.hora}:00 · {horaPico.cantidad} {horaPico.cantidad === 1 ? 'orden' : 'órdenes'}
+            </p>
+            <div className="fila-barras">
+              {stats.ordenes_por_hora.map((h) => (
+                <div
+                  className={`barra-hora ${h.cantidad > promedioHora ? 'sobre-promedio' : ''}`}
+                  key={h.hora} title={`${h.cantidad} órdenes entre ${h.hora}:00 y ${h.hora}:59`}
+                >
+                  <span className="barra-hora-valor">{h.cantidad}</span>
+                  <div className="barra-hora-relleno" style={{ height: `${(h.cantidad / maxHora) * 100}%` }} />
+                </div>
+              ))}
+            </div>
+            <div className="fila-etiquetas">
+              {stats.ordenes_por_hora.map((h) => (
+                <span className="barra-hora-etiqueta" key={h.hora}>{h.hora}</span>
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -295,10 +331,10 @@ function HistorialCierres({ onSesionVencida }: { onSesionVencida: () => void }) 
           <tr>
             <th>Fecha</th>
             <th className="col-cantidad">Fondo</th>
-            <th className="col-cantidad">💵 Efectivo</th>
-            <th className="col-cantidad">💳 Tarjeta</th>
-            <th className="col-cantidad">📱 Yape</th>
-            <th className="col-cantidad">💸 Egresos</th>
+            <th className="col-cantidad"><IconoBillete tam={15} /> Efectivo</th>
+            <th className="col-cantidad"><IconoTarjeta tam={15} /> Tarjeta</th>
+            <th className="col-cantidad"><IconoMovil tam={15} /> Yape</th>
+            <th className="col-cantidad"><IconoEgreso tam={15} /> Egresos</th>
             <th className="col-cantidad">Contado</th>
             <th className="col-total">Diferencia</th>
           </tr>
@@ -556,7 +592,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
         onSesionVencida={onSesionVencida}
         onCargado={(msg) => { cargar(); setMensaje(msg) }}
       />
-      <div className="tabla-desplazable"><table className="tabla-admin">
+      <div className="tabla-desplazable"><table className="tabla-admin tabla-editable">
         <thead>
           <tr>
             <th>Plato</th>
@@ -589,7 +625,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
                   ))}
                 </select>
               </td>
-              <td>
+              <td className="col-precio">
                 <input
                   type="number"
                   step="0.50"
@@ -1543,7 +1579,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
             </div>
           )}
           {insumos.length > 0 && (
-            <div className="tabla-desplazable"><table className="tabla-admin tabla-despensa">
+            <div className="tabla-desplazable"><table className="tabla-admin tabla-despensa tabla-editable">
               <thead>
                 <tr>
                   <th>Insumo</th>

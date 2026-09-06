@@ -25,7 +25,15 @@
   --papel-alto: #fffdf8;
   --tinta: #221a14;
   --tinta-media: #6c6155;
-  --tinta-suave: #8d8375;
+  /* Auditoría visual: el valor viejo (#8d8375) daba 3.7:1 sobre papel
+     alto y fallaba AA en texto chico; #6f6559 da ≈5.6:1 con el mismo
+     gesto. El viejo queda como decorativo (bordes, iconos no informativos). */
+  --tinta-suave: #6f6559;
+  --tinta-decorativa: #8d8375;
+
+  /* Métrica táctil (auditoría visual · hallazgo 04) */
+  --toque-min: 48px; /* piso absoluto: iconos, controles dentro de tabla */
+  --toque: 56px; /* botones de fila en /caja y /admin */
   --linea: #e0d5c0;
   --linea-fuerte: #cdbfa4;
 
@@ -1201,13 +1209,6 @@ select:focus-visible {
 .caja-total-dia strong {
   font-size: 1.35rem;
   color: var(--tinta);
-}
-
-.caja-banner {
-  margin: 0;
-  padding: 8px 14px;
-  font-size: 0.95rem;
-  border-left-width: 6px;
 }
 
 /* Panel de apertura/cierre de caja */
@@ -3550,6 +3551,458 @@ select:focus-visible {
 
 /* ---------- Impresión: solo se imprime el ticket ---------- */
 
+/* ============================================================
+   Auditoría visual (handoff de diseño, 2026-09-06)
+   Hallazgos 02, 04, 05, 07, 08, 09, 12 + panel de caja como tablero,
+   franja de avisos y filas de egreso. Nada aquí toca @media print.
+   ============================================================ */
+
+/* ---- 09 · Cifras de caja donde la cifra ES el contenido ---- */
+.total-grande,
+.numero-orden-gigante,
+.countdown-numero,
+.tile-valor,
+.caja-orden-numero,
+.combo-precio,
+.descuadre-cifra,
+.contador-menus-cifra {
+  font-family: var(--fuente-ui);
+  font-weight: 800;
+}
+
+.total-grande,
+.numero-orden-gigante,
+.countdown-numero,
+.tile-valor,
+.caja-orden-numero,
+.caja-orden-total,
+.caja-total-dia,
+.tarjeta-plato-precio,
+.tarjeta-plato-cantidad,
+.barra-carrito-resumen,
+.resumen-breve-total,
+.linea-resumen-precios,
+.tarjeta-orden-numero,
+.tarjeta-orden-timer,
+.cocina-resumen-item strong,
+.caja-orden-hora,
+.caja-panel input,
+.tabla-admin,
+.barra-hora-valor,
+.barra-hora-etiqueta,
+.voz-item-precio,
+.voz-total,
+.chip-mesa-tickets,
+.descuadre-cifra,
+.contador-menus-cifra,
+.combo-precio,
+.total-dia {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+/* .ticket-* usa --fuente-mono y no se toca. */
+
+/* ---- 02 · La banda de la fila de caja dice el estado (como cocina) ---- */
+.caja-orden {
+  border-left-width: 10px;
+}
+.caja-orden.estado-pendiente  { border-left-color: var(--st-pendiente); }
+.caja-orden.estado-preparando { border-left-color: var(--st-preparando); }
+.caja-orden.estado-listo      { border-left-color: var(--st-listo); }
+.caja-orden.estado-entregado  { border-left-color: var(--st-entregado); }
+.caja-orden.estado-anulada    { border-left-color: var(--st-anulada); }
+
+.caja-orden-numero { font-size: 26px; line-height: 1; }
+.caja-orden-total { font-size: 28px; font-weight: 800; line-height: 1; }
+.caja-orden-hora { color: var(--tinta-media); font-size: 15px; }
+
+/* ---- 04 · Piso táctil de /caja ---- */
+.boton-cobro {
+  min-height: var(--toque);
+  font-size: 16px;
+  padding: 0 18px;
+}
+
+.caja-orden-botones button,
+.boton-cerrar-caja {
+  min-height: var(--toque);
+  font-size: 16px;
+}
+
+/* ---- 12 · Botón base con modificadores (nuevos usos; las recetas
+   viejas se retiran a medida que se migran) ---- */
+.boton {
+  font-family: inherit;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--r-chico);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.boton--sm { min-height: var(--toque-min); padding: 0 16px; font-size: 15px; }
+.boton--md { min-height: var(--toque); padding: 0 18px; font-size: 16px; }
+
+.boton--papel {
+  background: var(--papel-alto);
+  color: var(--tinta);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+}
+
+.boton--culantro {
+  background: var(--culantro);
+  color: #fff;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.2);
+}
+
+.boton--peligro {
+  background: var(--achiote-tenue);
+  color: var(--achiote-hondo);
+  box-shadow: inset 0 0 0 1.5px var(--achiote);
+}
+
+.boton:disabled {
+  background: #d9cfc0;
+  color: #837868;
+  box-shadow: none;
+  cursor: default;
+}
+
+/* ---- 01 · Panel de caja como tablero de cifras ---- */
+.caja-panel-tablero {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 16px 20px;
+}
+
+.caja-panel-contexto {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.caja-panel-estado {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--culantro-hondo);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.caja-panel-estado-neutro {
+  color: var(--tinta-media);
+}
+
+.caja-panel-dato {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tinta-media);
+}
+
+/* "N sin registrar" deja de ser una cursiva al final de la frase */
+.chip-aviso {
+  margin-left: auto;
+  background: var(--aji-tenue);
+  box-shadow: inset 0 0 0 1.5px var(--aji);
+  color: var(--aji-hondo);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.caja-cifra-principal {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 3px double var(--linea-fuerte);
+  padding-bottom: 12px;
+}
+
+.cifra-etiqueta {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tinta-media);
+}
+
+.cifra-valor {
+  font-family: var(--fuente-ui);
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.05;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.caja-cifras-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 14px 16px;
+}
+
+.caja-cifra {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cifra-chica {
+  font-family: var(--fuente-ui);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.cifra-egreso {
+  color: var(--st-anulada);
+}
+
+.caja-panel-acciones {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.caja-panel-acciones .boton-cerrar-caja {
+  margin-left: 0;
+}
+
+/* ---- 03 · Avisos fuera del header, con alto reservado ---- */
+.franja-avisos {
+  min-height: 56px;
+  margin: 0 22px;
+  display: flex;
+  align-items: center;
+}
+
+.franja-avisos .banner-ok,
+.franja-avisos .banner-error {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 8px 0 0;
+}
+
+/* La conexión es un estado, no un mensaje: cintillo persistente */
+.cintillo-sin-conexion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--st-anulada);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  padding: 10px 22px;
+}
+
+.cintillo-sin-conexion::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+/* ---- 04 · El egreso pasa de chip a fila auditable ---- */
+.caja-egresos {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.caja-egresos-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fila-egreso {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--toque);
+  background: #fff;
+  border: 1px solid var(--linea);
+  border-radius: var(--r-chico);
+  padding: 4px 6px 4px 14px;
+}
+
+.fila-egreso-hora {
+  font-size: 14px;
+  color: var(--tinta-media);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.fila-egreso-concepto {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.fila-egreso-monto {
+  font-family: var(--fuente-ui);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--st-anulada);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.boton-aspa {
+  width: var(--toque-min);
+  height: var(--toque-min);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+/* ---- 05 · Tiles: un tile grande manda, etiquetas AA ---- */
+.tiles-resumen {
+  grid-template-columns: 1.6fr repeat(3, minmax(0, 1fr));
+}
+
+.tile {
+  border-top: 1.5px solid var(--linea); /* se retira el filete decorativo */
+}
+
+.tile:first-child {
+  border-color: var(--linea-fuerte);
+  padding: 20px 22px;
+}
+
+.tile-etiqueta {
+  color: var(--tinta-media);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+
+.tile-valor { font-size: 32px; }
+.tile:first-child .tile-valor { font-size: 52px; }
+.tile-detalle { color: var(--tinta-media); font-size: 14px; }
+
+/* ---- 06 · Métrica de tabla EDITABLE (la de lectura no cambia):
+   la única pantalla donde el dueño escribe precios no puede ser la de
+   objetivos más chicos del sistema ---- */
+.tabla-editable th {
+  padding: 12px 16px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--tinta-media);
+}
+
+.tabla-editable td { padding: 8px 16px; } /* fila resultante ≈ 68px */
+
+.tabla-editable input,
+.tabla-editable select {
+  height: 52px;
+  padding: 0 14px;
+  font-size: 17px;
+  min-width: 0;
+}
+
+.tabla-editable .col-precio input {
+  text-align: right;
+  font-size: 19px;
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.tabla-editable input[type='checkbox'] {
+  width: 28px;
+  height: 28px;
+}
+
+.tabla-editable .boton-quitar {
+  width: 52px;
+  height: 52px;
+  font-size: 20px;
+}
+
+/* ---- 07 · Tabs de admin en una sola línea, sin envolverse ---- */
+.admin-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  align-items: flex-end;
+  scrollbar-width: none;
+}
+
+.admin-tabs::-webkit-scrollbar { display: none; }
+
+.admin-tabs button {
+  min-height: 52px;
+  white-space: nowrap;
+  color: #4d4438;
+}
+
+.admin-tabs button.activa { font-weight: 800; }
+
+/* ---- 08 · Barras fluidas del Resumen (el kardex compacto no cambia) ---- */
+.barras-fluidas {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  overflow: visible;
+}
+
+.fila-barras {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 132px;
+  border-bottom: 2px solid var(--linea-fuerte);
+}
+
+.fila-barras .barra-hora {
+  flex: 1 1 0;
+  width: auto;
+  height: 100%;
+  flex-shrink: 1;
+}
+
+.fila-barras .barra-hora-relleno {
+  max-width: none;
+  opacity: 1;
+  border-radius: 0;
+  background: var(--linea-fuerte);
+}
+
+.fila-barras .barra-hora.sobre-promedio .barra-hora-relleno {
+  background: var(--achiote);
+}
+
+.fila-etiquetas {
+  display: flex;
+  gap: 6px;
+}
+
+.fila-etiquetas .barra-hora-etiqueta {
+  flex: 1 1 0;
+  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pico-grafico {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tinta-media);
+  margin: -8px 0 8px;
+}
+
 @media print {
   body {
     background: #fff;
@@ -3937,29 +4390,6 @@ select:focus-visible {
   margin: 10px 0;
   display: flex;
   justify-content: center;
-}
-
-/* ---------- Egresos del turno (pantalla de caja) ---------- */
-
-.chip-egreso {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #fff;
-  border: 1px solid #d8c9b0;
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 0.95rem;
-}
-
-.chip-egreso-x {
-  border: none;
-  background: none;
-  color: #b3261e;
-  font-weight: 800;
-  font-size: 1rem;
-  padding: 2px 4px;
-  cursor: pointer;
 }
 
 /* ---------- Menús guardados (Admin → Menú del día) ---------- */

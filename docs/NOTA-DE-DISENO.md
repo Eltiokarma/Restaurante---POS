@@ -63,6 +63,17 @@ zócalo. El sistema traduce eso a cinco decisiones:
   fila. Mesas: libre = contorno limpio; ocupada = relleno rayado. El mismo
   vocabulario se aplica al panel de voz del admin.
 - Contraste AA en todo texto (los rellenos de color llevan tinta oscura propia).
+  Tras la auditoría visual de 2026-09: `--tinta-suave` es `#6f6559` (≈5.6:1 sobre
+  papel alto); el valor viejo `#8d8375` vive como `--tinta-decorativa` y se usa
+  SOLO en bordes o iconos no informativos. Regla: texto por debajo de 1.1 rem
+  nunca usa el token más claro.
+- Métrica táctil (auditoría 2026-09): `--toque-min: 48px` es el piso absoluto
+  (iconos, controles dentro de tabla) y `--toque: 56px` el alto de los botones
+  de fila en /caja y /admin; la terminal del cliente sigue en 80 px. Nada por
+  debajo de 48 px.
+- Cifras de caja donde la cifra ES el contenido (totales, número de orden,
+  countdown, tiles): `--fuente-ui` con `font-variant-numeric: lining-nums
+  tabular-nums`. La serif display queda para nombres y rótulos, no para dinero.
 - Foco de teclado visible global (`:focus-visible`, anillo mayólica de 3 px).
 - Hover nunca es funcional; solo hay transiciones de `transform`/`opacity`.
 - `prefers-reduced-motion` apaga transiciones y el parpadeo de urgencia, pero la

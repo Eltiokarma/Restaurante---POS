@@ -84,3 +84,87 @@ export function IconoProhibido({ tam = 24, className }: Props) {
     </svg>
   )
 }
+
+/** 🔓 Candado abierto: abrir / reabrir la caja */
+export function IconoCandadoAbierto({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
+      <path d="M8 10.5V7a4 4 0 0 1 7.6-1.7" />
+      <path d="M12 14.5v2.5" />
+    </svg>
+  )
+}
+
+/** 🔒 Candado cerrado: cerrar la caja */
+export function IconoCandadoCerrado({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
+      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+      <path d="M12 14.5v2.5" />
+    </svg>
+  )
+}
+
+/** 💸 Egreso: plata que sale del cajón */
+export function IconoEgreso({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <rect x="2.5" y="8" width="15" height="10" rx="2" />
+      <circle cx="10" cy="13" r="2.4" />
+      <path d="M18.5 8.5l3 3m0 0l-3 3m3-3h-6" />
+    </svg>
+  )
+}
+
+/** 💳 Tarjeta de pago */
+export function IconoTarjeta({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <rect x="2.5" y="5.5" width="19" height="13" rx="2" />
+      <path d="M2.5 10h19M6 14.5h4" />
+    </svg>
+  )
+}
+
+/** 📱 Celular: Yape / billeteras móviles */
+export function IconoMovil({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <rect x="7" y="2.5" width="10" height="19" rx="2.5" />
+      <path d="M11 18.5h2" />
+    </svg>
+  )
+}
+
+/** 🖨️ Impresora: reimprimir tickets */
+export function IconoImpresora({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <path d="M7 8V3.5h10V8" />
+      <rect x="3.5" y="8" width="17" height="8.5" rx="1.5" />
+      <path d="M7 13.5h10v7H7z" />
+      <path d="M17 10.8h.01" />
+    </svg>
+  )
+}
+
+/** ✏️ Lápiz: corregir un dato */
+export function IconoLapiz({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <path d="M4 20l1-4.5L16.5 4a2.1 2.1 0 0 1 3 0l.5.5a2.1 2.1 0 0 1 0 3L8.5 19z" />
+      <path d="M14.5 6l3.5 3.5" />
+    </svg>
+  )
+}
+
+/** ✖ Aspa: anular / borrar */
+export function IconoAspa({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  )
+}
