@@ -1405,6 +1405,16 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [nuevo, setNuevo] = useState({ nombre: '', unidad: 'kg', costo: '' })
   const [mostrarNuevo, setMostrarNuevo] = useState(false)
 
+  // ---------- Historial ----------
+  const [histRango, setHistRango] = useState<'7' | '30' | 'manual'>('7')
+  const [histFechas, setHistFechas] = useState(() => ({
+    desde: fechaIso(sumarDias(new Date(), -6)),
+    hasta: fechaIso(new Date()),
+  }))
+  // Filtro "solo este insumo": se llega con el 🧾 de la despensa
+  const [histInsumo, setHistInsumo] = useState<Insumo | null>(null)
+  const [busquedaHistorial, setBusquedaHistorial] = useState('')
+
   // ---------- Recetas ----------
   const [busquedaPlato, setBusquedaPlato] = useState('')
   const [filtroReceta, setFiltroReceta] = useState<'sin' | 'con' | 'todos'>('sin')
@@ -1423,13 +1433,12 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
 
   const cargar = useCallback(async () => {
     try {
-      const [datos, kardex, cat, conReceta] = await Promise.all([
-        api.insumos(), api.kardex(), api.catalogo(), api.platosConReceta(),
+      const [datos, cat, conReceta] = await Promise.all([
+        api.insumos(), api.catalogo(), api.platosConReceta(),
       ])
       setInsumos(datos.insumos)
       setValorInventario(datos.valor_inventario)
       setPorAgotarse(datos.por_agotarse)
-      setMovimientos(kardex.movimientos)
       setCatalogo(cat.platos)
       setPlatosConReceta(new Set(conReceta.plato_ids))
       setError('')
@@ -1441,6 +1450,30 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   useEffect(() => {
     cargar()
   }, [cargar])
+
+  // El historial se trae con sus propios filtros y se refresca cada vez que
+  // se entra (así un movimiento recién guardado aparece al toque)
+  useEffect(() => {
+    if (seccion !== 'historial') return
+    const rango =
+      histRango === 'manual'
+        ? histFechas
+        : {
+            desde: fechaIso(sumarDias(new Date(), histRango === '7' ? -6 : -29)),
+            hasta: fechaIso(new Date()),
+          }
+    let vigente = true
+    api.kardex({ ...rango, insumoId: histInsumo?.id })
+      .then((r) => { if (vigente) setMovimientos(r.movimientos) })
+      .catch((e) => { if (vigente) setError(manejarError(e, onSesionVencida)) })
+    return () => { vigente = false }
+  }, [seccion, histRango, histFechas, histInsumo, onSesionVencida])
+
+  const verMovimientosDe = (insumo: Insumo) => {
+    setHistInsumo(insumo)
+    setBusquedaHistorial('')
+    setSeccion('historial')
+  }
 
   const avisar = (texto: string) => {
     setMensaje(texto)
@@ -1822,8 +1855,13 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
                       </button>
                     </div>
                     <div className="insumo-tarjeta-pie">
-                      {soles(i.costo_unitario)} el {i.unidad}
-                      {i.stock_minimo > 0 && ` · avisa bajo ${i.stock_minimo} ${i.unidad}`}
+                      <span>
+                        {soles(i.costo_unitario)} el {i.unidad}
+                        {i.stock_minimo > 0 && ` · avisa bajo ${i.stock_minimo} ${i.unidad}`}
+                      </span>
+                      <button className="enlace-historial" onClick={() => verMovimientosDe(i)}>
+                        🧾 Movimientos
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1861,6 +1899,9 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
                           <button className="boton-accion es-compra" onClick={() => abrirAccion(i, 'compra')}>🛒 Compré</button>
                           <button className="boton-accion" onClick={() => abrirAccion(i, 'ajuste')}>📋 Conté</button>
                           <button className="boton-accion" onClick={() => abrirAccion(i, 'merma')}>🗑 Se perdió</button>
+                          <button className="boton-accion" title={`Movimientos de ${i.nombre}: cuándo se compró y cuándo se descontó`}
+                                  aria-label={`Ver movimientos de ${i.nombre}`}
+                                  onClick={() => verMovimientosDe(i)}>🧾</button>
                         </td>
                       </tr>
                     ))}
@@ -2020,38 +2061,83 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
         </div>
       )}
 
-      {seccion === 'historial' && (
-        <>
-          <h3 className="subtitulo-resumen">Movimientos (últimos 7 días)</h3>
-          <div className="tabla-desplazable"><table className="tabla-admin">
-            <thead>
-              <tr><th>Fecha</th><th>Hora</th><th>Insumo</th><th>Qué pasó</th><th className="col-cantidad">Cantidad</th><th>Detalle</th></tr>
-            </thead>
-            <tbody>
-              {movimientos.map((m) => (
-                <tr key={m.id}>
-                  <td>{m.fecha}</td>
-                  <td>{m.hora}</td>
-                  <td>{m.insumo}</td>
-                  <td>
-                    {{ compra: '🛒 Compra', consumo: '🍽 Venta', merma: '🗑 Merma', ajuste: '📋 Conteo' }[m.tipo] ?? m.tipo}
-                    {m.costo_total != null ? ` (${soles(m.costo_total)})` : ''}
-                  </td>
-                  <td className={`col-cantidad ${m.cantidad < 0 ? 'stock-negativo' : ''}`}>
-                    {m.cantidad > 0 ? '+' : ''}{m.cantidad} {m.unidad}
-                  </td>
-                  <td>{m.referencia}</td>
-                </tr>
+      {seccion === 'historial' && (() => {
+        const filtro = busquedaHistorial.trim().toLowerCase()
+        const movsFiltrados = filtro
+          ? movimientos.filter((m) => m.insumo.toLowerCase().includes(filtro))
+          : movimientos
+        return (
+          <>
+            <h3 className="subtitulo-resumen">
+              Movimientos: cuándo se compró, se contó y se descontó por las ventas
+            </h3>
+            <div className="admin-acciones">
+              {([['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['manual', 'Otras fechas']] as const).map(([valor, texto]) => (
+                <button key={valor} className={histRango === valor ? 'boton-primario' : ''}
+                        onClick={() => setHistRango(valor)}>
+                  {texto}
+                </button>
               ))}
-            </tbody>
-          </table></div>
-          {movimientos.length === 0 && <p className="nota-admin">Sin movimientos en los últimos 7 días.</p>}
-          <p className="nota-admin">
-            Un stock en rojo significa que se vendió más de lo que el kardex tenía: corrígelo con
-            "Conté" en la despensa.
-          </p>
-        </>
-      )}
+              {histRango === 'manual' && (
+                <span className="rango-manual">
+                  <input type="date" value={histFechas.desde} max={histFechas.hasta}
+                         onChange={(e) => e.target.value && setHistFechas((f) => ({ ...f, desde: e.target.value }))} />
+                  <span>a</span>
+                  <input type="date" value={histFechas.hasta} min={histFechas.desde}
+                         onChange={(e) => e.target.value && setHistFechas((f) => ({ ...f, hasta: e.target.value }))} />
+                </span>
+              )}
+            </div>
+            <div className="admin-acciones despensa-filtros">
+              {histInsumo ? (
+                <button className="chip-filtro activa" onClick={() => setHistInsumo(null)}
+                        title="Quitar el filtro y ver todos los insumos">
+                  {histInsumo.nombre} ✕
+                </button>
+              ) : (
+                <input className="buscador" placeholder="🔍 Filtrar por insumo…" value={busquedaHistorial}
+                       onChange={(e) => setBusquedaHistorial(e.target.value)} />
+              )}
+            </div>
+            <div className="tabla-desplazable"><table className="tabla-admin">
+              <thead>
+                <tr><th>Fecha</th><th>Hora</th><th>Insumo</th><th>Qué pasó</th><th className="col-cantidad">Cantidad</th><th>Detalle</th></tr>
+              </thead>
+              <tbody>
+                {movsFiltrados.map((m) => (
+                  <tr key={m.id}>
+                    <td>{m.fecha}</td>
+                    <td>{m.hora}</td>
+                    <td>{m.insumo}</td>
+                    <td>
+                      {{ compra: '🛒 Compra', consumo: '🍽 Venta', merma: '🗑 Merma', ajuste: '📋 Conteo' }[m.tipo] ?? m.tipo}
+                      {m.costo_total != null ? ` (${soles(m.costo_total)})` : ''}
+                    </td>
+                    <td className={`col-cantidad ${m.cantidad < 0 ? 'stock-negativo' : ''}`}>
+                      {m.cantidad > 0 ? '+' : ''}{m.cantidad} {m.unidad}
+                    </td>
+                    <td>{m.referencia}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+            {movsFiltrados.length === 0 && (
+              <p className="nota-admin">
+                {movimientos.length > 0
+                  ? 'Ningún movimiento coincide con el filtro en estas fechas.'
+                  : histInsumo
+                    ? `${histInsumo.nombre} no tiene movimientos en estas fechas.`
+                    : 'Sin movimientos en estas fechas. Aquí aparece cada "Compré", "Conté" y "Se perdió" de la despensa, y cada venta de un plato CON receta (con su número de orden), todos con fecha y hora.'}
+              </p>
+            )}
+            <p className="nota-admin">
+              "🍽 Venta" es el descuento automático por la receta del plato vendido (el detalle
+              dice qué orden fue). Un stock en rojo significa que se vendió más de lo que el
+              kardex tenía: corrígelo con "Conté" en la despensa.
+            </p>
+          </>
+        )
+      })()}
 
       {/* Hoja por movimiento (h. 14): color y verbo propios, efecto antes
           de confirmar. En celular sube desde abajo como hoja. */}
@@ -2475,7 +2561,8 @@ function SeccionConsumo({ onSesionVencida }: { onSesionVencida: () => void }) {
           Este cálculo cubre los platos CON receta: <strong>{cobertura.con} de{' '}
           {cobertura.total}</strong> la tienen. Lo vendido de los otros{' '}
           {cobertura.total - cobertura.con} no descuenta insumos ni suma aquí — complétalos en
-          la pestaña <strong>Recetas</strong>.
+          la pestaña <strong>Recetas</strong>. Cuenta desde que guardas la receta: las ventas
+          de antes no se recalculan, lo de hoy aparece apenas vendas.
         </div>
       )}
 

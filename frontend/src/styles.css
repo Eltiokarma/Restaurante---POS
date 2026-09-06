@@ -5285,6 +5285,28 @@ select:focus-visible {
   margin: 4px 0 0;
 }
 
+/* Ver los movimientos de UN insumo desde su tarjeta (móvil) */
+.insumo-tarjeta-pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.enlace-historial {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--tinta-media);
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 /* Hoja de cambios sin guardar (22): tres opciones apiladas */
 .modal-botones-columna {
   flex-direction: column;
