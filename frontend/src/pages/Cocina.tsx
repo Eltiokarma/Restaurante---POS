@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, NOMBRE_EMPAQUE, NOMBRE_SERVICIO } from '../api'
-import type { EstadoItem, ImpresionPendiente, OrdenOut } from '../api'
+import type { EstadoItem, ImpresionPendiente, OrdenOut, Tanda } from '../api'
 import { AvisoImpresion } from '../components/AvisoImpresion'
 import { IconoProhibido, IconoReloj, IconoSarten, IconoSilla } from '../components/Iconos'
 
@@ -45,12 +45,23 @@ export function Cocina() {
   // sumando el tiempo local transcurrido desde entonces
   const [traidoEn, setTraidoEn] = useState(Date.now())
   const [, setTick] = useState(0)
+  // Tablero de tandas (pre-orquestador): el backend parte lo pendiente
+  // en grupos de órdenes completas con reglas deterministas
+  const [tandas, setTandas] = useState<Tanda[]>([])
+  const [tandasOn, setTandasOn] = useState(false)
+  // log abierto por "▶ Empezar" (clave = orden_ids de la tanda): al salir
+  // se cierra ese mismo log y queda el snapshot para la futura IA
+  const [logsAbiertos, setLogsAbiertos] = useState<Map<string, number>>(new Map())
+  const [avisosTanda, setAvisosTanda] = useState<string[]>([])
+  const [accionTanda, setAccionTanda] = useState(false)
 
   const cargar = useCallback(async () => {
     try {
-      const data = await api.ordenesHoy()
+      const [data, t] = await Promise.all([api.ordenesHoy(), api.tandas()])
       setOrdenes(data.ordenes)
       setImpresion(data.impresion_pendiente)
+      setTandas(t.tandas)
+      setTandasOn(t.habilitado)
       setTraidoEn(Date.now())
       setError(false)
     } catch {
@@ -116,6 +127,53 @@ export function Cocina() {
     }
     cargar()
   }
+
+  // ---------- Tandas: empezar / salió ----------
+
+  const claveTanda = (t: Tanda) => t.orden_ids.join(',')
+
+  const empezarTanda = async (t: Tanda) => {
+    if (accionTanda) return
+    setAccionTanda(true)
+    try {
+      const r = await api.empezarTanda(t.orden_ids)
+      setLogsAbiertos((prev) => new Map(prev).set(claveTanda(t), r.log_id))
+      setAvisosTanda(r.avisos)
+      setOrdenes((prev) => prev.map((o) => r.ordenes.find((n) => n.id === o.id) ?? o))
+      await cargar()
+    } catch {
+      cargar()
+    } finally {
+      setAccionTanda(false)
+    }
+  }
+
+  const salioTanda = async (t: Tanda) => {
+    if (accionTanda) return
+    setAccionTanda(true)
+    try {
+      const r = await api.salioTanda(t.orden_ids, logsAbiertos.get(claveTanda(t)))
+      setLogsAbiertos((prev) => {
+        const m = new Map(prev)
+        m.delete(claveTanda(t))
+        return m
+      })
+      setAvisosTanda(r.avisos)
+      setOrdenes((prev) => prev.map((o) => r.ordenes.find((n) => n.id === o.id) ?? o))
+      await cargar()
+    } catch {
+      cargar()
+    } finally {
+      setAccionTanda(false)
+    }
+  }
+
+  // Los avisos informan y se van solos (nunca bloquean a la cocina)
+  useEffect(() => {
+    if (avisosTanda.length === 0) return
+    const timer = window.setTimeout(() => setAvisosTanda([]), 10_000)
+    return () => window.clearTimeout(timer)
+  }, [avisosTanda])
 
   // Entregadas y anuladas desaparecen de la vista (quedan en BD)
   const activas = ordenes.filter((o) => o.estado !== 'entregado' && o.estado !== 'anulada')
@@ -219,6 +277,69 @@ export function Cocina() {
       </header>
 
       <AvisoImpresion estado={impresion} />
+
+      {avisosTanda.length > 0 && (
+        <div className="banner-aviso avisos-tanda">{avisosTanda.join(' ')}</div>
+      )}
+
+      {tandasOn && tandas.length > 0 && (
+        <div className="tablero-tandas">
+          {tandas.map((t) => (
+            <div key={claveTanda(t)}
+                 className={`tarjeta-tanda ${t.empezada ? 'tanda-empezada' : ''}`}>
+              <div className="tanda-cabecera">
+                <span className="tanda-titulo">TANDA {t.numero}</span>
+                {t.empezada && <span className="tanda-en-fuego">🔥 en fuego</span>}
+                <span className={`tanda-espera ${t.espera_min >= 15 ? 'tanda-urgente' : ''}`}>
+                  ⏱ {t.espera_min} min
+                </span>
+              </div>
+              <div className="tanda-tickets">
+                {t.tickets.map((tk) => (
+                  <span className="tanda-ticket" key={tk.numero}>
+                    #{tk.numero}
+                    {tk.mesas.length > 0 && ` · ${tk.mesas.join('+')}`}
+                  </span>
+                ))}
+              </div>
+              <ul className="tanda-platos">
+                {t.platos.map((p) => (
+                  <li key={p.nombre} className={p.al_momento ? 'tanda-al-momento' : ''}>
+                    <strong>{p.cantidad}×</strong> {p.nombre}
+                    <span className="tanda-estacion">{p.al_momento ? '🍳' : '🥘'}</span>
+                    {p.partes.length > 0 && (
+                      <span className="tanda-partes">
+                        {p.partes.join(' + ')} · {p.partes.length} sartenes
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {t.esperando.length > 0 && (
+                <div className="tanda-esperando">
+                  {t.esperando.map((e) => (
+                    <div key={e.numero}>⏳ #{e.numero}: {e.platos.join(', ')} espera su entrada</div>
+                  ))}
+                </div>
+              )}
+              {t.platos.length > 0 && (
+                <div className="tanda-botones">
+                  {!t.empezada && (
+                    <button className="boton-tanda" disabled={accionTanda}
+                            onClick={() => empezarTanda(t)}>
+                      ▶ EMPEZAR
+                    </button>
+                  )}
+                  <button className="boton-tanda boton-tanda-salio" disabled={accionTanda}
+                          onClick={() => salioTanda(t)}>
+                    ✔ SALIÓ LA TANDA
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {porSalir.size > 0 && (
         <div className="cocina-resumen-cola">

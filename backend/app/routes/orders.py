@@ -354,6 +354,59 @@ def _ordenes_del_dia(db: Session, fecha: date) -> dict:
     }
 
 
+@router.get("/tandas")
+def tandas_de_cocina(db: Session = Depends(get_db)):
+    """Tablero de tandas de /cocina: lo pendiente partido en grupos de
+    órdenes completas (pre-orquestador). Solo cálculo, no escribe."""
+    config = leer_config(db)
+    if not config["cocina_tandas"]:
+        return {"habilitado": False, "tandas": []}
+    from ..services.tandas import calcular_tandas
+
+    return {
+        "habilitado": True,
+        "tandas": calcular_tandas(db, config, _mapa_mesas(db)),
+    }
+
+
+class TandaAccionIn(BaseModel):
+    orden_ids: list[int] = Field(min_length=1, max_length=30)
+    # Al salir, cierra el log que abrió "empezar" (si se conoce)
+    log_id: int | None = None
+
+
+@router.post("/tandas/empezar")
+def empezar_tanda(payload: TandaAccionIn, db: Session = Depends(get_db)):
+    """Todo lo pendiente de la tanda pasa a "preparando" (los segundos
+    gateados por su entrada NO: entran en su momento). Abre el tanda_log."""
+    from ..services.tandas import avanzar_tanda
+
+    cambiadas, avisos, log_id = avanzar_tanda(db, payload.orden_ids, "preparando")
+    mapa = _mapa_mesas(db)
+    categorias = _mapa_categorias(db)
+    return {
+        "ordenes": [_orden_a_dict(o, mapa, categorias) for o in cambiadas],
+        "avisos": avisos,
+        "log_id": log_id,
+    }
+
+
+@router.post("/tandas/salio")
+def salio_tanda(payload: TandaAccionIn, db: Session = Depends(get_db)):
+    """La tanda salió: sus ítems pasan a "listo" y el tanda_log se cierra.
+    Los avisos (segundo esperando su entrada) informan, nunca bloquean."""
+    from ..services.tandas import avanzar_tanda
+
+    cambiadas, avisos, log_id = avanzar_tanda(db, payload.orden_ids, "listo", payload.log_id)
+    mapa = _mapa_mesas(db)
+    categorias = _mapa_categorias(db)
+    return {
+        "ordenes": [_orden_a_dict(o, mapa, categorias) for o in cambiadas],
+        "avisos": avisos,
+        "log_id": log_id,
+    }
+
+
 @router.get("/pending-print")
 def pendientes_de_impresion(db: Session = Depends(get_db)):
     """Cola de la estación de impresión (/ticketera): órdenes de hoy que

@@ -38,6 +38,9 @@ class Plato(Base):
     # True = se prepara al momento (bistec frito): no puede salir "todo
     # junto" con el resto del pedido
     sale_al_momento: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Cuántas porciones entran por tanda (sartén/olla): una tanda de 9
+    # chuletas con capacidad 6 se muestra "6 + 3". 0 = sin límite.
+    capacidad_tanda: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
 
@@ -379,6 +382,21 @@ class TicketBebida(Base):
     impreso: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
+class TandaLog(Base):
+    """Snapshot de cada tanda despachada: el dato de entrenamiento del
+    futuro orquestador IA (composición, cuándo se empezó, cuándo salió)."""
+
+    __tablename__ = "tanda_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fecha: Mapped[date] = mapped_column(Date, nullable=False)
+    # {"orden_ids": [...], "tickets": [...], "platos": [...]} al momento de empezar
+    composicion_json: Mapped[str] = mapped_column(Text, nullable=False)
+    hora_inicio: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    hora_listo: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
+
+
 class Mesa(Base):
     """Mesa del local. La ocupación se calcula desde las órdenes del día."""
 
@@ -486,4 +504,10 @@ CONFIG_DEFAULTS: dict[str, str] = {
     # porciones pertenecen a la tanda actual (la orden activa más antigua
     # + los pedidos que llegaron en los siguientes X minutos). 0 = apagado.
     "cocina_bulk_min": "10",
+    # Tablero de tandas en /cocina (pre-orquestador). Decisión del dueño
+    # (2026-09-06): la tanda cierra con LO QUE SE LLENE PRIMERO — la
+    # ventana de minutos (cocina_bulk_min) o el tope de tickets.
+    "cocina_tandas": "1",
+    # Tope de tickets por tanda (0 = sin tope, manda solo la ventana)
+    "cocina_tanda_max_tickets": "4",
 }

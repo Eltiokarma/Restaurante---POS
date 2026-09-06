@@ -247,6 +247,20 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       refresco manual, vacío redactado según la fecha, y reimprimir con texto + aria-label
       + confirmación que dice adónde va (estación o esta pantalla) y que NO imprime si la
       configuración del local no llega (antes salía un ticket sin nombre ni RUC).
+- [x] **Tandas de cocina: el pre-orquestador** (sesión 3; decisiones del dueño aplicadas —
+      la tanda cierra con lo que se llene primero, capacidad opcional, el gating solo
+      avisa): `services/tandas.py` parte las órdenes activas en tandas de ÓRDENES
+      COMPLETAS (ventana `cocina_bulk_min` O tope `cocina_tanda_max_tickets`, default 4;
+      al terminar una tanda salen mesas completas). En "separado" el segundo queda
+      "⏳ espera su entrada" hasta que la entrada esté lista (aviso, nunca bloqueo); los
+      platos se agrupan por estación 🍳 al momento (primero: lo frito manda la duración) /
+      🥘 de olla, y `platos.capacidad_tanda` (editable en el "⋯" del plato) parte "9" en
+      "6 + 3 · 2 sartenes". `/cocina` gana el tablero de tarjetas arriba de la grilla con
+      "▶ EMPEZAR" y "✔ SALIÓ LA TANDA" (64px); la tira "Por salir" queda para el ajuste
+      fino. Cada tanda despachada escribe `tanda_logs` (composición, hora de inicio, hora
+      en que salió): el dato de entrenamiento del futuro orquestador IA, que solo
+      reemplazará el cálculo — pantalla, endpoints y logs quedan. Toggle `cocina_tandas`
+      en Admin → Configuración (default encendido).
 - [x] **Gaseosas desde caja con ticket propio** (decisión del dueño 2026-09-06: lista fija
       con marca y precio, kardex sí, solo un comprobante chico sin reimprimir la comanda):
       lista de bebidas embotelladas en Admin → Menú del día → "🥤 Bebidas de caja" (crear
