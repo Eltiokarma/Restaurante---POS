@@ -156,6 +156,12 @@ export function TicketCierre({ estado, egresos, local }: {
       <hr />
       <table className="ticket-items">
         <tbody>
+          {(estado.por_cobrar ?? 0) > 0 && (
+            <tr><td>Falta pagar (no entró)</td><td className="ticket-subtotal">−{soles(estado.por_cobrar ?? 0)}</td></tr>
+          )}
+          {(estado.vueltos_pendientes ?? 0) > 0 && (
+            <tr><td>Vueltos por dar (de más)</td><td className="ticket-subtotal">+{soles(estado.vueltos_pendientes ?? 0)}</td></tr>
+          )}
           <tr><td>Esperado en caja</td><td className="ticket-subtotal">{soles(esperado)}</td></tr>
           <tr><td>Contado</td><td className="ticket-subtotal">{soles(estado.monto_contado ?? 0)}</td></tr>
         </tbody>

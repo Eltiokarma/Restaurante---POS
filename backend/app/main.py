@@ -53,10 +53,20 @@ def _migrar(engine_) -> None:
             conn.execute(text("ALTER TABLE ordenes ADD COLUMN metodo_pago TEXT"))
             conn.commit()
         columnas_cierres = [fila[1] for fila in conn.execute(text("PRAGMA table_info(cierres_caja)"))]
-        for col in ("ventas_efectivo", "ventas_tarjeta", "ventas_yape", "egresos"):
+        for col in (
+            "ventas_efectivo", "ventas_tarjeta", "ventas_yape", "egresos",
+            "por_cobrar", "vueltos_pendientes",
+        ):
             if columnas_cierres and col not in columnas_cierres:
                 conn.execute(text(f"ALTER TABLE cierres_caja ADD COLUMN {col} FLOAT"))
                 conn.commit()
+        # "Falta pagar" / "falta vuelto" por ticket (descuadraban la caja)
+        if columnas and "pago_pendiente" not in columnas:
+            conn.execute(text(
+                "ALTER TABLE ordenes ADD COLUMN pago_pendiente BOOLEAN NOT NULL DEFAULT 0"
+            ))
+            conn.execute(text("ALTER TABLE ordenes ADD COLUMN vuelto_pendiente FLOAT"))
+            conn.commit()
         columnas_movs = [fila[1] for fila in conn.execute(text("PRAGMA table_info(movimientos_insumo)"))]
         if columnas_movs and "orden_id" not in columnas_movs:
             conn.execute(text("ALTER TABLE movimientos_insumo ADD COLUMN orden_id INTEGER"))

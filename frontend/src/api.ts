@@ -142,6 +142,10 @@ export interface OrdenOut {
   estado: string
   tipo_servicio: TipoServicio
   metodo_pago: MetodoPago | null
+  // "Falta pagar": salió el ticket, la plata no entró todavía
+  pago_pendiente?: boolean
+  // "Falta vuelto": pagó de más; monto que se le debe (null = nada)
+  vuelto_pendiente?: number | null
   entrega: Entrega
   mesa_ids: number[]
   mesas: string[]
@@ -228,6 +232,10 @@ export interface CajaEstado {
   turno?: number
   // Total de egresos del turno (vivo con caja abierta; snapshot al cierre)
   egresos?: number
+  // Tickets marcados "falta pagar" (plata que no entró) y vueltos por dar
+  // (plata de más en el cajón); vivos con caja abierta, snapshot al cierre
+  por_cobrar?: number
+  vueltos_pendientes?: number
   fecha?: string
   hora_apertura?: string
   monto_apertura?: number
@@ -605,6 +613,20 @@ export const api = {
   borrarEgreso: (id: number) =>
     request<EgresosOut>(`/api/caja/egresos/${id}`, { method: 'DELETE' }),
 
+  // "Falta pagar": el ticket salió pero la plata no entró todavía
+  marcarPagoPendiente: (ordenId: number, pendiente: boolean) =>
+    request<{ id: number; pago_pendiente: boolean }>(`/api/orders/${ordenId}/pago-pendiente`, {
+      method: 'PATCH',
+      body: JSON.stringify({ pendiente }),
+    }),
+
+  // "Falta vuelto": pagó con billete grande; null = vuelto ya entregado
+  registrarVuelto: (ordenId: number, pagoCon: number | null) =>
+    request<{ id: number; vuelto_pendiente: number | null }>(`/api/orders/${ordenId}/vuelto`, {
+      method: 'PATCH',
+      body: JSON.stringify({ pago_con: pagoCon }),
+    }),
+
   // El resumen de cierre salió por la impresora (modo puente)
   confirmarCierreImpreso: () =>
     request<{ confirmada: boolean }>('/api/print/cierre/impresa', { method: 'POST' }),
@@ -914,7 +936,8 @@ export function subtotalExtras(linea: MenuCarrito): number {
  * autoridad del cuadre es el backend. */
 export function esperadoEnCaja(estado: CajaEstado): number {
   return Math.round(
-    ((estado.monto_apertura ?? 0) + estado.ventas_efectivo - (estado.egresos ?? 0)) * 100,
+    ((estado.monto_apertura ?? 0) + estado.ventas_efectivo - (estado.egresos ?? 0)
+      - (estado.por_cobrar ?? 0) + (estado.vueltos_pendientes ?? 0)) * 100,
   ) / 100
 }
 

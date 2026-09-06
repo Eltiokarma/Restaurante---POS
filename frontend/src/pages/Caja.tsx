@@ -62,6 +62,28 @@ export function Caja() {
   const [mesasNuevoPedido, setMesasNuevoPedido] = useState<number[]>([])
   // Orden a la que se le está eligiendo mesa (muestra los chips inline)
   const [asignandoMesa, setAsignandoMesa] = useState<number | null>(null)
+  // Orden con el menú "⋯" desplegado (acciones secundarias)
+  const [menuAbierto, setMenuAbierto] = useState<number | null>(null)
+  // Orden a la que se le está registrando el vuelto ("¿pagó con cuánto?")
+  const [vueltoAbierto, setVueltoAbierto] = useState<number | null>(null)
+  const [pagoConTexto, setPagoConTexto] = useState('')
+
+  // El "⋯" cierra con Escape y con un toque fuera
+  useEffect(() => {
+    if (menuAbierto === null) return
+    const alTocarFuera = (ev: MouseEvent) => {
+      if (!(ev.target as HTMLElement).closest('.menu-mas')) setMenuAbierto(null)
+    }
+    const alTeclear = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') setMenuAbierto(null)
+    }
+    document.addEventListener('click', alTocarFuera)
+    document.addEventListener('keydown', alTeclear)
+    return () => {
+      document.removeEventListener('click', alTocarFuera)
+      document.removeEventListener('keydown', alTeclear)
+    }
+  }, [menuAbierto])
 
   const cargarMesas = useCallback(async () => {
     try {
@@ -426,14 +448,72 @@ export function Caja() {
   }
 
   const cobrar = async (orden: OrdenOut, metodo: MetodoPago) => {
+    // Pagó: el método queda registrado y el "falta pagar" se levanta solo
     setOrdenes((prev) =>
-      prev.map((o) => (o.id === orden.id ? { ...o, metodo_pago: metodo } : o)),
+      prev.map((o) =>
+        o.id === orden.id ? { ...o, metodo_pago: metodo, pago_pendiente: false } : o,
+      ),
     )
     try {
       await api.cobrarOrden(orden.id, metodo)
       cargarCaja()
     } catch {
       cargarOrdenes()
+    }
+  }
+
+  // "Falta pagar": el ticket salió pero la plata no entró — mientras esté
+  // marcado, el cierre no espera ese efectivo
+  const alternarFaltaPagar = async (orden: OrdenOut) => {
+    try {
+      await api.marcarPagoPendiente(orden.id, !orden.pago_pendiente)
+      setMensaje(
+        orden.pago_pendiente
+          ? `Ticket #${String(orden.numero_orden_dia).padStart(3, '0')}: se levantó el "falta pagar"`
+          : `Ticket #${String(orden.numero_orden_dia).padStart(3, '0')} marcado FALTA PAGAR`,
+      )
+      setError('')
+      cargarOrdenes()
+      cargarCaja()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo marcar el ticket')
+    }
+  }
+
+  // "Falta vuelto": pagó con billete grande; se registra con cuánto pagó
+  // y el sistema calcula el vuelto que se le debe
+  const guardarVuelto = async (orden: OrdenOut) => {
+    const monto = parseFloat(pagoConTexto)
+    if (!(monto > 0)) {
+      setError('Pon con cuánto pagó el cliente')
+      return
+    }
+    try {
+      const r = await api.registrarVuelto(orden.id, monto)
+      setVueltoAbierto(null)
+      setPagoConTexto('')
+      setMensaje(
+        r.vuelto_pendiente
+          ? `Ticket #${String(orden.numero_orden_dia).padStart(3, '0')}: FALTA VUELTO ${soles(r.vuelto_pendiente)}`
+          : 'Pagó exacto: no queda vuelto pendiente',
+      )
+      setError('')
+      cargarOrdenes()
+      cargarCaja()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo registrar el vuelto')
+    }
+  }
+
+  const vueltoEntregado = async (orden: OrdenOut) => {
+    try {
+      await api.registrarVuelto(orden.id, null)
+      setMensaje(`Vuelto del ticket #${String(orden.numero_orden_dia).padStart(3, '0')} entregado`)
+      setError('')
+      cargarOrdenes()
+      cargarCaja()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo registrar el vuelto')
     }
   }
 
@@ -540,6 +620,18 @@ export function Caja() {
               <span className="cifra-etiqueta">Yape</span>
               <span className="cifra-chica">{soles(estadoCaja.ventas_yape)}</span>
             </div>
+            {(estadoCaja.por_cobrar ?? 0) > 0 && (
+              <div className="caja-cifra">
+                <span className="cifra-etiqueta">Falta pagar</span>
+                <span className="cifra-chica cifra-egreso">−{soles(estadoCaja.por_cobrar ?? 0)}</span>
+              </div>
+            )}
+            {(estadoCaja.vueltos_pendientes ?? 0) > 0 && (
+              <div className="caja-cifra">
+                <span className="cifra-etiqueta">Vueltos por dar</span>
+                <span className="cifra-chica cifra-vuelto">+{soles(estadoCaja.vueltos_pendientes ?? 0)}</span>
+              </div>
+            )}
           </div>
           <div className="caja-panel-acciones">
             {!cerrandoCaja && !corrigiendoFondo && (
@@ -677,6 +769,18 @@ export function Caja() {
               <span className="cifra-etiqueta">Yape</span>
               <span className="cifra-chica">{soles(estadoCaja.ventas_yape)}</span>
             </div>
+            {(estadoCaja.por_cobrar ?? 0) > 0 && (
+              <div className="caja-cifra">
+                <span className="cifra-etiqueta">Falta pagar</span>
+                <span className="cifra-chica cifra-egreso">−{soles(estadoCaja.por_cobrar ?? 0)}</span>
+              </div>
+            )}
+            {(estadoCaja.vueltos_pendientes ?? 0) > 0 && (
+              <div className="caja-cifra">
+                <span className="cifra-etiqueta">Vueltos por dar</span>
+                <span className="cifra-chica cifra-vuelto">+{soles(estadoCaja.vueltos_pendientes ?? 0)}</span>
+              </div>
+            )}
           </div>
           <div className="caja-panel-acciones">
             {!cerrandoCaja && !abriendoNueva && (
@@ -953,6 +1057,19 @@ export function Caja() {
                   {o.mesas.length > 0 && !o.mesa_liberada && (
                     <span className="badge-mesa"><IconoSilla tam={15} /> {o.mesas.join(' + ')}</span>
                   )}
+                  {(o.items.length + o.menus.length >= 2 || o.menus.length > 0) && (
+                    <span className="badge-servicio">
+                      {o.entrega === 'junto' ? 'Sale junto' : 'Por tiempos'}
+                    </span>
+                  )}
+                  {o.pago_pendiente && (
+                    <span className="chip-falta chip-falta-pagar">FALTA PAGAR</span>
+                  )}
+                  {(o.vuelto_pendiente ?? 0) > 0 && (
+                    <span className="chip-falta chip-falta-vuelto">
+                      FALTA VUELTO {soles(o.vuelto_pendiente ?? 0)}
+                    </span>
+                  )}
                   <span className="caja-orden-hora">{o.hora.slice(0, 5)}</span>
                   <span className="caja-orden-total">{soles(o.total)}</span>
                 </div>
@@ -985,23 +1102,11 @@ export function Caja() {
                     </span>
                   ))}
                 </div>
-                {o.estado !== 'anulada' && (o.items.length + o.menus.length >= 2 || o.menus.length > 0) && (
-                  <div className="caja-orden-cobro">
-                    <span className="cobro-etiqueta">Sale:</span>
-                    {(['junto', 'separado'] as Entrega[]).map((e) => (
-                      <button
-                        key={e}
-                        className={`boton-cobro ${o.entrega === e ? 'cobro-activo' : ''}`}
-                        onClick={() => corregirEntrega(o, e)}
-                      >
-                        {e === 'junto' ? '🍽 Junto' : '⏱ Por tiempos'}
-                      </button>
-                    ))}
-                  </div>
-                )}
                 {o.estado !== 'anulada' && (
                   <div className="caja-orden-cobro">
-                    {o.metodo_pago === null && <span className="cobro-etiqueta">Cobrar:</span>}
+                    {o.metodo_pago === null && !o.pago_pendiente && (
+                      <span className="cobro-etiqueta">Cobrar:</span>
+                    )}
                     {METODOS.map((m) => (
                       <button
                         key={m}
@@ -1011,25 +1116,106 @@ export function Caja() {
                         {NOMBRE_PAGO[m]}
                       </button>
                     ))}
+                    <button
+                      className={`boton-cobro ${o.pago_pendiente ? 'cobro-falta-activo' : ''}`}
+                      onClick={() => alternarFaltaPagar(o)}
+                      title="El ticket salió pero aún no pagan: el cierre no espera esa plata"
+                    >
+                      Falta pagar
+                    </button>
+                    {(o.vuelto_pendiente ?? 0) > 0 ? (
+                      <button
+                        className="boton boton--sm boton--culantro"
+                        onClick={() => vueltoEntregado(o)}
+                        title="Ya se le dio su vuelto"
+                      >
+                        Di el vuelto {soles(o.vuelto_pendiente ?? 0)}
+                      </button>
+                    ) : (
+                      <button
+                        className="boton-cobro"
+                        onClick={() => {
+                          setVueltoAbierto(vueltoAbierto === o.id ? null : o.id)
+                          setPagoConTexto('')
+                        }}
+                        title="Pagó con billete grande y el vuelto queda debiendo"
+                      >
+                        Vuelto…
+                      </button>
+                    )}
+                  </div>
+                )}
+                {vueltoAbierto === o.id && (
+                  <div className="caja-orden-cobro fila-vuelto">
+                    <label className="etiqueta-vuelto">
+                      ¿Pagó con cuánto?
+                      <input
+                        type="number" step="0.10" min="0" autoFocus placeholder="50.00"
+                        value={pagoConTexto} onChange={(e) => setPagoConTexto(e.target.value)}
+                      />
+                    </label>
+                    {parseFloat(pagoConTexto) > o.total && (
+                      <span className="vuelto-calculado">
+                        vuelto: <strong>{soles(parseFloat(pagoConTexto) - o.total)}</strong>
+                      </span>
+                    )}
+                    <button className="boton boton--sm boton--culantro" onClick={() => guardarVuelto(o)}>
+                      Guardar
+                    </button>
+                    <button className="boton boton--sm boton--papel" onClick={() => setVueltoAbierto(null)}>
+                      Cancelar
+                    </button>
                   </div>
                 )}
                 <div className="caja-orden-botones">
                   {SIGUIENTE_ESTADO[o.estado] && (
-                    <button onClick={() => avanzar(o)}>▶ {SIGUIENTE_ESTADO[o.estado]}</button>
+                    <button
+                      className="boton-avanzar"
+                      onClick={() => avanzar(o)}
+                    >▶ {SIGUIENTE_ESTADO[o.estado]}</button>
                   )}
                   <button onClick={() => reimprimir(o)}><IconoImpresora tam={18} /> Ticket</button>
                   {o.estado !== 'anulada' && (
-                    <button onClick={() => setAsignandoMesa(asignandoMesa === o.id ? null : o.id)}>
-                      <IconoSilla tam={18} /> Mesa
-                    </button>
-                  )}
-                  {o.estado !== 'anulada' && o.mesas.length > 0 && !o.mesa_liberada && (
-                    <button onClick={() => seFue(o)} title="Libera solo la mesa de este ticket">
-                      <IconoSilla tam={18} /> Se fue
-                    </button>
-                  )}
-                  {o.estado !== 'anulada' && o.estado !== 'entregado' && (
-                    <button className="boton-anular" onClick={() => anular(o)}><IconoAspa tam={18} /> Anular</button>
+                    <div className="menu-mas">
+                      <button
+                        className="boton-mas"
+                        aria-haspopup="menu"
+                        aria-expanded={menuAbierto === o.id}
+                        aria-label="Más acciones"
+                        onClick={() => setMenuAbierto(menuAbierto === o.id ? null : o.id)}
+                      >
+                        ⋯
+                      </button>
+                      {menuAbierto === o.id && (
+                        <div className="popover-mas" role="menu">
+                          <button role="menuitem" onClick={() => {
+                            setMenuAbierto(null)
+                            setAsignandoMesa(asignandoMesa === o.id ? null : o.id)
+                          }}>
+                            <IconoSilla tam={18} /> Mesa
+                          </button>
+                          {o.mesas.length > 0 && !o.mesa_liberada && (
+                            <button role="menuitem" onClick={() => { setMenuAbierto(null); seFue(o) }}>
+                              <IconoSilla tam={18} /> Se fue (liberar mesa)
+                            </button>
+                          )}
+                          {(o.items.length + o.menus.length >= 2 || o.menus.length > 0) && (
+                            <button role="menuitem" onClick={() => {
+                              setMenuAbierto(null)
+                              corregirEntrega(o, o.entrega === 'junto' ? 'separado' : 'junto')
+                            }}>
+                              Cambiar a {o.entrega === 'junto' ? 'por tiempos' : 'todo junto'}
+                            </button>
+                          )}
+                          {o.estado !== 'entregado' && (
+                            <button role="menuitem" className="popover-peligro"
+                                    onClick={() => { setMenuAbierto(null); anular(o) }}>
+                              <IconoAspa tam={18} /> Anular
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
                 {asignandoMesa === o.id && mesas.filter((m) => m.activa).length === 0 && (

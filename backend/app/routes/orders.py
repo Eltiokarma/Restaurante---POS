@@ -165,6 +165,8 @@ def _orden_a_dict(
         "tipo_servicio": orden.tipo_servicio,
         "origen": orden.origen,
         "metodo_pago": orden.metodo_pago,
+        "pago_pendiente": orden.pago_pendiente,
+        "vuelto_pendiente": orden.vuelto_pendiente,
         "entrega": orden.entrega,
         "mesa_ids": ids_mesa,
         "mesas": [mapa_mesas.get(i, f"#{i}") for i in ids_mesa],
@@ -570,5 +572,63 @@ def registrar_pago(orden_id: int, payload: PagoIn, db: Session = Depends(get_db)
     if orden.estado == "anulada":
         raise HTTPException(status_code=409, detail="Una orden anulada no se cobra")
     orden.metodo_pago = payload.metodo_pago
+    # Pagó: la marca de "falta pagar" se levanta sola
+    orden.pago_pendiente = False
     db.commit()
     return {"id": orden.id, "metodo_pago": orden.metodo_pago}
+
+
+class PagoPendienteIn(BaseModel):
+    pendiente: bool
+
+
+@router.patch("/{orden_id}/pago-pendiente")
+def marcar_pago_pendiente(orden_id: int, payload: PagoPendienteIn, db: Session = Depends(get_db)):
+    """Marca (o levanta) el "FALTA PAGAR" de un ticket: salió a la mesa
+    pero la plata aún no entró. Mientras esté marcado, el cierre de caja
+    NO espera ese efectivo — antes se llevaba de memoria y descuadraba."""
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if orden.estado == "anulada":
+        raise HTTPException(status_code=409, detail="Una orden anulada no se cobra")
+    orden.pago_pendiente = payload.pendiente
+    if payload.pendiente:
+        # Aún no se sabe cómo pagará: el método se registra al cobrar
+        orden.metodo_pago = None
+    db.commit()
+    return {"id": orden.id, "pago_pendiente": orden.pago_pendiente}
+
+
+class VueltoIn(BaseModel):
+    # Con cuánto pagó el cliente; None = vuelto entregado (limpia la marca)
+    pago_con: float | None = Field(default=None, ge=0, le=10_000)
+
+
+@router.patch("/{orden_id}/vuelto")
+def registrar_vuelto(orden_id: int, payload: VueltoIn, db: Session = Depends(get_db)):
+    """El cliente pagó con un billete grande y el vuelto queda debiendo:
+    se registra "pagó con S/ X" y el sistema calcula el vuelto pendiente.
+    Mientras esté pendiente, el cierre espera ESA plata de más en el
+    cajón. `pago_con: null` = ya se entregó el vuelto."""
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if orden.estado == "anulada":
+        raise HTTPException(status_code=409, detail="Una orden anulada no se cobra")
+    if payload.pago_con is None:
+        orden.vuelto_pendiente = None
+        db.commit()
+        return {"id": orden.id, "vuelto_pendiente": None}
+    if payload.pago_con < orden.total:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Pagó {payload.pago_con:.2f} y el ticket es {orden.total:.2f}: no alcanza",
+        )
+    vuelto = round(payload.pago_con - orden.total, 2)
+    orden.vuelto_pendiente = vuelto if vuelto > 0 else None
+    # El vuelto es cosa de efectivo: pagar con billete cobra la orden
+    orden.metodo_pago = "efectivo"
+    orden.pago_pendiente = False
+    db.commit()
+    return {"id": orden.id, "vuelto_pendiente": orden.vuelto_pendiente}
