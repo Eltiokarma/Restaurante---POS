@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, esperadoEnCaja, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, unidadesEnTaper } from '../api'
-import type { CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato } from '../api'
+import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, TicketBebidaOut } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
 import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
@@ -9,7 +9,7 @@ import { AvisoImpresion } from '../components/AvisoImpresion'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { IconoBillete, IconoSilla } from '../components/Iconos'
 import { TarjetaPlato } from '../components/TarjetaPlato'
-import { Ticket, TicketCierre } from '../components/Ticket'
+import { Ticket, TicketBebidaImpreso, TicketCierre } from '../components/Ticket'
 import {
   IconoAspa, IconoCandadoAbierto, IconoCandadoCerrado, IconoEgreso,
   IconoImpresora, IconoLapiz,
@@ -66,6 +66,17 @@ export function Caja() {
   const [menuAbierto, setMenuAbierto] = useState<number | null>(null)
   // Orden a la que se le está registrando el vuelto ("¿pagó con cuánto?")
   const [vueltoAbierto, setVueltoAbierto] = useState<number | null>(null)
+  // Gaseosas: lista fija de bebidas y la orden a la que se le agregan
+  const [bebidas, setBebidas] = useState<Bebida[]>([])
+  const [bebidasAbierto, setBebidasAbierto] = useState<OrdenOut | null>(null)
+  const [pedidoBebidas, setPedidoBebidas] = useState<Map<number, number>>(new Map())
+  const [agregandoBebidas, setAgregandoBebidas] = useState(false)
+  // El ticket chico de gaseosas que imprime ESTA pantalla (modo terminal)
+  const [ticketBebida, setTicketBebida] = useState<{ ticket: TicketBebidaOut; local: DatosLocal } | null>(null)
+  // Traslado de mesa: mover TODOS los pedidos de una mesa a otra
+  const [trasladando, setTrasladando] = useState(false)
+  const [trasladoDe, setTrasladoDe] = useState<number | null>(null)
+  const [trasladoReimprimir, setTrasladoReimprimir] = useState(false)
   const [pagoConTexto, setPagoConTexto] = useState('')
 
   // El "⋯" cierra con Escape y con un toque fuera
@@ -352,6 +363,23 @@ export function Caja() {
     return () => window.clearTimeout(timer)
   }, [ticket])
 
+  // El ticket chico de gaseosas se imprime igual (modo terminal)
+  useEffect(() => {
+    if (!ticketBebida) return
+    const timer = window.setTimeout(() => {
+      window.print()
+      setTicketBebida(null)
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [ticketBebida])
+
+  // La lista fija de bebidas cambia poco: se carga una vez
+  useEffect(() => {
+    api.bebidas()
+      .then((d) => setBebidas(d.bebidas.filter((b) => b.activa)))
+      .catch(() => {})
+  }, [])
+
   // El resumen de cierre se imprime igual: montado oculto y print
   useEffect(() => {
     if (!ticketCierre) return
@@ -532,6 +560,83 @@ export function Caja() {
       }
     } catch {
       setError('No se pudo reimprimir')
+    }
+  }
+
+  // ---------- Gaseosas ----------
+
+  const abrirBebidas = (orden: OrdenOut) => {
+    setBebidasAbierto(orden)
+    setPedidoBebidas(new Map())
+    setMenuAbierto(null)
+  }
+
+  const cambiarBebida = (id: number, delta: number) => {
+    setPedidoBebidas((prev) => {
+      const m = new Map(prev)
+      const n = (m.get(id) ?? 0) + delta
+      if (n <= 0) m.delete(id)
+      else m.set(id, Math.min(20, n))
+      return m
+    })
+  }
+
+  const totalBebidasElegidas = [...pedidoBebidas.entries()].reduce((suma, [id, cant]) => {
+    const bebida = bebidas.find((b) => b.id === id)
+    return suma + (bebida?.precio ?? 0) * cant
+  }, 0)
+
+  const confirmarBebidas = async () => {
+    if (!bebidasAbierto || pedidoBebidas.size === 0) return
+    setAgregandoBebidas(true)
+    try {
+      const items = [...pedidoBebidas.entries()].map(([bebida_id, cantidad]) => ({ bebida_id, cantidad }))
+      const r = await api.agregarBebidas(bebidasAbierto.id, items)
+      setBebidasAbierto(null)
+      const resumen = r.ticket_bebida.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(', ')
+      if (r.modo_impresion === 'terminal') {
+        // El comprobante chico sale de esta misma pantalla
+        const cfg = config ?? (await api.config())
+        setTicketBebida({
+          ticket: r.ticket_bebida,
+          local: { nombre: cfg.nombre_local, direccion: cfg.direccion, ruc: cfg.ruc },
+        })
+        setMensaje(`${resumen} en el ticket #${r.ticket_bebida.numero} (+${soles(r.ticket_bebida.total)})`)
+      } else {
+        setMensaje(
+          `${resumen} en el ticket #${r.ticket_bebida.numero} (+${soles(r.ticket_bebida.total)}). ` +
+          'El ticket de gaseosas va a imprimir.',
+        )
+      }
+      cargarOrdenes()
+      cargarCaja()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo agregar la gaseosa')
+    } finally {
+      setAgregandoBebidas(false)
+    }
+  }
+
+  // ---------- Traslado de mesa ----------
+
+  const confirmarTraslado = async (aMesaId: number) => {
+    if (trasladoDe === null) return
+    const nombreDe = mesas.find((m) => m.id === trasladoDe)?.nombre ?? `#${trasladoDe}`
+    const nombreA = mesas.find((m) => m.id === aMesaId)?.nombre ?? `#${aMesaId}`
+    const reimprime = trasladoReimprimir && config?.modo_impresion !== 'terminal'
+    try {
+      const r = await api.trasladarMesa(trasladoDe, aMesaId, reimprime)
+      setTrasladando(false)
+      setTrasladoDe(null)
+      setTrasladoReimprimir(false)
+      setMensaje(
+        `${r.trasladadas} pedido${r.trasladadas === 1 ? '' : 's'} de ${nombreDe} ${r.trasladadas === 1 ? 'pasó' : 'pasaron'} a ${nombreA}` +
+        (reimprime ? '; las comandas van a reimprimir con la mesa nueva' : ''),
+      )
+      cargarOrdenes()
+      cargarMesas()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo trasladar la mesa')
     }
   }
 
@@ -1044,7 +1149,13 @@ export function Caja() {
         </section>
 
         <section className="caja-ordenes">
-          <h2>Pedidos de hoy ({ordenes.length})</h2>
+          <div className="caja-ordenes-cabecera">
+            <h2>Pedidos de hoy ({ordenes.length})</h2>
+            <button className="boton boton--sm boton--papel"
+                    onClick={() => { setTrasladando(true); setTrasladoDe(null); setTrasladoReimprimir(false) }}>
+              ⇄ Trasladar mesa
+            </button>
+          </div>
           <div className="caja-lista">
             {ordenesRecientes.map((o) => (
               <div key={o.id} className={`caja-orden estado-${o.estado} ${o.estado === 'anulada' ? 'caja-orden-anulada' : ''}`}>
@@ -1176,6 +1287,12 @@ export function Caja() {
                   )}
                   <button onClick={() => reimprimir(o)}><IconoImpresora tam={18} /> Ticket</button>
                   {o.estado !== 'anulada' && (
+                    <button onClick={() => abrirBebidas(o)}
+                            aria-label={`Agregar gaseosa al ticket ${String(o.numero_orden_dia).padStart(3, '0')}`}>
+                      🥤 Gaseosa
+                    </button>
+                  )}
+                  {o.estado !== 'anulada' && (
                     <div className="menu-mas">
                       <button
                         className="boton-mas"
@@ -1249,9 +1366,124 @@ export function Caja() {
         </section>
       </div>
 
+      {/* Gaseosas: elegir de la lista fija y agregarlas al ticket */}
+      {bebidasAbierto && (
+        <div className="modal-fondo" onClick={() => setBebidasAbierto(null)}>
+          <div className="modal modal-bebidas" onClick={(e) => e.stopPropagation()}>
+            <h2>🥤 Gaseosas — ticket #{String(bebidasAbierto.numero_orden_dia).padStart(3, '0')}</h2>
+            {bebidas.length === 0 ? (
+              <p className="nota-admin">
+                Todavía no hay bebidas en la lista. Créalas en Admin → Menú del día →
+                "🥤 Bebidas de caja" (marca, tamaño y precio) y aparecen aquí.
+              </p>
+            ) : (
+              <div className="lista-bebidas">
+                {bebidas.map((b) => {
+                  const cant = pedidoBebidas.get(b.id) ?? 0
+                  return (
+                    <div className={`fila-bebida ${cant > 0 ? 'elegida' : ''}`} key={b.id}>
+                      <span className="insumo-ref">
+                        <span>{b.nombre}</span>
+                        <span className="meta">{soles(b.precio)}</span>
+                      </span>
+                      <div className="stepper-bebida">
+                        <button aria-label={`Quitar ${b.nombre}`} disabled={cant === 0}
+                                onClick={() => cambiarBebida(b.id, -1)}>−</button>
+                        <strong>{cant}</strong>
+                        <button aria-label={`Agregar ${b.nombre}`}
+                                onClick={() => cambiarBebida(b.id, 1)}>+</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <p className="nota-admin">
+              Se cobra en este mismo ticket y sale un comprobante SOLO de las gaseosas
+              (la comanda de cocina no se reimprime).
+            </p>
+            <div className="modal-botones">
+              <button className="boton-grande boton-secundario" onClick={() => setBebidasAbierto(null)}>
+                Cancelar
+              </button>
+              <button className="boton-grande boton-confirmar"
+                      disabled={pedidoBebidas.size === 0 || agregandoBebidas}
+                      onClick={confirmarBebidas}>
+                {agregandoBebidas
+                  ? 'Agregando…'
+                  : pedidoBebidas.size === 0
+                    ? 'Agregar'
+                    : `Agregar +${soles(totalBebidasElegidas)}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Traslado: el grupo se cambió de mesa */}
+      {trasladando && (
+        <div className="modal-fondo" onClick={() => setTrasladando(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>⇄ Trasladar mesa</h2>
+            <p>Mueve TODOS los pedidos de una mesa a otra (el grupo se cambió de sitio).</p>
+            <div className="campo-etiquetado">
+              <label>De la mesa</label>
+              {mesas.filter((m) => m.activa && m.ocupada).length === 0 ? (
+                <p className="nota-admin">Ninguna mesa tiene pedidos ahora.</p>
+              ) : (
+                <div className="empaques-linea">
+                  {mesas.filter((m) => m.activa && m.ocupada).map((m) => (
+                    <button key={m.id}
+                            className={`boton-servicio boton-empaque boton-empaque-caja ${trasladoDe === m.id ? 'servicio-activo' : ''}`}
+                            onClick={() => setTrasladoDe(m.id)}>
+                      {m.nombre} · {m.ordenes.length}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {trasladoDe !== null && config?.modo_impresion !== 'terminal' && (
+              <label className="opcion-al-momento">
+                <input type="checkbox" checked={trasladoReimprimir}
+                       onChange={(e) => setTrasladoReimprimir(e.target.checked)} />
+                <span className="explica">
+                  <strong>Reimprimir las comandas</strong>
+                  <span>Cada ticket movido vuelve a salir con su mesa nueva.</span>
+                </span>
+              </label>
+            )}
+            {trasladoDe !== null && (
+              <div className="campo-etiquetado">
+                <label>A la mesa (tócala y se traslada)</label>
+                <div className="empaques-linea">
+                  {mesas.filter((m) => m.activa && m.id !== trasladoDe).map((m) => (
+                    <button key={m.id}
+                            className="boton-servicio boton-empaque boton-empaque-caja"
+                            onClick={() => confirmarTraslado(m.id)}>
+                      {m.nombre}{m.ocupada ? ' •' : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="modal-botones">
+              <button className="boton-grande boton-secundario" onClick={() => setTrasladando(false)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {ticket && (
         <div className="solo-impresion">
           <Ticket orden={ticket.orden} local={ticket.local} />
+        </div>
+      )}
+
+      {ticketBebida && (
+        <div className="solo-impresion">
+          <TicketBebidaImpreso ticket={ticketBebida.ticket} local={ticketBebida.local} />
         </div>
       )}
 

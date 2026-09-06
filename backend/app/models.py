@@ -342,6 +342,43 @@ class EgresoCaja(Base):
     monto: Mapped[float] = mapped_column(Float, nullable=False)
 
 
+class Bebida(Base):
+    """Bebida embotellada de la lista fija de caja (Inca Kola 500 ml…).
+
+    No es un plato: no pasa por cocina ni por el menú del día. Se agrega
+    a una orden YA creada desde caja y se cobra al precio de esta lista
+    (el item guarda snapshot, como todo). Si tiene insumo ligado, cada
+    venta descuenta botellas del kardex."""
+
+    __tablename__ = "bebidas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(80), nullable=False)
+    precio: Mapped[float] = mapped_column(Float, nullable=False)
+    activa: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Insumo (unidad "unidad") que descuenta el kardex; NULL = sin kardex
+    insumo_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
+
+
+class TicketBebida(Base):
+    """Ticket chico de SOLO las gaseosas agregadas a una orden.
+
+    Pedido del dueño: al añadir gaseosas desde caja no se reimprime el
+    ticket de toda la mesa, sale solo este comprobante. Espera en la cola
+    de impresión (modo puente/estación) hasta que se confirme impreso."""
+
+    __tablename__ = "tickets_bebida"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    orden_id: Mapped[int] = mapped_column(ForeignKey("ordenes.id"), nullable=False)
+    # [{"nombre", "precio", "cantidad"}, …] — snapshot de lo agregado
+    detalle_json: Mapped[str] = mapped_column(Text, nullable=False)
+    total: Mapped[float] = mapped_column(Float, nullable=False)
+    creado_en: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
+    impreso: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
 class Mesa(Base):
     """Mesa del local. La ocupación se calcula desde las órdenes del día."""
 

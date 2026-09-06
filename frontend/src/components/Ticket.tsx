@@ -1,6 +1,42 @@
 import { Fragment } from 'react'
-import type { CajaEstado, DatosLocal, EgresoOut, OrdenOut } from '../api'
+import type { CajaEstado, DatosLocal, EgresoOut, OrdenOut, TicketBebidaOut } from '../api'
 import { esperadoEnCaja, soles } from '../api'
+
+/**
+ * Ticket chico de SOLO las gaseosas agregadas a una orden desde caja:
+ * no se reimprime la comanda completa, sale este comprobante aparte.
+ */
+export function TicketBebidaImpreso({ ticket, local }: {
+  ticket: TicketBebidaOut
+  local: DatosLocal
+}) {
+  return (
+    <div id="ticket-print" className="ticket">
+      <div className="ticket-cabecera">
+        <div className="ticket-local">{local.nombre}</div>
+      </div>
+      <div className="ticket-orden">GASEOSAS</div>
+      <div className="ticket-servicio">
+        Orden #{ticket.numero}
+        {ticket.mesas.length > 0 && ` — Mesa ${ticket.mesas.join(' + ')}`}
+      </div>
+      {ticket.hora && <div className="ticket-fecha">{ticket.hora}</div>}
+      <div className="ticket-items">
+        {ticket.items.map((item, i) => (
+          <div className="ticket-item" key={i}>
+            <span>{item.cantidad} × {item.nombre}</span>
+            <span>{soles(item.precio * item.cantidad)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="ticket-total">
+        <span>TOTAL GASEOSAS</span>
+        <span>{soles(ticket.total)}</span>
+      </div>
+      <div className="ticket-pie">Se suma al ticket de la orden</div>
+    </div>
+  )
+}
 
 interface Props {
   orden: OrdenOut

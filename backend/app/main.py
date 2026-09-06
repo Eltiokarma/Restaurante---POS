@@ -11,8 +11,8 @@ from sqlalchemy import text
 
 from .db import BACKEND_DIR, Base, engine
 from .routes import (
-    admin, caja, cancellations, config, impresion, insumos, mantenimiento,
-    menu, mesas, orders, stats, voice,
+    admin, bebidas, caja, cancellations, config, impresion, insumos,
+    mantenimiento, menu, mesas, orders, stats, voice,
 )
 from .services.backup import ciclo_backup_automatico
 
@@ -275,6 +275,7 @@ app.include_router(config.router)
 app.include_router(admin.router)
 app.include_router(stats.router)
 app.include_router(caja.router)
+app.include_router(bebidas.router)
 app.include_router(voice.router)
 app.include_router(insumos.router)
 app.include_router(mesas.router)

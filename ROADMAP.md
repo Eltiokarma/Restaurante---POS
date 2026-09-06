@@ -247,6 +247,22 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       refresco manual, vacío redactado según la fecha, y reimprimir con texto + aria-label
       + confirmación que dice adónde va (estación o esta pantalla) y que NO imprime si la
       configuración del local no llega (antes salía un ticket sin nombre ni RUC).
+- [x] **Gaseosas desde caja con ticket propio** (decisión del dueño 2026-09-06: lista fija
+      con marca y precio, kardex sí, solo un comprobante chico sin reimprimir la comanda):
+      lista de bebidas embotelladas en Admin → Menú del día → "🥤 Bebidas de caja" (crear
+      con marca+tamaño+precio, editar precio, apagar, borrar; el insumo del kardex en
+      "unidad" se crea/reusa solo por nombre). En caja, cada pedido tiene el botón
+      "🥤 Gaseosa": modal con la lista y steppers, se cobra en el mismo ticket (item
+      `es_cargo` nacido "entregado": cocina no lo ve, el total sí lo suma el backend) y
+      descuenta botellas del kardex ligadas a la orden (anular devuelve). Imprime SOLO un
+      ticket chico "GASEOSAS" (tabla `tickets_bebida` + trabajo tipo "bebida" en
+      `/api/print/cola` con `render_bebida` ESC/POS y confirmación propia; la ticketera lo
+      atiende en modo puente/RawBT y estación; en modo terminal lo imprime la caja).
+- [x] **Trasladar pedidos de una mesa a otra** (decisión del dueño): botón "⇄ Trasladar
+      mesa" en caja — `POST /api/orders/trasladar-mesa` mueve TODOS los pedidos de hoy de
+      la mesa origen a la destino (mesas combinadas: solo se reemplaza la de origen, sin
+      duplicar), con checkbox opcional para reimprimir las comandas con la mesa nueva
+      (modos puente/estación; en terminal se reimprime ticket por ticket como siempre).
 - [x] **Caja con "+ UN MENÚ" y cierre con resumen en pantalla**: la caja usa la misma
       tarjeta de oferta que la terminal (lista de platos por tiempo sin precios, un toque
       agrega el menú completo, contador al costado; adiós al modal "ARMAR MENÚ", ahora

@@ -57,6 +57,16 @@ def consumir_por_orden(db: Session, orden: Orden) -> None:
                            referencia, orden_id=orden.id)
 
 
+def consumir_directo(db: Session, insumo: Insumo, cantidad: float,
+                     referencia: str, orden_id: int | None = None) -> None:
+    """Consumo sin receta (bebidas embotelladas: 1 venta = N botellas).
+
+    Ligado a la orden: anularla lo devuelve igual que a los platos,
+    porque revertir_por_orden netea TODOS los movimientos de la orden."""
+    with _lock_inventario:
+        _registrar(db, insumo, "consumo", -abs(cantidad), referencia, orden_id=orden_id)
+
+
 def revertir_por_orden(db: Session, orden: Orden) -> None:
     """Devuelve el stock que ESTA orden tiene consumido según el kardex.
 

@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..auth import requiere_admin
 from ..db import get_db
-from ..models import CierreCaja, Config, Mesa, Orden, Plato, hoy_lima
+from ..models import CierreCaja, Config, Mesa, Orden, Plato, TicketBebida, hoy_lima
 from ..routes.config import leer_config
-from ..services.escpos import render_cierre, render_orden, render_prueba
+from ..services.escpos import render_bebida, render_cierre, render_orden, render_prueba
 
 router = APIRouter(prefix="/api/print", tags=["impresion"])
 
@@ -59,6 +59,16 @@ def confirmar_cierre_impreso(db: Session = Depends(get_db)):
     registro = db.get(Config, CLAVE_CIERRE)
     if registro is not None:
         registro.valor = "0"
+        db.commit()
+    return {"confirmada": True}
+
+
+@router.post("/bebida/{ticket_id}/impresa")
+def confirmar_bebida_impresa(ticket_id: int, db: Session = Depends(get_db)):
+    """El ticket chico de gaseosas salió por la impresora: fuera de la cola."""
+    ticket = db.get(TicketBebida, ticket_id)
+    if ticket is not None:
+        ticket.impreso = True
         db.commit()
     return {"confirmada": True}
 
@@ -114,6 +124,36 @@ def cola_de_impresion(db: Session = Depends(get_db)):
         else:
             marca_cierre.valor = "0"
             db.commit()
+
+    # Tickets chicos de gaseosas agregadas desde caja (solo los de hoy:
+    # uno viejo con el puente apagado no debe salir al día siguiente)
+    pendientes_bebida = db.scalars(
+        select(TicketBebida)
+        .join(Orden, TicketBebida.orden_id == Orden.id)
+        .where(
+            TicketBebida.impreso == False,  # noqa: E712
+            Orden.fecha == hoy_lima(),
+            Orden.estado != "anulada",
+        )
+        .order_by(TicketBebida.id)
+    ).all()
+    for tb in pendientes_bebida:
+        orden_tb = db.get(Orden, tb.orden_id)
+        ids_mesa = json.loads(orden_tb.mesa_ids or "[]")
+        datos = {
+            "numero": f"{orden_tb.numero_orden_dia:03d}",
+            "mesas": [local["mesas"].get(i, f"#{i}") for i in ids_mesa],
+            "items": json.loads(tb.detalle_json),
+            "total": tb.total,
+            "hora": tb.creado_en.strftime("%H:%M"),
+        }
+        trabajos.append({
+            "tipo": "bebida",
+            "orden_id": None,
+            "ticket_bebida_id": tb.id,
+            "numero": datos["numero"],
+            "datos_b64": base64.b64encode(render_bebida(datos, local, columnas)).decode(),
+        })
 
     ordenes = db.scalars(
         select(Orden)

@@ -369,8 +369,36 @@ def pendientes_de_impresion(db: Session = Depends(get_db)):
         .order_by(Orden.numero_orden_dia)
     ).all()
     config = leer_config(db)
+    mapa = _mapa_mesas(db)
+
+    # Tickets chicos de gaseosas (solo de hoy) para la estación HTML
+    from ..models import TicketBebida
+    pendientes_bebida = db.scalars(
+        select(TicketBebida)
+        .join(Orden, TicketBebida.orden_id == Orden.id)
+        .where(
+            TicketBebida.impreso == False,  # noqa: E712
+            Orden.fecha == hoy_lima(),
+            Orden.estado != "anulada",
+        )
+        .order_by(TicketBebida.id)
+    ).all()
+    tickets_bebida = []
+    for tb in pendientes_bebida:
+        orden_tb = db.get(Orden, tb.orden_id)
+        ids_mesa = json.loads(orden_tb.mesa_ids or "[]")
+        tickets_bebida.append({
+            "id": tb.id,
+            "numero": f"{orden_tb.numero_orden_dia:03d}",
+            "mesas": [mapa.get(i, f"#{i}") for i in ids_mesa],
+            "items": json.loads(tb.detalle_json),
+            "total": tb.total,
+            "hora": tb.creado_en.strftime("%H:%M"),
+        })
+
     return {
-        "ordenes": [_orden_a_dict(o, _mapa_mesas(db)) for o in ordenes],
+        "ordenes": [_orden_a_dict(o, mapa) for o in ordenes],
+        "tickets_bebida": tickets_bebida,
         "local": {
             "nombre": config["nombre_local"],
             "direccion": config["direccion"],
@@ -388,6 +416,8 @@ def descartar_pendientes(db: Session = Depends(get_db)):
         .where(Orden.fecha == hoy_lima(), Orden.impreso == False)  # noqa: E712
         .values(impreso=True)
     )
+    from ..models import TicketBebida
+    db.execute(update(TicketBebida).where(TicketBebida.impreso == False).values(impreso=True))  # noqa: E712
     db.commit()
     return {"descartadas": resultado.rowcount}
 
@@ -522,6 +552,134 @@ def asignar_mesas(orden_id: int, payload: MesasIn, db: Session = Depends(get_db)
         "id": orden.id,
         "mesa_ids": payload.mesa_ids,
         "mesas": [mapa.get(i, f"#{i}") for i in payload.mesa_ids],
+    }
+
+
+class BebidaPedida(BaseModel):
+    bebida_id: int
+    cantidad: int = Field(gt=0, le=20)
+
+
+class BebidasIn(BaseModel):
+    items: list[BebidaPedida] = Field(min_length=1, max_length=10)
+
+
+@router.post("/{orden_id}/bebidas")
+def agregar_bebidas(orden_id: int, payload: BebidasIn, db: Session = Depends(get_db)):
+    """La caja añade gaseosas de la lista fija a una orden YA creada.
+
+    El item nace "entregado" y es_cargo=True (cocina no lo ve ni frena la
+    orden), entra al total y descuenta botellas del kardex. NO se reimprime
+    la comanda: sale solo un ticket chico con las gaseosas (en modo
+    puente/estación espera en la cola; en modo terminal lo imprime la
+    propia caja con los datos que devuelve este endpoint)."""
+    from ..models import Bebida, Insumo, OrdenItem, TicketBebida
+    from ..services.inventario import consumir_directo
+
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if orden.estado == "anulada":
+        raise HTTPException(status_code=409, detail="La orden está anulada")
+
+    detalle: list[dict] = []
+    total_bebidas = 0.0
+    referencia = f"orden #{orden.numero_orden_dia:03d} gaseosa"
+    for pedido in payload.items:
+        bebida = db.get(Bebida, pedido.bebida_id)
+        if bebida is None or not bebida.activa:
+            raise HTTPException(status_code=422, detail="Bebida no disponible")
+        orden.items.append(OrdenItem(
+            plato_id=None,
+            nombre_snapshot=bebida.nombre,
+            precio_snapshot=bebida.precio,
+            cantidad=pedido.cantidad,
+            empaque="mesa",
+            nota="",
+            es_cargo=True,
+            estado="entregado",
+        ))
+        total_bebidas += bebida.precio * pedido.cantidad
+        detalle.append({"nombre": bebida.nombre, "precio": bebida.precio,
+                        "cantidad": pedido.cantidad})
+        if bebida.insumo_id is not None:
+            insumo = db.get(Insumo, bebida.insumo_id)
+            if insumo is not None:
+                consumir_directo(db, insumo, pedido.cantidad, referencia, orden.id)
+
+    total_bebidas = round(total_bebidas, 2)
+    orden.total = round(orden.total + total_bebidas, 2)
+
+    modo = leer_config(db)["modo_impresion"]
+    if modo in ("puente", "estacion"):
+        db.add(TicketBebida(orden_id=orden.id, detalle_json=json.dumps(detalle),
+                            total=total_bebidas))
+    db.commit()
+
+    mapa = _mapa_mesas(db)
+    ids_mesa = json.loads(orden.mesa_ids or "[]")
+    return {
+        "orden": _orden_a_dict(orden, mapa, _mapa_categorias(db)),
+        "modo_impresion": modo,
+        "ticket_bebida": {
+            "numero": f"{orden.numero_orden_dia:03d}",
+            "mesas": [mapa.get(i, f"#{i}") for i in ids_mesa],
+            "items": detalle,
+            "total": total_bebidas,
+        },
+    }
+
+
+class TrasladoIn(BaseModel):
+    de_mesa_id: int
+    a_mesa_id: int
+    # True = las órdenes movidas vuelven a la cola de impresión con su
+    # mesa nueva (modo puente/estación); en modo terminal no aplica
+    reimprimir: bool = False
+
+
+@router.post("/trasladar-mesa")
+def trasladar_mesa(payload: TrasladoIn, db: Session = Depends(get_db)):
+    """Mueve TODOS los pedidos de hoy de una mesa a otra de un toque
+    (el grupo se cambió de sitio). Mesas combinadas: solo se reemplaza
+    la mesa de origen, las demás quedan."""
+    if payload.de_mesa_id == payload.a_mesa_id:
+        raise HTTPException(status_code=422, detail="Elige una mesa distinta")
+    _validar_mesas(db, [payload.de_mesa_id, payload.a_mesa_id])
+
+    ordenes = db.scalars(
+        select(Orden)
+        .options(selectinload(Orden.items), selectinload(Orden.menus))
+        .where(
+            Orden.fecha == hoy_lima(),
+            Orden.estado != "anulada",
+            Orden.mesa_liberada == False,  # noqa: E712
+        )
+        .order_by(Orden.numero_orden_dia)
+    ).all()
+    movidas = []
+    for orden in ordenes:
+        ids = json.loads(orden.mesa_ids or "[]")
+        if payload.de_mesa_id not in ids:
+            continue
+        nuevas = []
+        for i in ids:
+            reemplazo = payload.a_mesa_id if i == payload.de_mesa_id else i
+            if reemplazo not in nuevas:
+                nuevas.append(reemplazo)
+        orden.mesa_ids = json.dumps(nuevas)
+        if payload.reimprimir:
+            orden.impreso = False
+        movidas.append(orden)
+
+    if not movidas:
+        raise HTTPException(status_code=409, detail="Esa mesa no tiene pedidos hoy")
+    db.commit()
+    mapa = _mapa_mesas(db)
+    categorias = _mapa_categorias(db)
+    return {
+        "trasladadas": len(movidas),
+        "ordenes": [_orden_a_dict(o, mapa, categorias) for o in movidas],
     }
 
 
