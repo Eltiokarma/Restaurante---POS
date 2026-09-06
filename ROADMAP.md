@@ -207,6 +207,25 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       mensajes de estado van sin emoji. Pendiente por decisión de producto: agrupar
       acciones secundarias tras un "⋯" (hallazgos 01/02/07) y migrar todos los botones a
       la clase base `.boton`. Reglas nuevas documentadas en `docs/NOTA-DE-DISENO.md`.
+- [x] **Auditoría visual entrega 2: rediseño del kardex** (handoff de Claude Design,
+      hallazgos 13-22 sobre Admin → Insumos; solo frontend, el backend no se tocó): en
+      celular (<700px) la despensa se vuelve tarjetas con Compré/Conté a 56px y la merma
+      como icono aparte (la tabla queda para tablet, con gradiente que anuncia el scroll);
+      cada movimiento abre SU hoja con color y verbo propios (compra verde, conteo azul,
+      merma roja; bottom sheet en móvil) con campo grande de unidad fija y línea de
+      efecto ("Sumas 25 kg. Quedas con 29 kg.") antes de confirmar; la compra muestra el
+      costo unitario en vivo contra el anterior y un costo >50 % desviado pide segunda
+      confirmación "Sí, pagué eso"; la unidad del insumo nuevo son chips cerrados
+      (kg·g·l·ml·unidad·atado) con etiquetas visibles; el mínimo se edita también dentro
+      de la hoja de Conté y el de la tabla da acuse "✓ guardado". Recetas: lista buscable
+      de platos con progreso "N de M" + barra + filtros Sin receta/Con receta/Todos
+      (los sin-receta activos hoy van primero), editor con costo y margen EN VIVO en la
+      cabecera del plato (verde sano / ámbar justo / rojo pérdida), "+ Buscar insumo"
+      que excluye los ya usados y crea el que no existe (con su unidad) agregándolo al
+      toque, avisos de "salió bien pero falta algo" en banner ámbar propio (tercer canal,
+      adiós window.confirm) y guardia de cambios sin guardar con 3 opciones (Guardar y
+      salir / Salir sin guardar / Seguir editando). El aviso "Se está acabando" se
+      recorta a 8 nombres + "y N más" para no comerse la pantalla del celular.
 - [x] **Caja con "+ UN MENÚ" y cierre con resumen en pantalla**: la caja usa la misma
       tarjeta de oferta que la terminal (lista de platos por tiempo sin precios, un toque
       agrega el menú completo, contador al costado; adiós al modal "ARMAR MENÚ", ahora

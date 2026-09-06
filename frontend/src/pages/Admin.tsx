@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE } from '../api'
 import { IconoBillete, IconoEgreso, IconoEngranaje, IconoMovil, IconoTarjeta } from '../components/Iconos'
 import type { CajaEstado, ConfigOut, DatosLocal, Empaque, Insumo, MenuGuardadoOut, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
@@ -1370,6 +1370,13 @@ function TabOrdenes() {
 
 // ---------- Insumos, recetas y kardex ----------
 
+// Unidades cerradas de la despensa (hallazgo 16): texto libre creaba
+// "Kg", "kilo" y "kg." como tres unidades distintas y rompía la
+// conversión de las recetas base semanas después.
+const UNIDADES_INSUMO = ['kg', 'g', 'l', 'ml', 'unidad', 'atado']
+
+const redondear = (n: number) => Math.round(n * 1000) / 1000
+
 function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [insumos, setInsumos] = useState<Insumo[]>([])
   const [valorInventario, setValorInventario] = useState(0)
@@ -1377,20 +1384,39 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [movimientos, setMovimientos] = useState<MovimientoKardex[]>([])
   const [catalogo, setCatalogo] = useState<Plato[]>([])
   const [mensaje, setMensaje] = useState('')
+  // Canal ámbar (hallazgo 21): "salió bien pero falta algo" no es un error
+  const [aviso, setAviso] = useState('')
   const [error, setError] = useState('')
   const [seccion, setSeccion] = useState<'despensa' | 'consumo' | 'recetas' | 'historial'>('despensa')
 
-  // Acción rápida abierta en una fila de la despensa
+  // ---------- Despensa ----------
+  const [busquedaDespensa, setBusquedaDespensa] = useState('')
+  const [soloBajos, setSoloBajos] = useState(false)
+  // Hoja de movimiento abierta (hallazgo 14: una hoja por movimiento,
+  // con color y verbo propios, en vez de la fila inline idéntica)
   const [accion, setAccion] = useState<{ id: number; tipo: 'compra' | 'merma' | 'ajuste' } | null>(null)
   const [accionCantidad, setAccionCantidad] = useState('')
   const [accionCosto, setAccionCosto] = useState('')
   const [accionNota, setAccionNota] = useState('')
+  // El mínimo se edita donde tiene contexto: en la hoja de "Conté" (h. 17)
+  const [accionMinimo, setAccionMinimo] = useState('')
+  const [confirmandoCostoRaro, setConfirmandoCostoRaro] = useState(false)
+  const [minimoAcuse, setMinimoAcuse] = useState<number | null>(null)
   const [nuevo, setNuevo] = useState({ nombre: '', unidad: 'kg', costo: '' })
   const [mostrarNuevo, setMostrarNuevo] = useState(false)
 
-  // Recetas
+  // ---------- Recetas ----------
+  const [busquedaPlato, setBusquedaPlato] = useState('')
+  const [filtroReceta, setFiltroReceta] = useState<'sin' | 'con' | 'todos'>('sin')
   const [recetaPlato, setRecetaPlato] = useState('')
   const [recetaItems, setRecetaItems] = useState<{ insumo_id: number; cantidad: string }[]>([])
+  // Guardado sucio/limpio (h. 22): cambiar de plato no borra sin preguntar
+  const [recetaSucia, setRecetaSucia] = useState(false)
+  const [saliendoA, setSaliendoA] = useState<string | null>(null)
+  const [buscandoInsumo, setBuscandoInsumo] = useState(false)
+  const [busquedaInsumo, setBusquedaInsumo] = useState('')
+  const [unidadNueva, setUnidadNueva] = useState('kg')
+  const [confirmandoBase, setConfirmandoBase] = useState(false)
   const [costoPorcion, setCostoPorcion] = useState<number | null>(null)
   const [sugerida, setSugerida] = useState<{ base: string | null; encontrada: boolean; items: { insumo: string; unidad: string; cantidad: number; existe: boolean; sin_conversion: boolean }[] } | null>(null)
   const [platosConReceta, setPlatosConReceta] = useState<Set<number>>(new Set())
@@ -1405,7 +1431,6 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
       setPorAgotarse(datos.por_agotarse)
       setMovimientos(kardex.movimientos)
       setCatalogo(cat.platos)
-      // Qué platos ya tienen receta (marca ✔ en el selector): una sola consulta
       setPlatosConReceta(new Set(conReceta.plato_ids))
       setError('')
     } catch (e) {
@@ -1419,10 +1444,11 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
 
   const avisar = (texto: string) => {
     setMensaje(texto)
+    setAviso('')
     setError('')
   }
 
-  // ---------- Despensa ----------
+  // ---------- Despensa: handlers ----------
 
   const cargarDespensa = async () => {
     try {
@@ -1441,53 +1467,73 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   const crearInsumo = async () => {
     if (!nuevo.nombre.trim()) return
     try {
-      await api.crearInsumo(nuevo.nombre.trim(), nuevo.unidad.trim() || 'kg', parseFloat(nuevo.costo) || 0)
+      await api.crearInsumo(nuevo.nombre.trim(), nuevo.unidad, parseFloat(nuevo.costo) || 0)
       setNuevo({ nombre: '', unidad: 'kg', costo: '' })
       setMostrarNuevo(false)
-      avisar('Insumo creado ✔')
+      avisar('Insumo creado')
       cargar()
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
   }
 
-  const abrirAccion = (id: number, tipo: 'compra' | 'merma' | 'ajuste') => {
-    setAccion({ id, tipo })
+  const abrirAccion = (insumo: Insumo, tipo: 'compra' | 'merma' | 'ajuste') => {
+    setAccion({ id: insumo.id, tipo })
     setAccionCantidad('')
     setAccionCosto('')
     setAccionNota('')
+    setAccionMinimo(insumo.stock_minimo ? String(insumo.stock_minimo) : '')
+    setConfirmandoCostoRaro(false)
+    setError('')
   }
 
+  const insumoAccion = accion ? insumos.find((i) => i.id === accion.id) : undefined
+  const cantidadNum = parseFloat(accionCantidad)
+  const costoNum = parseFloat(accionCosto)
+  // Unitario en vivo (h. 15): un 120 donde iba 12.00 mueve el costo de
+  // TODAS las recetas; se muestra y se compara antes de guardar
+  const unitarioVivo =
+    accion?.tipo === 'compra' && cantidadNum > 0 && costoNum > 0 ? costoNum / cantidadNum : null
+  const desviacionCosto =
+    unitarioVivo !== null && insumoAccion && insumoAccion.costo_unitario > 0
+      ? (unitarioVivo - insumoAccion.costo_unitario) / insumoAccion.costo_unitario
+      : null
+  const costoRaro = desviacionCosto !== null && Math.abs(desviacionCosto) > 0.5
+
   const confirmarAccion = async () => {
-    if (!accion) return
-    const cantidad = parseFloat(accionCantidad)
-    const insumo = insumos.find((i) => i.id === accion.id)
-    if (!insumo || !(cantidad >= 0)) {
+    if (!accion || !insumoAccion) return
+    if (!(cantidadNum >= 0) || (accion.tipo !== 'ajuste' && !(cantidadNum > 0))) {
       setError('Pon la cantidad.')
       return
     }
-    // Mensajes claros ANTES de ir al servidor (el 422 del backend es más seco)
-    if (accion.tipo !== 'ajuste' && cantidad <= 0) {
-      setError('La cantidad tiene que ser mayor a 0.')
+    if (accion.tipo === 'compra' && !(costoNum > 0)) {
+      setError('Pon cuánto pagaste en total por esta compra: con eso se calcula el costo promedio.')
       return
     }
-    const costo = parseFloat(accionCosto)
-    if (accion.tipo === 'compra' && !(costo > 0)) {
-      setError('Pon cuánto pagaste en total por esta compra: con eso se calcula el costo promedio.')
+    // Costo fuera de lo normal (>50 % de desviación): segunda confirmación
+    if (accion.tipo === 'compra' && costoRaro && !confirmandoCostoRaro) {
+      setConfirmandoCostoRaro(true)
       return
     }
     try {
       await api.movimientoInsumo(
-        accion.id, accion.tipo, cantidad,
-        accion.tipo === 'compra' ? costo : undefined,
+        accion.id, accion.tipo, cantidadNum,
+        accion.tipo === 'compra' ? costoNum : undefined,
         accionNota.trim(),
       )
-      const texto = {
-        compra: `Compra de ${cantidad} ${insumo.unidad} de ${insumo.nombre} registrada ✔ (el costo promedio se recalculó solo)`,
-        merma: `Merma de ${cantidad} ${insumo.unidad} de ${insumo.nombre} registrada`,
-        ajuste: `${insumo.nombre}: stock corregido a ${cantidad} ${insumo.unidad} según tu conteo ✔`,
-      }[accion.tipo]
-      avisar(texto)
+      if (accion.tipo === 'ajuste') {
+        const minimo = parseFloat(accionMinimo) || 0
+        if (minimo !== insumoAccion.stock_minimo) {
+          await api.actualizarInsumo(accion.id, { stock_minimo: minimo })
+        }
+      }
+      const u = insumoAccion.unidad
+      avisar({
+        compra: `Compra registrada: +${cantidadNum} ${u} de ${insumoAccion.nombre}` +
+          (unitarioVivo !== null ? ` a ${soles(unitarioVivo)} el ${u}` : ''),
+        merma: `Pérdida registrada: −${cantidadNum} ${u} de ${insumoAccion.nombre}`,
+        ajuste: `${insumoAccion.nombre}: stock corregido a ${cantidadNum} ${u} según tu conteo`,
+      }[accion.tipo])
       setAccion(null)
       cargar()
     } catch (e) {
@@ -1500,21 +1546,34 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
     if (minimo === insumo.stock_minimo) return
     try {
       await api.actualizarInsumo(insumo.id, { stock_minimo: minimo })
+      // Acuse (h. 17): el guardado silencioso al perder el foco no se veía
+      setMinimoAcuse(insumo.id)
+      window.setTimeout(() => setMinimoAcuse(null), 1500)
       cargar()
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
   }
 
-  // ---------- Recetas ----------
+  const bajos = insumos.filter((i) => i.bajo_minimo).length
+  const insumosFiltrados = insumos.filter(
+    (i) =>
+      (!soloBajos || i.bajo_minimo) &&
+      i.nombre.toLowerCase().includes(busquedaDespensa.trim().toLowerCase()),
+  )
+
+  // ---------- Recetas: handlers ----------
 
   const platoElegido = catalogo.find((p) => p.id === parseInt(recetaPlato))
+  const precioPlato = platoElegido?.precio
+  const unidadDe = (id: number) => insumos.find((i) => i.id === id)?.unidad ?? ''
 
   const cargarReceta = async (platoId: string) => {
     setRecetaPlato(platoId)
     setRecetaItems([])
     setCostoPorcion(null)
     setSugerida(null)
+    setRecetaSucia(false)
     if (!platoId) return
     try {
       const [receta, sug] = await Promise.all([
@@ -1529,24 +1588,70 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
     }
   }
 
-  const usarSugerida = async () => {
+  // Navegar entre lista y editor respetando lo escrito (h. 22)
+  const irA = (destino: string) => {
+    if (recetaSucia) {
+      setSaliendoA(destino)
+      return
+    }
+    cargarReceta(destino)
+  }
+
+  const editarItemReceta = (idx: number, cantidad: string) => {
+    setRecetaSucia(true)
+    setRecetaItems((prev) => prev.map((x, i) => (i === idx ? { ...x, cantidad } : x)))
+  }
+
+  const quitarItemReceta = (idx: number) => {
+    setRecetaSucia(true)
+    setRecetaItems((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const agregarInsumoAReceta = (insumoId: number) => {
+    setRecetaSucia(true)
+    setRecetaItems((prev) => [...prev, { insumo_id: insumoId, cantidad: '' }])
+    setBuscandoInsumo(false)
+  }
+
+  const crearInsumoDesdeBuscador = async () => {
+    const nombre = busquedaInsumo.trim()
+    if (!nombre) return
+    try {
+      const creado = await api.crearInsumo(nombre, unidadNueva, 0)
+      await cargar()
+      agregarInsumoAReceta(creado.id)
+      avisar(`Insumo «${nombre}» creado en ${unidadNueva}: ponle su cantidad por porción.`)
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const aplicarBase = async () => {
     if (!recetaPlato) return
-    // La base REEMPLAZA la receta guardada: si ya hay una afinada a mano, se pregunta
-    if (recetaItems.length > 0 && !window.confirm(
-      `${platoElegido?.nombre ?? 'Este plato'} ya tiene una receta con ${recetaItems.length} insumo(s). ` +
-      '¿La reemplazo por la receta base? Lo que ajustaste a mano se pierde.',
-    )) return
+    setConfirmandoBase(false)
     try {
       const receta = await api.aplicarRecetaSugerida(parseInt(recetaPlato))
       setRecetaItems(receta.items.map((i) => ({ insumo_id: i.insumo_id, cantidad: String(i.cantidad) })))
       setCostoPorcion(receta.costo_porcion)
-      avisar('Receta base cargada ✔ — ajusta las cantidades a tu mano y guarda. Los insumos que faltaban se crearon con stock 0.')
-      // cargar() limpia el error al terminar: el aviso de unidades va DESPUÉS
+      setRecetaSucia(false)
+      setMensaje(
+        `Receta base de ${platoElegido?.nombre ?? 'este plato'} cargada: ${receta.items.length} insumo(s). ` +
+        'Ajusta las cantidades a tu mano y guarda.',
+      )
+      setError('')
       await cargar()
-      if (receta.avisos.length > 0) setError(receta.avisos.join(' '))
+      // Lo pendiente NO es un error: canal ámbar con la acción de arreglo (h. 21)
+      setAviso(receta.avisos.length > 0 ? `${receta.avisos.join(' ')} Agrégalo a mano con "+ Buscar insumo".` : '')
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
+  }
+
+  const usarSugerida = () => {
+    if (!recetaPlato) return
+    // La base REEMPLAZA la receta guardada: hoja propia, no window.confirm
+    if (recetaItems.length > 0) setConfirmandoBase(true)
+    else aplicarBase()
   }
 
   const guardarReceta = async () => {
@@ -1559,15 +1664,48 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
           .filter((i) => i.cantidad > 0),
       )
       setCostoPorcion(receta.costo_porcion)
-      avisar('Receta guardada ✔ (cada venta de este plato descontará estos insumos)')
+      setRecetaSucia(false)
+      avisar('Receta guardada (cada venta de este plato descontará estos insumos)')
       cargar()
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
   }
 
-  const precioPlato = platoElegido?.precio
-  const unidadDe = (id: number) => insumos.find((i) => i.id === id)?.unidad ?? ''
+  // Costo y margen EN VIVO con los costos ya en memoria (h. 20): el
+  // servidor sigue siendo la verdad al guardar; esto es la vista previa
+  const costoVivo = recetaItems.reduce((s, it) => {
+    const ins = insumos.find((x) => x.id === it.insumo_id)
+    return s + (ins?.costo_unitario ?? 0) * (parseFloat(it.cantidad) || 0)
+  }, 0)
+  const margenVivo = precioPlato !== undefined ? precioPlato - costoVivo : null
+  const margenPct =
+    precioPlato !== undefined && precioPlato > 0 ? 1 - costoVivo / precioPlato : null
+  const claseMargen =
+    margenVivo !== null && margenVivo < 0
+      ? 'margen-perdida'
+      : margenPct !== null && margenPct < 0.4
+        ? 'margen-justo'
+        : 'margen-sano'
+
+  // Lista de platos (h. 18): buscable, con progreso y la urgencia primero
+  const sinReceta = catalogo.filter((p) => !platosConReceta.has(p.id)).length
+  const rangoPlato = (p: Plato) =>
+    !platosConReceta.has(p.id) ? (p.activo_hoy ? 0 : 1) : 2
+  const platosFiltrados = catalogo
+    .filter((p) => {
+      if (filtroReceta === 'sin' && platosConReceta.has(p.id)) return false
+      if (filtroReceta === 'con' && !platosConReceta.has(p.id)) return false
+      return p.nombre.toLowerCase().includes(busquedaPlato.trim().toLowerCase())
+    })
+    .sort((a, b) => rangoPlato(a) - rangoPlato(b) || a.nombre.localeCompare(b.nombre))
+
+  const insumosUsados = new Set(recetaItems.map((i) => i.insumo_id))
+  const candidatosInsumo = insumos.filter(
+    (i) =>
+      !insumosUsados.has(i.id) &&
+      i.nombre.toLowerCase().includes(busquedaInsumo.trim().toLowerCase()),
+  )
 
   return (
     <div>
@@ -1586,14 +1724,17 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
         </button>
       </nav>
       {mensaje && <div className="banner-ok">{mensaje}</div>}
+      {aviso && <div className="banner-aviso">{aviso}</div>}
       {error && <div className="banner-error">{error}</div>}
 
       {seccion === 'despensa' && (
         <>
           {porAgotarse.length > 0 && (
             <div className="aviso-por-agotarse">
-              <strong>⚠ Se está acabando:</strong> {porAgotarse.join(', ')}. Compra antes de la
-              próxima hora punta.
+              <strong>⚠ Se está acabando:</strong>{' '}
+              {porAgotarse.slice(0, 8).join(', ')}
+              {porAgotarse.length > 8 && ` y ${porAgotarse.length - 8} más (filtra con el botón "bajos")`}
+              . Compra antes de la próxima hora punta.
             </div>
           )}
           <div className="admin-acciones">
@@ -1604,14 +1745,33 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
             <span className="nota-admin">Inventario valorizado: <strong>{soles(valorInventario)}</strong></span>
           </div>
           {mostrarNuevo && (
-            <div className="form-insumo form-insumo-inline">
-              <input placeholder="Nombre (Papa, Arroz…)" value={nuevo.nombre} autoFocus
-                     onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
-              <input placeholder="Unidad (kg, l, unidad)" value={nuevo.unidad}
-                     onChange={(e) => setNuevo({ ...nuevo, unidad: e.target.value })} />
-              <input type="number" step="0.1" min="0" placeholder="Costo por unidad S/ (opcional)"
-                     value={nuevo.costo} onChange={(e) => setNuevo({ ...nuevo, costo: e.target.value })} />
-              <button className="boton-primario" onClick={crearInsumo}>Crear</button>
+            <div className="form-insumo form-insumo-hoja">
+              <div className="campo-etiquetado">
+                <label>Nombre del insumo</label>
+                <input placeholder="Papa, ají amarillo, aceite…" value={nuevo.nombre} autoFocus
+                       onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
+              </div>
+              <div className="campo-etiquetado">
+                <label>Unidad en la que lo mides</label>
+                <div className="chips-unidad">
+                  {UNIDADES_INSUMO.map((u) => (
+                    <button key={u} type="button" className="chip-unidad" aria-pressed={nuevo.unidad === u}
+                            onClick={() => setNuevo({ ...nuevo, unidad: u })}>
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="campo-etiquetado">
+                <label>Costo por {nuevo.unidad} (opcional)</label>
+                <input type="number" inputMode="decimal" min="0"
+                       placeholder="Si lo dejas vacío, se aprende de tu primera compra"
+                       value={nuevo.costo} onChange={(e) => setNuevo({ ...nuevo, costo: e.target.value })} />
+              </div>
+              <div className="admin-acciones">
+                <button className="boton-primario" onClick={crearInsumo}>Crear insumo</button>
+                <button onClick={() => setMostrarNuevo(false)}>Cancelar</button>
+              </div>
             </div>
           )}
           {insumos.length === 0 && (
@@ -1625,67 +1785,89 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
             </div>
           )}
           {insumos.length > 0 && (
-            <div className="tabla-desplazable"><table className="tabla-admin tabla-despensa tabla-editable">
-              <thead>
-                <tr>
-                  <th>Insumo</th>
-                  <th className="col-cantidad">Tengo</th>
-                  <th className="col-cantidad" title="Avisar cuando el stock baje de aquí (vacío = sin aviso)">Avisar bajo</th>
-                  <th className="col-cantidad">Costo / unidad</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {insumos.map((i) => (
-                  <Fragment key={i.id}>
-                    <tr className={i.bajo_minimo ? 'fila-por-agotarse' : ''}>
-                      <td>{i.bajo_minimo && '⚠ '}{i.nombre} <span className="unidad-suave">({i.unidad})</span></td>
-                      <td className={`col-cantidad ${i.stock_actual < 0 ? 'stock-negativo' : ''}`}>
-                        <strong>{i.stock_actual}</strong> {i.unidad}
-                      </td>
-                      <td className="col-cantidad">
-                        <input type="number" step="0.5" min="0" className="input-minimo"
-                               defaultValue={i.stock_minimo || ''} placeholder="—"
-                               onBlur={(e) => guardarMinimo(i, e.target.value)} />
-                      </td>
-                      <td className="col-cantidad">{soles(i.costo_unitario)}</td>
-                      <td className="celda-acciones">
-                        <button className="boton-accion" onClick={() => abrirAccion(i.id, 'compra')}>🛒 Compré</button>
-                        <button className="boton-accion" onClick={() => abrirAccion(i.id, 'ajuste')}>📋 Conté</button>
-                        <button className="boton-accion" onClick={() => abrirAccion(i.id, 'merma')}>🗑 Se perdió</button>
-                      </td>
+            <>
+              <div className="admin-acciones despensa-filtros">
+                <input className="buscador" placeholder="🔍 Buscar insumo…" value={busquedaDespensa}
+                       onChange={(e) => setBusquedaDespensa(e.target.value)} />
+                {bajos > 0 && (
+                  <button className={`chip-filtro ${soloBajos ? 'activa' : ''}`}
+                          onClick={() => setSoloBajos((v) => !v)}>
+                    ⚠ {bajos} bajo{bajos === 1 ? '' : 's'}
+                  </button>
+                )}
+              </div>
+
+              {/* En celular la fila pasa a tarjeta: la tarea diaria (Compré /
+                  Conté) a 56px, sin scroll horizontal escondido (h. 13) */}
+              <div className="despensa-tarjetas">
+                {insumosFiltrados.map((i) => (
+                  <div className={`insumo-tarjeta ${i.bajo_minimo ? 'esta-bajo' : ''}`} key={i.id}>
+                    <div className="insumo-tarjeta-cabecera">
+                      <span className="insumo-tarjeta-nombre">{i.nombre}</span>
+                      {i.bajo_minimo && <span className="insumo-tarjeta-aviso">se está acabando</span>}
+                      <span className={`insumo-tarjeta-stock ${i.stock_actual < 0 ? 'stock-negativo' : ''}`}>
+                        {i.stock_actual} <span className="unidad">{i.unidad}</span>
+                      </span>
+                    </div>
+                    <div className="insumo-tarjeta-acciones">
+                      <button className="boton-accion es-frecuente es-compra" onClick={() => abrirAccion(i, 'compra')}>
+                        🛒 Compré
+                      </button>
+                      <button className="boton-accion es-frecuente" onClick={() => abrirAccion(i, 'ajuste')}>
+                        📋 Conté
+                      </button>
+                      <button className="boton-accion es-merma" aria-label={`Registrar pérdida de ${i.nombre}`}
+                              title="Se perdió" onClick={() => abrirAccion(i, 'merma')}>
+                        🗑
+                      </button>
+                    </div>
+                    <div className="insumo-tarjeta-pie">
+                      {soles(i.costo_unitario)} el {i.unidad}
+                      {i.stock_minimo > 0 && ` · avisa bajo ${i.stock_minimo} ${i.unidad}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* En tablet ancha se conserva la tabla */}
+              <div className="tabla-despensa-envoltorio">
+                <div className="tabla-desplazable"><table className="tabla-admin tabla-despensa tabla-editable">
+                  <thead>
+                    <tr>
+                      <th>Insumo</th>
+                      <th className="col-cantidad">Tengo</th>
+                      <th className="col-cantidad" title="Avisar cuando el stock baje de aquí (vacío = sin aviso)">Avisar bajo</th>
+                      <th className="col-cantidad">Costo / unidad</th>
+                      <th>Acciones</th>
                     </tr>
-                    {accion?.id === i.id && (
-                      <tr className="fila-accion">
-                        <td colSpan={5}>
-                          <div className="accion-inline">
-                            <strong>
-                              {accion.tipo === 'compra' && `🛒 Compré ${i.nombre}:`}
-                              {accion.tipo === 'ajuste' && `📋 Conté ${i.nombre}, hay:`}
-                              {accion.tipo === 'merma' && `🗑 Se perdió de ${i.nombre}:`}
-                            </strong>
-                            <input type="number" step="0.01" min="0" autoFocus
-                                   placeholder={`${accion.tipo === 'ajuste' ? 'total en' : 'cantidad en'} ${i.unidad}`}
-                                   value={accionCantidad} onChange={(e) => setAccionCantidad(e.target.value)}
-                                   onKeyDown={(e) => e.key === 'Enter' && confirmarAccion()} />
-                            {accion.tipo === 'compra' && (
-                              <input type="number" step="0.1" min="0" placeholder="pagué S/ (total)"
-                                     value={accionCosto} onChange={(e) => setAccionCosto(e.target.value)}
-                                     onKeyDown={(e) => e.key === 'Enter' && confirmarAccion()} />
-                            )}
-                            <input placeholder={accion.tipo === 'compra' ? 'dónde / a quién (opcional)' : 'nota (opcional)'}
-                                   maxLength={200} value={accionNota} onChange={(e) => setAccionNota(e.target.value)}
-                                   onKeyDown={(e) => e.key === 'Enter' && confirmarAccion()} />
-                            <button className="boton-primario" onClick={confirmarAccion}>Registrar</button>
-                            <button onClick={() => setAccion(null)}>Cancelar</button>
-                          </div>
+                  </thead>
+                  <tbody>
+                    {insumosFiltrados.map((i) => (
+                      <tr key={i.id} className={i.bajo_minimo ? 'fila-por-agotarse' : ''}>
+                        <td>{i.bajo_minimo && '⚠ '}{i.nombre} <span className="unidad-suave">({i.unidad})</span></td>
+                        <td className={`col-cantidad ${i.stock_actual < 0 ? 'stock-negativo' : ''}`}>
+                          <strong>{i.stock_actual}</strong> {i.unidad}
+                        </td>
+                        <td className="col-cantidad">
+                          <input type="number" inputMode="decimal" min="0" className="input-minimo"
+                                 defaultValue={i.stock_minimo || ''} placeholder="—"
+                                 onBlur={(e) => guardarMinimo(i, e.target.value)} />
+                          {minimoAcuse === i.id && (
+                            <span className="acuse-guardado" aria-live="polite">✓ guardado</span>
+                          )}
+                        </td>
+                        <td className="col-cantidad">{soles(i.costo_unitario)}</td>
+                        <td className="celda-acciones">
+                          <button className="boton-accion es-compra" onClick={() => abrirAccion(i, 'compra')}>🛒 Compré</button>
+                          <button className="boton-accion" onClick={() => abrirAccion(i, 'ajuste')}>📋 Conté</button>
+                          <button className="boton-accion" onClick={() => abrirAccion(i, 'merma')}>🗑 Se perdió</button>
                         </td>
                       </tr>
-                    )}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table></div>
+                    ))}
+                  </tbody>
+                </table></div>
+              </div>
+            </>
           )}
           <p className="nota-admin">
             <strong>Compré</strong> suma stock y recalcula el costo promedio con lo que pagaste.
@@ -1700,30 +1882,92 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
 
       {seccion === 'recetas' && (
         <div className="panel-recetas">
-          <p className="nota-admin">
-            La receta dice cuánto insumo consume UNA porción. Con eso, cada venta descuenta stock
-            sola y ves el costo y margen del plato. Elige un plato: si es un clásico (lomo, ají de
-            gallina, seco…), te ofrezco una receta base para que la ajustes a tu mano.
-          </p>
-          <select value={recetaPlato} onChange={(e) => cargarReceta(e.target.value)} className="select-plato">
-            <option value="">— Elige un plato —</option>
-            {catalogo.map((p) => (
-              <option key={p.id} value={p.id}>
-                {platosConReceta.has(p.id) ? '✔ ' : '· '}{p.nombre}
-              </option>
-            ))}
-          </select>
-          {recetaPlato && (
+          {!recetaPlato ? (
             <>
+              <div className="platos-progreso">
+                <span className="cuenta">{platosConReceta.size}</span>
+                <span>de {catalogo.length} platos con receta</span>
+              </div>
+              <div className="platos-barra">
+                <i style={{ width: `${catalogo.length > 0 ? (platosConReceta.size / catalogo.length) * 100 : 0}%` }} />
+              </div>
+              <div className="admin-acciones despensa-filtros">
+                <input className="buscador" placeholder="🔍 Buscar plato…" value={busquedaPlato}
+                       onChange={(e) => setBusquedaPlato(e.target.value)} />
+              </div>
+              <div className="admin-acciones chips-filtro">
+                <button className={`chip-filtro ${filtroReceta === 'sin' ? 'activa' : ''}`}
+                        onClick={() => setFiltroReceta('sin')}>
+                  Sin receta · {sinReceta}
+                </button>
+                <button className={`chip-filtro ${filtroReceta === 'con' ? 'activa' : ''}`}
+                        onClick={() => setFiltroReceta('con')}>
+                  Con receta
+                </button>
+                <button className={`chip-filtro ${filtroReceta === 'todos' ? 'activa' : ''}`}
+                        onClick={() => setFiltroReceta('todos')}>
+                  Todos
+                </button>
+              </div>
+              <div className="platos-lista">
+                {platosFiltrados.map((p) => (
+                  <button className="plato-fila" key={p.id} onClick={() => irA(String(p.id))}>
+                    <span className="insumo-ref">
+                      <span>{platosConReceta.has(p.id) ? '✔ ' : ''}{p.nombre}</span>
+                      <span className="meta">
+                        {soles(p.precio)}{p.activo_hoy ? ' · en el menú de hoy' : ''}
+                      </span>
+                    </span>
+                    {!platosConReceta.has(p.id) && (
+                      <span className="etiqueta-receta-base">sin receta</span>
+                    )}
+                  </button>
+                ))}
+                {platosFiltrados.length === 0 && (
+                  <p className="nota-admin platos-vacio">Ningún plato coincide con la búsqueda y el filtro.</p>
+                )}
+              </div>
+              <p className="nota-admin">
+                La receta dice cuánto insumo consume UNA porción: con eso cada venta descuenta
+                stock sola y ves el costo y margen del plato.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="admin-acciones">
+                <button onClick={() => irA('')}>← Platos</button>
+              </div>
+              {platoElegido && (
+                <div className="plato-cabecera">
+                  <div className="fila">
+                    <strong className="plato-cabecera-nombre">{platoElegido.nombre}</strong>
+                    <span className="meta">se vende a {soles(platoElegido.precio)}</span>
+                  </div>
+                  <div className="cifras">
+                    <div className="cifra">
+                      <span>Costo</span>
+                      <strong>{soles(costoVivo)}</strong>
+                    </div>
+                    {margenVivo !== null && (
+                      <div className={`cifra ${claseMargen}`}>
+                        <span>Te queda</span>
+                        <strong>{soles(margenVivo)}</strong>
+                      </div>
+                    )}
+                    {margenPct !== null && (
+                      <div className={`cifra ${claseMargen}`}>
+                        <span>Margen</span>
+                        <strong>{Math.round(margenPct * 100)} %</strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {sugerida?.encontrada && (
                 <div className="sugerencia-menu">
                   <span>
                     ✨ Tengo una receta base de <strong>{sugerida.base}</strong> ({sugerida.items.length} insumos
                     {sugerida.items.some((s) => !s.existe) && '; los que no tengas se crean solos'}).
-                    {sugerida.items.some((s) => s.sin_conversion) && (
-                      <> ⚠ {sugerida.items.filter((s) => s.sin_conversion).map((s) => s.insumo).join(', ')}:
-                      lo tienes en otra unidad, ese lo agregas a mano.</>
-                    )}
                   </span>
                   <button className="boton-grande boton-confirmar boton-sugerencia" onClick={usarSugerida}>
                     ✨ Usar receta base
@@ -1731,36 +1975,35 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
                 </div>
               )}
               {sugerida && !sugerida.encontrada && recetaItems.length === 0 && (
-                <p className="nota-admin">No tengo una receta base para este plato: ármala abajo insumo por insumo.</p>
+                <p className="nota-admin">No tengo una receta base para este plato: ármala insumo por insumo con "+ Buscar insumo".</p>
               )}
               <div className="receta-editor">
-                {recetaItems.map((item, idx) => (
-                  <div className="receta-fila" key={idx}>
-                    <select
-                      value={item.insumo_id}
-                      onChange={(e) => setRecetaItems((prev) =>
-                        prev.map((x, i) => (i === idx ? { ...x, insumo_id: parseInt(e.target.value) } : x)))}
-                    >
-                      {insumos.map((i) => <option key={i.id} value={i.id}>{i.nombre}</option>)}
-                    </select>
-                    <input type="number" step="0.001" min="0" placeholder="Cantidad"
-                           value={item.cantidad}
-                           onChange={(e) => setRecetaItems((prev) =>
-                             prev.map((x, i) => (i === idx ? { ...x, cantidad: e.target.value } : x)))} />
-                    <span className="unidad-suave">{unidadDe(item.insumo_id)} por porción</span>
-                    <button className="boton-quitar"
-                            onClick={() => setRecetaItems((prev) => prev.filter((_, i) => i !== idx))}>✕</button>
-                  </div>
-                ))}
-                <div className="admin-acciones">
-                  <button
-                    disabled={insumos.length === 0}
-                    onClick={() => setRecetaItems((prev) => [...prev, { insumo_id: insumos[0]?.id ?? 0, cantidad: '' }])}
-                  >
-                    + Agregar insumo
+                {recetaItems.map((item, idx) => {
+                  const ins = insumos.find((x) => x.id === item.insumo_id)
+                  return (
+                    <div className="receta-fila" key={`${item.insumo_id}-${idx}`}>
+                      <span className="insumo-ref">
+                        <span>{ins?.nombre ?? `Insumo #${item.insumo_id}`}</span>
+                        {ins && <span className="costo">{soles(ins.costo_unitario)} el {ins.unidad}</span>}
+                      </span>
+                      <label className="cantidad">
+                        <input type="number" inputMode="decimal" min="0" placeholder="0"
+                               value={item.cantidad}
+                               onChange={(e) => editarItemReceta(idx, e.target.value)} />
+                        <span className="unidad-fija">{unidadDe(item.insumo_id)}</span>
+                      </label>
+                      <button className="quitar" aria-label={`Quitar ${ins?.nombre ?? 'insumo'}`}
+                              onClick={() => quitarItemReceta(idx)}>✕</button>
+                    </div>
+                  )
+                })}
+                <div className="admin-acciones receta-acciones">
+                  <button disabled={insumos.length === 0}
+                          onClick={() => { setBuscandoInsumo(true); setBusquedaInsumo('') }}>
+                    + Buscar insumo
                   </button>
                   <button className="boton-primario" onClick={guardarReceta} disabled={recetaItems.length === 0}>
-                    💾 Guardar receta
+                    💾 Guardar receta{recetaSucia ? ' *' : ''}
                   </button>
                 </div>
                 {insumos.length === 0 && (
@@ -1769,16 +2012,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
               </div>
               {costoPorcion !== null && costoPorcion > 0 && (
                 <div className="costo-porcion">
-                  <span>Costo por porción: <strong>{soles(costoPorcion)}</strong></span>
-                  {precioPlato !== undefined && (
-                    <span>
-                      · se vende a <strong>{soles(precioPlato)}</strong> · te queda{' '}
-                      <strong className={precioPlato - costoPorcion < 0 ? 'stock-negativo' : ''}>
-                        {soles(precioPlato - costoPorcion)}
-                      </strong>{' '}
-                      ({Math.round((1 - costoPorcion / precioPlato) * 100)}%)
-                    </span>
-                  )}
+                  Costo guardado en el servidor: <strong>{soles(costoPorcion)}</strong> por porción.
                 </div>
               )}
             </>
@@ -1817,6 +2051,211 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
             "Conté" en la despensa.
           </p>
         </>
+      )}
+
+      {/* Hoja por movimiento (h. 14): color y verbo propios, efecto antes
+          de confirmar. En celular sube desde abajo como hoja. */}
+      {accion && insumoAccion && (
+        <div className="modal-fondo hoja-abajo" onClick={() => setAccion(null)}>
+          <div
+            className={`modal hoja-movimiento ${
+              accion.tipo === 'compra' ? 'mov-compra' : accion.tipo === 'ajuste' ? 'mov-conteo' : 'mov-merma'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="hoja-movimiento-cabecera">
+              <span className="tipo">
+                {accion.tipo === 'compra' ? 'Compra' : accion.tipo === 'ajuste' ? 'Conteo de inventario' : 'Pérdida / merma'}
+              </span>
+              <span className="insumo">{insumoAccion.nombre}</span>
+            </div>
+            <div className="hoja-movimiento-cuerpo">
+              <div className="campo-etiquetado">
+                <label>
+                  {accion.tipo === 'compra' ? '¿Cuánto compraste?'
+                    : accion.tipo === 'ajuste' ? '¿Cuánto tienes EN TOTAL?'
+                    : '¿Cuánto se perdió?'}
+                </label>
+                <div className="campo-cantidad">
+                  <input type="number" inputMode="decimal" enterKeyHint="done" min="0" autoFocus
+                         value={accionCantidad}
+                         onChange={(e) => { setAccionCantidad(e.target.value); setConfirmandoCostoRaro(false) }}
+                         onKeyDown={(e) => e.key === 'Enter' && confirmarAccion()} />
+                  <span className="unidad-fija">{insumoAccion.unidad}</span>
+                </div>
+              </div>
+              {accion.tipo === 'compra' && (
+                <div className="campo-etiquetado">
+                  <label>¿Cuánto pagaste en total?</label>
+                  <div className="campo-cantidad">
+                    <span className="unidad-fija">S/</span>
+                    <input type="number" inputMode="decimal" enterKeyHint="done" min="0"
+                           value={accionCosto}
+                           onChange={(e) => { setAccionCosto(e.target.value); setConfirmandoCostoRaro(false) }}
+                           onKeyDown={(e) => e.key === 'Enter' && confirmarAccion()} />
+                  </div>
+                </div>
+              )}
+              {accion.tipo === 'compra' && unitarioVivo !== null && (
+                <div className={`linea-efecto ${costoRaro ? 'efecto-raro' : ''}`}>
+                  Te queda a <strong>{soles(unitarioVivo)} el {insumoAccion.unidad}</strong>.
+                  {desviacionCosto !== null && (
+                    <> Antes pagabas {soles(insumoAccion.costo_unitario)} —{' '}
+                    {desviacionCosto >= 0 ? 'sube' : 'baja'} {Math.abs(Math.round(desviacionCosto * 100))} %.</>
+                  )}
+                  {costoRaro && <strong> Revisa el monto antes de guardar.</strong>}
+                </div>
+              )}
+              {cantidadNum > 0 && (
+                <div className="linea-efecto">
+                  {accion.tipo === 'compra' && (
+                    <>Sumas {cantidadNum} {insumoAccion.unidad}. Quedas con{' '}
+                    <strong>{redondear(insumoAccion.stock_actual + cantidadNum)} {insumoAccion.unidad}</strong>.</>
+                  )}
+                  {accion.tipo === 'ajuste' && (
+                    <>El stock pasa de {insumoAccion.stock_actual} a{' '}
+                    <strong>{cantidadNum} {insumoAccion.unidad}</strong>. Se registra un conteo, no una compra.</>
+                  )}
+                  {accion.tipo === 'merma' && (
+                    <>Descuentas {cantidadNum} {insumoAccion.unidad}. Quedas con{' '}
+                    <strong>{redondear(insumoAccion.stock_actual - cantidadNum)} {insumoAccion.unidad}</strong>.</>
+                  )}
+                </div>
+              )}
+              {accion.tipo === 'ajuste' && (
+                <div className="campo-etiquetado">
+                  <label>Avisar cuando quede menos de (opcional)</label>
+                  <div className="campo-cantidad campo-cantidad-chico">
+                    <input type="number" inputMode="decimal" min="0" placeholder="—"
+                           value={accionMinimo} onChange={(e) => setAccionMinimo(e.target.value)} />
+                    <span className="unidad-fija">{insumoAccion.unidad}</span>
+                  </div>
+                </div>
+              )}
+              <div className="campo-etiquetado">
+                <label>Nota (opcional)</label>
+                <input className="input-nota-hoja"
+                       placeholder={accion.tipo === 'compra' ? 'dónde / a quién' : 'qué pasó'}
+                       maxLength={200} value={accionNota}
+                       onChange={(e) => setAccionNota(e.target.value)}
+                       onKeyDown={(e) => e.key === 'Enter' && confirmarAccion()} />
+              </div>
+              {error && <div className="banner-error">{error}</div>}
+              <div className="admin-acciones hoja-acciones">
+                <button className="boton-primario" onClick={confirmarAccion}>
+                  {confirmandoCostoRaro
+                    ? 'Sí, pagué eso'
+                    : accion.tipo === 'compra' ? 'Guardar compra'
+                    : accion.tipo === 'ajuste' ? 'Guardar conteo'
+                    : 'Registrar pérdida'}
+                </button>
+                <button onClick={() => setAccion(null)}>Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Buscador de insumo para la receta (h. 19): excluye los ya usados
+          y ofrece crear el que no existe */}
+      {buscandoInsumo && (
+        <div className="modal-fondo" onClick={() => setBuscandoInsumo(false)}>
+          <div className="modal modal-buscar-insumo" onClick={(e) => e.stopPropagation()}>
+            <h2>Agregar insumo a la receta</h2>
+            <input className="buscador" autoFocus placeholder="🔍 ají amarillo, papa…"
+                   value={busquedaInsumo} onChange={(e) => setBusquedaInsumo(e.target.value)} />
+            <div className="platos-lista lista-insumos">
+              {candidatosInsumo.map((i) => (
+                <button className="plato-fila" key={i.id} onClick={() => agregarInsumoAReceta(i.id)}>
+                  <span className="insumo-ref">
+                    <span>{i.nombre}</span>
+                    <span className="meta">{soles(i.costo_unitario)} el {i.unidad} · tienes {i.stock_actual}</span>
+                  </span>
+                </button>
+              ))}
+              {candidatosInsumo.length === 0 && busquedaInsumo.trim() !== '' && (
+                <div className="crear-desde-buscador">
+                  <p>No existe «{busquedaInsumo.trim()}» en tu despensa.</p>
+                  <div className="chips-unidad">
+                    {UNIDADES_INSUMO.map((u) => (
+                      <button key={u} type="button" className="chip-unidad" aria-pressed={unidadNueva === u}
+                              onClick={() => setUnidadNueva(u)}>
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="boton-primario" onClick={crearInsumoDesdeBuscador}>
+                    Crear «{busquedaInsumo.trim()}» en {unidadNueva} y agregarlo
+                  </button>
+                </div>
+              )}
+              {candidatosInsumo.length === 0 && busquedaInsumo.trim() === '' && (
+                <p className="nota-admin platos-vacio">Todos tus insumos ya están en esta receta.</p>
+              )}
+            </div>
+            <button className="boton-grande boton-secundario" onClick={() => setBuscandoInsumo(false)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reemplazar por la receta base: hoja propia, no window.confirm (h. 21) */}
+      {confirmandoBase && (
+        <div className="modal-fondo" onClick={() => setConfirmandoBase(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>¿Usar la receta base?</h2>
+            <p>
+              {platoElegido?.nombre ?? 'Este plato'} ya tiene una receta con{' '}
+              <strong>{recetaItems.length} insumo(s)</strong>. La base la reemplaza y lo que
+              ajustaste a mano se pierde.
+            </p>
+            <div className="modal-botones">
+              <button className="boton-grande boton-secundario" onClick={() => setConfirmandoBase(false)}>
+                Cancelar
+              </button>
+              <button className="boton-grande boton-confirmar" onClick={aplicarBase}>
+                Sí, usar la base
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cambios sin guardar (h. 22): nada se borra sin preguntar */}
+      {saliendoA !== null && (
+        <div className="modal-fondo">
+          <div className="modal">
+            <h2>Tienes cambios sin guardar</h2>
+            <p>La receta de {platoElegido?.nombre ?? 'este plato'} tiene ajustes que no se guardaron.</p>
+            <div className="modal-botones modal-botones-columna">
+              <button
+                className="boton-grande boton-confirmar"
+                onClick={async () => {
+                  const destino = saliendoA
+                  setSaliendoA(null)
+                  await guardarReceta()
+                  cargarReceta(destino)
+                }}
+              >
+                💾 Guardar y salir
+              </button>
+              <button
+                className="boton-grande boton-secundario"
+                onClick={() => {
+                  const destino = saliendoA
+                  setSaliendoA(null)
+                  cargarReceta(destino)
+                }}
+              >
+                Salir sin guardar
+              </button>
+              <button className="boton-grande boton-secundario" onClick={() => setSaliendoA(null)}>
+                Seguir editando
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

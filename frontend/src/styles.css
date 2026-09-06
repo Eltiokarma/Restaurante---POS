@@ -4582,3 +4582,714 @@ select:focus-visible {
   min-width: 170px;
   padding: 8px 10px;
 }
+
+
+/* ==========================================================================
+   Kardex — Tanda 1 (solo CSS)
+   Auditoría Admin → Insumos, hallazgos 13–22.
+   Mergear al final de frontend/src/styles.css, dentro del bloque
+   "Kardex intuitivo" o después de él.
+
+   No introduce tokens nuevos, dependencias ni recursos externos.
+   No toca @media print ni #ticket-print.
+   Los hallazgos marcados (parcial) necesitan además markup en Admin.tsx;
+   aquí queda el andamio para que ese markup no requiera CSS nuevo.
+   ========================================================================== */
+
+
+/* --- 13 · Piso táctil de las acciones de despensa -----------------------
+   .boton-accion estaba en min-height: 40px, bajo el propio --toque-min.
+   Compré / Conté son las acciones diarias: van al piso alto.               */
+
+.boton-accion {
+  min-height: var(--toque-min);
+  padding-inline: 16px;
+  font-size: 15px;
+}
+
+.boton-accion.es-frecuente {
+  min-height: 56px;
+  font-size: 16px;
+}
+
+/* Merma: destructiva y rara. Icono cuadrado, nunca al lado de las otras
+   dos con el mismo peso visual. Necesita aria-label en el TSX.             */
+.boton-accion.es-merma {
+  min-width: 56px;
+  min-height: 56px;
+  padding-inline: 0;
+}
+
+
+/* --- 13 · Señal de que la tabla se desplaza -----------------------------
+   Mientras la tabla siga existiendo en anchos intermedios, el borde
+   derecho tiene que anunciar el corte.                                     */
+
+.tabla-desplazable {
+  position: relative;
+}
+
+.tabla-desplazable::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: 48px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 253, 248, 0), var(--papel-alto) 72%);
+}
+
+@media (min-width: 1100px) {
+  .tabla-desplazable::after { display: none; }
+}
+
+
+/* --- 13 · Andamio de tarjetas de despensa en móvil ----------------------
+   Requiere que TabInsumos emita las tarjetas (o la tabla con
+   display:block). El CSS ya está listo para recibirlas.                    */
+
+.despensa-tarjetas { display: none; }
+
+@media (max-width: 700px) {
+  .tabla-despensa-envoltorio { display: none; }
+
+  .despensa-tarjetas {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+.insumo-tarjeta {
+  background: var(--papel-alto);
+  border: 1.5px solid var(--linea);
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Estado bajo: forma + etiqueta, no solo matiz. */
+.insumo-tarjeta.esta-bajo {
+  border-left: 6px solid var(--aji);
+}
+
+.insumo-tarjeta-cabecera {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.insumo-tarjeta-nombre {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.insumo-tarjeta-aviso {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b4a05; /* --aji sobre --papel-alto no pasa AA como texto */
+}
+
+.insumo-tarjeta-stock {
+  margin-left: auto;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.insumo-tarjeta-stock .unidad {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tinta-media);
+}
+
+.insumo-tarjeta-acciones {
+  display: flex;
+  gap: 8px;
+}
+
+.insumo-tarjeta-acciones > .boton-accion.es-frecuente {
+  flex: 1;
+}
+
+.insumo-tarjeta-pie {
+  font-size: 13.5px;
+  color: #6f6559; /* ver hallazgo 2: --tinta-suave falla AA */
+}
+
+
+/* --- 14 · Un color y un verbo por movimiento ----------------------------
+   Hoy los tres comparten --culantro-tenue. Compra verde, conteo azul,
+   merma roja, en la hoja y en el historial.                                */
+
+.mov-compra  { --mov-color: var(--culantro); --mov-tenue: var(--culantro-tenue); }
+.mov-conteo  { --mov-color: var(--mayolica); --mov-tenue: #e3eef5; }
+.mov-merma   { --mov-color: var(--achiote);  --mov-tenue: #fbe9e2; }
+
+.hoja-movimiento-cabecera {
+  background: var(--mov-color);
+  color: #fff;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hoja-movimiento-cabecera .tipo {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.92;
+}
+
+.hoja-movimiento-cabecera .insumo {
+  font-size: 21px;
+  font-weight: 700;
+}
+
+/* Campo único, grande, con la unidad fija dentro. */
+.campo-cantidad {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 64px;
+  padding: 0 14px;
+  background: #fff;
+  border: 2px solid var(--mov-color);
+  border-radius: 6px;
+}
+
+.campo-cantidad input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.campo-cantidad input:focus { outline: none; }
+
+.campo-cantidad .unidad-fija {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--tinta-media);
+}
+
+/* Línea de efecto: qué va a pasar, antes de confirmar. */
+.linea-efecto {
+  background: var(--mov-tenue);
+  border-left: 6px solid var(--mov-color);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+
+/* --- 16 · Unidad como chips cerrados ------------------------------------ */
+
+.chips-unidad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-unidad {
+  min-height: var(--toque-min);
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chip-unidad[aria-pressed='true'] {
+  background: var(--culantro);
+  color: #fff;
+  box-shadow: none;
+}
+
+/* Etiquetas visibles: el placeholder no es etiqueta. */
+.campo-etiquetado {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.campo-etiquetado > label {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-media);
+}
+
+.form-insumo input {
+  min-height: 56px;
+  font-size: 17px;
+}
+
+
+/* --- 17 · Acuse del mínimo --------------------------------------------- */
+
+.input-minimo {
+  min-height: var(--toque-min);
+}
+
+.acuse-guardado {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--culantro);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .acuse-guardado {
+    animation: acuse-aparece 180ms ease-out;
+  }
+}
+
+@keyframes acuse-aparece {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: none; }
+}
+
+
+/* --- 18 · Lista buscable de platos ------------------------------------- */
+
+.platos-progreso {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.platos-progreso .cuenta {
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.platos-barra {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--papel-hondo);
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+  overflow: hidden;
+}
+
+.platos-barra > i {
+  display: block;
+  height: 100%;
+  background: var(--culantro);
+}
+
+.plato-fila {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 14px;
+  border: 0;
+  border-bottom: 1px solid var(--linea);
+  background: var(--papel-alto);
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+
+.plato-fila:last-child { border-bottom: 0; }
+
+.plato-fila .meta {
+  font-size: 13.5px;
+  color: #6f6559;
+}
+
+/* Anticipa el esfuerzo antes de entrar al plato. */
+.etiqueta-receta-base {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--aji-tenue);
+  box-shadow: inset 0 0 0 1.5px var(--aji);
+  color: #6b4a05;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+
+/* --- 19 · Filas de receta táctiles ------------------------------------- */
+
+.receta-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 10px 12px;
+  background: var(--papel-alto);
+  border: 1.5px solid var(--linea);
+  border-radius: 6px;
+}
+
+.receta-fila .insumo-ref {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.receta-fila .insumo-ref .costo {
+  font-size: 13px;
+  color: #6f6559;
+}
+
+.receta-fila .cantidad {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--toque-min);
+  padding: 0 12px;
+  background: #fff;
+  border: 1.5px solid var(--linea-fuerte);
+  border-radius: 6px;
+}
+
+.receta-fila .cantidad input {
+  width: 72px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 800;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.receta-fila .cantidad input:focus { outline: none; }
+
+.receta-fila .cantidad .unidad-fija {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tinta-media);
+}
+
+.receta-fila .quitar {
+  width: var(--toque-min);
+  height: var(--toque-min);
+  border: 0;
+  border-radius: 6px;
+  background: #fbe9e2;
+  box-shadow: inset 0 0 0 1.5px var(--achiote);
+  color: #7d2515;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+
+/* --- 20 · Costo y margen en el encabezado del plato -------------------- */
+
+.plato-cabecera {
+  background: var(--papel-alto);
+  border: 1.5px solid var(--linea-fuerte);
+  border-left: 6px solid var(--mayolica);
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plato-cabecera .cifras {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+}
+
+.plato-cabecera .cifra {
+  display: flex;
+  flex-direction: column;
+}
+
+.plato-cabecera .cifra > span:first-child {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-media);
+}
+
+.plato-cabecera .cifra > strong {
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.plato-cabecera .cifra.margen-sano   > strong { color: #1e4a26; }
+.plato-cabecera .cifra.margen-justo  > strong { color: #6b4a05; }
+.plato-cabecera .cifra.margen-perdida > strong { color: #7d2515; }
+
+/* El bloque viejo, al pie y a 1.05rem, deja de ser la única fuente. */
+.costo-porcion {
+  font-size: 14px;
+  color: #6f6559;
+}
+
+
+/* --- 21 · Tercer canal de aviso ---------------------------------------- */
+/* "Salió bien pero falta algo" no es un error. El rojo se reserva para
+   lo que impide seguir.                                                    */
+
+.banner-aviso {
+  background: var(--aji-tenue);
+  border-left: 6px solid var(--aji);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tinta);
+}
+
+.banner-aviso .arreglar {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--tinta);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+
+/* --- 14 / 19 / 22 · Botones de confirmación en móvil ------------------- */
+
+@media (max-width: 700px) {
+  .hoja-movimiento .boton-primario,
+  .panel-recetas .boton-primario {
+    width: 100%;
+    min-height: 56px;
+    font-size: 17px;
+  }
+
+  /* Nada de acciones críticas en una fila que se desplaza. */
+  .receta-acciones {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .receta-acciones > * { width: 100%; }
+}
+
+/* --- Complemento propio de la tanda 2/3 (markup nuevo de TabInsumos) --- */
+
+/* Compré lleva el relleno del verbo (verde): es LA acción diaria */
+.boton-accion.es-compra {
+  background: var(--culantro);
+  border-color: var(--culantro);
+  color: #fff;
+}
+
+/* Buscadores y chips de filtro (hallazgos 13 y 18) */
+.buscador {
+  min-height: var(--toque-min);
+  padding: 0 14px;
+  font-size: 16px;
+  border: 1.5px solid var(--linea-fuerte);
+  border-radius: 6px;
+  background: var(--papel-alto);
+  flex: 1;
+  min-width: 200px;
+}
+
+.despensa-filtros {
+  align-items: stretch;
+}
+
+.chip-filtro {
+  min-height: var(--toque-min);
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chip-filtro.activa {
+  background: var(--culantro);
+  color: #fff;
+  box-shadow: none;
+}
+
+/* Lista de platos (18) y de insumos del buscador (19) */
+.platos-lista {
+  border: 1.5px solid var(--linea);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--papel-alto);
+}
+
+.plato-fila .insumo-ref,
+.receta-fila .insumo-ref {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.platos-vacio {
+  padding: 14px;
+  margin: 0;
+}
+
+.plato-cabecera .fila {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.plato-cabecera-nombre {
+  font-size: 19px;
+}
+
+.plato-cabecera .meta {
+  font-size: 13.5px;
+  color: var(--tinta-suave);
+}
+
+/* Hoja por movimiento (14): modal centrado en tablet, bottom sheet en móvil */
+.hoja-movimiento {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.hoja-movimiento-cuerpo {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.hoja-movimiento .banner-error {
+  margin: 0;
+}
+
+.hoja-acciones {
+  margin: 0;
+}
+
+.campo-cantidad-chico {
+  height: var(--toque);
+}
+
+.campo-cantidad-chico input {
+  font-size: 20px;
+}
+
+.input-nota-hoja {
+  min-height: var(--toque-min);
+  font-size: 16px;
+}
+
+/* Compra con costo fuera de lo normal (15): el efecto avisa en ámbar */
+.linea-efecto.efecto-raro {
+  background: var(--aji-tenue);
+  border-left-color: var(--aji);
+}
+
+@media (max-width: 700px) {
+  .modal-fondo.hoja-abajo {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-fondo.hoja-abajo .hoja-movimiento {
+    width: 100%;
+    max-width: none;
+    border-radius: 16px 16px 0 0;
+    max-height: 92dvh;
+  }
+}
+
+/* Formulario de nuevo insumo con campos etiquetados (16) */
+.form-insumo-hoja {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+}
+
+.form-insumo-hoja .admin-acciones {
+  margin: 0;
+}
+
+/* Buscador de insumo para la receta (19) */
+.modal-buscar-insumo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-buscar-insumo .lista-insumos {
+  overflow-y: auto;
+  max-height: 48dvh;
+}
+
+.crear-desde-buscador {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+.crear-desde-buscador p {
+  margin: 0;
+}
+
+/* Editor de receta (19/22) */
+.receta-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.receta-acciones {
+  margin: 4px 0 0;
+}
+
+/* Hoja de cambios sin guardar (22): tres opciones apiladas */
+.modal-botones-columna {
+  flex-direction: column;
+}
+
+.modal-botones-columna .boton-grande {
+  width: 100%;
+}
