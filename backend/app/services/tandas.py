@@ -92,7 +92,34 @@ def _ordenes_activas(db: Session) -> list[Orden]:
     ).all()
 
 
-def calcular_tandas(db: Session, config: dict, mapa_mesas: dict[int, str]) -> list[dict]:
+def metricas_servido(db: Session) -> dict:
+    """Métrica del día: cuánto está tardando un ticket en salir completo.
+
+    Promedio de los últimos 15 tickets servidos hoy (listo_en − hora del
+    pedido); con menos historia, lo que haya. None = aún nada servido."""
+    servidas = db.scalars(
+        select(Orden)
+        .where(
+            Orden.fecha == hoy_lima(),
+            Orden.estado != "anulada",
+            Orden.listo_en.is_not(None),
+        )
+        .order_by(Orden.listo_en.desc())
+    ).all()
+    minutos = []
+    for orden in servidas[:15]:
+        momento = orden.listo_en
+        if momento.tzinfo is None:
+            momento = momento.replace(tzinfo=LIMA)
+        minutos.append(max(0.0, (momento - _hora_a_datetime(orden)).total_seconds() / 60))
+    return {
+        "servidas": len(servidas),
+        "promedio_min": round(sum(minutos) / len(minutos), 1) if minutos else None,
+    }
+
+
+def calcular_tandas(db: Session, config: dict, mapa_mesas: dict[int, str],
+                    promedio_min: float | None = None) -> list[dict]:
     """Parte las órdenes activas de hoy en tandas. Puro cálculo: no escribe."""
     ventana_min = config["cocina_bulk_min"]
     max_tickets = config["cocina_tanda_max_tickets"]
@@ -190,6 +217,12 @@ def calcular_tandas(db: Session, config: dict, mapa_mesas: dict[int, str]) -> li
             "esperando": tanda["esperando"],
             "espera_min": tanda["espera_min"],
             "empezada": bool(platos) and tanda["empezada"],
+            # Estimado de salida según el ritmo real del día (promedio de
+            # servido menos lo ya esperado); None sin historia todavía
+            "estimado_min": (
+                max(0, round(promedio_min - tanda["espera_min"]))
+                if promedio_min is not None else None
+            ),
         })
     return resultado
 
@@ -266,10 +299,14 @@ def avanzar_tanda(db: Session, orden_ids: list[int], destino: str,
         else:
             log = db.get(TandaLog, log_id) if log_id else None
             if log is None:
+                # Sin "empezar" previo (la cocina no lo usa): el inicio de
+                # la tanda es la hora de su pedido más antiguo — así el log
+                # mide el tiempo de servido real, no el momento del toque
+                hora_inicio = min((o.hora for o in ordenes), default=ahora.strftime("%H:%M:%S"))
                 log = TandaLog(
                     fecha=hoy_lima(),
                     composicion_json=composicion,
-                    hora_inicio=ahora.strftime("%H:%M:%S"),
+                    hora_inicio=hora_inicio,
                 )
                 db.add(log)
                 db.flush()

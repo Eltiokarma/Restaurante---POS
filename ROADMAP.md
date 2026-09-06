@@ -261,6 +261,17 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       en que salió): el dato de entrenamiento del futuro orquestador IA, que solo
       reemplazará el cálculo — pantalla, endpoints y logs quedan. Toggle `cocina_tandas`
       en Admin → Configuración (default encendido).
+      **v2 tras probarlo el dueño**: la tira "Por salir" se quitó — el tachado de
+      porciones vive EN la tanda (cada plato de la tarjeta es un botón que abre el mismo
+      panel de tachar, con la cantidad de la tanda sugerida); atender un ticket desde su
+      tarjeta de abajo (avanzar/tachar/anular) refresca la tanda de arriba al toque; el
+      botón "▶ Empezar" se quitó (la cocina no lo usaba) y el `tanda_log` sin "empezar"
+      arranca en la hora del pedido más antiguo para medir el servicio real. **Métricas de
+      tiempo de servido**: `ordenes.listo_en` registra la PRIMERA vez que cada ticket quedó
+      listo completo (`servido_min` en la API), la cabecera de cocina muestra "⏱ servido
+      ~N min · M hoy" (promedio de los últimos 15) y cada tanda muestra su estimado
+      "Sale ≈ en N min (al ritmo de hoy)" = promedio − lo ya esperado (rojo "ya debería
+      estar saliendo" cuando llega a 0).
 - [x] **Gaseosas desde caja con ticket propio** (decisión del dueño 2026-09-06: lista fija
       con marca y precio, kardex sí, solo un comprobante chico sin reimprimir la comanda):
       lista de bebidas embotelladas en Admin → Menú del día → "🥤 Bebidas de caja" (crear

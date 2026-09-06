@@ -15,7 +15,7 @@ import threading
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from ..models import Orden, OrdenItem, hoy_lima
+from ..models import Orden, OrdenItem, ahora_lima, hoy_lima
 
 # pendiente < preparando < listo < entregado (nunca se retrocede en bulk)
 RANGO_ESTADO = {"pendiente": 0, "preparando": 1, "listo": 2, "entregado": 3}
@@ -34,11 +34,19 @@ class BulkInsuficiente(Exception):
         super().__init__(f"{nombre}: se pidió {pedidas}, quedan {disponibles}")
 
 
+def sellar_listo(orden: Orden) -> None:
+    """Registra la PRIMERA vez que la orden quedó lista completa: la
+    métrica de tiempo de servido es listo_en − hora del pedido."""
+    if orden.listo_en is None and RANGO_ESTADO.get(orden.estado, 0) >= RANGO_ESTADO["listo"]:
+        orden.listo_en = ahora_lima()
+
+
 def recalcular_estado_orden(orden: Orden) -> None:
     """ordenes.estado = mínimo de sus ítems. Una anulada no se toca."""
     if orden.estado == "anulada" or not orden.items:
         return
     orden.estado = min(orden.items, key=lambda i: RANGO_ESTADO[i.estado]).estado
+    sellar_listo(orden)
 
 
 def _coincide(item: OrdenItem, linea: dict) -> bool:

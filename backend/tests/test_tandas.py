@@ -153,7 +153,7 @@ def test_toggle_apaga_el_tablero(client, db, admin_headers):
     _orden(client, [(ids["Ají de gallina"], 1)])
     client.put("/api/config", json={"cocina_tandas": False}, headers=admin_headers)
     data = client.get("/api/orders/tandas").json()
-    assert data == {"habilitado": False, "tandas": []}
+    assert data["habilitado"] is False and data["tandas"] == []
 
 
 def test_capacidad_tanda_editable_en_el_menu(client, db, admin_headers):
@@ -166,3 +166,63 @@ def test_capacidad_tanda_editable_en_el_menu(client, db, admin_headers):
     assert r.status_code == 200, r.text
     chuleta = next(p for p in r.json()["platos"] if p["nombre"] == "Chuleta frita")
     assert chuleta["capacidad_tanda"] == 4
+
+
+# ---------- Métricas y estimado de tiempo de servido ----------
+
+def test_servido_se_registra_y_alimenta_el_estimado(client, db):
+    ids = _platos(db)
+    # Un ticket ya servido (pedido hace 12 min) fija el promedio del día
+    previa = _orden(client, [(ids["Ají de gallina"], 1)], hora=_hora(12))
+    client.post("/api/orders/tandas/salio", json={"orden_ids": [previa["id"]]})
+
+    from app.models import Orden
+
+    db.expire_all()
+    servida = db.get(Orden, previa["id"])
+    assert servida.listo_en is not None  # métrica registrada en la BD
+
+    # servido_min viaja en la API (~12 min)
+    ordenes = client.get("/api/orders/today").json()["ordenes"]
+    servido = next(o["servido_min"] for o in ordenes if o["id"] == previa["id"])
+    assert 11 <= servido <= 13
+
+    # Un ticket nuevo con 4 min esperando: estimado ≈ promedio − espera ≈ 8
+    _orden(client, [(ids["Chuleta frita"], 1)], entrega="separado", hora=_hora(4))
+    data = client.get("/api/orders/tandas").json()
+    assert data["metricas"]["servidas"] == 1
+    assert 11 <= data["metricas"]["promedio_min"] <= 13
+    assert 7 <= data["tandas"][0]["estimado_min"] <= 9
+
+
+def test_sin_historia_no_hay_estimado(client, db):
+    ids = _platos(db)
+    _orden(client, [(ids["Ají de gallina"], 1)])
+    data = client.get("/api/orders/tandas").json()
+    assert data["metricas"] == {"servidas": 0, "promedio_min": None}
+    assert data["tandas"][0]["estimado_min"] is None
+
+
+def test_avanzar_ticket_suelto_tambien_sella_el_servido(client, db):
+    ids = _platos(db)
+    orden = _orden(client, [(ids["Ají de gallina"], 1)], hora=_hora(7))
+    # La cocina atiende el ticket por separado (tarjeta de abajo)
+    client.patch(f"/api/orders/{orden['id']}/status", json={"estado": "listo"})
+    ordenes = client.get("/api/orders/today").json()["ordenes"]
+    servido = next(o["servido_min"] for o in ordenes if o["id"] == orden["id"])
+    assert 6 <= servido <= 8
+    # Y desaparece de las tandas (se atendió aparte)
+    assert client.get("/api/orders/tandas").json()["tandas"] == []
+
+
+def test_log_sin_empezar_arranca_en_la_orden_mas_antigua(client, db):
+    from app.models import TandaLog
+
+    ids = _platos(db)
+    orden = _orden(client, [(ids["Ají de gallina"], 1)], hora=_hora(10))
+    r = client.post("/api/orders/tandas/salio", json={"orden_ids": [orden["id"]]})
+    log = db.get(TandaLog, r.json()["log_id"])
+    # hora_inicio = hora del pedido (no el momento del toque): el log mide
+    # el tiempo de servido real
+    assert log.hora_inicio == _hora(10)[:5] + log.hora_inicio[5:]  # mismo HH:MM
+    assert log.hora_listo is not None

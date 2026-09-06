@@ -153,6 +153,8 @@ export interface OrdenOut {
   mesas: string[]
   mesa_liberada: boolean
   minutos_espera: number
+  // Cuánto tardó el ticket en salir completo (min); null = aún no sale
+  servido_min?: number | null
   // Segundos desde que se anuló (cintillo "no preparar" en cocina); null si no aplica
   anulada_hace_seg: number | null
   // Solo la venta a la carta; los platos de menú van agrupados en "menus"
@@ -344,6 +346,15 @@ export interface Tanda {
   esperando: { numero: string; platos: string[] }[]
   espera_min: number
   empezada: boolean
+  // "Sale en ~N min" según el ritmo real del día; null sin historia aún
+  estimado_min: number | null
+}
+
+// Cuánto está tardando un ticket en salir completo (promedio de los
+// últimos 15 servidos hoy)
+export interface MetricasServido {
+  servidas: number
+  promedio_min: number | null
 }
 
 export interface MesaEstado {
@@ -747,7 +758,7 @@ export const api = {
     request<{ descartadas: number }>('/api/orders/pending-print/clear', { method: 'POST' }),
 
   // --- Tandas de cocina (pre-orquestador) ---
-  tandas: () => request<{ habilitado: boolean; tandas: Tanda[] }>('/api/orders/tandas'),
+  tandas: () => request<{ habilitado: boolean; tandas: Tanda[]; metricas: MetricasServido }>('/api/orders/tandas'),
 
   empezarTanda: (ordenIds: number[]) =>
     request<{ ordenes: OrdenOut[]; avisos: string[]; log_id: number }>('/api/orders/tandas/empezar', {

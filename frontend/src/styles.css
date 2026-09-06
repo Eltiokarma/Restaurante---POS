@@ -6249,3 +6249,62 @@ select:focus-visible {
 @media (max-width: 700px) {
   .tarjeta-tanda { flex-basis: 300px; }
 }
+
+
+/* --- Tandas v2: tachar desde la tanda + tiempo estimado de servido --- */
+
+/* El plato de la tanda ES el botón de tachar (adiós tira "Por salir") */
+.tanda-plato-boton {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--toque-min);
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--r-chico);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--linea);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.35;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tanda-plato-boton:active {
+  background: var(--papel-hondo);
+}
+
+.tanda-plato-boton strong {
+  font-size: 19px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.tanda-plato-boton.tanda-al-momento {
+  font-weight: 700;
+}
+
+/* "Sale ≈ en N min", calculado con el ritmo real del día */
+.tanda-estimado {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--mayolica);
+  background: var(--mayolica-tenue);
+  border-radius: var(--r-chico);
+  padding: 6px 10px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.tanda-estimado-ya {
+  color: #fff;
+  background: var(--urgente);
+}
+
+.cocina-metrica-servido {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+  opacity: 0.85;
+}

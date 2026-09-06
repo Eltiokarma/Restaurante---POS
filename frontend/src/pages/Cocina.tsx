@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, NOMBRE_EMPAQUE, NOMBRE_SERVICIO } from '../api'
-import type { EstadoItem, ImpresionPendiente, OrdenOut, Tanda } from '../api'
+import type { EstadoItem, ImpresionPendiente, MetricasServido, OrdenOut, Tanda } from '../api'
 import { AvisoImpresion } from '../components/AvisoImpresion'
 import { IconoProhibido, IconoReloj, IconoSarten, IconoSilla } from '../components/Iconos'
 
@@ -49,9 +49,8 @@ export function Cocina() {
   // en grupos de órdenes completas con reglas deterministas
   const [tandas, setTandas] = useState<Tanda[]>([])
   const [tandasOn, setTandasOn] = useState(false)
-  // log abierto por "▶ Empezar" (clave = orden_ids de la tanda): al salir
-  // se cierra ese mismo log y queda el snapshot para la futura IA
-  const [logsAbiertos, setLogsAbiertos] = useState<Map<string, number>>(new Map())
+  // Métricas de tiempo de servido del día (promedio de los últimos 15)
+  const [metricas, setMetricas] = useState<MetricasServido | null>(null)
   const [avisosTanda, setAvisosTanda] = useState<string[]>([])
   const [accionTanda, setAccionTanda] = useState(false)
 
@@ -62,6 +61,7 @@ export function Cocina() {
       setImpresion(data.impresion_pendiente)
       setTandas(t.tandas)
       setTandasOn(t.habilitado)
+      setMetricas(t.metricas)
       setTraidoEn(Date.now())
       setError(false)
     } catch {
@@ -123,41 +123,21 @@ export function Cocina() {
     try {
       await api.cambiarEstado(orden.id, siguiente)
     } catch {
-      cargar()
+      // se refresca abajo igual
     }
+    // Atender un ticket por separado afecta la tanda de arriba: refrescar
     cargar()
   }
 
-  // ---------- Tandas: empezar / salió ----------
+  // ---------- Tandas: salió (la cocina no usa "empezar") ----------
 
   const claveTanda = (t: Tanda) => t.orden_ids.join(',')
-
-  const empezarTanda = async (t: Tanda) => {
-    if (accionTanda) return
-    setAccionTanda(true)
-    try {
-      const r = await api.empezarTanda(t.orden_ids)
-      setLogsAbiertos((prev) => new Map(prev).set(claveTanda(t), r.log_id))
-      setAvisosTanda(r.avisos)
-      setOrdenes((prev) => prev.map((o) => r.ordenes.find((n) => n.id === o.id) ?? o))
-      await cargar()
-    } catch {
-      cargar()
-    } finally {
-      setAccionTanda(false)
-    }
-  }
 
   const salioTanda = async (t: Tanda) => {
     if (accionTanda) return
     setAccionTanda(true)
     try {
-      const r = await api.salioTanda(t.orden_ids, logsAbiertos.get(claveTanda(t)))
-      setLogsAbiertos((prev) => {
-        const m = new Map(prev)
-        m.delete(claveTanda(t))
-        return m
-      })
+      const r = await api.salioTanda(t.orden_ids)
       setAvisosTanda(r.avisos)
       setOrdenes((prev) => prev.map((o) => r.ordenes.find((n) => n.id === o.id) ?? o))
       await cargar()
@@ -229,11 +209,12 @@ export function Cocina() {
   const [bulkError, setBulkError] = useState('')
   const [despachando, setDespachando] = useState(false)
 
-  const abrirBulk = (nombre: string) => {
+  // Se abre desde la tanda: tachar N porciones de UN plato (ajuste fino)
+  const abrirBulk = (nombre: string, sugerida?: number) => {
     const info = porSalir.get(nombre)
     if (!info) return
     setBulkError('')
-    setBulk({ nombre, cantidad: ventanaMin > 0 && info.tanda > 0 ? info.tanda : info.total })
+    setBulk({ nombre, cantidad: Math.min(info.total, Math.max(1, sugerida ?? info.total)) })
   }
 
   const despacharBulk = async (destino: EstadoItem) => {
@@ -249,6 +230,8 @@ export function Cocina() {
         prev.map((o) => r.ordenes.find((n) => n.id === o.id) ?? o),
       )
       setBulk(null)
+      // El tachado afecta las tandas de arriba: refrescar al toque
+      cargar()
     } catch (e) {
       setBulkError(e instanceof Error ? e.message : 'No se pudo despachar, intenta de nuevo')
       cargar()
@@ -273,6 +256,11 @@ export function Cocina() {
       <header className="cocina-cabecera">
         <h1><IconoSarten tam={30} /> Cocina</h1>
         <span className="cocina-contador">{activas.length} órdenes activas</span>
+        {metricas && metricas.servidas > 0 && metricas.promedio_min !== null && (
+          <span className="cocina-metrica-servido" title="Promedio de los últimos 15 tickets servidos hoy">
+            ⏱ servido ~{Math.round(metricas.promedio_min)} min · {metricas.servidas} hoy
+          </span>
+        )}
         {error && <span className="banner-error">Sin conexión con el sistema</span>}
       </header>
 
@@ -294,6 +282,13 @@ export function Cocina() {
                   ⏱ {t.espera_min} min
                 </span>
               </div>
+              {t.estimado_min !== null && (
+                <div className={`tanda-estimado ${t.estimado_min === 0 ? 'tanda-estimado-ya' : ''}`}>
+                  {t.estimado_min === 0
+                    ? '⚡ Ya debería estar saliendo'
+                    : `Sale ≈ en ${t.estimado_min} min (al ritmo de hoy)`}
+                </div>
+              )}
               <div className="tanda-tickets">
                 {t.tickets.map((tk) => (
                   <span className="tanda-ticket" key={tk.numero}>
@@ -304,14 +299,20 @@ export function Cocina() {
               </div>
               <ul className="tanda-platos">
                 {t.platos.map((p) => (
-                  <li key={p.nombre} className={p.al_momento ? 'tanda-al-momento' : ''}>
-                    <strong>{p.cantidad}×</strong> {p.nombre}
-                    <span className="tanda-estacion">{p.al_momento ? '🍳' : '🥘'}</span>
-                    {p.partes.length > 0 && (
-                      <span className="tanda-partes">
-                        {p.partes.join(' + ')} · {p.partes.length} sartenes
-                      </span>
-                    )}
+                  <li key={p.nombre}>
+                    <button
+                      className={`tanda-plato-boton ${p.al_momento ? 'tanda-al-momento' : ''}`}
+                      title="Toca para tachar porciones de este plato"
+                      onClick={() => abrirBulk(p.nombre, p.cantidad)}
+                    >
+                      <strong>{p.cantidad}×</strong> {p.nombre}
+                      <span className="tanda-estacion">{p.al_momento ? '🍳' : '🥘'}</span>
+                      {p.partes.length > 0 && (
+                        <span className="tanda-partes">
+                          {p.partes.join(' + ')} · {p.partes.length} sartenes
+                        </span>
+                      )}
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -324,12 +325,6 @@ export function Cocina() {
               )}
               {t.platos.length > 0 && (
                 <div className="tanda-botones">
-                  {!t.empezada && (
-                    <button className="boton-tanda" disabled={accionTanda}
-                            onClick={() => empezarTanda(t)}>
-                      ▶ EMPEZAR
-                    </button>
-                  )}
                   <button className="boton-tanda boton-tanda-salio" disabled={accionTanda}
                           onClick={() => salioTanda(t)}>
                     ✔ SALIÓ LA TANDA
@@ -338,32 +333,6 @@ export function Cocina() {
               )}
             </div>
           ))}
-        </div>
-      )}
-
-      {porSalir.size > 0 && (
-        <div className="cocina-resumen-cola">
-          <span className="cocina-resumen-titulo">Por salir:</span>
-          {[...porSalir.entries()]
-            .sort((a, b) => b[1].total - a[1].total)
-            .map(([nombre, info]) => (
-              <button
-                key={nombre}
-                className="cocina-resumen-item bulk-tachable"
-                onClick={() => abrirBulk(nombre)}
-                title="Toca para tachar porciones de este plato"
-              >
-                <strong>{info.total}×</strong> {nombre}
-                {ventanaMin > 0 && info.tanda < info.total && (
-                  <span className="bulk-tanda">tanda: {info.tanda}</span>
-                )}
-                {(info.empaques.size > 1 || !info.empaques.has('mesa')) && (
-                  <span className="cocina-resumen-empaques">
-                    {' '}({[...info.empaques.entries()].map(([e, n]) => `${n} ${e}`).join(' · ')})
-                  </span>
-                )}
-              </button>
-            ))}
         </div>
       )}
 
