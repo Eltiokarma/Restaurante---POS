@@ -233,10 +233,17 @@ def render_cierre(datos: dict, local: dict, columnas: int = 42) -> bytes:
             "TOTAL EGRESOS", f"-{_soles(datos['egresos_total'] or 0.0)}", columnas
         )), NEGRITA_OFF]
 
+    por_cobrar = datos.get("por_cobrar") or 0.0
+    vueltos = datos.get("vueltos_pendientes") or 0.0
     esperado = round(
-        datos["monto_apertura"] + datos["ventas_efectivo"] - (datos["egresos_total"] or 0.0), 2
+        datos["monto_apertura"] + datos["ventas_efectivo"]
+        - (datos["egresos_total"] or 0.0) - por_cobrar + vueltos, 2
     )
     partes.append(_texto("-" * columnas))
+    if por_cobrar > 0:
+        partes.append(_texto(_fila("Falta pagar (no entro)", f"-{_soles(por_cobrar)}", columnas)))
+    if vueltos > 0:
+        partes.append(_texto(_fila("Vueltos por dar (de mas)", f"+{_soles(vueltos)}", columnas)))
     partes.append(_texto(_fila("Esperado en caja", _soles(esperado), columnas)))
     partes.append(_texto(_fila("Contado", _soles(datos["monto_contado"]), columnas)))
 

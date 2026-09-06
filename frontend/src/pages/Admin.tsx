@@ -17,9 +17,33 @@ interface PlatoEditable {
   sinonimos: string[]
 }
 
+const TABS_EXTRA: { id: Tab; texto: string }[] = [
+  { id: 'cancelaciones', texto: 'Cancelaciones' },
+  { id: 'voz', texto: 'Voz' },
+  { id: 'config', texto: 'Configuración' },
+]
+
 export function Admin() {
   const [logueado, setLogueado] = useState(() => getAdminToken() !== '')
   const [tab, setTab] = useState<Tab>('resumen')
+  // Tabs de uso ocasional agrupadas tras el "⋯" (auditoría visual, h. 07)
+  const [tabsExtraAbierto, setTabsExtraAbierto] = useState(false)
+
+  useEffect(() => {
+    if (!tabsExtraAbierto) return
+    const alTocarFuera = (ev: MouseEvent) => {
+      if (!(ev.target as HTMLElement).closest('.menu-mas')) setTabsExtraAbierto(false)
+    }
+    const alTeclear = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') setTabsExtraAbierto(false)
+    }
+    document.addEventListener('click', alTocarFuera)
+    document.addEventListener('keydown', alTeclear)
+    return () => {
+      document.removeEventListener('click', alTocarFuera)
+      document.removeEventListener('keydown', alTeclear)
+    }
+  }, [tabsExtraAbierto])
 
   if (!logueado) {
     return <AdminLogin onOk={() => setLogueado(true)} />
@@ -34,9 +58,31 @@ export function Admin() {
           <button className={tab === 'menu' ? 'activa' : ''} onClick={() => setTab('menu')}>Menú del día</button>
           <button className={tab === 'ordenes' ? 'activa' : ''} onClick={() => setTab('ordenes')}>Órdenes</button>
           <button className={tab === 'insumos' ? 'activa' : ''} onClick={() => setTab('insumos')}>Insumos</button>
-          <button className={tab === 'cancelaciones' ? 'activa' : ''} onClick={() => setTab('cancelaciones')}>Cancelaciones</button>
-          <button className={tab === 'voz' ? 'activa' : ''} onClick={() => setTab('voz')}>Voz</button>
-          <button className={tab === 'config' ? 'activa' : ''} onClick={() => setTab('config')}>Configuración</button>
+          <div className="menu-mas">
+            <button
+              className={`boton-mas ${TABS_EXTRA.some((t) => t.id === tab) ? 'activa' : ''}`}
+              aria-haspopup="menu"
+              aria-expanded={tabsExtraAbierto}
+              aria-label="Más secciones"
+              onClick={() => setTabsExtraAbierto((v) => !v)}
+            >
+              ⋯
+            </button>
+            {tabsExtraAbierto && (
+              <div className="popover-mas" role="menu">
+                {TABS_EXTRA.map((t) => (
+                  <button
+                    key={t.id}
+                    role="menuitem"
+                    className={tab === t.id ? 'activa' : ''}
+                    onClick={() => { setTab(t.id); setTabsExtraAbierto(false) }}
+                  >
+                    {t.texto}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </nav>
         <button
           className="boton-salir"

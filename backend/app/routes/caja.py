@@ -52,7 +52,15 @@ def _ventas_de_hoy(db: Session, desde_id: int | None = None) -> dict:
         "ventas_efectivo": round(efectivo, 2),
         "ventas_tarjeta": round(tarjeta, 2),
         "ventas_yape": round(yape, 2),
-        "sin_registrar": sum(1 for o in ordenes if o.metodo_pago is None),
+        "sin_registrar": sum(
+            1 for o in ordenes if o.metodo_pago is None and not o.pago_pendiente
+        ),
+        # Tickets marcados "falta pagar": esa plata NO entró todavía
+        "por_cobrar": round(sum(o.total for o in ordenes if o.pago_pendiente), 2),
+        # Vueltos por dar: esa plata está DE MÁS en el cajón
+        "vueltos_pendientes": round(
+            sum(o.vuelto_pendiente or 0.0 for o in ordenes), 2
+        ),
     }
 
 
@@ -86,6 +94,16 @@ def _a_dict(
             ),
             "ventas_tarjeta": registro.ventas_tarjeta or 0.0,
             "ventas_yape": registro.ventas_yape or 0.0,
+            "por_cobrar": (
+                registro.por_cobrar
+                if registro.por_cobrar is not None
+                else ventas.get("por_cobrar", 0.0)
+            ),
+            "vueltos_pendientes": (
+                registro.vueltos_pendientes
+                if registro.vueltos_pendientes is not None
+                else ventas.get("vueltos_pendientes", 0.0)
+            ),
             "ventas_despues_del_cierre": round(ventas["total_vendido"], 2)
             != round(registro.total_sistema or 0.0, 2),
         })
@@ -196,8 +214,12 @@ def cerrar(payload: CierreIn, db: Session = Depends(get_db)):
 
     ventas = _ventas_de_hoy(db, registro.desde_orden_id)
     egresos = _total_egresos(_egresos_de(db, registro))
-    # Los egresos salieron del cajón: bajan el efectivo esperado
-    esperado_efectivo = round(registro.monto_apertura + ventas["ventas_efectivo"] - egresos, 2)
+    # Los egresos salieron del cajón y lo "por cobrar" nunca entró: bajan
+    # el esperado. Los vueltos por dar están de más en el cajón: lo suben.
+    esperado_efectivo = round(
+        registro.monto_apertura + ventas["ventas_efectivo"] - egresos
+        - ventas["por_cobrar"] + ventas["vueltos_pendientes"], 2,
+    )
     registro.hora_cierre = ahora_lima().strftime("%H:%M:%S")
     registro.monto_contado = round(payload.monto_contado, 2)
     registro.total_sistema = ventas["total_vendido"]
@@ -205,6 +227,8 @@ def cerrar(payload: CierreIn, db: Session = Depends(get_db)):
     registro.ventas_tarjeta = ventas["ventas_tarjeta"]
     registro.ventas_yape = ventas["ventas_yape"]
     registro.egresos = egresos
+    registro.por_cobrar = ventas["por_cobrar"]
+    registro.vueltos_pendientes = ventas["vueltos_pendientes"]
     registro.diferencia = round(registro.monto_contado - esperado_efectivo, 2)
     if payload.notas.strip():
         registro.notas = payload.notas.strip()
@@ -254,6 +278,8 @@ def resumen_de_cierre(db: Session, registro: CierreCaja) -> dict:
             {"hora": e.hora, "concepto": e.concepto, "monto": e.monto} for e in egresos
         ],
         "egresos_total": registro.egresos if registro.egresos is not None else _total_egresos(egresos),
+        "por_cobrar": registro.por_cobrar or 0.0,
+        "vueltos_pendientes": registro.vueltos_pendientes or 0.0,
         "monto_contado": registro.monto_contado or 0.0,
         "diferencia": registro.diferencia or 0.0,
     }
@@ -342,6 +368,8 @@ def reabrir(db: Session = Depends(get_db)):
     registro.ventas_tarjeta = None
     registro.ventas_yape = None
     registro.egresos = None
+    registro.por_cobrar = None
+    registro.vueltos_pendientes = None
     registro.diferencia = None
     db.commit()
     egresos = _total_egresos(_egresos_de(db, registro))
@@ -361,7 +389,8 @@ def corregir_fondo(payload: FondoIn, db: Session = Depends(get_db)):
     if registro.hora_cierre is not None and registro.monto_contado is not None:
         esperado_efectivo = round(
             registro.monto_apertura + (registro.ventas_efectivo or 0.0)
-            - (registro.egresos or 0.0), 2
+            - (registro.egresos or 0.0)
+            - (registro.por_cobrar or 0.0) + (registro.vueltos_pendientes or 0.0), 2
         )
         registro.diferencia = round(registro.monto_contado - esperado_efectivo, 2)
     db.commit()
@@ -401,6 +430,8 @@ def historial(db: Session = Depends(get_db)):
             "ventas_tarjeta": r.ventas_tarjeta or 0.0,
             "ventas_yape": r.ventas_yape or 0.0,
             "sin_registrar": 0,
+            "por_cobrar": r.por_cobrar or 0.0,
+            "vueltos_pendientes": r.vueltos_pendientes or 0.0,
         }, turno_de.get(r.id, 1), round(egresos_por_cierre.get(r.id, 0.0) or 0.0, 2))
         for r in registros
     ]}

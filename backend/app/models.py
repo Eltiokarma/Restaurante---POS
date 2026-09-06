@@ -158,6 +158,12 @@ class Orden(Base):
     # efectivo | tarjeta | yape — lo registra la caja al cobrar.
     # None = sin registrar (el cierre lo asume efectivo, comportamiento histórico)
     metodo_pago: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # "Falta pagar": el ticket salió pero la plata aún no entró al cajón.
+    # "Falta vuelto": pagó de más y se le debe el vuelto. Los dos afectan
+    # el efectivo esperado del cierre hasta que se resuelven — antes se
+    # llevaban de memoria y descuadraban la caja.
+    pago_pendiente: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    vuelto_pendiente: Mapped[float | None] = mapped_column(Float, nullable=True)
     # junto | separado — cómo sale el pedido: todo en una entrega, o por
     # tiempos (la sopa primero, el segundo cuando esté)
     entrega: Mapped[str] = mapped_column(String(10), default="junto", nullable=False)
@@ -315,6 +321,10 @@ class CierreCaja(Base):
     # Snapshot al cierre del total de egresos del turno (None = cierre
     # anterior a la función de egresos, o caja aún abierta)
     egresos: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Snapshot al cierre de los tickets con pago pendiente (plata que no
+    # entró) y de los vueltos por dar (plata de más en el cajón)
+    por_cobrar: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vueltos_pendientes: Mapped[float | None] = mapped_column(Float, nullable=True)
     notas: Mapped[str] = mapped_column(Text, default="", nullable=False)
 
 

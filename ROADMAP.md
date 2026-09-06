@@ -176,6 +176,21 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       catálogo se muestra por si acaso) — y la letra de los platos va al doble (3.1rem)
       con tarjetas más anchas para que quepan los nombres largos. El ticket y la caja
       siguen mostrando todo.
+- [x] **"Falta pagar" y "falta vuelto" por ticket** (a veces mataban el cuadre): cada
+      ticket en caja tiene el toggle "Falta pagar" (salió sin pagar: el cierre NO espera
+      esa plata; cobrar con cualquier método levanta la marca solo) y "Vuelto…" (se
+      registra "¿pagó con cuánto?", el sistema calcula el vuelto y muestra el botón verde
+      "Di el vuelto S/ X"). Chips FALTA PAGAR / FALTA VUELTO en la fila, cifras "Falta
+      pagar −" y "Vueltos por dar +" en el tablero, y el esperado del cierre las incluye:
+      esperado = fondo + efectivo − egresos − por cobrar + vueltos (snapshot en
+      `cierres_caja`, sale en el resumen impreso y en el de pantalla). Columnas nuevas
+      `ordenes.pago_pendiente` y `ordenes.vuelto_pendiente` con migración.
+- [x] **Menú "⋯" (hallazgos 01/02/07 de la auditoría)**: en cada fila de caja las
+      acciones secundarias (Mesa, Se fue, cambiar entrega, Anular) viven tras un "⋯" de
+      56px — Anular sale del roce de "Ticket" y la entrega se ve como badge de solo
+      lectura; "▶ preparando" es LA acción primaria (culantro, flex 1). En el admin,
+      Cancelaciones, Voz y Configuración van tras el "⋯" de las tabs. Los popovers
+      cierran con Escape, toque fuera y al elegir.
 - [x] **Auditoría visual aplicada** (handoff de Claude Design, 12 hallazgos sobre /caja y
       /admin, 5 transversales): token `--tinta-suave` ahora cumple AA (#6f6559; el viejo
       quedó como `--tinta-decorativa`), cifras de dinero en sans con `lining-nums

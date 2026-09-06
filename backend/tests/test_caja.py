@@ -220,6 +220,58 @@ def test_cierre_imprime_resumen_en_modo_puente(client, db, menu_ejemplo):
     assert all(t["tipo"] != "cierre" for t in client.get("/api/print/cola").json()["trabajos"])
 
 
+def test_falta_pagar_y_falta_vuelto_en_el_cuadre(client, menu_ejemplo):
+    """El caso que descuadraba la caja: un ticket salió sin pagar y otro
+    pagó con billete grande y se le debe vuelto."""
+    client.post("/api/caja/abrir", json={"monto_apertura": 100})
+    crear_orden(client, menu_ejemplo)  # 15, pagada normal (se asume efectivo)
+    fiada = crear_orden(client, menu_ejemplo).json()["orden"]
+    con_billete = crear_orden(client, menu_ejemplo).json()["orden"]
+
+    r = client.patch(f"/api/orders/{fiada['id']}/pago-pendiente", json={"pendiente": True})
+    assert r.json()["pago_pendiente"] is True
+    r = client.patch(f"/api/orders/{con_billete['id']}/vuelto", json={"pago_con": 50})
+    assert r.json()["vuelto_pendiente"] == 35.0
+
+    estado = client.get("/api/caja/hoy").json()
+    assert estado["por_cobrar"] == 15.0
+    assert estado["vueltos_pendientes"] == 35.0
+
+    # Efectivo real en el cajón: 100 fondo + 15 pagada + 50 del billete = 165
+    # (fórmula: 100 + 45 de ventas efectivo − 15 sin pagar + 35 de vuelto)
+    r = client.post("/api/caja/cerrar", json={"monto_contado": 165})
+    assert r.json()["descuadre"] == {"tipo": "exacta", "monto": 0.0}
+
+    # Se resuelven: cobra la fiada y entrega el vuelto → esperado 145
+    client.post("/api/caja/reabrir")
+    client.patch(f"/api/orders/{fiada['id']}/pago", json={"metodo_pago": "efectivo"})
+    client.patch(f"/api/orders/{con_billete['id']}/vuelto", json={"pago_con": None})
+    estado = client.get("/api/caja/hoy").json()
+    assert estado["por_cobrar"] == 0.0 and estado["vueltos_pendientes"] == 0.0
+    r = client.post("/api/caja/cerrar", json={"monto_contado": 145})
+    assert r.json()["descuadre"] == {"tipo": "exacta", "monto": 0.0}
+
+
+def test_vuelto_insuficiente_y_cobro_levanta_la_marca(client, menu_ejemplo):
+    client.post("/api/caja/abrir", json={"monto_apertura": 0})
+    orden = crear_orden(client, menu_ejemplo).json()["orden"]
+    # Pagó menos que el total: no es un vuelto, es un error
+    r = client.patch(f"/api/orders/{orden['id']}/vuelto", json={"pago_con": 10})
+    assert r.status_code == 422
+
+    # Marcada "falta pagar", cobrar la levanta solo
+    client.patch(f"/api/orders/{orden['id']}/pago-pendiente", json={"pendiente": True})
+    assert client.get("/api/caja/hoy").json()["por_cobrar"] == 15.0
+    client.patch(f"/api/orders/{orden['id']}/pago", json={"metodo_pago": "yape"})
+    datos = client.get("/api/orders/today").json()["ordenes"][0]
+    assert datos["pago_pendiente"] is False
+    assert client.get("/api/caja/hoy").json()["por_cobrar"] == 0.0
+
+    # Pagar exacto no deja vuelto pendiente
+    r = client.patch(f"/api/orders/{orden['id']}/vuelto", json={"pago_con": 15})
+    assert r.json()["vuelto_pendiente"] is None
+
+
 def test_reabrir_sin_caja_o_sin_cierre_es_409(client):
     assert client.post("/api/caja/reabrir").status_code == 409
     assert client.put("/api/caja/apertura", json={"monto_apertura": 50}).status_code == 409
