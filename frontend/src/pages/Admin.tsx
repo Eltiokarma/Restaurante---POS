@@ -2388,7 +2388,16 @@ function SeccionConsumo({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [rango, setRango] = useState<RangoConsumo>('semana')
   const [fechas, setFechas] = useState(() => rangoConsumoDe('semana'))
   const [datos, setDatos] = useState<ReporteConsumo | null>(null)
+  // Cuántos platos alimentan de verdad este reporte: solo los CON receta
+  // descuentan insumos al venderse. Sin esto, un "S/ 0.00" parece bug.
+  const [cobertura, setCobertura] = useState<{ con: number; total: number } | null>(null)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    Promise.all([api.catalogo(), api.platosConReceta()])
+      .then(([cat, recetas]) => setCobertura({ con: recetas.plato_ids.length, total: cat.platos.length }))
+      .catch(() => setCobertura(null)) // sin cobertura el reporte sigue sirviendo
+  }, [])
 
   useEffect(() => {
     // Si el dueño cambia de rango antes de que llegue la respuesta anterior,
@@ -2452,6 +2461,23 @@ function SeccionConsumo({ onSesionVencida }: { onSesionVencida: () => void }) {
 
       {error && <div className="banner-error">{error}</div>}
       {!datos && !error && <p className="nota-admin">Cargando…</p>}
+
+      {cobertura && cobertura.con === 0 && cobertura.total > 0 && (
+        <div className="banner-aviso">
+          <strong>Ninguno de tus {cobertura.total} platos tiene receta todavía</strong>, así que
+          las ventas no descuentan insumos ni suman soles aquí. Ármalas en la pestaña{' '}
+          <strong>Recetas</strong> (con "✨ Usar receta base" es un toque por plato): desde ese
+          momento cada plato vendido se calcula solo. Las ventas anteriores no se recalculan.
+        </div>
+      )}
+      {cobertura && cobertura.con > 0 && cobertura.con < cobertura.total && (
+        <div className="banner-aviso">
+          Este cálculo cubre los platos CON receta: <strong>{cobertura.con} de{' '}
+          {cobertura.total}</strong> la tienen. Lo vendido de los otros{' '}
+          {cobertura.total - cobertura.con} no descuenta insumos ni suma aquí — complétalos en
+          la pestaña <strong>Recetas</strong>.
+        </div>
+      )}
 
       {datos && (
         <>
