@@ -424,6 +424,9 @@ function SeccionMenusGuardados({ onSesionVencida, onCargado }: {
   const [nombre, setNombre] = useState('')
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
+  // Guardar sobre un día que YA tiene menú lo reemplaza: se confirma en
+  // una hoja propia diciendo qué se pierde (hallazgo 29)
+  const [reemplazando, setReemplazando] = useState<{ nombre: string; existente: MenuGuardadoOut } | null>(null)
 
   useEffect(() => {
     api.menusGuardados()
@@ -431,12 +434,8 @@ function SeccionMenusGuardados({ onSesionVencida, onCargado }: {
       .catch((e) => setError(manejarError(e, onSesionVencida)))
   }, [onSesionVencida])
 
-  const guardar = async (n: string) => {
-    const limpio = n.trim()
-    if (!limpio) {
-      setError('Ponle un nombre al menú (por ejemplo, el día de la semana)')
-      return
-    }
+  const guardarDirecto = async (limpio: string) => {
+    setReemplazando(null)
     setError('')
     try {
       const data = await api.guardarMenuDeHoyComo(limpio)
@@ -446,6 +445,20 @@ function SeccionMenusGuardados({ onSesionVencida, onCargado }: {
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
+  }
+
+  const guardar = (n: string) => {
+    const limpio = n.trim()
+    if (!limpio) {
+      setError('Ponle un nombre al menú (por ejemplo, el día de la semana)')
+      return
+    }
+    const existente = guardados.find((g) => g.nombre.toLowerCase() === limpio.toLowerCase())
+    if (existente) {
+      setReemplazando({ nombre: limpio, existente })
+      return
+    }
+    guardarDirecto(limpio)
   }
 
   const cargar = async (g: MenuGuardadoOut) => {
@@ -471,8 +484,6 @@ function SeccionMenusGuardados({ onSesionVencida, onCargado }: {
       setError(manejarError(e, onSesionVencida))
     }
   }
-
-  const nombresUsados = new Set(guardados.map((g) => g.nombre.toLowerCase()))
 
   return (
     <div className="panel-config seccion-guardados">
@@ -501,11 +512,16 @@ function SeccionMenusGuardados({ onSesionVencida, onCargado }: {
       )}
       <div className="admin-acciones fila-guardar-menu">
         <span>Guardar el menú de hoy como:</span>
-        {DIAS_SEMANA.map((d) => (
-          <button key={d} onClick={() => guardar(d)}>
-            {d}{nombresUsados.has(d.toLowerCase()) ? ' ↺' : ''}
-          </button>
-        ))}
+        {DIAS_SEMANA.map((d) => {
+          const existente = guardados.find((g) => g.nombre.toLowerCase() === d.toLowerCase())
+          return (
+            <button key={d} className={existente ? 'dia-ocupado' : ''}
+                    title={existente ? `Ya guardado (${existente.cuantos_platos} platos): guardar encima lo reemplaza` : undefined}
+                    onClick={() => guardar(d)}>
+              {existente ? `${d} · ${existente.cuantos_platos} platos` : `Guardar como ${d}`}
+            </button>
+          )
+        })}
         <input
           placeholder="u otro nombre…"
           value={nombre}
@@ -514,16 +530,48 @@ function SeccionMenusGuardados({ onSesionVencida, onCargado }: {
         />
         <button className="boton-primario" onClick={() => guardar(nombre)}>💾 Guardar</button>
       </div>
+      {reemplazando && (
+        <div className="modal-fondo" onClick={() => setReemplazando(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>¿Reemplazar "{reemplazando.existente.nombre}"?</h2>
+            <p>
+              "{reemplazando.existente.nombre}" ya tiene un menú guardado con{' '}
+              <strong>{reemplazando.existente.cuantos_platos} plato{reemplazando.existente.cuantos_platos === 1 ? '' : 's'}</strong>
+              {reemplazando.existente.resumen ? ` (${reemplazando.existente.resumen})` : ''}. Guardar
+              encima lo reemplaza con el menú de HOY y esa lista se pierde.
+            </p>
+            <div className="modal-botones">
+              <button className="boton-grande boton-secundario" onClick={() => setReemplazando(null)}>
+                Cancelar
+              </button>
+              <button className="boton-grande boton-confirmar"
+                      onClick={() => guardarDirecto(reemplazando.nombre)}>
+                Sí, reemplazar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ---------- Menú del día ----------
 
+// Qué campos viven en el estado local hasta "Guardar" (la foto NO: se sube
+// al instante). Sirve para contar cambios sin guardar (hallazgo 25).
+const serialPlato = (p: PlatoEditable) =>
+  JSON.stringify([p.nombre, p.categoria, p.precio, p.activo_hoy, p.sale_al_momento, p.sinonimos])
+
 function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [platos, setPlatos] = useState<PlatoEditable[]>([])
+  const [baseline, setBaseline] = useState<Map<number, string>>(new Map())
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
+  const [menuEmpezar, setMenuEmpezar] = useState(false)
+  // Índice del plato abierto en la hoja ⋯ (foto, sinónimos, al momento…)
+  const [editando, setEditando] = useState<number | null>(null)
+  const [confirmandoAyer, setConfirmandoAyer] = useState(false)
 
   const aEditable = (p: Plato): PlatoEditable => ({
     id: p.id,
@@ -536,10 +584,16 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
     sinonimos: p.sinonimos ?? [],
   })
 
+  const fijarBaseline = (lista: PlatoEditable[]) => {
+    setBaseline(new Map(lista.filter((p) => p.id !== undefined).map((p) => [p.id as number, serialPlato(p)])))
+  }
+
   const cargar = useCallback(async () => {
     try {
       const data = await api.menuHoy()
-      setPlatos(data.platos.map(aEditable))
+      const lista = data.platos.map(aEditable)
+      setPlatos(lista)
+      fijarBaseline(lista)
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
@@ -549,8 +603,20 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
     cargar()
   }, [cargar])
 
-  const editar = (idx: number, cambios: Partial<PlatoEditable>) => {
-    setPlatos((prev) => prev.map((p, i) => (i === idx ? { ...p, ...cambios } : p)))
+  const tocado = (p: PlatoEditable) =>
+    p.id === undefined || baseline.get(p.id) !== serialPlato(p)
+  const cambios = platos.filter(tocado).length
+
+  // Cerrar la pestaña del navegador con cambios pendientes avisa (h. 25)
+  useEffect(() => {
+    if (cambios === 0) return
+    const avisa = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', avisa)
+    return () => window.removeEventListener('beforeunload', avisa)
+  }, [cambios])
+
+  const editar = (idx: number, cambiosPlato: Partial<PlatoEditable>) => {
+    setPlatos((prev) => prev.map((p, i) => (i === idx ? { ...p, ...cambiosPlato } : p)))
   }
 
   const agregar = () => {
@@ -567,6 +633,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
   const cargarAyer = async () => {
     setError('')
     setMensaje('')
+    setConfirmandoAyer(false)
     try {
       const data = await api.menuAnterior()
       if (data.platos.length === 0) {
@@ -580,6 +647,12 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
     }
   }
 
+  // Reemplaza TODO lo escrito: si hay cambios sin guardar, primero pregunta (h. 24)
+  const pedirCargarAyer = () => {
+    if (cambios > 0) setConfirmandoAyer(true)
+    else cargarAyer()
+  }
+
   const cargarDelCatalogo = async () => {
     setError('')
     setMensaje('')
@@ -587,8 +660,12 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
       const data = await api.catalogo()
       const actuales = new Set(platos.filter((p) => p.id).map((p) => p.id))
       const nuevos = data.platos.filter((p) => !actuales.has(p.id))
+      if (nuevos.length === 0) {
+        setMensaje('Todo el catálogo ya está en la lista.')
+        return
+      }
       setPlatos((prev) => [...prev, ...nuevos.map((p) => ({ ...aEditable(p), activo_hoy: false }))])
-      setMensaje('Catálogo cargado: activa los platos que van hoy.')
+      setMensaje(`${nuevos.length} plato(s) del catálogo agregados APAGADOS: prende los que salen hoy y guarda.`)
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
@@ -617,28 +694,98 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
           sinonimos: p.sinonimos,
         })),
       )
-      setPlatos(data.platos.map(aEditable))
-      setMensaje('Menú guardado ✔ (la terminal lo verá en el próximo refresco)')
+      const lista = data.platos.map(aEditable)
+      setPlatos(lista)
+      fijarBaseline(lista)
+      setMensaje('Menú guardado ✔ La terminal se actualiza en menos de 30 segundos.')
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
   }
 
+  const nombreDe = (p: PlatoEditable) => p.nombre.trim() || 'Plato nuevo'
+  const activos = platos.filter((p) => p.activo_hoy).length
+
   return (
     <div>
       <div className="admin-acciones">
         <button onClick={agregar}>+ Agregar plato</button>
-        <button onClick={cargarAyer}>Cargar menú de ayer</button>
-        <button onClick={cargarDelCatalogo}>Ver catálogo histórico</button>
-        <button className="boton-primario" onClick={guardar}>💾 Guardar menú del día</button>
+        <div className="menu-empezar-envoltorio">
+          <button onClick={() => setMenuEmpezar((v) => !v)} aria-expanded={menuEmpezar}>
+            Empezar desde… ▾
+          </button>
+          {menuEmpezar && (
+            <>
+              <button className="fondo-popover" aria-label="Cerrar" onClick={() => setMenuEmpezar(false)} />
+              {/* Cada opción declara su consecuencia ANTES de tocarla (h. 24) */}
+              <div className="menu-empezar">
+                <button onClick={() => { setMenuEmpezar(false); pedirCargarAyer() }}>
+                  <strong>El menú de ayer</strong>
+                  <span>Reemplaza los {platos.length} platos de la lista de hoy</span>
+                </button>
+                <button onClick={() => {
+                  setMenuEmpezar(false)
+                  document.querySelector('.seccion-guardados')?.scrollIntoView({ behavior: 'smooth' })
+                }}>
+                  <strong>Un menú guardado</strong>
+                  <span>Lunes, Martes… — se eligen más abajo</span>
+                </button>
+                <button onClick={() => { setMenuEmpezar(false); cargarDelCatalogo() }}>
+                  <strong>Agregar del catálogo</strong>
+                  <span>Suma a la lista, apagados, los platos históricos que falten</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
       {mensaje && <div className="banner-ok">{mensaje}</div>}
       {error && <div className="banner-error">{error}</div>}
-      <SeccionMenusGuardados
-        onSesionVencida={onSesionVencida}
-        onCargado={(msg) => { cargar(); setMensaje(msg) }}
-      />
-      <div className="tabla-desplazable"><table className="tabla-admin tabla-editable">
+      {platos.length > 0 && (
+        <div className="platos-progreso">
+          <span className="cuenta">{activos}</span>
+          <span>plato{activos === 1 ? '' : 's'} sale{activos === 1 ? '' : 'n'} hoy · {platos.length} en la lista</span>
+        </div>
+      )}
+      <p className="ayuda-arriba">
+        Para agotar un plato a mitad de servicio: apaga "Sale hoy" y guarda.
+      </p>
+
+      {/* En celular cada plato es una tarjeta y "Sale hoy" manda (h. 23/26) */}
+      <div className="menu-tarjetas">
+        {platos.map((p, idx) => (
+          <div key={p.id ?? `nuevo-${idx}`}
+               className={`plato-tarjeta ${p.activo_hoy ? 'sale-hoy' : 'no-sale-hoy'} ${tocado(p) ? 'tocada' : ''}`}>
+            <div className="plato-tarjeta-cabecera">
+              {p.foto && <img className="mini-foto" src={urlFotoPlato(p.foto)} alt="" />}
+              <div className="plato-tarjeta-datos">
+                <strong>{nombreDe(p)}</strong>
+                <span>
+                  {NOMBRE_CATEGORIA[p.categoria] ?? p.categoria}
+                  {p.sinonimos.length > 0 && ` · ${p.sinonimos.length} sinónimo${p.sinonimos.length === 1 ? '' : 's'}`}
+                  {p.sale_al_momento && ' · al momento'}
+                </span>
+              </div>
+              <span className="plato-tarjeta-precio">
+                {parseFloat(p.precio) > 0 ? soles(parseFloat(p.precio)) : '—'}
+              </span>
+            </div>
+            <div className="plato-tarjeta-acciones">
+              <button type="button" className="toggle-sale-hoy" aria-pressed={p.activo_hoy}
+                      aria-label={`${nombreDe(p)} sale hoy`}
+                      onClick={() => editar(idx, { activo_hoy: !p.activo_hoy })}>
+                <span className="riel"><span className="perilla" /></span>
+                {p.activo_hoy ? 'Sale hoy' : 'No sale hoy'}
+              </button>
+              <button className="boton-mas-plato" aria-label={`Editar ${nombreDe(p)}`}
+                      onClick={() => setEditando(idx)}>⋯</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* En escritorio se conserva la tabla completa */}
+      <div className="tabla-menu-envoltorio tabla-desplazable"><table className="tabla-admin tabla-editable">
         <thead>
           <tr>
             <th>Plato</th>
@@ -647,13 +794,13 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
             <th>Precio S/</th>
             <th>Sinónimos (para la voz)</th>
             <th title="Se prepara al pedido (bistec frito): obliga entrega por tiempos">Al momento</th>
-            <th>Disponible hoy</th>
+            <th>Sale hoy</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {platos.map((p, idx) => (
-            <tr key={p.id ?? `nuevo-${idx}`}>
+            <tr key={p.id ?? `nuevo-${idx}`} className={tocado(p) ? 'fila-tocada' : ''}>
               <td>
                 <input value={p.nombre} onChange={(e) => editar(idx, { nombre: e.target.value })} placeholder="Nombre del plato" />
               </td>
@@ -665,7 +812,8 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
                 />
               </td>
               <td>
-                <select value={p.categoria} onChange={(e) => editar(idx, { categoria: e.target.value })}>
+                <select value={p.categoria} onChange={(e) => editar(idx, { categoria: e.target.value })}
+                        aria-label={`Categoría de ${nombreDe(p)}`}>
                   {Object.entries(NOMBRE_CATEGORIA).map(([valor, texto]) => (
                     <option key={valor} value={valor}>{texto}</option>
                   ))}
@@ -679,6 +827,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
                   value={p.precio}
                   onChange={(e) => editar(idx, { precio: e.target.value })}
                   placeholder="0.00"
+                  aria-label={`Precio de ${nombreDe(p)}`}
                 />
               </td>
               <td>
@@ -691,6 +840,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
                 <input
                   type="checkbox"
                   checked={p.sale_al_momento}
+                  aria-label={`${nombreDe(p)} se prepara al momento`}
                   onChange={(e) => editar(idx, { sale_al_momento: e.target.checked })}
                 />
               </td>
@@ -698,22 +848,124 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
                 <input
                   type="checkbox"
                   checked={p.activo_hoy}
+                  aria-label={`${nombreDe(p)} sale hoy`}
                   onChange={(e) => editar(idx, { activo_hoy: e.target.checked })}
                 />
               </td>
               <td>
                 {p.id === undefined && (
-                  <button className="boton-quitar" onClick={() => quitar(idx)}>✕</button>
+                  <button className="boton-quitar" aria-label={`Quitar ${nombreDe(p)}`}
+                          onClick={() => quitar(idx)}>✕</button>
                 )}
               </td>
             </tr>
           ))}
         </tbody>
       </table></div>
-      <p className="nota-admin">
-        Para agotar un plato a mitad de servicio: desmarca "Disponible hoy" y guarda. Desaparece de la
-        terminal en el siguiente refresco (máx. 30 segundos).
-      </p>
+
+      {/* Un solo modelo de guardado, con el contador a la vista (h. 24/25) */}
+      <div className={`barra-guardado ${cambios === 0 ? 'limpia' : ''}`}>
+        <span className="cuenta-cambios">
+          {cambios === 0 ? 'Todo guardado' : `${cambios} cambio${cambios === 1 ? '' : 's'} sin guardar`}
+        </span>
+        <button className="boton-primario" onClick={guardar}>💾 Guardar menú del día</button>
+      </div>
+
+      <SeccionMenusGuardados
+        onSesionVencida={onSesionVencida}
+        onCargado={(msg) => { cargar(); setMensaje(msg) }}
+      />
+
+      {/* Hoja ⋯: lo secundario del plato, con espacio real (h. 23/26/28) */}
+      {editando !== null && platos[editando] && (
+        <div className="modal-fondo" onClick={() => setEditando(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>{nombreDe(platos[editando])}</h2>
+            <div className="hoja-plato">
+              <div className="campo-etiquetado">
+                <label>Nombre</label>
+                <input type="text" value={platos[editando].nombre}
+                       onChange={(e) => editar(editando, { nombre: e.target.value })}
+                       placeholder="Nombre del plato" />
+              </div>
+              <div className="campo-etiquetado">
+                <label>Categoría</label>
+                <select value={platos[editando].categoria}
+                        onChange={(e) => editar(editando, { categoria: e.target.value })}>
+                  {Object.entries(NOMBRE_CATEGORIA).map(([valor, texto]) => (
+                    <option key={valor} value={valor}>{texto}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="campo-etiquetado">
+                <label>Precio S/</label>
+                <input type="number" inputMode="decimal" step="0.50" min="0"
+                       value={platos[editando].precio}
+                       onChange={(e) => editar(editando, { precio: e.target.value })}
+                       placeholder="0.00" />
+              </div>
+              <div className="campo-etiquetado">
+                <label>Foto (se guarda al instante, sin pasar por "Guardar")</label>
+                <CeldaFoto
+                  plato={platos[editando]}
+                  onCambio={(foto) => editar(editando, { foto })}
+                  onError={(e) => setError(manejarError(e, onSesionVencida))}
+                />
+              </div>
+              <div className="campo-etiquetado">
+                <label>Sinónimos (para la voz)</label>
+                <ChipsSinonimos
+                  sinonimos={platos[editando].sinonimos}
+                  onCambiar={(sinonimos) => editar(editando, { sinonimos })}
+                />
+              </div>
+              <label className="opcion-al-momento">
+                <input type="checkbox" checked={platos[editando].sale_al_momento}
+                       onChange={(e) => editar(editando, { sale_al_momento: e.target.checked })} />
+                <span className="explica">
+                  <strong>Sale al momento</strong>
+                  <span>Se prepara al pedido (bistec frito). Obliga entrega por tiempos en cocina.</span>
+                </span>
+              </label>
+              {platos[editando].id === undefined ? (
+                <button className="boton-grande boton--peligro"
+                        onClick={() => { quitar(editando); setEditando(null) }}>
+                  ✕ Quitar esta fila
+                </button>
+              ) : (
+                <p className="nota-admin">
+                  Para que no salga hoy, apaga "Sale hoy": el plato queda en el catálogo y su
+                  historial no cambia.
+                </p>
+              )}
+              <button className="boton-grande boton-confirmar" onClick={() => setEditando(null)}>
+                Listo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cargar el menú de ayer con cambios sin guardar: se pierde trabajo (h. 24) */}
+      {confirmandoAyer && (
+        <div className="modal-fondo" onClick={() => setConfirmandoAyer(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>¿Cargar el menú de ayer?</h2>
+            <p>
+              Tienes <strong>{cambios} cambio{cambios === 1 ? '' : 's'} sin guardar</strong> en la
+              lista de hoy. Cargar el menú de ayer reemplaza toda la lista y esos cambios se pierden.
+            </p>
+            <div className="modal-botones">
+              <button className="boton-grande boton-secundario" onClick={() => setConfirmandoAyer(false)}>
+                Cancelar
+              </button>
+              <button className="boton-grande boton-confirmar" onClick={cargarAyer}>
+                Sí, cargar el de ayer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <EditorPlantillas onSesionVencida={onSesionVencida} />
       <EditorAgregados onSesionVencida={onSesionVencida} />
     </div>
@@ -1086,7 +1338,7 @@ function ChipsSinonimos({
       <input
         className="chip-input"
         value={texto}
-        placeholder="+ sinónimo"
+        placeholder="+ sinónimo ⏎"
         onChange={(e) => setTexto(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ',') {
@@ -1094,7 +1346,9 @@ function ChipsSinonimos({
             agregar()
           }
         }}
-        onBlur={agregar}
+        // Un scroll no es una confirmación: al perder el foco se descarta
+        // lo escrito a medias en vez de guardarlo en silencio (hallazgo 28)
+        onBlur={() => setTexto('')}
       />
     </div>
   )
@@ -1256,51 +1510,111 @@ function fechaHoyISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// Una línea por partida con los tiempos del menú debajo, en vez del
+// join(', ') con paréntesis anidados (hallazgo 30)
+function PartidasDeOrden({ orden }: { orden: OrdenOut }) {
+  return (
+    <ul className="orden-partidas">
+      {orden.menus.map((m, i) => (
+        <li className="orden-partida" key={`m-${i}`}>
+          <span className="cantidad">{m.cantidad}×</span>
+          <span className="cuerpo">
+            <strong>{m.nombre}</strong>
+            {m.items.length > 0 && (
+              <span className="tiempos">{m.items.map((x) => x.nombre).join(' · ')}</span>
+            )}
+          </span>
+        </li>
+      ))}
+      {orden.items.map((it, i) => (
+        <li className="orden-partida" key={`i-${i}`}>
+          <span className="cantidad">{it.cantidad}×</span>
+          <span className="cuerpo"><strong>{it.nombre}</strong></span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+const ESTADOS_ORDEN = ['pendiente', 'preparando', 'listo', 'entregado', 'anulada']
+
 function TabOrdenes() {
   const [ordenes, setOrdenes] = useState<OrdenOut[]>([])
   const [totalVendido, setTotalVendido] = useState(0)
   const [ticket, setTicket] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
   // Movimiento de cualquier día, no solo hoy
   const [fecha, setFecha] = useState(fechaHoyISO())
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroEstado, setFiltroEstado] = useState('')
+  const [ultimaCarga, setUltimaCarga] = useState<number | null>(null)
+  const [avisoReimpresion, setAvisoReimpresion] = useState('')
+  const [error, setError] = useState('')
+  // Confirmación previa de la reimpresión, con adónde va (hallazgo 32)
+  const [confirmando, setConfirmando] = useState<{ orden: OrdenOut; modo: string; local: DatosLocal } | null>(null)
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
     const esHoy = fecha === fechaHoyISO()
-    const cargar = () =>
-      (esHoy ? api.ordenesHoy() : api.ordenesDeDia(fecha))
-        .then((data) => {
-          setOrdenes(data.ordenes)
-          setTotalVendido(data.total_vendido)
-        })
-        .catch(() => {})
-    cargar()
-    if (!esHoy) return
-    const intervalo = window.setInterval(cargar, 15_000)
-    return () => window.clearInterval(intervalo)
+    return (esHoy ? api.ordenesHoy() : api.ordenesDeDia(fecha))
+      .then((data) => {
+        // El refresco de 15s no debe hacer saltar la lista bajo el dedo:
+        // solo se reemplaza el arreglo si de verdad cambió
+        setOrdenes((prev) =>
+          JSON.stringify(prev) === JSON.stringify(data.ordenes) ? prev : data.ordenes,
+        )
+        setTotalVendido(data.total_vendido)
+        setUltimaCarga(Date.now())
+      })
+      .catch(() => {})
   }, [fecha])
 
-  const [avisoReimpresion, setAvisoReimpresion] = useState('')
+  useEffect(() => {
+    cargar()
+    if (fecha !== fechaHoyISO()) return
+    const intervalo = window.setInterval(cargar, 15_000)
+    return () => window.clearInterval(intervalo)
+  }, [cargar, fecha])
+
+  // Re-render periódico solo para que "actualizado hace N s" no se congele
+  const [, setTic] = useState(0)
+  useEffect(() => {
+    const t = window.setInterval(() => setTic((n) => n + 1), 5_000)
+    return () => window.clearInterval(t)
+  }, [])
 
   // Reimpresión: útil cuando el ticket original no salió (papel, impresora
-  // apagada, etc.). En modo "estacion" se reencola para /ticketera; en modo
-  // "terminal" se imprime desde esta misma pantalla.
-  const reimprimir = async (orden: OrdenOut) => {
+  // apagada, etc.). Si la configuración del local no llega, NO se imprime:
+  // saldría un ticket sin nombre ni RUC.
+  const prepararReimpresion = async (orden: OrdenOut) => {
     setAvisoReimpresion('')
+    setError('')
     try {
       const cfg = await api.config()
-      if (cfg.modo_impresion === 'estacion') {
+      setConfirmando({
+        orden,
+        modo: cfg.modo_impresion,
+        local: { nombre: cfg.nombre_local, direccion: cfg.direccion, ruc: cfg.ruc },
+      })
+    } catch {
+      setError('No se pudo leer la configuración del local, así que no se reimprime (saldría un ticket sin nombre ni RUC). Prueba de nuevo en unos segundos.')
+    }
+  }
+
+  const confirmarReimpresion = async () => {
+    if (!confirmando) return
+    const { orden, modo, local } = confirmando
+    setConfirmando(null)
+    if (modo === 'estacion') {
+      try {
         await api.reimprimirOrden(orden.id)
         setAvisoReimpresion(
           `Ticket #${String(orden.numero_orden_dia).padStart(3, '0')} enviado a la estación de impresión.`,
         )
-        return
+      } catch {
+        setError('No se pudo reenviar el ticket a la estación. Revisa que la ticketera esté abierta y prueba de nuevo.')
       }
-      setTicket({
-        orden,
-        local: { nombre: cfg.nombre_local, direccion: cfg.direccion, ruc: cfg.ruc },
-      })
-    } catch {
-      setTicket({ orden, local: { nombre: '', direccion: '', ruc: '' } })
+      return
     }
+    setTicket({ orden, local })
   }
 
   useEffect(() => {
@@ -1312,17 +1626,79 @@ function TabOrdenes() {
     return () => window.clearTimeout(timer)
   }, [ticket])
 
+  const esHoy = fecha === fechaHoyISO()
+  const num = (o: OrdenOut) => String(o.numero_orden_dia).padStart(3, '0')
+  const hace = ultimaCarga ? Math.max(0, Math.round((Date.now() - ultimaCarga) / 1000)) : null
+  const filtroNum = busqueda.trim().replace(/^#/, '')
+  const ordenesFiltradas = ordenes.filter((o) => {
+    if (filtroEstado && o.estado !== filtroEstado) return false
+    if (filtroNum && !num(o).includes(filtroNum) && String(o.numero_orden_dia) !== filtroNum) return false
+    return true
+  })
+  const estadosPresentes = ESTADOS_ORDEN.filter((e) => ordenes.some((o) => o.estado === e))
+
   return (
     <div>
       <div className="total-dia">
+        <div className="cifra">
+          <span>Vendido</span>
+          <strong>{soles(totalVendido)}</strong>
+        </div>
+        <div className="cifra">
+          <span>Órdenes</span>
+          <strong>{ordenes.length}</strong>
+        </div>
         <label className="selector-fecha">
-          Día:{' '}
-          <input type="date" value={fecha} max={fechaHoyISO()} onChange={(e) => setFecha(e.target.value)} />
+          Día
+          <input type="date" value={fecha} max={fechaHoyISO()}
+                 onChange={(e) => e.target.value && setFecha(e.target.value)} />
         </label>
-        {' '}Total vendido: <strong>{soles(totalVendido)}</strong> ({ordenes.length} órdenes)
       </div>
       {avisoReimpresion && <div className="banner-ok">{avisoReimpresion}</div>}
-      <div className="tabla-desplazable"><table className="tabla-admin">
+      {error && <div className="banner-error">{error}</div>}
+      {(ordenes.length > 0 || esHoy) && (
+        <div className="ordenes-filtros">
+          <input className="buscador-orden" inputMode="numeric" placeholder="🔍 Nº de orden…"
+                 value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+          {estadosPresentes.map((e) => (
+            <button key={e} type="button" className="chip-estado" aria-pressed={filtroEstado === e}
+                    onClick={() => setFiltroEstado((f) => (f === e ? '' : e))}>
+              {e} · {ordenes.filter((o) => o.estado === e).length}
+            </button>
+          ))}
+          {esHoy && (
+            <span className="acuse-refresco">
+              {hace !== null && (hace < 10 ? 'recién actualizado' : `actualizado hace ${hace} s`)}
+              <button type="button" onClick={() => { void cargar() }}>↻ Refrescar</button>
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* En celular cada orden es una tarjeta legible bajo presión (h. 30) */}
+      <div className="ordenes-tarjetas">
+        {ordenesFiltradas.map((o) => (
+          <div className="orden-tarjeta" key={o.id}>
+            <div className="orden-tarjeta-cabecera">
+              <span className="orden-tarjeta-numero">#{num(o)}</span>
+              <span className="orden-tarjeta-hora">{o.hora}</span>
+              <span className={`etiqueta-estado etiqueta-${o.estado}`}>{o.estado}</span>
+              <span className="orden-tarjeta-total">{soles(o.total)}</span>
+            </div>
+            <PartidasDeOrden orden={o} />
+            <div className="orden-tarjeta-pie">
+              <button className="boton-reimprimir"
+                      aria-label={`Reimprimir ticket de la orden ${num(o)}`}
+                      onClick={() => prepararReimpresion(o)}>
+                🖨 Reimprimir ticket
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* En escritorio se conserva la tabla, con las partidas como lista */}
+      <div className="tabla-ordenes-envoltorio tabla-desplazable"><table className="tabla-admin">
         <thead>
           <tr>
             <th>#</th>
@@ -1334,31 +1710,53 @@ function TabOrdenes() {
           </tr>
         </thead>
         <tbody>
-          {ordenes.map((o) => (
+          {ordenesFiltradas.map((o) => (
             <tr key={o.id}>
-              <td>#{String(o.numero_orden_dia).padStart(3, '0')}</td>
+              <td>#{num(o)}</td>
               <td>{o.hora}</td>
-              <td>
-                {[
-                  ...o.menus.map(
-                    (m) =>
-                      `${m.cantidad}× ${m.nombre} (${m.items.map((i) => i.nombre).join(' + ')})`,
-                  ),
-                  ...o.items.map((i) => `${i.cantidad}× ${i.nombre}`),
-                ].join(', ')}
-              </td>
+              <td className="col-items"><PartidasDeOrden orden={o} /></td>
               <td>{soles(o.total)}</td>
               <td><span className={`etiqueta-estado etiqueta-${o.estado}`}>{o.estado}</span></td>
               <td>
-                <button className="boton-reimprimir" onClick={() => reimprimir(o)} title="Reimprimir ticket">
-                  🖨️
+                <button className="boton-reimprimir"
+                        aria-label={`Reimprimir ticket de la orden ${num(o)}`}
+                        onClick={() => prepararReimpresion(o)}>
+                  🖨 Reimprimir
                 </button>
               </td>
             </tr>
           ))}
         </tbody>
       </table></div>
-      {ordenes.length === 0 && <p className="nota-admin">Todavía no hay órdenes hoy.</p>}
+      {ordenesFiltradas.length === 0 && (
+        <p className="nota-admin">
+          {ordenes.length > 0
+            ? 'Ninguna orden coincide con el filtro.'
+            : esHoy
+              ? 'Todavía no hay órdenes hoy.'
+              : `No hubo órdenes el ${fecha}.`}
+        </p>
+      )}
+      {confirmando && (
+        <div className="modal-fondo" onClick={() => setConfirmando(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>¿Reimprimir el ticket #{num(confirmando.orden)}?</h2>
+            <p>
+              {confirmando.modo === 'estacion'
+                ? 'Se reimprime en la estación de impresión (la PC con la impresora).'
+                : 'Se imprime desde esta pantalla: se va a abrir el diálogo de impresión.'}
+            </p>
+            <div className="modal-botones">
+              <button className="boton-grande boton-secundario" onClick={() => setConfirmando(null)}>
+                Cancelar
+              </button>
+              <button className="boton-grande boton-confirmar" onClick={confirmarReimpresion}>
+                🖨 Reimprimir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {ticket && (
         <div className="solo-impresion">
           <Ticket orden={ticket.orden} local={ticket.local} />

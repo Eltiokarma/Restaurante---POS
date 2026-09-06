@@ -90,6 +90,22 @@ datos quedan.
 3. ¿El gating de "todo junto" debe BLOQUEAR el tachado del segundo o solo
    avisar? (propuesta: solo avisar, cocina manda)
 
+## También pedido por el dueño (sesión 2, aún sin arrancar)
+
+- **Gaseosas en el pedido**: poder añadir gaseosas/bebidas embotelladas a un
+  pedido (terminal y caja). Hoy solo entran si son un plato del menú (p. ej.
+  "Chicha morada" como refresco); falta el caso botella con marca y tamaño.
+  Preguntar antes de arrancar: ¿lista fija de bebidas con precio (Inca Kola
+  1L, Coca 500ml…) como sección propia? ¿Descuentan kardex (botellas =
+  insumo en "unidad")? ¿Se pueden añadir a una orden YA creada desde caja
+  (lo más probable) o solo al tomar el pedido?
+- **Trasladar pedidos de una mesa a otra**: mover una orden (o todas las de
+  una mesa) a otra mesa desde caja — hoy solo se puede asignar mesa al crear
+  o desde el "⋯" (Mesa), pero conviene que el flujo diga "traslado" y
+  soporte mover TODO lo de la mesa 2 a la 5 de un toque. Nota: la orden ya
+  guarda `mesa_ids` múltiples; el traslado sería un PATCH de reasignación +
+  reimpresión opcional de comanda con la mesa nueva.
+
 ## Datos operativos
 
 - Producción: `https://restaurante-pos-production-dc39.up.railway.app`

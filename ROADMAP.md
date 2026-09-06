@@ -226,6 +226,27 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       adiós window.confirm) y guardia de cambios sin guardar con 3 opciones (Guardar y
       salir / Salir sin guardar / Seguir editando). El aviso "Se está acabando" se
       recorta a 8 nombres + "y N más" para no comerse la pantalla del celular.
+- [x] **Auditoría visual entrega 3: Menú del día y Órdenes** (handoff de Claude Design,
+      hallazgos 23-33; solo frontend): en celular (<900px) cada plato es una tarjeta con el
+      toggle "Sale hoy / No sale hoy" de 56px como elemento principal (verde con borde
+      culantro cuando sale; apagada con opacidad cuando no) y lo secundario — foto,
+      categoría, precio, sinónimos, "al momento" con su explicación visible — en una hoja
+      "⋯"; la tabla completa sobrevive en escritorio con aria-labels en los checkboxes.
+      Las tres formas de partir el menú se agrupan en "Empezar desde…" y cada opción
+      declara su consecuencia antes de tocarla; cargar el menú de ayer con cambios sin
+      guardar pide confirmación. Un solo modelo de guardado: barra fija al pie con
+      "N cambios sin guardar" (la foto conserva su guardado inmediato pero lo declara),
+      punto ámbar en filas/tarjetas tocadas, beforeunload con pendientes y acuse con
+      número ("la terminal se actualiza en menos de 30 segundos"). Menús guardados: el
+      día ocupado muestra "Lunes · 9 platos" y guardarle encima pide confirmación en hoja
+      propia con lo que se pierde. Sinónimos: chips de 40px con ✕ de 40×40 y el onBlur ya
+      no guarda texto a medias. Órdenes: tarjeta por orden en móvil (nº, hora, estado,
+      total 21px y una línea por partida con los tiempos del menú separados por "·"),
+      tiles de Vendido/Órdenes a 38px, buscador por número + chips de estado con conteo,
+      auto-refresco que no salta (solo reemplaza si cambió) con "actualizado hace N s" y
+      refresco manual, vacío redactado según la fecha, y reimprimir con texto + aria-label
+      + confirmación que dice adónde va (estación o esta pantalla) y que NO imprime si la
+      configuración del local no llega (antes salía un ticket sin nombre ni RUC).
 - [x] **Caja con "+ UN MENÚ" y cierre con resumen en pantalla**: la caja usa la misma
       tarjeta de oferta que la terminal (lista de platos por tiempo sin precios, un toque
       agrega el menú completo, contador al costado; adiós al modal "ARMAR MENÚ", ahora

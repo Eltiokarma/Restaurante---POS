@@ -5315,3 +5315,668 @@ select:focus-visible {
 .modal-botones-columna .boton-grande {
   width: 100%;
 }
+
+
+/* ==========================================================================
+   Menú del día y Órdenes — Tanda 1 (solo CSS)
+   Auditoría de Admin → Menú del día y Admin → Órdenes, hallazgos 23–33.
+   Mergear al final de frontend/src/styles.css.
+
+   Parte del estado ACTUAL del repo (tandas 1 de las entregas anteriores ya
+   mergeadas: .tabla-editable a 68px/52px, .banner-aviso, etc.).
+
+   No introduce tokens nuevos, dependencias ni recursos externos.
+   No toca @media print, #ticket-print ni .solo-impresion.
+   Los hallazgos marcados (andamio) necesitan además markup en Admin.tsx;
+   el CSS ya está listo para recibirlo.
+   ========================================================================== */
+
+
+/* --- 28 · Chips de sinónimos al piso táctil -----------------------------
+   .chip medía ~28px con una ✕ de ~20px en --tinta-suave (3.7:1).
+   Es la única corrección de esta tanda que aplica sin tocar el TSX.        */
+
+.chip {
+  min-height: 40px;
+  padding: 4px 6px 4px 12px;
+  gap: 4px;
+  font-size: 0.95rem;
+}
+
+.chip button {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0.95rem;
+  color: var(--tinta-media);
+}
+
+.chip button:active {
+  background: var(--linea);
+}
+
+/* El campo se salía de la regla de 52px con cuatro !important. */
+.chip-input {
+  border: 1.5px dashed var(--linea-fuerte) !important;
+  min-width: 130px !important;
+  width: 130px !important;
+  height: 52px !important;
+  padding: 0 12px !important;
+  font-size: 1rem !important;
+}
+
+/* En móvil los sinónimos se editan en la hoja ⋯ del plato, con espacio. */
+@media (max-width: 900px) {
+  .chips-sinonimos {
+    min-width: 0;
+    gap: 8px;
+  }
+}
+
+
+/* --- 31 · El total del día como cifras, no como párrafo -----------------
+   Reutiliza el patrón .tile que ya existe en el Resumen.                   */
+
+.total-dia {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  background: var(--papel-alto);
+  border: 1.5px solid var(--linea-fuerte);
+  border-top: 4px solid var(--achiote);
+  border-radius: var(--r-chico);
+  font-size: 1rem; /* deja de gobernar el tamaño de las cifras */
+}
+
+.total-dia .cifra {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.total-dia .cifra > span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-media);
+}
+
+.total-dia .cifra > strong {
+  font-size: 38px;
+  line-height: 1;
+  font-weight: 800;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.total-dia .selector-fecha {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-media);
+}
+
+.total-dia .selector-fecha input {
+  min-height: var(--toque-min);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--tinta);
+}
+
+@media (max-width: 700px) {
+  .total-dia .cifra > strong { font-size: 32px; }
+  .total-dia .selector-fecha { margin-left: 0; width: 100%; }
+}
+
+
+/* --- 23 · Andamio de tarjetas de plato (Menú del día) -------------------
+   Requiere que TabMenu emita las tarjetas. La tabla sobrevive en escritorio. */
+
+.menu-tarjetas { display: none; }
+
+@media (max-width: 900px) {
+  .tabla-menu-envoltorio { display: none; }
+
+  .menu-tarjetas {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+.plato-tarjeta {
+  background: var(--papel-alto);
+  border: 1.5px solid var(--linea);
+  border-radius: var(--r-chico);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Activo hoy: forma + palabra, no solo matiz (el toggle lleva el texto). */
+.plato-tarjeta.sale-hoy {
+  border-color: var(--linea-fuerte);
+  border-left: 6px solid var(--culantro);
+}
+
+.plato-tarjeta.no-sale-hoy {
+  opacity: 0.82;
+}
+
+/* 25 · Cambio sin guardar, visible en la propia tarjeta. */
+.plato-tarjeta.tocada::after {
+  content: 'sin guardar';
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b4a05;
+  background: var(--aji-tenue);
+  box-shadow: inset 0 0 0 1.5px var(--aji);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.plato-tarjeta-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.plato-tarjeta-cabecera .mini-foto {
+  width: 56px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.plato-tarjeta-datos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.plato-tarjeta-datos > strong { font-size: 18px; }
+
+.plato-tarjeta-datos > span {
+  font-size: 13.5px;
+  color: var(--tinta-media);
+}
+
+.plato-tarjeta-precio {
+  margin-left: auto;
+  font-size: 22px;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.plato-tarjeta-acciones {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+
+/* --- 23 / 26 · Toggle "Sale hoy" con estado en palabras ----------------
+   Sustituye al checkbox de 28px sin etiqueta. Necesita aria-label con el
+   nombre del plato en el TSX.                                              */
+
+.toggle-sale-hoy {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-chico);
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--tinta);
+  cursor: pointer;
+  text-align: left;
+}
+
+.toggle-sale-hoy[aria-pressed='true'] {
+  background: var(--culantro);
+  color: #fff;
+  box-shadow: none;
+}
+
+.toggle-sale-hoy .riel {
+  display: inline-flex;
+  align-items: center;
+  width: 52px;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--linea);
+}
+
+.toggle-sale-hoy[aria-pressed='true'] .riel {
+  background: rgba(255, 255, 255, 0.28);
+  justify-content: flex-end;
+}
+
+.toggle-sale-hoy .perilla {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--papel-alto);
+}
+
+.toggle-sale-hoy[aria-pressed='true'] .perilla { background: #fff; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .toggle-sale-hoy .riel { transition: justify-content 120ms ease; }
+  .toggle-sale-hoy .perilla { transition: transform 120ms ease; }
+}
+
+/* Lo secundario (foto, categoría, sinónimos, al momento, quitar) entra aquí. */
+.boton-mas-plato {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--r-chico);
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  font-size: 20px;
+  color: var(--tinta);
+  cursor: pointer;
+}
+
+
+/* --- 24 / 25 · Barra fija de guardado con contador de cambios ---------- */
+
+.barra-guardado {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: var(--tinta);
+  border-radius: var(--r-chico);
+}
+
+.barra-guardado .cuenta-cambios {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--papel);
+}
+
+.barra-guardado .boton-primario {
+  margin-left: auto;
+  min-height: var(--toque-min);
+  padding: 0 18px;
+  background: var(--achiote);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.barra-guardado.limpia {
+  background: var(--papel-hondo);
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+}
+
+.barra-guardado.limpia .cuenta-cambios { color: var(--tinta-media); }
+
+
+/* --- 24 · "Empezar desde…": cada opción declara su consecuencia -------- */
+
+.menu-empezar {
+  background: var(--papel-alto);
+  border: 1.5px solid var(--linea-fuerte);
+  border-radius: var(--r-chico);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-width: 300px;
+}
+
+.menu-empezar button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  min-height: 56px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--linea);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-empezar button:last-child { border-bottom: 0; }
+
+.menu-empezar button > strong { font-size: 15.5px; }
+
+/* La consecuencia, escrita antes de tocar. */
+.menu-empezar button > span {
+  font-size: 13.5px;
+  color: var(--tinta-media);
+}
+
+
+/* --- 30 · Andamio de tarjetas de orden --------------------------------- */
+
+.ordenes-tarjetas { display: none; }
+
+@media (max-width: 900px) {
+  .tabla-ordenes-envoltorio { display: none; }
+
+  .ordenes-tarjetas {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+.orden-tarjeta {
+  background: var(--papel-alto);
+  border: 1.5px solid var(--linea-fuerte);
+  border-radius: var(--r-chico);
+  overflow: hidden;
+}
+
+.orden-tarjeta-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--linea);
+}
+
+.orden-tarjeta-numero {
+  font-size: 19px;
+  font-weight: 800;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.orden-tarjeta-hora {
+  font-size: 14.5px;
+  color: var(--tinta-media);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.orden-tarjeta-total {
+  margin-left: auto;
+  font-size: 21px;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Una línea por partida, tres niveles tipográficos. Reemplaza el join(', '). */
+.orden-partidas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  margin: 0;
+  list-style: none;
+}
+
+.orden-partida {
+  display: flex;
+  gap: 10px;
+  font-size: 15.5px;
+}
+
+.orden-partida .cantidad {
+  min-width: 26px;
+  font-weight: 800;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.orden-partida .cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.orden-partida .cuerpo > strong { font-weight: 700; }
+
+/* Tiempos del menú: separados por · , no por " + " dentro de paréntesis. */
+.orden-partida .tiempos {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--tinta);
+}
+
+.orden-tarjeta-pie {
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--linea);
+}
+
+/* 32 · El botón deja de ser un emoji suelto: lleva texto y aria-label. */
+.boton-reimprimir {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  min-height: var(--toque-min);
+  height: auto;
+  padding: 0 16px;
+  font-size: 15.5px;
+  font-weight: 700;
+}
+
+/* En la tabla de escritorio, la celda de items también deja de ser párrafo. */
+.tabla-admin .col-items .orden-partidas {
+  padding: 0;
+  max-width: 46ch;
+}
+
+
+/* --- 33 · Filtros de estado y acuse de refresco ------------------------
+   Reutiliza .etiqueta-estado, que ya trae color + forma + texto.           */
+
+.ordenes-filtros {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ordenes-filtros .buscador-orden {
+  min-height: var(--toque-min);
+  padding: 0 14px;
+  font-family: inherit;
+  font-size: 1rem;
+  background: #fff;
+  border: 1.5px solid var(--linea-fuerte);
+  border-radius: var(--r-chico);
+}
+
+.chip-estado {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chip-estado[aria-pressed='true'] {
+  background: var(--tinta);
+  color: var(--papel);
+  box-shadow: none;
+  font-weight: 800;
+}
+
+.acuse-refresco {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--tinta-media);
+}
+
+.acuse-refresco button {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-chico);
+  background: var(--papel-hondo);
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+
+/* --- 23 / 30 · Señal de scroll donde la tabla sobreviva ----------------
+   La regla de .tabla-desplazable::after ya entró con la tanda del kardex;
+   aquí solo se asegura que el degradado no tape la última columna útil
+   en los anchos donde la tabla sí es la vista correcta.                    */
+
+@media (min-width: 901px) {
+  .tabla-menu-envoltorio.tabla-desplazable::after,
+  .tabla-ordenes-envoltorio.tabla-desplazable::after {
+    width: 32px;
+  }
+}
+
+
+/* --- 27 · La ayuda deja de ser nota al pie en gris que falla AA -------- */
+
+.nota-admin {
+  color: var(--tinta-media);
+}
+
+.ayuda-arriba {
+  margin: 0 0 14px;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--tinta-media);
+  max-width: 68ch;
+}
+
+/* --- Complemento propio de las tandas 2/3 (markup nuevo de TabMenu/TabOrdenes) --- */
+
+/* "Empezar desde…" como popover anclado al botón (24) */
+.menu-empezar-envoltorio {
+  position: relative;
+  display: inline-block;
+}
+
+.menu-empezar-envoltorio > .menu-empezar {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  box-shadow: var(--sombra-papel);
+}
+
+.fondo-popover {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: default;
+}
+
+/* Hoja ⋯ del plato: lo secundario con espacio real (23/26/28) */
+.hoja-plato {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.hoja-plato .celda-foto {
+  flex-wrap: wrap;
+}
+
+.hoja-plato input[type='text'],
+.hoja-plato input[type='number'],
+.hoja-plato select {
+  min-height: 52px;
+  font-size: 1rem;
+}
+
+/* "Al momento": explicación visible, no title (26) */
+.opcion-al-momento {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1.5px solid var(--linea);
+  border-radius: var(--r-chico);
+  cursor: pointer;
+}
+
+.opcion-al-momento input[type='checkbox'] {
+  width: 26px;
+  height: 26px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.opcion-al-momento .explica {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.opcion-al-momento .explica > span {
+  font-size: 13.5px;
+  color: var(--tinta-media);
+}
+
+/* Fila tocada en la tabla de escritorio (25) */
+.tabla-editable tr.fila-tocada td:first-child {
+  box-shadow: inset 6px 0 0 var(--aji);
+}
+
+/* Menús guardados (29): botones de día con su estado en palabras */
+.fila-guardar-menu .dia-ocupado {
+  box-shadow: inset 0 0 0 1.5px var(--aji);
+  background: var(--aji-tenue);
+}
+
+@media (max-width: 900px) {
+  .menu-tarjetas .plato-tarjeta .toggle-sale-hoy { min-height: 56px; }
+
+  .barra-guardado {
+    margin-inline: -4px;
+  }
+}
