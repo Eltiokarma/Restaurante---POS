@@ -6308,3 +6308,161 @@ select:focus-visible {
   font-variant-numeric: lining-nums tabular-nums;
   opacity: 0.85;
 }
+
+
+/* --- Guía de progreso del pedido (handoff 4: opciones 4c + 4b) --- */
+
+/* 4c · El menú se llena: filete que pasa de ámbar a verde */
+.tarjeta-menu.menu-incompleto {
+  border-left: 6px solid var(--aji);
+}
+
+.tarjeta-menu.menu-completo {
+  border-left: 6px solid var(--culantro);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tarjeta-menu { transition: border-color 240ms ease; }
+}
+
+.menu-progreso {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 14px 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--aji-hondo);
+}
+
+.menu-progreso.menu-progreso-listo {
+  color: var(--culantro-hondo);
+}
+
+.menu-progreso-barra {
+  flex: 1;
+  max-width: 180px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--papel-hondo);
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+  overflow: hidden;
+}
+
+.menu-progreso-barra > i {
+  display: block;
+  height: 100%;
+  background: var(--aji);
+}
+
+.menu-progreso-listo .menu-progreso-barra > i {
+  background: var(--culantro);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .menu-progreso-barra > i { transition: width 240ms ease, background-color 240ms ease; }
+}
+
+/* Casillero vacío: se ve QUE falta y DÓNDE se arregla; respira despacio */
+.casillero-vacio {
+  min-height: var(--toque-min);
+  padding: 8px 14px;
+  border: 2px dashed var(--aji);
+  border-radius: var(--r-chico);
+  background: var(--aji-tenue);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--aji-hondo);
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .casillero-vacio { animation: casillero-respira 2.4s ease-in-out infinite; }
+}
+
+@keyframes casillero-respira {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.62; }
+}
+
+/* 4b · La barra de abajo nombra el hueco y lo persigue */
+.pie-resumen {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  margin: 16px -4px 0;
+  padding: 8px 4px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: var(--papel);
+  box-shadow: 0 -6px 14px rgba(34, 26, 20, 0.08);
+}
+
+.barra-guia {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  border-radius: var(--r-chico);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.barra-guia.guia-falta {
+  background: var(--aji-tenue);
+  box-shadow: inset 0 0 0 2px var(--aji);
+  color: var(--aji-hondo);
+}
+
+.barra-guia.guia-lista {
+  background: var(--culantro-tenue);
+  box-shadow: inset 0 0 0 2px var(--culantro);
+  color: var(--culantro-hondo);
+}
+
+.barra-guia-texto { flex: 1; }
+
+.boton-ir-ahi {
+  min-height: var(--toque-min);
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--r-chico);
+  background: var(--aji);
+  color: #3c2a03;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .flecha-rebota {
+    display: inline-block;
+    animation: flecha-rebota 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes flecha-rebota {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(3px); }
+}
+
+/* La tarjeta perseguida responde con dos latidos del anillo */
+@media (prefers-reduced-motion: no-preference) {
+  .tarjeta-perseguida .tarjeta-menu {
+    animation: anillo-late 0.7s ease-out 2;
+  }
+}
+
+@keyframes anillo-late {
+  0% { box-shadow: 0 0 0 0 rgba(224, 160, 33, 0.65); }
+  100% { box-shadow: 0 0 0 14px rgba(224, 160, 33, 0); }
+}
+
+/* Sin movimiento, la persecución se lee igual: anillo fijo un instante */
+.tarjeta-perseguida .tarjeta-menu {
+  outline: 3px solid var(--aji);
+  outline-offset: 2px;
+}

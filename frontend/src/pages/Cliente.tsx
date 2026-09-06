@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles, unidadesEnTaper } from '../api'
+import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles, tiemposPendientes, unidadesEnTaper } from '../api'
 import type { ConfigOut, DatosLocal, Entrega, MenuHoy, MesaEstado, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { describirMenu } from '../components/describirMenu'
 import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
@@ -59,6 +59,10 @@ export function Cliente() {
   // sale "SIN MESA" y en caja la asignan después
   const [mesas, setMesas] = useState<MesaEstado[]>([])
   const [mesasElegidas, setMesasElegidas] = useState<number[]>([])
+  // Guía de lo que falta (4b): la barra de abajo nombra el hueco y lo
+  // persigue — "IR AHÍ" abre la tarjeta del menú incompleto y la hace latir
+  const [abrirTics, setAbrirTics] = useState<Record<number, number>>({})
+  const [perseguida, setPerseguida] = useState<number | null>(null)
   // Para el campo origen de la orden: qué canales llenaron el carrito
   const usoVoz = useRef(false)
   const usoTactil = useRef(false)
@@ -410,6 +414,23 @@ export function Cliente() {
     )
   }
 
+  // Lo que el backend reclamaría con un 422 al final, dicho desde el
+  // principio y con el mismo lenguaje (espejo de la validación)
+  const pendientesMenus = carrito.menus.flatMap((m, idx) =>
+    tiemposPendientes(m).map((t) => ({ idx, rotulo: t.rotulo, numero: idx + 1 })),
+  )
+
+  const irAlPendiente = () => {
+    const primero = pendientesMenus[0]
+    if (!primero) return
+    setAbrirTics((prev) => ({ ...prev, [primero.idx]: (prev[primero.idx] ?? 0) + 1 }))
+    setPerseguida(primero.idx)
+    window.setTimeout(() => setPerseguida(null), 1600)
+    document
+      .getElementById(`tarjeta-menu-${primero.idx}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
   if (pantalla === 'resumen') {
     return (
       <div className="pantalla pantalla-resumen">
@@ -437,7 +458,7 @@ export function Cliente() {
                 menu={m}
                 etiqueta={`➕ UN MENÚ — ${soles(m.precio)}`}
                 enPedido={menusEnPedido(carrito.menus, m.id)}
-                onAgregar={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m) }}
+                onAgregar={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m, false) }}
               />
             ))}
             {carrito.totalItems === 0 && (
@@ -465,8 +486,12 @@ export function Cliente() {
         )}
         <div className="lista-resumen">
           {carrito.menus.map((m, idx) => (
-            <TarjetaMenuCarrito
+            <div
               key={`menu-${idx}`}
+              id={`tarjeta-menu-${idx}`}
+              className={perseguida === idx ? 'tarjeta-perseguida' : ''}
+            >
+            <TarjetaMenuCarrito
               linea={m}
               numero={idx + 1}
               onCambiarEleccion={(t, p) => carrito.cambiarEleccion(idx, t, p)}
@@ -480,7 +505,9 @@ export function Cliente() {
               onCambiarNota={(n) => carrito.cambiarNotaMenu(idx, n)}
               empaquesOfrecidos={empaquesOfrecidos}
               precioTaper={precioTaper}
+              abrirTic={abrirTics[idx] ?? 0}
             />
+            </div>
           ))}
           {carrito.items.map((i) => (
             <div className="linea-resumen linea-con-empaque" key={i.plato.id}>
@@ -575,19 +602,44 @@ export function Cliente() {
             <div className="total-grande">TOTAL: {soles(totalConCargos)}</div>
           </>
         )}
-        <div className="botones-resumen">
-          {!soloMenus && (
-            <button className="boton-grande boton-secundario" onClick={() => setPantalla('menu')}>
-              ← Modificar
-            </button>
+        <div className="pie-resumen">
+          {carrito.menus.length > 0 && carrito.totalItems > 0 && (
+            <div className={`barra-guia ${pendientesMenus.length > 0 ? 'guia-falta' : 'guia-lista'}`}>
+              {pendientesMenus.length > 0 ? (
+                <>
+                  <span className="barra-guia-texto">
+                    Falta elegir {pendientesMenus[0].rotulo.toLowerCase()} del Menú{' '}
+                    {pendientesMenus[0].numero}
+                    {pendientesMenus.length > 1 && ` · y ${pendientesMenus.length - 1} más`}
+                  </span>
+                  <button className="boton-ir-ahi" onClick={irAlPendiente}>
+                    IR AHÍ <span className="flecha-rebota" aria-hidden="true">↓</span>
+                  </button>
+                </>
+              ) : (
+                <span className="barra-guia-texto">✓ Todo elegido: confirma cuando quieras</span>
+              )}
+            </div>
           )}
-          <button
-            className="boton-grande boton-confirmar"
-            disabled={carrito.totalItems === 0 || guardando}
-            onClick={() => setPantalla('countdown')}
-          >
-            ✅ CONFIRMAR PEDIDO
-          </button>
+          <div className="botones-resumen">
+            {!soloMenus && (
+              <button className="boton-grande boton-secundario" onClick={() => setPantalla('menu')}>
+                ← Modificar
+              </button>
+            )}
+            <button
+              className="boton-grande boton-confirmar"
+              disabled={carrito.totalItems === 0 || guardando}
+              onClick={() => {
+                // Con huecos pendientes, confirmar LLEVA al hueco: el 422
+                // del final deja de existir
+                if (pendientesMenus.length > 0) irAlPendiente()
+                else setPantalla('countdown')
+              }}
+            >
+              ✅ CONFIRMAR PEDIDO
+            </button>
+          </div>
         </div>
         {confirmandoCancelarTodo && (
           <ModalCancelarTodo

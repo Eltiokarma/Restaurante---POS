@@ -1020,6 +1020,27 @@ export interface PlantillaMenuIn {
 // Precio de UNA unidad del menú: precio base + recargos de las elecciones
 // − descuentos por los tiempos quitados ("sin sopa"). El backend hace el
 // mismo cálculo y es la autoridad; esto es solo para mostrar en pantalla.
+// Tiempos del menú que TODAVÍA hay que elegir. Es el espejo exacto de la
+// validación del backend (services/orders._armar_menu): obligatorio, con
+// más de una alternativa, no quitado y sin elección — así la guía dice lo
+// mismo que el 422 diría al final, pero desde el principio.
+export function tiemposPendientes(linea: MenuCarrito): MenuTiempoHoy[] {
+  return linea.menu.tiempos.filter(
+    (t) =>
+      t.obligatorio &&
+      t.alternativas.length > 1 &&
+      !linea.omitidos.includes(t.orden) &&
+      linea.elecciones[t.orden] === undefined,
+  )
+}
+
+// Cuántos tiempos del menú requieren elección (para "2 de 3 listos")
+export function tiemposElegibles(linea: MenuCarrito): number {
+  return linea.menu.tiempos.filter(
+    (t) => t.obligatorio && t.alternativas.length > 1 && !linea.omitidos.includes(t.orden),
+  ).length
+}
+
 export function precioUnitarioMenu(linea: MenuCarrito): number {
   let unitario = linea.menu.precio
   for (const tiempo of linea.menu.tiempos) {

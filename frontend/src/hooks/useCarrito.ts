@@ -75,10 +75,16 @@ export function useCarrito() {
 
   // "Un menú" al toque: entra completo con la opción por defecto de cada
   // tiempo; después el cliente lo afina en su tarjeta si quiere
-  const agregarMenuCompleto = useCallback((menu: MenuHoy) => {
+  // preElegir=true (caja): un toque agrega el menú ya armado con los
+  // defaults. preElegir=false (terminal del cliente): los tiempos con
+  // varias alternativas quedan como casilleros vacíos y la guía de
+  // progreso acompaña la elección — el cliente arma SU menú, no se lleva
+  // el default en silencio. Un tiempo con una sola opción viene incluido.
+  const agregarMenuCompleto = useCallback((menu: MenuHoy, preElegir = true) => {
     const elecciones: Record<number, number> = {}
     for (const t of menu.tiempos) {
-      if (t.alternativas.length > 0) elecciones[t.orden] = eleccionPorDefecto(t)
+      if (t.alternativas.length === 0) continue
+      if (preElegir || t.alternativas.length === 1) elecciones[t.orden] = eleccionPorDefecto(t)
     }
     setMenus((prev) => [...prev, {
       menu, cantidad: 1, elecciones, extras: [], omitidos: [], agregados: [],
