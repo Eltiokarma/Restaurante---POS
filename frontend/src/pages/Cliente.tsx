@@ -63,6 +63,40 @@ export function Cliente() {
   // persigue — "IR AHÍ" abre la tarjeta del menú incompleto y la hace latir
   const [abrirTics, setAbrirTics] = useState<Record<number, number>>({})
   const [perseguida, setPerseguida] = useState<number | null>(null)
+  // La flecha de "IR AHÍ" rebota SOLO si la tarjeta pendiente quedó fuera
+  // de vista (detalle del handoff: movimiento permanente en táctil cansa)
+  const [pendienteALaVista, setPendienteALaVista] = useState(true)
+
+  // Lo que el backend reclamaría con un 422 al final, dicho desde el
+  // principio y con el mismo lenguaje (espejo de la validación)
+  const pendientesMenus = carrito.menus.flatMap((m, idx) =>
+    tiemposPendientes(m).map((t) => ({ idx, rotulo: t.rotulo, numero: idx + 1 })),
+  )
+
+  const primerPendienteIdx = carrito.menus.findIndex((m) => tiemposPendientes(m).length > 0)
+
+  useEffect(() => {
+    if (primerPendienteIdx < 0) return
+    const objetivo = document.getElementById(`tarjeta-menu-${primerPendienteIdx}`)
+    if (!objetivo || typeof IntersectionObserver === 'undefined') return
+    const observador = new IntersectionObserver(
+      ([entrada]) => setPendienteALaVista(entrada.isIntersecting),
+      { threshold: 0.4 },
+    )
+    observador.observe(objetivo)
+    return () => observador.disconnect()
+  }, [primerPendienteIdx, pantalla])
+
+  const irAlPendiente = () => {
+    const primero = pendientesMenus[0]
+    if (!primero) return
+    setAbrirTics((prev) => ({ ...prev, [primero.idx]: (prev[primero.idx] ?? 0) + 1 }))
+    setPerseguida(primero.idx)
+    window.setTimeout(() => setPerseguida(null), 1600)
+    document
+      .getElementById(`tarjeta-menu-${primero.idx}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
   // Para el campo origen de la orden: qué canales llenaron el carrito
   const usoVoz = useRef(false)
   const usoTactil = useRef(false)
@@ -414,23 +448,6 @@ export function Cliente() {
     )
   }
 
-  // Lo que el backend reclamaría con un 422 al final, dicho desde el
-  // principio y con el mismo lenguaje (espejo de la validación)
-  const pendientesMenus = carrito.menus.flatMap((m, idx) =>
-    tiemposPendientes(m).map((t) => ({ idx, rotulo: t.rotulo, numero: idx + 1 })),
-  )
-
-  const irAlPendiente = () => {
-    const primero = pendientesMenus[0]
-    if (!primero) return
-    setAbrirTics((prev) => ({ ...prev, [primero.idx]: (prev[primero.idx] ?? 0) + 1 }))
-    setPerseguida(primero.idx)
-    window.setTimeout(() => setPerseguida(null), 1600)
-    document
-      .getElementById(`tarjeta-menu-${primero.idx}`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
-
   if (pantalla === 'resumen') {
     return (
       <div className="pantalla pantalla-resumen">
@@ -489,7 +506,7 @@ export function Cliente() {
             <div
               key={`menu-${idx}`}
               id={`tarjeta-menu-${idx}`}
-              className={perseguida === idx ? 'tarjeta-perseguida' : ''}
+              className={`${perseguida === idx ? 'tarjeta-perseguida' : ''} ${primerPendienteIdx === idx ? 'primera-incompleta' : ''}`}
             >
             <TarjetaMenuCarrito
               linea={m}
@@ -543,7 +560,9 @@ export function Cliente() {
         </div>
         {carrito.totalItems > 0 && mesas.some((m) => m.activa) && (
           <div className="selector-servicio">
-            <span className="selector-servicio-titulo">🪑 ¿En qué mesa van a estar?</span>
+            <span className="selector-servicio-titulo">
+              🪑 ¿En qué mesa van a estar? <small className="titulo-opcional">(opcional)</small>
+            </span>
             <div className="empaques-linea mesas-terminal">
               {mesas.filter((m) => m.activa).map((m) => (
                 <button
@@ -613,7 +632,7 @@ export function Cliente() {
                     {pendientesMenus.length > 1 && ` · y ${pendientesMenus.length - 1} más`}
                   </span>
                   <button className="boton-ir-ahi" onClick={irAlPendiente}>
-                    IR AHÍ <span className="flecha-rebota" aria-hidden="true">↓</span>
+                    IR AHÍ <span className={pendienteALaVista ? '' : 'flecha-rebota'} aria-hidden="true">↓</span>
                   </button>
                 </>
               ) : (

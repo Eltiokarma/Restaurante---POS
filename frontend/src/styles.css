@@ -6379,7 +6379,7 @@ select:focus-visible {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .casillero-vacio { animation: casillero-respira 2.4s ease-in-out infinite; }
+  .primera-incompleta .casillero-vacio { animation: casillero-respira 2.4s ease-in-out infinite; }
 }
 
 @keyframes casillero-respira {
@@ -6407,6 +6407,10 @@ select:focus-visible {
   border-radius: var(--r-chico);
   font-size: 16px;
   font-weight: 700;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .barra-guia { transition: background-color 240ms ease, box-shadow 240ms ease, color 240ms ease; }
 }
 
 .barra-guia.guia-falta {
@@ -6465,4 +6469,11 @@ select:focus-visible {
 .tarjeta-perseguida .tarjeta-menu {
   outline: 3px solid var(--aji);
   outline-offset: 2px;
+}
+
+
+/* Hallazgo 34: la mesa es opcional y el título lo dice de entrada */
+.titulo-opcional {
+  font-weight: 600;
+  color: var(--tinta-suave);
 }
