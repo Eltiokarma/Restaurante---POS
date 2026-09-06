@@ -13,6 +13,7 @@ interface PlatoEditable {
   precio: string // como texto mientras se edita
   activo_hoy: boolean
   sale_al_momento: boolean
+  capacidad_tanda: string // como texto mientras se edita (0 = sin límite)
   foto: string | null
   sinonimos: string[]
 }
@@ -561,7 +562,7 @@ function SeccionMenusGuardados({ onSesionVencida, onCargado }: {
 // Qué campos viven en el estado local hasta "Guardar" (la foto NO: se sube
 // al instante). Sirve para contar cambios sin guardar (hallazgo 25).
 const serialPlato = (p: PlatoEditable) =>
-  JSON.stringify([p.nombre, p.categoria, p.precio, p.activo_hoy, p.sale_al_momento, p.sinonimos])
+  JSON.stringify([p.nombre, p.categoria, p.precio, p.activo_hoy, p.sale_al_momento, p.capacidad_tanda, p.sinonimos])
 
 function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [platos, setPlatos] = useState<PlatoEditable[]>([])
@@ -580,6 +581,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
     precio: p.precio.toFixed(2),
     activo_hoy: p.activo_hoy,
     sale_al_momento: p.sale_al_momento ?? false,
+    capacidad_tanda: String(p.capacidad_tanda ?? 0),
     foto: p.foto ?? null,
     sinonimos: p.sinonimos ?? [],
   })
@@ -622,7 +624,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
   const agregar = () => {
     setPlatos((prev) => [
       ...prev,
-      { nombre: '', categoria: 'fondo', precio: '', activo_hoy: true, sale_al_momento: false, foto: null, sinonimos: [] },
+      { nombre: '', categoria: 'fondo', precio: '', activo_hoy: true, sale_al_momento: false, capacidad_tanda: '0', foto: null, sinonimos: [] },
     ])
   }
 
@@ -691,6 +693,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
           precio: parseFloat(p.precio),
           activo_hoy: p.activo_hoy,
           sale_al_momento: p.sale_al_momento,
+          capacidad_tanda: Math.max(0, parseInt(p.capacidad_tanda) || 0),
           sinonimos: p.sinonimos,
         })),
       )
@@ -927,6 +930,16 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
                   <span>Se prepara al pedido (bistec frito). Obliga entrega por tiempos en cocina.</span>
                 </span>
               </label>
+              <div className="campo-etiquetado">
+                <label>Capacidad por tanda en cocina (0 = sin límite)</label>
+                <input type="number" inputMode="numeric" min="0" max="99"
+                       value={platos[editando].capacidad_tanda}
+                       onChange={(e) => editar(editando, { capacidad_tanda: e.target.value })} />
+                <span className="nota-admin">
+                  Cuántas porciones entran de una (sartén/olla): con capacidad 6, una tanda de
+                  9 se muestra "6 + 3". Úsalo solo en los platos que lo necesitan.
+                </span>
+              </div>
               {platos[editando].id === undefined ? (
                 <button className="boton-grande boton--peligro"
                         onClick={() => { quitar(editando); setEditando(null) }}>
@@ -3312,6 +3325,31 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
         En la tira "Por salir" de cocina, cada plato muestra además su <strong>tanda</strong>: las
         porciones del pedido más antiguo más los que llegaron en los siguientes minutos configurados.
         Al tocar el plato para tachar, esa cantidad viene sugerida.
+      </p>
+      <label className="config-toggle">
+        <input
+          type="checkbox"
+          checked={config.cocina_tandas}
+          onChange={(e) => setConfig({ ...config, cocina_tandas: e.target.checked })}
+        />
+        🍳 Tablero de TANDAS en cocina (agrupa pedidos completos para que salgan juntos)
+      </label>
+      <label>
+        Tope de tickets por tanda (0 = sin tope; la tanda cierra con lo que se llene
+        primero: estos tickets o los minutos de arriba)
+        <input
+          type="number"
+          min="0"
+          max="20"
+          value={config.cocina_tanda_max_tickets}
+          onChange={(e) => setConfig({ ...config, cocina_tanda_max_tickets: parseInt(e.target.value) || 0 })}
+        />
+      </label>
+      <p className="nota-admin">
+        Cada tarjeta de tanda lista sus tickets y mesas, separa 🍳 al momento de 🥘 de olla, y
+        tiene "▶ Empezar tanda" y "✔ Salió la tanda". En pedidos "por tiempos" el segundo espera
+        a que salga su entrada (el sistema avisa, nunca bloquea). La capacidad por plato ("entran
+        6 chuletas por sartén") se pone en Menú del día → "⋯" del plato.
       </p>
       <label>
         El táper cuesta S/ extra por porción (0 = gratis)

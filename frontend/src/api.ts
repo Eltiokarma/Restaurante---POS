@@ -7,6 +7,8 @@ export interface Plato {
   precio: number
   activo_hoy: boolean
   sale_al_momento: boolean
+  // Porciones que entran por tanda en cocina (0 = sin límite)
+  capacidad_tanda: number
   // Nombre de archivo de la foto (servida por el backend); null = sin foto
   foto: string | null
   sinonimos: string[]
@@ -299,6 +301,8 @@ export interface ConfigOut {
   empaques_ofrecidos: Empaque[]
   // Ventana de la tanda en cocina (minutos); 0 = apagada
   cocina_bulk_min: number
+  cocina_tandas: boolean
+  cocina_tanda_max_tickets: number
 }
 
 // Bebida embotellada de la lista fija (Inca Kola 500 ml…): no es un
@@ -319,6 +323,27 @@ export interface TicketBebidaOut {
   items: { nombre: string; precio: number; cantidad: number }[]
   total: number
   hora?: string
+}
+
+// Tanda de cocina (pre-orquestador): grupo de órdenes completas que
+// salen juntas. Calculada por el backend con reglas deterministas.
+export interface TandaPlato {
+  nombre: string
+  cantidad: number
+  al_momento: boolean
+  // Partición por capacidad ("6 + 3"); vacío = sale de una
+  partes: number[]
+}
+
+export interface Tanda {
+  numero: number
+  orden_ids: number[]
+  tickets: { numero: string; mesas: string[]; entrega: Entrega }[]
+  platos: TandaPlato[]
+  // Órdenes "separado" cuyo segundo espera a que salga su entrada
+  esperando: { numero: string; platos: string[] }[]
+  espera_min: number
+  empezada: boolean
 }
 
 export interface MesaEstado {
@@ -721,6 +746,21 @@ export const api = {
   descartarPendientes: () =>
     request<{ descartadas: number }>('/api/orders/pending-print/clear', { method: 'POST' }),
 
+  // --- Tandas de cocina (pre-orquestador) ---
+  tandas: () => request<{ habilitado: boolean; tandas: Tanda[] }>('/api/orders/tandas'),
+
+  empezarTanda: (ordenIds: number[]) =>
+    request<{ ordenes: OrdenOut[]; avisos: string[]; log_id: number }>('/api/orders/tandas/empezar', {
+      method: 'POST',
+      body: JSON.stringify({ orden_ids: ordenIds }),
+    }),
+
+  salioTanda: (ordenIds: number[], logId?: number) =>
+    request<{ ordenes: OrdenOut[]; avisos: string[]; log_id: number }>('/api/orders/tandas/salio', {
+      method: 'POST',
+      body: JSON.stringify({ orden_ids: ordenIds, log_id: logId ?? null }),
+    }),
+
   // Tachar un bulk desde "Por salir": avanza N porciones de un plato en
   // cascada (orden más antigua primero) y devuelve las órdenes que cambiaron
   despacharBulk: (lineas: { plato_nombre: string; cantidad: number }[], estadoDestino: EstadoItem) =>
@@ -786,7 +826,7 @@ export const api = {
 
   menuAnterior: () => request<{ fecha: string | null; platos: Plato[] }>('/api/menu/previous', {}, true),
 
-  guardarMenu: (platos: { id?: number; nombre: string; categoria: string; precio: number; activo_hoy: boolean; sale_al_momento?: boolean; sinonimos?: string[] }[]) =>
+  guardarMenu: (platos: { id?: number; nombre: string; categoria: string; precio: number; activo_hoy: boolean; sale_al_momento?: boolean; capacidad_tanda?: number; sinonimos?: string[] }[]) =>
     request<{ categorias: string[]; platos: Plato[] }>('/api/menu/today', {
       method: 'PUT',
       body: JSON.stringify({ platos }),

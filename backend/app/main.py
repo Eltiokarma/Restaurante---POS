@@ -43,6 +43,11 @@ def _migrar(engine_) -> None:
         if columnas_platos and "sinonimos" not in columnas_platos:
             conn.execute(text("ALTER TABLE platos ADD COLUMN sinonimos TEXT NOT NULL DEFAULT '[]'"))
             conn.commit()
+        if columnas_platos and "capacidad_tanda" not in columnas_platos:
+            conn.execute(text(
+                "ALTER TABLE platos ADD COLUMN capacidad_tanda INTEGER NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
         columnas_items = [fila[1] for fila in conn.execute(text("PRAGMA table_info(orden_items)"))]
         if columnas_items and "empaque" not in columnas_items:
             conn.execute(text(

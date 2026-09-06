@@ -32,6 +32,8 @@ class PlatoOut(BaseModel):
     precio: float
     activo_hoy: bool
     sale_al_momento: bool = False
+    # Porciones que entran por tanda en cocina (0 = sin límite)
+    capacidad_tanda: int = 0
     foto: str | None = None
     sinonimos: list[str] = []
 
@@ -54,6 +56,7 @@ class PlatoIn(BaseModel):
     precio: float = Field(gt=0)
     activo_hoy: bool = True
     sale_al_momento: bool = False
+    capacidad_tanda: int = Field(default=0, ge=0, le=99)
     sinonimos: list[str] = Field(default_factory=list, max_length=30)
 
 
@@ -160,6 +163,7 @@ def actualizar_menu(payload: MenuUpdate, db: Session = Depends(get_db)):
             plato.precio = round(p.precio, 2)
             plato.activo_hoy = p.activo_hoy
             plato.sale_al_momento = p.sale_al_momento
+            plato.capacidad_tanda = p.capacidad_tanda
             plato.sinonimos = sinonimos_json
         else:
             plato = Plato(
@@ -169,6 +173,7 @@ def actualizar_menu(payload: MenuUpdate, db: Session = Depends(get_db)):
                 activo_hoy=p.activo_hoy,
                 en_catalogo=True,
                 sale_al_momento=p.sale_al_momento,
+                capacidad_tanda=p.capacidad_tanda,
                 sinonimos=sinonimos_json,
             )
             db.add(plato)

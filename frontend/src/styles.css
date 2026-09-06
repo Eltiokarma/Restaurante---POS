@@ -6073,3 +6073,179 @@ select:focus-visible {
 .fila-apagada td { opacity: 0.55; }
 
 .input-precio-bebida { max-width: 120px; }
+
+
+/* --- Tablero de TANDAS en /cocina (sesión 3: el pre-orquestador) --- */
+
+.tablero-tandas {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+  margin-bottom: 8px;
+}
+
+.tarjeta-tanda {
+  flex: 0 0 320px;
+  max-width: 90vw;
+  /* /cocina es pantalla oscura: la tarjeta vuelve a tinta sobre papel */
+  color: var(--tinta);
+  background: var(--papel-alto);
+  border: 1.5px solid var(--linea-fuerte);
+  border-top: 6px solid var(--mayolica);
+  border-radius: var(--r-chico);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* La primera tanda es LA tanda: manda visualmente */
+.tablero-tandas .tarjeta-tanda:first-child {
+  border-top-color: var(--achiote);
+  flex-basis: 360px;
+}
+
+.tarjeta-tanda.tanda-empezada {
+  border-top-color: var(--culantro);
+  background: var(--culantro-tenue);
+}
+
+.tanda-cabecera {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.tanda-titulo {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.tanda-en-fuego {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--culantro-hondo);
+}
+
+.tanda-espera {
+  margin-left: auto;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--tinta-media);
+}
+
+.tanda-espera.tanda-urgente {
+  color: var(--urgente);
+  font-weight: 800;
+}
+
+.tanda-tickets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tanda-ticket {
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+  background: var(--papel-hondo);
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.tanda-platos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tanda-platos li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.tanda-platos li strong {
+  font-size: 19px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Lo frito manda la duración de la tanda: va primero y resaltado */
+.tanda-platos li.tanda-al-momento {
+  font-weight: 700;
+}
+
+.tanda-estacion {
+  font-size: 15px;
+}
+
+.tanda-partes {
+  margin-left: auto;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--aji-hondo);
+  background: var(--aji-tenue);
+  box-shadow: inset 0 0 0 1.5px var(--aji);
+  border-radius: 999px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
+/* Segundos gateados: informan, nunca bloquean */
+.tanda-esperando {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--tinta-media);
+  background: var(--papel-hondo);
+  border-radius: var(--r-chico);
+  padding: 8px 10px;
+}
+
+.tanda-botones {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.boton-tanda {
+  flex: 1;
+  min-height: 64px;
+  border: 0;
+  border-radius: var(--r-chico);
+  background: var(--papel-hondo);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.boton-tanda-salio {
+  background: var(--culantro);
+  box-shadow: none;
+  color: #fff;
+}
+
+.boton-tanda:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.avisos-tanda {
+  margin: 0 0 10px;
+}
+
+@media (max-width: 700px) {
+  .tarjeta-tanda { flex-basis: 300px; }
+}
