@@ -6477,3 +6477,159 @@ select:focus-visible {
   font-weight: 600;
   color: var(--tinta-suave);
 }
+
+
+/* ============================================================
+   4a · Riel de pasos — pantalla del cliente (resumen)
+   ------------------------------------------------------------
+   Opción NO implementada: pegar solo si se decide sumarla.
+   4b + 4c ya están en styles.css (bloque "Guía de progreso del
+   pedido") y no dependen de esto.
+
+   Markup en el README del handoff. Tokens: los del sistema, sin
+   colores nuevos.
+   ============================================================ */
+
+.riel-pasos {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  margin: 0 -24px 6px;
+  padding: 14px 16px 12px;
+  list-style: none;
+  background: var(--papel-alto);
+  border-bottom: 2px solid var(--linea);
+}
+
+.riel-paso {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  width: 92px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+/* El tramo entre dos pasos: crece con la lista, no con un ancho fijo */
+.riel-paso {
+  position: relative;
+}
+
+.riel-paso + .riel-paso::before {
+  content: '';
+  position: absolute;
+  top: 13px;
+  right: calc(50% + 19px);
+  left: calc(-50% + 19px);
+  height: 5px;
+  border-radius: 999px;
+  background: var(--linea);
+}
+
+.riel-punto {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--papel-hondo);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+}
+
+.riel-rotulo {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--tinta-media);
+}
+
+/* Hecho: verde con la marca. La marca es el ::after, no un emoji. */
+.paso-hecho .riel-punto {
+  background: var(--culantro);
+  box-shadow: none;
+  position: relative;
+}
+
+.paso-hecho .riel-punto::after {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 7px;
+  width: 7px;
+  height: 12px;
+  border: solid var(--papel-alto);
+  border-width: 0 2.6px 2.6px 0;
+  transform: rotate(45deg);
+}
+
+/* Actual: anillo achiote que late, rótulo en tinta plena */
+.paso-actual .riel-punto {
+  background: var(--papel-alto);
+  box-shadow: inset 0 0 0 3px var(--achiote);
+  position: relative;
+}
+
+.paso-actual .riel-punto::after {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: var(--achiote);
+}
+
+.paso-actual .riel-rotulo {
+  color: var(--tinta);
+  font-weight: 800;
+}
+
+/* Pendiente: círculo punteado, sin relleno */
+.paso-pendiente .riel-punto {
+  background: transparent;
+  box-shadow: none;
+  border: 2px dashed var(--linea-fuerte);
+}
+
+.paso-pendiente .riel-rotulo {
+  color: var(--tinta-suave);
+}
+
+/* Relleno del tramo ya recorrido */
+.riel-pasos .paso-hecho + .riel-paso::before,
+.riel-pasos .paso-hecho + .paso-hecho::before {
+  background: var(--culantro);
+}
+
+/* --- Movimiento --------------------------------------------
+   Regla: nada se mueve solo. El tramo se rellena cuando el
+   cliente completa un paso; el punto actual late para decir
+   "acá vas". Solo transform/opacity.                          */
+
+@media (prefers-reduced-motion: no-preference) {
+  .riel-paso + .riel-paso::before {
+    transform-origin: left center;
+    transition: background-color 260ms ease;
+  }
+
+  .paso-actual .riel-punto {
+    animation: riel-late 2.2s ease-out infinite;
+  }
+
+  .riel-rotulo,
+  .riel-punto {
+    transition: color 200ms ease, background-color 240ms ease, box-shadow 240ms ease;
+  }
+}
+
+@keyframes riel-late {
+  0% { box-shadow: inset 0 0 0 3px var(--achiote), 0 0 0 0 rgba(176, 58, 34, 0.40); }
+  70% { box-shadow: inset 0 0 0 3px var(--achiote), 0 0 0 14px rgba(176, 58, 34, 0); }
+  100% { box-shadow: inset 0 0 0 3px var(--achiote), 0 0 0 0 rgba(176, 58, 34, 0); }
+}
+
+/* Pantalla angosta (celular en mano): los rótulos no se parten */
+@media (max-width: 520px) {
+  .riel-paso { width: 74px; }
+  .riel-rotulo { font-size: 11px; }
+}

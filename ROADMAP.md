@@ -262,6 +262,22 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       varias alternativas (el cliente arma SU menú guiado; antes se llevaba el default en
       silencio); en CAJA se mantiene el pre-elegido de un toque por velocidad, con los
       casilleros como aviso y un guard en REGISTRAR con el mismo lenguaje del 422.
+- [x] **Riel de pasos (opción 4a) en la terminal** (decisión del dueño, por encima de la
+      nota de "alternativa" del handoff: el resumen necesitaba orientación): cinta fija
+      bajo la cabecera con Cantidad · Ármalo · Junto o Separado · Confirma — punto verde
+      con la marca dibujada al completar, anillo achiote que late en el paso actual,
+      círculo punteado en lo pendiente y el tramo recorrido en verde; CSS del propio
+      handoff (`riel-4a.css`, con el tramo entre puntos dimensionado que venía sin ancho)
+      y markup de su README. "Junto o Separado" se marca hecho al tocarlo (o cuando un
+      plato al momento fuerza la entrega). Convive con la guía 4b/4c.
+- [x] **Semana real cargada al sistema** (kardex_spec del dueño, 2026-09-07): 31 platos
+      Lunes-Sábado creados en el catálogo (fondos S/ 13.00 y entradas/sopas S/ 6.00 de
+      referencia, A AJUSTAR por el dueño) y 6 menús guardados por día con su plantilla
+      armada (Entrada o sopa = la sopa + la entrada del día; Segundo = los fondos; el
+      Refresco queda como estaba) — cargar un día desde Admin → Menú deja todo listo.
+      Kardex: 49 insumos nuevos del catálogo maestro del spec (32 ya existían), unidades
+      mapeadas al set del sistema. El motor analítico del spec (clases ABC, cobertura en
+      días, variación teórico vs real) queda como candidato de una fase siguiente.
 - [x] **Cierre del handoff 5 (guía del cliente, paquete completo)**: Claude Design revisó
       la implementación de 4c + 4b en `main` y la validó ("no hay nada que parchar");
       se aplicaron sus 3 detalles — transición ámbar→verde en `.barra-guia`, la flecha de
