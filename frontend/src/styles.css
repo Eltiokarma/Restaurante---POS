@@ -6633,3 +6633,160 @@ select:focus-visible {
   .riel-paso { width: 74px; }
   .riel-rotulo { font-size: 11px; }
 }
+
+
+/* --- Fidelidad al tablero antes/después del handoff 5 (4b + 4c) --- */
+
+/* Pill de estado en la cabecera del menú cerrado */
+.menu-estado-pill {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.menu-estado-pill.pill-falta {
+  color: var(--aji-hondo);
+  box-shadow: inset 0 0 0 1.5px var(--aji);
+  background: var(--aji-tenue);
+}
+
+.menu-estado-pill.pill-listo {
+  color: var(--culantro-hondo);
+  box-shadow: inset 0 0 0 1.5px var(--culantro);
+  background: transparent;
+}
+
+/* Progreso del mock: texto a la derecha y barra gruesa a todo el ancho */
+.menu-progreso {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.menu-progreso-texto {
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.menu-progreso .menu-progreso-barra {
+  max-width: none;
+  width: 100%;
+  height: 8px;
+  box-shadow: none;
+  background: var(--papel-hondo);
+}
+
+/* Casillero del tiempo sin elegir: las opciones viven ADENTRO */
+.casillero-tiempo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 2px dashed var(--aji);
+  border-radius: 10px;
+}
+
+.casillero-titulo {
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tinta-media);
+}
+
+.casillero-opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pastilla-opcion {
+  min-height: 52px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--papel-alto);
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.casillero-sin {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--tinta-media);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Respira el casillero del PRIMER menú incompleto (regla del handoff) */
+@media (prefers-reduced-motion: no-preference) {
+  .primera-incompleta .casillero-tiempo { animation: casillero-respira 2.4s ease-in-out infinite; }
+}
+
+/* El tiempo elegido: fila verde con su punto (mock 4c) */
+.fila-elegida {
+  display: flex;
+  /* .menu-tiempo-info viene en columna: la fila del mock es horizontal */
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--culantro-tenue);
+}
+
+.punto-elegido {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--culantro);
+}
+
+.fila-elegida .tiempo-rotulo::after {
+  content: ' ·';
+}
+
+.tag-incluido {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tinta-media);
+}
+
+/* Barra guía del mock 4b: kicker en versalitas + IR AHÍ oscuro */
+.barra-guia-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.guia-kicker {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.boton-ir-ahi {
+  background: var(--tinta);
+  color: var(--papel);
+}

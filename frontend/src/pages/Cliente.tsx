@@ -653,16 +653,20 @@ export function Cliente() {
               {pendientesMenus.length > 0 ? (
                 <>
                   <span className="barra-guia-texto">
-                    Falta elegir {pendientesMenus[0].rotulo.toLowerCase()} del Menú{' '}
-                    {pendientesMenus[0].numero}
-                    {pendientesMenus.length > 1 && ` · y ${pendientesMenus.length - 1} más`}
+                    <span className="guia-kicker">
+                      Falta {pendientesMenus.length} cosa{pendientesMenus.length === 1 ? '' : 's'}
+                    </span>
+                    Elegir {pendientesMenus[0].rotulo.toLowerCase()} del Menú {pendientesMenus[0].numero}
                   </span>
                   <button className="boton-ir-ahi" onClick={irAlPendiente}>
                     IR AHÍ <span className={pendienteALaVista ? '' : 'flecha-rebota'} aria-hidden="true">↓</span>
                   </button>
                 </>
               ) : (
-                <span className="barra-guia-texto">✓ Todo elegido: confirma cuando quieras</span>
+                <span className="barra-guia-texto">
+                  <span className="guia-kicker">Ya no falta nada</span>
+                  ✓ Todo elegido: confirma cuando quieras
+                </span>
               )}
             </div>
           )}
