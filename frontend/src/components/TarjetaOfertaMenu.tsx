@@ -1,5 +1,4 @@
 import type { MenuCarrito, MenuHoy } from '../api'
-import { soles } from '../api'
 
 /** Cuántas unidades de ESTE menú hay en el pedido (para el contador). */
 export function menusEnPedido(menus: MenuCarrito[], menuId: number): number {
@@ -21,14 +20,11 @@ export function TarjetaOfertaMenu({ menu, etiqueta, enPedido, onAgregar }: {
 }) {
   return (
     <div className="combo">
-      <div className="combo-cabecera">
-        <span className="combo-titulo">{menu.nombre}</span>
-        <span className="combo-precio">{soles(menu.precio)}</span>
-      </div>
+      {/* Sin cabecera ni rótulos "Entrada:"/"Segundo:" (pedido del dueño):
+          los platos hablan solos y el precio ya va en el botón */}
       <div className="combo-resumen-tiempos">
         {menu.tiempos.map((t) => (
           <div key={t.orden}>
-            <strong>{t.rotulo}:</strong>{' '}
             {t.alternativas.length === 1
               ? `${t.alternativas[0].nombre} (incluido)`
               : t.alternativas.map((a) => a.nombre).join(' / ')}
