@@ -66,6 +66,8 @@ export function Cliente() {
   // La flecha de "IR AHÍ" rebota SOLO si la tarjeta pendiente quedó fuera
   // de vista (detalle del handoff: movimiento permanente en táctil cansa)
   const [pendienteALaVista, setPendienteALaVista] = useState(true)
+  // Riel de pasos 4a (decisión del dueño: el resumen necesita orientación)
+  const [tocaronEntrega, setTocaronEntrega] = useState(false)
 
   // Lo que el backend reclamaría con un 422 al final, dicho desde el
   // principio y con el mismo lenguaje (espejo de la validación)
@@ -165,6 +167,7 @@ export function Cliente() {
       setVozAbierta(false)
       setEntrega('junto')
       setMesasElegidas([])
+      setTocaronEntrega(false)
       usoVoz.current = false
       usoTactil.current = false
       setPantalla('inicio')
@@ -466,6 +469,29 @@ export function Cliente() {
         ) : (
           <h1>Tu pedido</h1>
         )}
+        {(() => {
+          const pasos = [
+            { rotulo: 'Cantidad', hecho: carrito.totalItems > 0 },
+            { rotulo: 'Ármalo', hecho: carrito.totalItems > 0 && pendientesMenus.length === 0 },
+            { rotulo: 'Junto o Separado', hecho: tocaronEntrega || hayAlMomento },
+            { rotulo: 'Confirma', hecho: false },
+          ]
+          const actual = pasos.findIndex((p) => !p.hecho)
+          return (
+            <ol className="riel-pasos">
+              {pasos.map((p, i) => (
+                <li
+                  key={p.rotulo}
+                  className={`riel-paso ${p.hecho ? 'paso-hecho' : i === actual ? 'paso-actual' : 'paso-pendiente'}`}
+                  aria-current={i === actual ? 'step' : undefined}
+                >
+                  <span className="riel-punto" aria-hidden="true" />
+                  <span className="riel-rotulo">{p.rotulo}</span>
+                </li>
+              ))}
+            </ol>
+          )
+        })()}
         {errorConexion && <div className="banner-error">{errorConexion}</div>}
         {soloMenus && (
           <div className="oferta-menus">
@@ -595,7 +621,7 @@ export function Cliente() {
                   key={e}
                   className={`boton-entrega ${entregaEfectiva === e ? 'entrega-activa' : ''}`}
                   disabled={e === 'junto' && hayAlMomento}
-                  onClick={() => setEntrega(e)}
+                  onClick={() => { setEntrega(e); setTocaronEntrega(true) }}
                 >
                   {NOMBRE_ENTREGA[e].titulo}
                   <small>{NOMBRE_ENTREGA[e].detalle}</small>
