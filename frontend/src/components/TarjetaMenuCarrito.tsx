@@ -101,14 +101,19 @@ export function TarjetaMenuCarrito({
           {' · '}{linea.menu.nombre}
         </span>
         <span className="tarjeta-menu-precio">{soles(subtotalMenu(linea))}</span>
+        {elegibles > 0 && !abierta && (
+          <span className={`menu-estado-pill ${completo ? 'pill-listo' : 'pill-falta'}`}>
+            {completo ? `${elegibles} de ${elegibles} · listo` : 'falta elegir'}
+          </span>
+        )}
         <span className="tarjeta-menu-flecha">{abierta ? '▲' : '▼'}</span>
       </button>
       {elegibles > 0 && (
         <div className={`menu-progreso ${completo ? 'menu-progreso-listo' : ''}`}>
-          <span>
+          <span className="menu-progreso-texto">
             {completo
-              ? '✓ Listo para confirmar'
-              : `${elegibles - pendientes} de ${elegibles} elegido${elegibles === 1 ? '' : 's'}`}
+              ? `${elegibles} de ${elegibles} · listo`
+              : `${elegibles - pendientes} de ${elegibles} listo${elegibles - pendientes === 1 ? '' : 's'}`}
           </span>
           <span className="menu-progreso-barra" aria-hidden="true">
             <i style={{ width: `${elegibles > 0 ? ((elegibles - pendientes) / elegibles) * 100 : 100}%` }} />
@@ -122,28 +127,45 @@ export function TarjetaMenuCarrito({
           {linea.menu.tiempos.map((t) => {
             const quitado = linea.omitidos.includes(t.orden)
             const elegida = t.alternativas.find((a) => a.plato_id === linea.elecciones[t.orden])
+            const incluida = !elegida && t.alternativas.length === 1 ? t.alternativas[0] : undefined
+            const sinElegir = !quitado && t.alternativas.length > 1 && !elegida
+            // Casillero del mock 4c: el tiempo sin elegir muestra SUS
+            // opciones adentro — un toque y queda en su sitio
+            if (sinElegir) {
+              return (
+                <div key={t.orden} className="casillero-tiempo">
+                  <span className="casillero-titulo">{t.rotulo} · toca para elegir</span>
+                  <div className="casillero-opciones">
+                    {t.alternativas.map((a) => (
+                      <button key={a.plato_id} className="pastilla-opcion"
+                              onClick={() => onCambiarEleccion(t.orden, a.plato_id)}>
+                        {a.nombre}
+                        {a.recargo > 0 && <small> +{soles(a.recargo)}</small>}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="casillero-sin" onClick={() => onAlternarOmitido(t.orden)}>
+                    No quiero {t.rotulo.toLowerCase()}
+                    {t.descuento_si_se_quita > 0 && ` (−${soles(t.descuento_si_se_quita)})`}
+                  </button>
+                </div>
+              )
+            }
             return (
               <div key={t.orden} className={`menu-tiempo-fila ${quitado ? 'tiempo-quitado' : ''}`}>
-                <div className="menu-tiempo-info">
+                <div className={`menu-tiempo-info ${quitado ? '' : 'fila-elegida'}`}>
+                  {!quitado && <span className="punto-elegido" aria-hidden="true" />}
                   <span className="tiempo-rotulo">{t.rotulo}</span>
-                  {quitado || elegida || t.alternativas.length <= 1 ? (
-                    <span className="tiempo-eleccion">
-                      {quitado
-                        ? `Sin ${t.rotulo.toLowerCase()}${t.descuento_si_se_quita > 0 ? ` (−${soles(t.descuento_si_se_quita)})` : ''}`
-                        : elegida
-                          ? `${elegida.nombre}${elegida.recargo > 0 ? ` (+${soles(elegida.recargo)})` : ''}`
-                          : t.alternativas[0]
-                            ? t.alternativas[0].nombre
-                            : '—'}
-                    </span>
-                  ) : (
-                    <button
-                      className="casillero-vacio"
-                      onClick={() => { setEmpacando(null); setCambiando((c) => (c === t.orden ? null : t.orden)) }}
-                    >
-                      Toca para elegir {t.rotulo.toLowerCase()} →
-                    </button>
-                  )}
+                  <span className="tiempo-eleccion">
+                    {quitado
+                      ? `Sin ${t.rotulo.toLowerCase()}${t.descuento_si_se_quita > 0 ? ` (−${soles(t.descuento_si_se_quita)})` : ''}`
+                      : elegida
+                        ? `${elegida.nombre}${elegida.recargo > 0 ? ` (+${soles(elegida.recargo)})` : ''}`
+                        : incluida
+                          ? incluida.nombre
+                          : '—'}
+                  </span>
+                  {!quitado && t.alternativas.length === 1 && <span className="tag-incluido">incluido</span>}
                 </div>
                 <div className="menu-tiempo-acciones">
                   {!quitado && t.alternativas.length > 1 && (
