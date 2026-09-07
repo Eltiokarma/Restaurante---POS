@@ -111,3 +111,40 @@ def test_config_de_impresora(client, admin_headers):
     assert datos["impresora_ip"] == "10.0.0.5"
     assert datos["impresora_columnas"] == 48
     assert datos["modo_impresion"] == "puente"
+
+
+def test_comanda_empaque_completo_y_otros_sin_monto(client, db, admin_headers, menu_ejemplo):
+    """Pedidos del dueño: la etiqueta [BOLSA] nunca se trunca aunque el
+    plato tenga nombre largo (antes salía "...Huancaína [."), la sección
+    OTROS (gaseosas) va SIN montos y el pie ya no dice "Paga en caja"."""
+    activar_modo_puente(db)
+    r = client.put("/api/menu/today", json={"platos": [
+        {"id": menu_ejemplo["Lomo saltado"], "nombre": "Lomo saltado",
+         "categoria": "fondo", "precio": 15.0, "activo_hoy": True},
+        {"nombre": "Arroz a la Jardinera con Pollo Dorado y Ensalada",
+         "categoria": "fondo", "precio": 10.0, "activo_hoy": True},
+    ]}, headers=admin_headers)
+    largo = next(p for p in r.json()["platos"] if "Jardinera" in p["nombre"])
+
+    r = client.post("/api/orders", json={"items": [
+        {"plato_id": largo["id"], "cantidad": 1, "empaque": "bolsa", "nota": ""},
+    ]})
+    assert r.status_code == 201
+    orden = r.json()["orden"]
+
+    client.post("/api/bebidas", json={"nombre": "Inca Kola 500 ml", "precio": 3.5},
+                headers=admin_headers)
+    bebida = client.get("/api/bebidas").json()["bebidas"][0]
+    r = client.post(f"/api/orders/{orden['id']}/bebidas",
+                    json={"items": [{"bebida_id": bebida["id"], "cantidad": 2}]})
+    assert r.status_code == 200
+
+    cola = client.get("/api/print/cola").json()
+    trabajo = next(t for t in cola["trabajos"] if t["tipo"] == "orden")
+    texto = base64.b64decode(trabajo["datos_b64"]).decode("cp850", errors="replace")
+
+    assert "[BOLSA]" in texto, texto            # la etiqueta sale completa
+    assert "OTROS" in texto and "Inca Kola" in texto
+    assert "7.00" not in texto                  # sin sumatoria en OTROS
+    assert "10.00" in texto                     # el plato suelto sí muestra monto
+    assert "Paga en caja" not in texto
