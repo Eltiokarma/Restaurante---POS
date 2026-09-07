@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nombre_app">Impresora POS</string>
+    <string name="titulo">🖨 Impresora del POS</string>
+    <string name="subtitulo">Esta tablet manda los tickets a la impresora, incluso bloqueada. Reemplaza a RawBT: ya no hay que tocar nada por ticket.</string>
+    <string name="rotulo_url">Dirección del POS</string>
+    <string name="pista_url">https://tu-pos.up.railway.app</string>
+    <string name="rotulo_pin">PIN del local (si tiene)</string>
+    <string name="pista_pin">••••</string>
+    <string name="iniciar">▶ INICIAR</string>
+    <string name="boton_bateria">🔋 Permitir correr con pantalla apagada</string>
+    <string name="estado_inicial">Estado: Detenido</string>
+</resources>

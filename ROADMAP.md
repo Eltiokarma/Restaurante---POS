@@ -426,13 +426,19 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       sus insumos del kardex apagados; y los 31 platos de la semana pasaron del precio de
       referencia al real (fondos S/ 13 → S/ 10, entradas/sopas S/ 6 → S/ 1; lo ajustado a
       mano no se tocó).
-- [ ] **App propia de Android para imprimir** (reemplazo de RawBT): decisión del dueño —
-      se hace en la fase final del prototipo, no ahora. Llevaría dentro el mismo driver
-      ESC/POS que hoy pone RawBT, se compilaría en GitHub Actions y se instalaría en la
-      tablet; ventaja extra sobre el navegador: puede seguir imprimiendo con la tablet
-      bloqueada. Mientras tanto opera RawBT — probado en sala: imprime, pero en la
-      tablet del dueño **pide un toque por ticket** (política de Chrome Android). Por eso
-      la app propia sube de prioridad para la fase final.
+- [x] **App propia de Android para imprimir** (reemplazo de RawBT — adelantada por decisión
+      del dueño en el 2º prototipo: RawBT pedía un toque por ticket): `android-impresora/`,
+      app Kotlin SIN dependencias externas (HttpURLConnection + Socket + org.json) que
+      corre un servicio en primer plano: pide `GET /api/print/cola` cada 3 s con
+      `X-Pin-Local`, manda los bytes ESC/POS por TCP a la IP:puerto que la propia cola
+      trae (config del Admin) y confirma cada tipo en su endpoint (orden / bebida /
+      cierre / prueba). Sigue imprimiendo con la tablet bloqueada (wake+wifi lock y
+      exención de batería), rearranca al prender la tablet, y no duplica tickets si la
+      confirmación al POS falla (recuerda lo ya impreso). GitHub Actions compila el APK
+      en cada push a `main` y lo publica en el release `app-impresora`
+      (`.github/workflows/app-impresora.yml`); guía de instalación en
+      `docs/impresora-tablet.md`. De paso se corrigió el puente de PC: no conocía los
+      tipos `bebida` y `cierre` (los habría reimpreso en bucle).
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
       hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.
