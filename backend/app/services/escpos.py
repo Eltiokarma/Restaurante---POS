@@ -179,9 +179,18 @@ def render_orden(
                 nombre = f"{datos['cantidad']} x {nombre_plato}"
                 if es_extra:
                     nombre += " (EXTRA)"
+            # En OTROS (gaseosas y cargos sin plato) no van montos: la
+            # comanda es para cocina, la plata se ve en caja
+            monto = "" if bucket is None else (_soles(datos["monto"]) if datos["monto"] > 0 else "")
             if empaque != "mesa":
-                nombre += f" [{empaque.upper()}]"
-            monto = _soles(datos["monto"]) if datos["monto"] > 0 else ""
+                # La etiqueta va SIEMPRE completa, con su espacio: si el
+                # nombre es largo se recorta el plato, nunca el [TAPER]
+                # (antes salía "...Huancaína [." y no se entendía nada)
+                etiqueta = f" [{empaque.upper()}]"
+                ancho = columnas - len(etiqueta) - (len(monto) + 1 if monto else 0)
+                if len(nombre) > ancho:
+                    nombre = nombre[: max(0, ancho - 1)] + "."
+                nombre += etiqueta
             if nota:
                 # La observación al costado si entra; si no, debajo
                 con_nota = f"{nombre} -> {nota}"
@@ -194,7 +203,8 @@ def render_orden(
                 partes.append(_texto(_fila(nombre, monto, columnas)))
 
     partes += [TAMANO_NORMAL, _texto("-" * columnas)]
-    partes += [CENTRAR, _texto(""), _texto("Paga en caja con este ticket."), _texto("Gracias!")]
+    # "Paga en caja con este ticket" quitado por ahora (pedido del dueño)
+    partes += [CENTRAR, _texto(""), _texto("Gracias!")]
     partes.append(CORTAR)
     return b"".join(partes)
 

@@ -132,7 +132,8 @@ export function Ticket({ orden, local }: Props) {
         <span>TOTAL</span>
         <span>{soles(orden.total)}</span>
       </div>
-      <div className="ticket-pie">Paga en caja con este ticket. ¡Gracias!</div>
+      {/* "Paga en caja con este ticket" quitado por ahora (pedido del dueño) */}
+      <div className="ticket-pie">¡Gracias!</div>
     </div>
   )
 }
