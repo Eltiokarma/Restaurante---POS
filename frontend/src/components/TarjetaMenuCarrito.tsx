@@ -68,6 +68,7 @@ export function TarjetaMenuCarrito({
   const [abierta, setAbierta] = useState(false)
   const [cambiando, setCambiando] = useState<number | null>(null) // tiempo con las opciones abiertas
   const [empacando, setEmpacando] = useState<number | null>(null) // tiempo eligiendo su empaque
+  const [extrasAbiertos, setExtrasAbiertos] = useState(false) // porciones y agregados, plegados
 
   // "IR AHÍ" desde la barra: la tarjeta se abre con las opciones del
   // primer hueco listas para tocar
@@ -91,6 +92,14 @@ export function TarjetaMenuCarrito({
 
   const quitados = linea.menu.tiempos.filter((t) => linea.omitidos.includes(t.orden))
   const descuento = quitados.reduce((s, t) => s + t.descuento_si_se_quita, 0)
+
+  // Extras plegados: la lista de porciones y agregados es larga, así que
+  // vive detrás de un botón; lo elegido se ve en la cabecera del pliegue
+  const hayPorciones = linea.menu.tiempos.some((t) => t.precio_extra > 0 && !linea.omitidos.includes(t.orden))
+  const hayAgregados = linea.menu.agregados.length > 0
+  const nExtras =
+    linea.extras.reduce((s, e) => s + e.cantidad, 0) +
+    linea.agregados.reduce((s, a) => s + a.cantidad, 0)
 
   return (
     <div className={`tarjeta-menu ${abierta ? 'tarjeta-menu-abierta' : ''} ${completo ? 'menu-completo' : 'menu-incompleto'}`}>
@@ -225,41 +234,53 @@ export function TarjetaMenuCarrito({
             )
           })}
 
-          {linea.menu.tiempos.some((t) => t.precio_extra > 0 && !linea.omitidos.includes(t.orden)) && (
-            <div className="menu-agregados">
-              <span className="extras-titulo">¿Una porción más? (aparte de la incluida)</span>
-              <div className="chips-agregados">
-                {linea.menu.tiempos
-                  .filter((t) => t.precio_extra > 0 && !linea.omitidos.includes(t.orden))
-                  .flatMap((t) =>
-                    t.alternativas.map((a) => (
-                      <ChipStepper
-                        key={`${t.orden}-${a.plato_id}`}
-                        etiqueta={a.nombre}
-                        precio={t.precio_extra + a.recargo}
-                        cantidad={cantidadExtra(t.orden, a.plato_id)}
-                        onCambiar={(d) => onCambiarExtra(t.orden, a.plato_id, d)}
-                      />
-                    )),
-                  )}
-              </div>
-            </div>
-          )}
+          {(hayPorciones || hayAgregados) && (
+            <div className="pliegue-extras">
+              <button className="pliegue-cabecera" onClick={() => setExtrasAbiertos((v) => !v)}>
+                <span className="pliegue-titulo">➕ ¿Algo más? <small>porciones y agregados</small></span>
+                {nExtras > 0 && (
+                  <span className="pliegue-resumen">{nExtras} elegido{nExtras === 1 ? '' : 's'}</span>
+                )}
+                <span className="tarjeta-menu-flecha">{extrasAbiertos ? '▲' : '▼'}</span>
+              </button>
 
-          {linea.menu.agregados.length > 0 && (
-            <div className="menu-agregados">
-              <span className="extras-titulo">Agregar al menú:</span>
-              <div className="chips-agregados">
-                {linea.menu.agregados.map((a) => (
-                  <ChipStepper
-                    key={a.id}
-                    etiqueta={a.nombre}
-                    precio={a.precio}
-                    cantidad={linea.agregados.find((x) => x.agregado.id === a.id)?.cantidad ?? 0}
-                    onCambiar={(d) => onCambiarAgregado(a, d)}
-                  />
-                ))}
-              </div>
+              {extrasAbiertos && hayPorciones && (
+                <div className="menu-agregados">
+                  <span className="extras-titulo">¿Una porción más? (aparte de la incluida)</span>
+                  <div className="chips-agregados">
+                    {linea.menu.tiempos
+                      .filter((t) => t.precio_extra > 0 && !linea.omitidos.includes(t.orden))
+                      .flatMap((t) =>
+                        t.alternativas.map((a) => (
+                          <ChipStepper
+                            key={`${t.orden}-${a.plato_id}`}
+                            etiqueta={a.nombre}
+                            precio={t.precio_extra + a.recargo}
+                            cantidad={cantidadExtra(t.orden, a.plato_id)}
+                            onCambiar={(d) => onCambiarExtra(t.orden, a.plato_id, d)}
+                          />
+                        )),
+                      )}
+                  </div>
+                </div>
+              )}
+
+              {extrasAbiertos && hayAgregados && (
+                <div className="menu-agregados">
+                  <span className="extras-titulo">Agregar al menú:</span>
+                  <div className="chips-agregados">
+                    {linea.menu.agregados.map((a) => (
+                      <ChipStepper
+                        key={a.id}
+                        etiqueta={a.nombre}
+                        precio={a.precio}
+                        cantidad={linea.agregados.find((x) => x.agregado.id === a.id)?.cantidad ?? 0}
+                        onCambiar={(d) => onCambiarAgregado(a, d)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
