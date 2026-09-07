@@ -417,6 +417,15 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       la parrilla de mesas ("¿En qué mesa van a estar?" en la terminal, "Mesa" del nuevo
       pedido en caja) detrás del suyo. Cerrados por defecto; lo ya elegido se lee en la
       cabecera del pliegue sin abrirlo ("2 elegidos", "3 B + 3 C") con una pastilla verde.
+- [x] **Refresco fuera y precios reales** (decisión del dueño para el 2º prototipo: el
+      refresco es gratis y no se toma como dato): los platos aceptan **S/ 0.00**
+      (`PlatoIn.precio ge=0`; negativos siguen rechazados; menús, agregados y gaseosas
+      siguen exigiendo precio). En producción se corrió el saneo: el tiempo "Refresco"
+      salió de todas las plantillas, de las 6 listas guardadas (Lunes-Sábado) y del menú
+      de hoy; los platos de categoría bebida quedaron desactivados (histórico intacto) y
+      sus insumos del kardex apagados; y los 31 platos de la semana pasaron del precio de
+      referencia al real (fondos S/ 13 → S/ 10, entradas/sopas S/ 6 → S/ 1; lo ajustado a
+      mano no se tocó).
 - [ ] **App propia de Android para imprimir** (reemplazo de RawBT): decisión del dueño —
       se hace en la fase final del prototipo, no ahora. Llevaría dentro el mismo driver
       ESC/POS que hoy pone RawBT, se compilaría en GitHub Actions y se instalaría en la

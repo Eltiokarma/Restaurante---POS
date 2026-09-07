@@ -38,6 +38,24 @@ def test_put_menu_crea_actualiza_y_desactiva(client, admin_headers, menu_ejemplo
     assert "Chicha morada" not in activos
 
 
+def test_plato_gratis_precio_cero(client, admin_headers, menu_ejemplo):
+    """Hay platos que van gratis con el menú: S/ 0.00 debe aceptarse
+    (los negativos siguen rechazados)."""
+    payload = {"platos": [
+        {"id": menu_ejemplo["Lomo saltado"], "nombre": "Lomo saltado", "categoria": "fondo",
+         "precio": 15.0, "activo_hoy": True},
+        {"nombre": "Ensalada de la casa", "categoria": "entrada", "precio": 0.0, "activo_hoy": True},
+    ]}
+    r = client.put("/api/menu/today", json=payload, headers=admin_headers)
+    assert r.status_code == 200
+    activos = {p["nombre"]: p for p in r.json()["platos"]}
+    assert activos["Ensalada de la casa"]["precio"] == 0.0
+
+    payload["platos"][1]["precio"] = -1.0
+    r = client.put("/api/menu/today", json=payload, headers=admin_headers)
+    assert r.status_code == 422
+
+
 def test_catalogo_conserva_platos_desactivados(client, admin_headers, menu_ejemplo):
     catalogo = client.get("/api/menu/catalog", headers=admin_headers).json()
     nombres = [p["nombre"] for p in catalogo["platos"]]
