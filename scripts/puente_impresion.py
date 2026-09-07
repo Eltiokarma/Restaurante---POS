@@ -37,6 +37,21 @@ def api(url_base: str, pin: str, ruta: str, metodo: str = "GET") -> dict:
         return json.loads(respuesta.read())
 
 
+def ruta_de_confirmacion(trabajo: dict) -> str | None:
+    """La comanda, el ticket de gaseosas, el cierre de caja y la prueba
+    viven en la misma cola pero se confirman en endpoints distintos."""
+    tipo = trabajo.get("tipo")
+    if tipo == "orden":
+        return f"/api/orders/{trabajo['orden_id']}/printed"
+    if tipo == "bebida":
+        return f"/api/print/bebida/{trabajo['ticket_bebida_id']}/impresa"
+    if tipo == "cierre":
+        return "/api/print/cierre/impresa"
+    if tipo == "prueba":
+        return "/api/print/prueba/impresa"
+    return None
+
+
 def imprimir(ip: str, puerto: int, datos: bytes) -> None:
     with socket.create_connection((ip, puerto), timeout=TIMEOUT_IMPRESORA_SEG) as conexion:
         conexion.sendall(datos)
@@ -76,6 +91,12 @@ def ciclo(url_base: str, pin: str) -> None:
         aviso_sin_ip = False
 
         for trabajo in trabajos:
+            # Cada tipo confirma en SU endpoint; uno desconocido (de una
+            # versión más nueva del POS) no se imprime para no ciclar.
+            ruta_ok = ruta_de_confirmacion(trabajo)
+            if ruta_ok is None:
+                print(f"⚠ Trabajo de tipo desconocido '{trabajo.get('tipo')}': actualiza el puente")
+                continue
             datos = base64.b64decode(trabajo["datos_b64"])
             try:
                 imprimir(ip, puerto, datos)
@@ -84,11 +105,6 @@ def ciclo(url_base: str, pin: str) -> None:
                 print(f"  Revisa que la impresora esté prendida y su IP sea {ip}:{puerto}.")
                 break  # el ticket sigue en cola; se reintenta en el próximo ciclo
             # Confirmar: hasta que esto llegue, el trabajo sigue en cola
-            ruta_ok = (
-                f"/api/orders/{trabajo['orden_id']}/printed"
-                if trabajo["tipo"] == "orden"
-                else "/api/print/prueba/impresa"
-            )
             try:
                 api(url_base, pin, ruta_ok, "POST")
             except Exception:

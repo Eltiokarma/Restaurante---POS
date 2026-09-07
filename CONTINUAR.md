@@ -18,9 +18,20 @@ platos sueltos), auditoría visual de Claude Design aplicada (tablero de
 caja, contraste AA, piso táctil 48/56px, iconos SVG, menú "⋯" en filas de
 caja y tabs del admin).
 
-Pendiente diferido (decisión del dueño, no arrancar solos): app propia
-Android para imprimir (RawBT pide un toque por ticket mientras tanto),
-migrar todos los botones viejos a la clase base `.boton`, voz (fase 3).
+Pendiente diferido: migrar todos los botones viejos a la clase base
+`.boton`, voz (fase 3).
+
+## APP DE IMPRESIÓN: ENTREGADA (2026-09-07, pedido del dueño)
+
+La app Android que reemplaza a RawBT vive en `android-impresora/` (Kotlin
+sin dependencias; servicio en primer plano que atiende `/api/print/cola`
+y confirma orden/bebida/cierre/prueba cada uno en su endpoint; sigue con
+la tablet bloqueada; rearranca al prender). GitHub Actions compila y
+publica el APK en el release `app-impresora` en cada push a `main`
+(workflow `app-impresora.yml`). Guía: `docs/impresora-tablet.md`.
+Siguiente paso de campo: instalarla en la tablet del local y desinstalar
+RawBT; si el dueño reporta algo, los mensajes de la bitácora de la app
+dicen exactamente qué pasó.
 
 ## TANDAS: ENTREGADO (sesión 3, 2026-09-06)
 
