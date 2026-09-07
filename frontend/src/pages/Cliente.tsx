@@ -59,6 +59,9 @@ export function Cliente() {
   // sale "SIN MESA" y en caja la asignan después
   const [mesas, setMesas] = useState<MesaEstado[]>([])
   const [mesasElegidas, setMesasElegidas] = useState<number[]>([])
+  // Con 30+ mesas la parrilla come la pantalla: vive plegada y lo elegido
+  // se ve en la cabecera del pliegue
+  const [mostrarMesas, setMostrarMesas] = useState(false)
   // Guía de lo que falta (4b): la barra de abajo nombra el hueco y lo
   // persigue — "IR AHÍ" abre la tarjeta del menú incompleto y la hace latir
   const [abrirTics, setAbrirTics] = useState<Record<number, number>>({})
@@ -167,6 +170,7 @@ export function Cliente() {
       setVozAbierta(false)
       setEntrega('junto')
       setMesasElegidas([])
+      setMostrarMesas(false)
       setTocaronEntrega(false)
       usoVoz.current = false
       usoTactil.current = false
@@ -585,31 +589,43 @@ export function Cliente() {
           ))}
         </div>
         {carrito.totalItems > 0 && mesas.some((m) => m.activa) && (
-          <div className="selector-servicio">
-            <span className="selector-servicio-titulo">
-              🪑 ¿En qué mesa van a estar? <small className="titulo-opcional">(opcional)</small>
-            </span>
-            <div className="empaques-linea mesas-terminal">
-              {mesas.filter((m) => m.activa).map((m) => (
-                <button
-                  key={m.id}
-                  className={`boton-servicio boton-empaque ${mesasElegidas.includes(m.id) ? 'servicio-activo' : ''}`}
-                  onClick={() =>
-                    setMesasElegidas((prev) =>
-                      prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id],
-                    )
-                  }
-                >
-                  {m.nombre}
-                  {m.ocupada ? ' •' : ''}
-                </button>
-              ))}
-            </div>
-            <p className="aviso-entrega">
-              {mesasElegidas.length > 0
-                ? 'Puedes marcar varias si van a juntar mesas.'
-                : 'Si aún no eligen mesa, sigue nomás: en caja te la asignan.'}
-            </p>
+          <div className="selector-servicio pliegue-extras">
+            <button className="pliegue-cabecera" onClick={() => setMostrarMesas((v) => !v)}>
+              <span className="pliegue-titulo">
+                🪑 ¿En qué mesa van a estar? <small className="titulo-opcional">(opcional)</small>
+              </span>
+              {mesasElegidas.length > 0 && (
+                <span className="pliegue-resumen">
+                  {mesas.filter((m) => mesasElegidas.includes(m.id)).map((m) => m.nombre).join(' + ')}
+                </span>
+              )}
+              <span className="tarjeta-menu-flecha">{mostrarMesas ? '▲' : '▼'}</span>
+            </button>
+            {mostrarMesas && (
+              <>
+                <div className="empaques-linea mesas-terminal">
+                  {mesas.filter((m) => m.activa).map((m) => (
+                    <button
+                      key={m.id}
+                      className={`boton-servicio boton-empaque ${mesasElegidas.includes(m.id) ? 'servicio-activo' : ''}`}
+                      onClick={() =>
+                        setMesasElegidas((prev) =>
+                          prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id],
+                        )
+                      }
+                    >
+                      {m.nombre}
+                      {m.ocupada ? ' •' : ''}
+                    </button>
+                  ))}
+                </div>
+                <p className="aviso-entrega">
+                  {mesasElegidas.length > 0
+                    ? 'Puedes marcar varias si van a juntar mesas.'
+                    : 'Si aún no eligen mesa, sigue nomás: en caja te la asignan.'}
+                </p>
+              </>
+            )}
           </div>
         )}
         {(carrito.items.length >= 2 || carrito.menus.length > 0 || hayAlMomento) && (

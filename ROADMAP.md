@@ -411,6 +411,12 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       admin scrollean dentro de sí mismas bajo 900px. La regla táctil quedó escrita en
       `CLAUDE.md` y es la que heredará la app cuando se haga (decisión del dueño: "al final
       se hará de todo esto una o varias apps").
+- [x] **Extras y mesas plegados** (pedido del dueño con el local ya cargado: 36 mesas y
+      listas largas de porciones comían la pantalla): "¿Una porción más?" y "Agregar al
+      menú:" viven detrás de un pliegue "➕ ¿Algo más?" dentro de la tarjeta del menú, y
+      la parrilla de mesas ("¿En qué mesa van a estar?" en la terminal, "Mesa" del nuevo
+      pedido en caja) detrás del suyo. Cerrados por defecto; lo ya elegido se lee en la
+      cabecera del pliegue sin abrirlo ("2 elegidos", "3 B + 3 C") con una pastilla verde.
 - [ ] **App propia de Android para imprimir** (reemplazo de RawBT): decisión del dueño —
       se hace en la fase final del prototipo, no ahora. Llevaría dentro el mismo driver
       ESC/POS que hoy pone RawBT, se compilaría en GitHub Actions y se instalaría en la

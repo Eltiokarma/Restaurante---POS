@@ -6790,3 +6790,76 @@ select:focus-visible {
   background: var(--tinta);
   color: var(--papel);
 }
+
+/* ============================================================
+   Pliegues: extras del menú y parrilla de mesas
+   Con 30+ mesas y listas largas de porciones, esas zonas comían
+   la pantalla: viven plegadas y lo elegido se lee en la cabecera.
+   ============================================================ */
+.pliegue-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pliegue-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 16px;
+  border: 2px solid var(--linea);
+  border-radius: var(--r);
+  background: var(--papel-alto);
+  color: var(--tinta);
+  font-family: var(--fuente-ui);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pliegue-cabecera:active {
+  background: var(--papel-hondo);
+}
+
+.pliegue-titulo {
+  min-width: 0;
+}
+
+.pliegue-titulo small {
+  font-weight: 600;
+  color: var(--tinta-media);
+}
+
+/* Lo ya elegido, visible sin abrir el pliegue */
+.pliegue-resumen {
+  margin-left: auto;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--culantro-tenue);
+  box-shadow: inset 0 0 0 2px var(--culantro);
+  color: var(--culantro-hondo);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+
+.pliegue-cabecera .tarjeta-menu-flecha {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.pliegue-resumen ~ .tarjeta-menu-flecha {
+  margin-left: 0;
+}
+
+/* En caja los controles son más compactos */
+.pliegue-caja {
+  min-height: var(--toque);
+  font-size: 14.5px;
+}

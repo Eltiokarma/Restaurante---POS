@@ -60,6 +60,8 @@ export function Caja() {
   } | null>(null)
   const [mesas, setMesas] = useState<MesaEstado[]>([])
   const [mesasNuevoPedido, setMesasNuevoPedido] = useState<number[]>([])
+  // Con 30+ mesas la parrilla come la pantalla: vive plegada
+  const [mostrarMesasNuevo, setMostrarMesasNuevo] = useState(false)
   // Orden a la que se le está eligiendo mesa (muestra los chips inline)
   const [asignandoMesa, setAsignandoMesa] = useState<number | null>(null)
   // Orden con el menú "⋯" desplegado (acciones secundarias)
@@ -441,6 +443,7 @@ export function Caja() {
       )
       carrito.vaciar()
       setMesasNuevoPedido([])
+      setMostrarMesasNuevo(false)
       cargarOrdenes()
       cargarCaja()
       cargarMesas()
@@ -1116,23 +1119,33 @@ export function Caja() {
             </div>
           )}
           {mesas.some((m) => m.activa) && carrito.totalItems > 0 && (
-            <div className="caja-mesas-nuevo">
-              <span className="cobro-etiqueta">Mesa (elige varias para combinar):</span>
-              <div className="empaques-linea">
-                {mesas.filter((m) => m.activa).map((m) => (
-                  <button
-                    key={m.id}
-                    className={`boton-servicio boton-empaque boton-empaque-caja ${mesasNuevoPedido.includes(m.id) ? 'servicio-activo' : ''} ${m.ocupada && !mesasNuevoPedido.includes(m.id) ? 'mesa-chip-ocupada' : ''}`}
-                    onClick={() =>
-                      setMesasNuevoPedido((prev) =>
-                        prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id],
-                      )
-                    }
-                  >
-                    {m.nombre}{m.ocupada ? ' •' : ''}
-                  </button>
-                ))}
-              </div>
+            <div className="caja-mesas-nuevo pliegue-extras">
+              <button className="pliegue-cabecera pliegue-caja" onClick={() => setMostrarMesasNuevo((v) => !v)}>
+                <span className="pliegue-titulo">🪑 Mesa <small>(elige varias para combinar)</small></span>
+                {mesasNuevoPedido.length > 0 && (
+                  <span className="pliegue-resumen">
+                    {mesas.filter((m) => mesasNuevoPedido.includes(m.id)).map((m) => m.nombre).join(' + ')}
+                  </span>
+                )}
+                <span className="tarjeta-menu-flecha">{mostrarMesasNuevo ? '▲' : '▼'}</span>
+              </button>
+              {mostrarMesasNuevo && (
+                <div className="empaques-linea">
+                  {mesas.filter((m) => m.activa).map((m) => (
+                    <button
+                      key={m.id}
+                      className={`boton-servicio boton-empaque boton-empaque-caja ${mesasNuevoPedido.includes(m.id) ? 'servicio-activo' : ''} ${m.ocupada && !mesasNuevoPedido.includes(m.id) ? 'mesa-chip-ocupada' : ''}`}
+                      onClick={() =>
+                        setMesasNuevoPedido((prev) =>
+                          prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id],
+                        )
+                      }
+                    >
+                      {m.nombre}{m.ocupada ? ' •' : ''}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           <div className="caja-acciones">
