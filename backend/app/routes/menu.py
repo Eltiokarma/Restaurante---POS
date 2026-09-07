@@ -53,7 +53,8 @@ class PlatoIn(BaseModel):
     id: int | None = None
     nombre: str = Field(min_length=1, max_length=120)
     categoria: str
-    precio: float = Field(gt=0)
+    # ge=0: hay platos que van gratis con el menú (pedido del dueño)
+    precio: float = Field(ge=0)
     activo_hoy: bool = True
     sale_al_momento: bool = False
     capacidad_tanda: int = Field(default=0, ge=0, le=99)

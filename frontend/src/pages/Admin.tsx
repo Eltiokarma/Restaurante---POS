@@ -677,13 +677,14 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
     setError('')
     setMensaje('')
     // Un plato con nombre pero precio inválido no debe descartarse en
-    // silencio (se desactivaría sin que el dueño se entere)
-    const sinPrecio = platos.filter((p) => p.nombre.trim() !== '' && !(parseFloat(p.precio) > 0))
+    // silencio (se desactivaría sin que el dueño se entere). S/ 0.00 sí
+    // vale: hay platos que van gratis con el menú.
+    const sinPrecio = platos.filter((p) => p.nombre.trim() !== '' && !(parseFloat(p.precio) >= 0))
     if (sinPrecio.length > 0) {
       setError(`Falta el precio de: ${sinPrecio.map((p) => p.nombre.trim()).join(', ')}`)
       return
     }
-    const validos = platos.filter((p) => p.nombre.trim() !== '' && parseFloat(p.precio) > 0)
+    const validos = platos.filter((p) => p.nombre.trim() !== '' && parseFloat(p.precio) >= 0)
     try {
       const data = await api.guardarMenu(
         validos.map((p) => ({
@@ -770,7 +771,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
                 </span>
               </div>
               <span className="plato-tarjeta-precio">
-                {parseFloat(p.precio) > 0 ? soles(parseFloat(p.precio)) : '—'}
+                {parseFloat(p.precio) >= 0 ? soles(parseFloat(p.precio)) : '—'}
               </span>
             </div>
             <div className="plato-tarjeta-acciones">
