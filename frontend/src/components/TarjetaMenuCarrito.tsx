@@ -104,10 +104,11 @@ export function TarjetaMenuCarrito({
   return (
     <div className={`tarjeta-menu ${abierta ? 'tarjeta-menu-abierta' : ''} ${completo ? 'menu-completo' : 'menu-incompleto'}`}>
       <button className="tarjeta-menu-cabecera" onClick={() => setAbierta((v) => !v)}>
+        {/* Solo "Menú 1" (pedido del dueño, igual que el mock 4c):
+            el nombre de la plantilla no le dice nada al cliente */}
         <span className="tarjeta-menu-nombre">
           <strong>Menú {numero}</strong>
           {linea.cantidad > 1 && <span className="tarjeta-menu-por"> × {linea.cantidad}</span>}
-          {' · '}{linea.menu.nombre}
         </span>
         <span className="tarjeta-menu-precio">{soles(subtotalMenu(linea))}</span>
         {elegibles > 0 && !abierta && (

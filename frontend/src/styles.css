@@ -6863,3 +6863,23 @@ select:focus-visible {
   min-height: var(--toque);
   font-size: 14.5px;
 }
+
+/* ============================================================
+   Tarjeta de oferta del menú, sin rótulos (pedido del dueño)
+   Los platos son el único texto: letra más ancha y menos alargada
+   (Verdana es más ancha y baja que la del sistema; en Android cae
+   a la del sistema con el mismo tamaño y peso).
+   ============================================================ */
+.combo-resumen-tiempos {
+  padding: 14px 20px;
+  font-family: Verdana, Geneva, var(--fuente-ui);
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  line-height: 1.5;
+  color: var(--tinta);
+}
+
+.combo-resumen-tiempos div + div {
+  margin-top: 6px;
+}
