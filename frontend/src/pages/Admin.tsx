@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE } from '../api'
 import { IconoBillete, IconoEgreso, IconoEngranaje, IconoMovil, IconoTarjeta } from '../components/Iconos'
-import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, Insumo, MenuGuardadoOut, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
+import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, FinanzasFijos, FinanzasResumen, Insumo, MenuGuardadoOut, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
-type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'cancelaciones' | 'voz' | 'config'
+type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'finanzas' | 'cancelaciones' | 'voz' | 'config'
 
 interface PlatoEditable {
   id?: number
@@ -59,6 +59,7 @@ export function Admin() {
           <button className={tab === 'menu' ? 'activa' : ''} onClick={() => setTab('menu')}>Menú del día</button>
           <button className={tab === 'ordenes' ? 'activa' : ''} onClick={() => setTab('ordenes')}>Órdenes</button>
           <button className={tab === 'insumos' ? 'activa' : ''} onClick={() => setTab('insumos')}>Insumos</button>
+          <button className={tab === 'finanzas' ? 'activa' : ''} onClick={() => setTab('finanzas')}>Finanzas</button>
           <div className="menu-mas">
             <button
               className={`boton-mas ${TABS_EXTRA.some((t) => t.id === tab) ? 'activa' : ''}`}
@@ -100,6 +101,7 @@ export function Admin() {
         {tab === 'menu' && <TabMenu onSesionVencida={() => setLogueado(false)} />}
         {tab === 'ordenes' && <TabOrdenes />}
         {tab === 'insumos' && <TabInsumos onSesionVencida={() => setLogueado(false)} />}
+        {tab === 'finanzas' && <TabFinanzas onSesionVencida={() => setLogueado(false)} />}
         {tab === 'cancelaciones' && <TabCancelaciones onSesionVencida={() => setLogueado(false)} />}
         {tab === 'voz' && <TabVoz onSesionVencida={() => setLogueado(false)} />}
         {tab === 'config' && <TabConfig onSesionVencida={() => setLogueado(false)} />}
@@ -3844,5 +3846,241 @@ function GestorMesas({ onSesionVencida }: { onSesionVencida: () => void }) {
         <button className="boton-primario boton-crear-mesa" onClick={crear}>+ Agregar mesa</button>
       </div>
     </div>
+  )
+}
+
+/**
+ * Finanzas: junta lo que el sistema ya sabe (ventas, egresos, kardex)
+ * con lo que solo el dueño sabe (costos fijos y planilla) y responde:
+ * ¿entró más de lo que salió?, ¿estoy ganando?, ¿cuánto debo vender al
+ * día para no perder?
+ */
+function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [dias, setDias] = useState(30)
+  const [resumen, setResumen] = useState<FinanzasResumen | null>(null)
+  const [fijos, setFijos] = useState<FinanzasFijos | null>(null)
+  const [error, setError] = useState('')
+  const [nuevoCostoNombre, setNuevoCostoNombre] = useState('')
+  const [nuevoCostoMonto, setNuevoCostoMonto] = useState('')
+  const [nuevoTrabNombre, setNuevoTrabNombre] = useState('')
+  const [nuevoTrabRol, setNuevoTrabRol] = useState('')
+  const [nuevoTrabSueldo, setNuevoTrabSueldo] = useState('')
+
+  const cargar = useCallback(async () => {
+    try {
+      const [r, f] = await Promise.all([api.finanzasResumen(dias), api.finanzasFijos()])
+      setResumen(r)
+      setFijos(f)
+      setError('')
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }, [dias, onSesionVencida])
+
+  useEffect(() => { cargar() }, [cargar])
+
+  const ejecutar = async (accion: () => Promise<FinanzasFijos>) => {
+    try {
+      setFijos(await accion())
+      setError('')
+      // los fijos cambian la utilidad y el punto de equilibrio
+      setResumen(await api.finanzasResumen(dias))
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const agregarCosto = () => {
+    const monto = parseFloat(nuevoCostoMonto)
+    if (!nuevoCostoNombre.trim() || !(monto > 0)) {
+      setError('Pon el nombre del gasto y cuánto es al mes (ej. Alquiler, 1500)')
+      return
+    }
+    ejecutar(() => api.crearCostoFijo(nuevoCostoNombre.trim(), monto))
+    setNuevoCostoNombre('')
+    setNuevoCostoMonto('')
+  }
+
+  const agregarTrabajador = () => {
+    const sueldo = parseFloat(nuevoTrabSueldo)
+    if (!nuevoTrabNombre.trim() || !(sueldo > 0)) {
+      setError('Pon el nombre de la persona y su sueldo al mes')
+      return
+    }
+    ejecutar(() => api.crearTrabajador(nuevoTrabNombre.trim(), nuevoTrabRol.trim(), sueldo))
+    setNuevoTrabNombre('')
+    setNuevoTrabRol('')
+    setNuevoTrabSueldo('')
+  }
+
+  const fijosMes = (fijos?.total_costos_mes ?? 0) + (fijos?.total_planilla_mes ?? 0)
+  const maxDia = Math.max(1, ...(resumen?.por_dia ?? []).map((d) => Math.max(d.entro, d.egresos + d.compras)))
+  const diasConMovimiento = (resumen?.por_dia ?? []).filter((d) => d.entro > 0 || d.egresos > 0 || d.compras > 0)
+  const cobertura = resumen?.cobertura_recetas
+  const ddmm = (fecha: string) => `${fecha.slice(8, 10)}/${fecha.slice(5, 7)}`
+  const gana = (resumen?.utilidad_estimada ?? 0) >= 0
+  const alcanza = resumen?.venta_diaria_necesaria != null &&
+    resumen.promedio_venta_dia >= resumen.venta_diaria_necesaria
+
+  return (
+    <section>
+      <h2>Finanzas</h2>
+      <div className="admin-acciones">
+        {[7, 30].map((d) => (
+          <button key={d} className={dias === d ? 'boton-primario' : ''} onClick={() => setDias(d)}>
+            Últimos {d} días
+          </button>
+        ))}
+      </div>
+      {error && <p className="error-admin">{error}</p>}
+
+      {resumen && (
+        <>
+          <div className="fin-tarjetas">
+            <div className="fin-tarjeta">
+              <span className="fin-rotulo">Vendido</span>
+              <span className="fin-cifra">{soles(resumen.ventas)}</span>
+              <span className="fin-detalle">
+                {resumen.dias_con_venta} día{resumen.dias_con_venta === 1 ? '' : 's'} con venta ·
+                promedio {soles(resumen.promedio_venta_dia)}/día
+              </span>
+            </div>
+            <div className="fin-tarjeta">
+              <span className="fin-rotulo">Insumos usados</span>
+              <span className="fin-cifra">{soles(resumen.costo_insumos + resumen.mermas)}</span>
+              <span className="fin-detalle">
+                según recetas{resumen.mermas > 0 ? ` (mermas ${soles(resumen.mermas)})` : ''}
+              </span>
+            </div>
+            <div className="fin-tarjeta">
+              <span className="fin-rotulo">Fijos + planilla</span>
+              <span className="fin-cifra">{soles(resumen.fijos_periodo)}</span>
+              <span className="fin-detalle">
+                {soles(fijosMes)}/mes repartido en {resumen.dias} días
+              </span>
+            </div>
+            <div className={`fin-tarjeta fin-utilidad ${gana ? 'fin-gana' : 'fin-pierde'}`}>
+              <span className="fin-rotulo">{gana ? 'Utilidad estimada' : 'Pérdida estimada'}</span>
+              <span className="fin-cifra">{soles(Math.abs(resumen.utilidad_estimada))}</span>
+              <span className="fin-detalle">
+                {resumen.margen_pct != null ? `margen ${resumen.margen_pct}% sobre insumos` : 'sin ventas en el período'}
+              </span>
+            </div>
+          </div>
+
+          {resumen.venta_diaria_necesaria != null && (
+            <div className={`fin-equilibrio ${alcanza ? 'fin-equilibrio-ok' : ''}`}>
+              {alcanza
+                ? <>✅ Para no perder necesitas vender <strong>{soles(resumen.venta_diaria_necesaria)}</strong> al día
+                    — y estás promediando <strong>{soles(resumen.promedio_venta_dia)}</strong>. Vas bien.</>
+                : <>⚠ Para no perder necesitas vender <strong>{soles(resumen.venta_diaria_necesaria)}</strong> al día
+                    y estás promediando <strong>{soles(resumen.promedio_venta_dia)}</strong>.</>}
+            </div>
+          )}
+
+          {cobertura && cobertura.con_receta < cobertura.activos && (
+            <p className="nota-admin">
+              La utilidad usa el consumo según recetas: hoy {cobertura.con_receta} de {cobertura.activos} platos
+              activos tienen la suya. Arma las que faltan en Insumos → Recetas para afinar el número.
+            </p>
+          )}
+
+          <h3 className="fin-subtitulo">Flujo de caja: lo que entró y salió cada día</h3>
+          <p className="nota-admin">
+            Entró = ventas. Salió = egresos del cajón + compras de insumos (plata real, no recetas).
+          </p>
+          {diasConMovimiento.length === 0 ? (
+            <p className="nota-admin">Sin movimientos en el período.</p>
+          ) : (
+            <div className="fin-flujo">
+              {diasConMovimiento.map((d) => (
+                <div className="fin-dia" key={d.fecha}>
+                  <span className="fin-dia-fecha">{ddmm(d.fecha)}</span>
+                  <span className="fin-dia-barras" aria-hidden="true">
+                    <i className="fin-barra-entro" style={{ width: `${(d.entro / maxDia) * 100}%` }} />
+                    <i className="fin-barra-salio" style={{ width: `${((d.egresos + d.compras) / maxDia) * 100}%` }} />
+                  </span>
+                  <span className="fin-dia-cifras">
+                    <em className="fin-entro">+{soles(d.entro)}</em>
+                    <em className="fin-salio">−{soles(d.egresos + d.compras)}</em>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {fijos && (
+        <div className="fin-editores">
+          <div className="fin-editor">
+            <h3>Costos fijos del mes</h3>
+            <p className="nota-admin">Alquiler, luz, agua, internet, licencias… lo que pagas sí o sí.</p>
+            {fijos.costos.map((c) => (
+              <div className="fin-fila" key={c.id}>
+                <input defaultValue={c.nombre} aria-label={`Nombre de ${c.nombre}`}
+                       onBlur={(e) => {
+                         const v = e.target.value.trim()
+                         if (v && v !== c.nombre) ejecutar(() => api.editarCostoFijo(c.id, v, c.monto_mensual))
+                       }} />
+                <input type="number" step="10" min="0" className="fin-monto"
+                       defaultValue={c.monto_mensual.toFixed(2)} aria-label={`Monto de ${c.nombre}`}
+                       onBlur={(e) => {
+                         const v = parseFloat(e.target.value)
+                         if (v > 0 && v !== c.monto_mensual) ejecutar(() => api.editarCostoFijo(c.id, c.nombre, v))
+                       }} />
+                <button className="boton boton--sm boton--papel" aria-label={`Quitar ${c.nombre}`}
+                        onClick={() => ejecutar(() => api.borrarCostoFijo(c.id))}>🗑</button>
+              </div>
+            ))}
+            <div className="fin-fila fin-fila-nueva">
+              <input placeholder="Ej. Alquiler" value={nuevoCostoNombre}
+                     onChange={(e) => setNuevoCostoNombre(e.target.value)} />
+              <input type="number" step="10" min="0" className="fin-monto" placeholder="S/ al mes"
+                     value={nuevoCostoMonto} onChange={(e) => setNuevoCostoMonto(e.target.value)} />
+              <button className="boton boton--sm boton--culantro" onClick={agregarCosto}>+ Agregar</button>
+            </div>
+            <p className="fin-total">Total: <strong>{soles(fijos.total_costos_mes)}</strong> al mes</p>
+          </div>
+
+          <div className="fin-editor">
+            <h3>Planilla</h3>
+            <p className="nota-admin">Quiénes trabajan y cuánto ganan al mes (para el cálculo, no paga sola).</p>
+            {fijos.trabajadores.map((t) => (
+              <div className="fin-fila fin-fila-planilla" key={t.id}>
+                <input defaultValue={t.nombre} aria-label={`Nombre de ${t.nombre}`}
+                       onBlur={(e) => {
+                         const v = e.target.value.trim()
+                         if (v && v !== t.nombre) ejecutar(() => api.editarTrabajador(t.id, v, t.rol, t.sueldo_mensual))
+                       }} />
+                <input defaultValue={t.rol} placeholder="Rol" aria-label={`Rol de ${t.nombre}`}
+                       onBlur={(e) => {
+                         const v = e.target.value.trim()
+                         if (v !== t.rol) ejecutar(() => api.editarTrabajador(t.id, t.nombre, v, t.sueldo_mensual))
+                       }} />
+                <input type="number" step="50" min="0" className="fin-monto"
+                       defaultValue={t.sueldo_mensual.toFixed(2)} aria-label={`Sueldo de ${t.nombre}`}
+                       onBlur={(e) => {
+                         const v = parseFloat(e.target.value)
+                         if (v > 0 && v !== t.sueldo_mensual) ejecutar(() => api.editarTrabajador(t.id, t.nombre, t.rol, v))
+                       }} />
+                <button className="boton boton--sm boton--papel" aria-label={`Quitar a ${t.nombre}`}
+                        onClick={() => ejecutar(() => api.borrarTrabajador(t.id))}>🗑</button>
+              </div>
+            ))}
+            <div className="fin-fila fin-fila-planilla fin-fila-nueva">
+              <input placeholder="Nombre" value={nuevoTrabNombre}
+                     onChange={(e) => setNuevoTrabNombre(e.target.value)} />
+              <input placeholder="Rol (cocina, mozo…)" value={nuevoTrabRol}
+                     onChange={(e) => setNuevoTrabRol(e.target.value)} />
+              <input type="number" step="50" min="0" className="fin-monto" placeholder="S/ al mes"
+                     value={nuevoTrabSueldo} onChange={(e) => setNuevoTrabSueldo(e.target.value)} />
+              <button className="boton boton--sm boton--culantro" onClick={agregarTrabajador}>+ Agregar</button>
+            </div>
+            <p className="fin-total">Total: <strong>{soles(fijos.total_planilla_mes)}</strong> al mes</p>
+          </div>
+        </div>
+      )}
+    </section>
   )
 }

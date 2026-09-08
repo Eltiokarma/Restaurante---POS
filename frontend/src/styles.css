@@ -6883,3 +6883,200 @@ select:focus-visible {
 .combo-resumen-tiempos div + div {
   margin-top: 6px;
 }
+
+/* ============================================================
+   Finanzas (Admin): tarjetas del período, punto de equilibrio,
+   flujo de caja por día y editores de fijos + planilla
+   ============================================================ */
+.fin-tarjetas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 14px 0;
+}
+
+.fin-tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  background: var(--papel-alto);
+  border: 2px solid var(--linea);
+  border-radius: var(--r);
+  box-shadow: var(--sombra-papel);
+}
+
+.fin-rotulo {
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tinta-media);
+}
+
+.fin-cifra {
+  font-family: var(--fuente-ui);
+  font-size: 1.7rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-detalle {
+  font-size: 13px;
+  color: var(--tinta-suave);
+}
+
+.fin-utilidad.fin-gana {
+  border-color: var(--culantro);
+  background: var(--culantro-tenue);
+}
+
+.fin-utilidad.fin-gana .fin-cifra { color: var(--culantro-hondo); }
+
+.fin-utilidad.fin-pierde {
+  border-color: var(--achiote);
+  background: var(--achiote-tenue);
+}
+
+.fin-utilidad.fin-pierde .fin-cifra { color: var(--achiote-hondo); }
+
+/* "Vende S/ X al día para no perder": la frase que importa */
+.fin-equilibrio {
+  padding: 14px 18px;
+  border: 2px solid var(--aji);
+  border-left-width: 8px;
+  border-radius: var(--r);
+  background: var(--aji-tenue);
+  font-size: 15.5px;
+  line-height: 1.5;
+}
+
+.fin-equilibrio-ok {
+  border-color: var(--culantro);
+  background: var(--culantro-tenue);
+}
+
+.fin-subtitulo {
+  margin: 22px 0 2px;
+  font-family: var(--fuente-display);
+}
+
+/* Flujo diario: fecha, dos barras (entró/salió) y las cifras */
+.fin-flujo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: var(--papel-alto);
+  border: 2px solid var(--linea);
+  border-radius: var(--r);
+}
+
+.fin-dia {
+  display: grid;
+  grid-template-columns: 46px 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.fin-dia-fecha {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tinta-media);
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-dia-barras {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fin-dia-barras i {
+  display: block;
+  height: 9px;
+  border-radius: 999px;
+  min-width: 2px;
+}
+
+.fin-barra-entro { background: var(--culantro); }
+.fin-barra-salio { background: var(--achiote); }
+
+.fin-dia-cifras {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-dia-cifras em { font-style: normal; font-weight: 700; }
+.fin-entro { color: var(--culantro-hondo); }
+.fin-salio { color: var(--achiote-hondo); }
+
+/* Editores de costos fijos y planilla */
+.fin-editores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.fin-editor {
+  padding: 16px 18px;
+  background: var(--papel-alto);
+  border: 2px solid var(--linea);
+  border-radius: var(--r);
+}
+
+.fin-editor h3 {
+  margin: 0 0 2px;
+  font-family: var(--fuente-display);
+}
+
+.fin-fila {
+  display: grid;
+  grid-template-columns: 1fr 120px 48px;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.fin-fila-planilla {
+  grid-template-columns: 1fr 130px 110px 48px;
+}
+
+.fin-fila input {
+  min-height: var(--toque-min);
+  padding: 6px 10px;
+  border: 2px solid var(--linea-fuerte);
+  border-radius: var(--r-chico);
+  background: var(--papel-alto);
+  font: inherit;
+}
+
+/* La fila de alta lleva "+ Agregar" en vez del tachito: su columna crece */
+.fin-fila-nueva {
+  margin-top: 14px;
+  grid-template-columns: 1fr 110px auto;
+}
+
+.fin-fila-planilla.fin-fila-nueva {
+  grid-template-columns: 1fr 120px 100px auto;
+}
+
+.fin-fila-nueva button { white-space: nowrap; }
+
+.fin-monto { text-align: right; font-variant-numeric: tabular-nums; }
+
+.fin-total {
+  margin: 12px 0 0;
+  text-align: right;
+  color: var(--tinta-media);
+}
+
+@media (max-width: 640px) {
+  .fin-fila-planilla { grid-template-columns: 1fr 100px 48px; }
+  .fin-fila-planilla input[placeholder^="Rol"],
+  .fin-fila-planilla input[aria-label^="Rol"] { display: none; }
+}
