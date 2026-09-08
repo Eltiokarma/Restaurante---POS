@@ -138,3 +138,19 @@ def test_plato_sin_receta_no_genera_movimientos(client, admin_headers, menu_ejem
 def test_insumos_requieren_admin(client):
     assert client.get("/api/insumos").status_code == 401
     assert client.post("/api/insumos", json={"nombre": "X", "unidad": "kg"}).status_code == 401
+
+
+def test_corregir_costo_de_referencia(client, admin_headers):
+    """El dueño puede corregir el costo unitario a mano (valoriza recetas
+    y consumo); las compras lo siguen promediando después."""
+    r = client.post("/api/insumos", json={"nombre": "Palta", "unidad": "kg",
+                                          "costo_unitario": 0.0}, headers=admin_headers)
+    insumo = r.json()
+    r = client.put(f"/api/insumos/{insumo['id']}", json={"costo_unitario": 8.0},
+                   headers=admin_headers)
+    assert r.status_code == 200
+    assert r.json()["costo_unitario"] == 8.0
+
+    r = client.put(f"/api/insumos/{insumo['id']}", json={"costo_unitario": -1},
+                   headers=admin_headers)
+    assert r.status_code == 422

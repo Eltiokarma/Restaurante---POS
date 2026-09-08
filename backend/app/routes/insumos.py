@@ -34,6 +34,9 @@ class InsumoUpdate(BaseModel):
     unidad: str | None = None
     activo: bool | None = None
     stock_minimo: float | None = Field(default=None, ge=0)
+    # Costo de REFERENCIA corregible a mano (valoriza recetas y consumo);
+    # las compras lo siguen ajustando por promedio ponderado
+    costo_unitario: float | None = Field(default=None, ge=0)
 
 
 class MovimientoIn(BaseModel):
