@@ -348,6 +348,32 @@ class EgresoCaja(Base):
     monto: Mapped[float] = mapped_column(Float, nullable=False)
 
 
+class CostoFijo(Base):
+    """Gasto fijo del mes (alquiler, luz, agua, internet…): alimenta la
+    utilidad estimada y el punto de equilibrio de Finanzas. No mueve la
+    caja: la plata que sale del cajón se registra como egreso del turno."""
+
+    __tablename__ = "costos_fijos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(120), nullable=False)
+    monto_mensual: Mapped[float] = mapped_column(Float, nullable=False)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class Trabajador(Base):
+    """Planilla simple: quiénes trabajan y cuánto ganan al mes. Junto con
+    los costos fijos forma el "gasto de todos los meses" de Finanzas."""
+
+    __tablename__ = "trabajadores"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(120), nullable=False)
+    rol: Mapped[str] = mapped_column(String(60), default="", nullable=False)
+    sueldo_mensual: Mapped[float] = mapped_column(Float, nullable=False)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
 class Bebida(Base):
     """Bebida embotellada de la lista fija de caja (Inca Kola 500 ml…).
 

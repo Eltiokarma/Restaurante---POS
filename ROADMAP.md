@@ -439,6 +439,15 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       (`.github/workflows/app-impresora.yml`); guía de instalación en
       `docs/impresora-tablet.md`. De paso se corrigió el puente de PC: no conocía los
       tipos `bebida` y `cierre` (los habría reimpreso en bucle).
+- [x] **Finanzas** (pedido del dueño, 2º prototipo): pestaña nueva del Admin que junta lo
+      que el sistema ya sabe (ventas, egresos del cajón, compras y consumo del kardex) con
+      lo que solo el dueño sabe (`costos_fijos` y `trabajadores`, CRUD propio en
+      `/api/finanzas`). `GET /api/finanzas/resumen?dias=7|30` responde las tres preguntas:
+      flujo de caja diario (entró = ventas; salió = egresos + compras), utilidad estimada
+      (ventas − consumo teórico − mermas − fijos prorrateados a 30 días/mes) y **punto de
+      equilibrio** ("para no perder vende S/ X al día", comparado con el promedio real).
+      La cobertura de recetas avisa qué tan confiable es el costo de insumos. Borrar un
+      fijo o un trabajador solo lo desactiva (histórico simple).
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
       hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.

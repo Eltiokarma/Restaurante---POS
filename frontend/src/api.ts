@@ -309,6 +309,56 @@ export interface ConfigOut {
   cocina_tanda_max_tickets: number
 }
 
+// --- Finanzas: lo que solo el dueño sabe (fijos y planilla) más el
+// resumen que junta ventas, kardex y egresos ---
+export interface CostoFijo {
+  id: number
+  nombre: string
+  monto_mensual: number
+}
+
+export interface TrabajadorPlanilla {
+  id: number
+  nombre: string
+  rol: string
+  sueldo_mensual: number
+}
+
+export interface FinanzasFijos {
+  costos: CostoFijo[]
+  trabajadores: TrabajadorPlanilla[]
+  total_costos_mes: number
+  total_planilla_mes: number
+}
+
+export interface FinanzasDia {
+  fecha: string
+  entro: number
+  egresos: number
+  compras: number
+}
+
+export interface FinanzasResumen {
+  desde: string
+  hasta: string
+  dias: number
+  ventas: number
+  costo_insumos: number
+  mermas: number
+  compras_insumos: number
+  egresos_caja: number
+  costos_fijos_mes: number
+  planilla_mes: number
+  fijos_periodo: number
+  utilidad_estimada: number
+  margen_pct: number | null
+  venta_diaria_necesaria: number | null
+  promedio_venta_dia: number
+  dias_con_venta: number
+  cobertura_recetas: { activos: number; con_receta: number }
+  por_dia: FinanzasDia[]
+}
+
 // Bebida embotellada de la lista fija (Inca Kola 500 ml…): no es un
 // plato, se agrega desde caja a una orden ya creada
 export interface Bebida {
@@ -744,6 +794,42 @@ export const api = {
 
   confirmarBebidaImpresa: (ticketId: number) =>
     request<{ confirmada: boolean }>(`/api/print/bebida/${ticketId}/impresa`, { method: 'POST' }),
+
+  // --- Finanzas: costos fijos, planilla y resumen financiero ---
+  finanzasFijos: () => request<FinanzasFijos>('/api/finanzas/fijos', {}, true),
+
+  crearCostoFijo: (nombre: string, montoMensual: number) =>
+    request<FinanzasFijos>('/api/finanzas/costos-fijos', {
+      method: 'POST',
+      body: JSON.stringify({ nombre, monto_mensual: montoMensual }),
+    }, true),
+
+  editarCostoFijo: (id: number, nombre: string, montoMensual: number) =>
+    request<FinanzasFijos>(`/api/finanzas/costos-fijos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ nombre, monto_mensual: montoMensual }),
+    }, true),
+
+  borrarCostoFijo: (id: number) =>
+    request<FinanzasFijos>(`/api/finanzas/costos-fijos/${id}`, { method: 'DELETE' }, true),
+
+  crearTrabajador: (nombre: string, rol: string, sueldoMensual: number) =>
+    request<FinanzasFijos>('/api/finanzas/planilla', {
+      method: 'POST',
+      body: JSON.stringify({ nombre, rol, sueldo_mensual: sueldoMensual }),
+    }, true),
+
+  editarTrabajador: (id: number, nombre: string, rol: string, sueldoMensual: number) =>
+    request<FinanzasFijos>(`/api/finanzas/planilla/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ nombre, rol, sueldo_mensual: sueldoMensual }),
+    }, true),
+
+  borrarTrabajador: (id: number) =>
+    request<FinanzasFijos>(`/api/finanzas/planilla/${id}`, { method: 'DELETE' }, true),
+
+  finanzasResumen: (dias: number) =>
+    request<FinanzasResumen>(`/api/finanzas/resumen?dias=${dias}`, {}, true),
 
   // --- Estación de impresión (/ticketera) ---
   pendientesImpresion: () =>
