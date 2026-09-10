@@ -7080,3 +7080,72 @@ select:focus-visible {
   .fin-fila-planilla input[placeholder^="Rol"],
   .fin-fila-planilla input[aria-label^="Rol"] { display: none; }
 }
+
+/* ============================================================
+   Finanzas v2: desplegables con "Otro…", desgloses por categoría
+   y método, y el flujo agrupado por día/semana/mes/año
+   ============================================================ */
+.fin-fila select,
+.caja-cierre-form select {
+  min-height: var(--toque-min);
+  padding: 6px 10px;
+  border: 2px solid var(--linea-fuerte);
+  border-radius: var(--r-chico);
+  background: var(--papel-alto);
+  font: inherit;
+}
+
+/* El campo que aparece al elegir "Otro…" */
+.fin-otro {
+  width: 100%;
+  margin-top: 8px;
+  min-height: var(--toque-min);
+  padding: 6px 10px;
+  border: 2px dashed var(--linea-fuerte);
+  border-radius: var(--r-chico);
+  background: var(--papel-alto);
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.fin-desgloses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.fin-cat-fila {
+  display: grid;
+  grid-template-columns: minmax(150px, auto) 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--linea);
+  font-size: 14.5px;
+}
+
+.fin-cat-fila:last-of-type { border-bottom: none; }
+
+.fin-cat-barra {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--papel-hondo);
+  overflow: hidden;
+}
+
+.fin-cat-barra i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--achiote);
+  min-width: 2px;
+}
+
+.fin-cat-monto {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-cat-barra-entra i { background: var(--culantro); }

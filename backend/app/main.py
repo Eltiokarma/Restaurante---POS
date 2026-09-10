@@ -39,6 +39,12 @@ def _migrar(engine_) -> None:
                 "ALTER TABLE ordenes ADD COLUMN origen TEXT NOT NULL DEFAULT 'tactil'"
             ))
             conn.commit()
+        columnas_egresos = [fila[1] for fila in conn.execute(text("PRAGMA table_info(egresos_caja)"))]
+        if columnas_egresos and "categoria" not in columnas_egresos:
+            conn.execute(text(
+                "ALTER TABLE egresos_caja ADD COLUMN categoria TEXT NOT NULL DEFAULT 'otros'"
+            ))
+            conn.commit()
         columnas_platos = [fila[1] for fila in conn.execute(text("PRAGMA table_info(platos)"))]
         if columnas_platos and "sinonimos" not in columnas_platos:
             conn.execute(text("ALTER TABLE platos ADD COLUMN sinonimos TEXT NOT NULL DEFAULT '[]'"))

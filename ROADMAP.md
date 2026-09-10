@@ -448,6 +448,16 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       equilibrio** ("para no perder vende S/ X al día", comparado con el promedio real).
       La cobertura de recetas avisa qué tan confiable es el costo de insumos. Borrar un
       fijo o un trabajador solo lo desactiva (histórico simple).
+- [x] **Finanzas v2** (pedidos del dueño): los egresos del cajón llevan **tipo de gasto**
+      (15 categorías fijas: verduras, carnes, hierbas, abarrotes, lácteos, limpieza,
+      descartables, menaje, mantenimiento, gas, servicios, transporte, adelantos, trámites,
+      otros — desplegable en el formulario de caja, columna `egresos_caja.categoria` con
+      migración; lo viejo cae en "otros"). Finanzas muestra **salidas por tipo de gasto**
+      y **de dónde entró la plata** (por método de pago, con lo aún sin cobrar aparte), y
+      el **flujo de caja se agrupa por día / semana / mes / año**
+      (`GET /api/finanzas/flujo?agrupar=…`; semana empieza lunes, 26 semanas, 12 meses,
+      años desde el primer dato). Las altas de costos fijos y de rol en planilla son
+      **desplegables con "Otro…"** que abre un campo libre.
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
       hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.
