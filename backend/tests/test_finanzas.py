@@ -91,3 +91,57 @@ def test_resumen_financiero(client, admin_headers, menu_ejemplo):
     # La cobertura avisa qué tan confiable es el costo de insumos
     assert datos["cobertura_recetas"]["con_receta"] == 0
     assert datos["cobertura_recetas"]["activos"] > 0
+
+
+def test_egresos_con_categoria_y_desgloses(client, admin_headers, menu_ejemplo):
+    client.post("/api/caja/abrir", json={"monto_apertura": 100})
+    client.post("/api/caja/egresos",
+                json={"concepto": "Lejía y esponjas", "monto": 12.0, "categoria": "limpieza"})
+    client.post("/api/caja/egresos",
+                json={"concepto": "Perejil del mercado", "monto": 5.0, "categoria": "hierbas"})
+    # Sin categoría cae en "otros" (egresos viejos también, por la migración)
+    r = client.post("/api/caja/egresos", json={"concepto": "Taxi", "monto": 8.0})
+    assert r.status_code == 201
+    assert {e["categoria"] for e in r.json()["egresos"]} == {"limpieza", "hierbas", "otros"}
+
+    r = client.post("/api/orders", json={"items": [
+        {"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 1, "nota": ""},
+    ]})
+    orden = r.json()["orden"]
+    client.patch(f"/api/orders/{orden['id']}/pago", json={"metodo_pago": "yape"})
+
+    datos = client.get("/api/finanzas/resumen?dias=7", headers=admin_headers).json()
+    por_cat = {e["categoria"]: e["monto"] for e in datos["egresos_por_categoria"]}
+    assert por_cat == {"limpieza": 12.0, "hierbas": 5.0, "otros": 8.0}
+    assert datos["entradas_por_metodo"].get("yape") == orden["total"]
+
+
+def test_flujo_agrupado(client, admin_headers, menu_ejemplo, db):
+    from datetime import timedelta
+    from app.models import hoy_lima
+
+    r = client.post("/api/orders", json={"items": [
+        {"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 1, "nota": ""},
+    ]})
+    assert r.status_code == 201
+    hoy = hoy_lima()
+
+    r = client.get("/api/finanzas/flujo?agrupar=dia", headers=admin_headers).json()
+    assert r["agrupar"] == "dia" and len(r["filas"]) == 30
+    assert r["filas"][-1]["entro"] > 0  # la venta de hoy
+
+    r = client.get("/api/finanzas/flujo?agrupar=semana", headers=admin_headers).json()
+    assert len(r["filas"]) >= 26  # 26 semanas (27 si la ventana corta una)
+    lunes = hoy - timedelta(days=hoy.weekday())
+    assert r["filas"][-1]["etiqueta"] == f"Sem {lunes.day:02d}/{lunes.month:02d}"
+    assert r["filas"][-1]["entro"] > 0
+
+    r = client.get("/api/finanzas/flujo?agrupar=mes", headers=admin_headers).json()
+    assert r["filas"][-1]["entro"] > 0 and len(r["filas"]) in (12, 13)
+
+    r = client.get("/api/finanzas/flujo?agrupar=anio", headers=admin_headers).json()
+    assert r["filas"][-1]["etiqueta"] == str(hoy.year)
+    assert r["filas"][-1]["entro"] > 0
+
+    r = client.get("/api/finanzas/flujo?agrupar=rarisimo", headers=admin_headers)
+    assert r.status_code == 422

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, esperadoEnCaja, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, tiemposPendientes, unidadesEnTaper } from '../api'
+import { api, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, tiemposPendientes, unidadesEnTaper } from '../api'
 import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, TicketBebidaOut } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
@@ -54,6 +54,8 @@ export function Caja() {
   const [agregandoEgreso, setAgregandoEgreso] = useState(false)
   const [conceptoEgreso, setConceptoEgreso] = useState('')
   const [montoEgreso, setMontoEgreso] = useState('')
+  // Para agrupar los gastos en Finanzas (verduras, limpieza, adelantos…)
+  const [categoriaEgreso, setCategoriaEgreso] = useState('otros')
   // Resumen de cierre que se imprime desde esta pantalla (modo no-puente)
   const [ticketCierre, setTicketCierre] = useState<{
     estado: CajaEstado; egresos: EgresoOut[]; local: DatosLocal
@@ -302,10 +304,11 @@ export function Caja() {
       return
     }
     try {
-      const datos = await api.registrarEgreso(conceptoEgreso.trim(), monto)
+      const datos = await api.registrarEgreso(conceptoEgreso.trim(), monto, categoriaEgreso)
       setEgresos(datos.egresos)
       setConceptoEgreso('')
       setMontoEgreso('')
+      setCategoriaEgreso('otros')
       setAgregandoEgreso(false)
       setMensaje(`Egreso registrado: −${soles(monto)}`)
       setError('')
@@ -989,6 +992,14 @@ export function Caja() {
                   autoFocus placeholder="balón de gas" maxLength={120}
                   value={conceptoEgreso} onChange={(e) => setConceptoEgreso(e.target.value)}
                 />
+              </label>
+              <label>
+                Tipo de gasto
+                <select value={categoriaEgreso} onChange={(e) => setCategoriaEgreso(e.target.value)}>
+                  {CATEGORIAS_EGRESO.map((c) => (
+                    <option key={c.clave} value={c.clave}>{c.nombre}</option>
+                  ))}
+                </select>
               </label>
               <label>
                 S/

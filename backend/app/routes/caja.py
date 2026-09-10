@@ -291,12 +291,15 @@ def resumen_de_cierre(db: Session, registro: CierreCaja) -> dict:
 class EgresoIn(BaseModel):
     concepto: str = Field(min_length=1, max_length=120)
     monto: float = Field(gt=0, le=10_000)
+    # Clave de categoría para agrupar en Finanzas (la lista vive en el front)
+    categoria: str = Field(default="otros", min_length=1, max_length=40)
 
 
 def _egresos_a_dict(egresos: list[EgresoCaja]) -> dict:
     return {
         "egresos": [
-            {"id": e.id, "hora": e.hora, "concepto": e.concepto, "monto": e.monto}
+            {"id": e.id, "hora": e.hora, "concepto": e.concepto, "monto": e.monto,
+             "categoria": e.categoria}
             for e in egresos
         ],
         "total": _total_egresos(egresos),
@@ -323,6 +326,7 @@ def registrar_egreso(payload: EgresoIn, db: Session = Depends(get_db)):
         hora=ahora.strftime("%H:%M:%S"),
         concepto=payload.concepto.strip(),
         monto=round(payload.monto, 2),
+        categoria=payload.categoria.strip() or "otros",
     ))
     db.commit()
     return _egresos_a_dict(_egresos_de(db, registro))

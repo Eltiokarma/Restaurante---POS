@@ -260,7 +260,47 @@ export interface EgresoOut {
   hora: string
   concepto: string
   monto: number
+  categoria: string
 }
+
+// Categorías para agrupar los egresos del cajón (el análisis de Finanzas)
+export const CATEGORIAS_EGRESO: { clave: string; nombre: string }[] = [
+  { clave: 'verduras', nombre: '🥬 Verduras y frutas' },
+  { clave: 'carnes', nombre: '🥩 Carnes y pollo' },
+  { clave: 'hierbas', nombre: '🌿 Hierbas y especias' },
+  { clave: 'abarrotes', nombre: '🍚 Abarrotes (no perecibles)' },
+  { clave: 'lacteos', nombre: '🥚 Lácteos y huevos' },
+  { clave: 'limpieza', nombre: '🧴 Productos de limpieza' },
+  { clave: 'descartables', nombre: '🥡 Descartables y plásticos' },
+  { clave: 'menaje', nombre: '🍴 Menaje y utensilios' },
+  { clave: 'mantenimiento', nombre: '🔧 Mantenimiento y repuestos' },
+  { clave: 'gas', nombre: '🔥 Gas y combustible' },
+  { clave: 'servicios', nombre: '💡 Servicios (luz, agua, internet)' },
+  { clave: 'transporte', nombre: '🚚 Transporte y taxi' },
+  { clave: 'adelantos', nombre: '💵 Adelantos al personal' },
+  { clave: 'tramites', nombre: '📄 Trámites e impuestos' },
+  { clave: 'otros', nombre: '📦 Otros' },
+]
+
+export const NOMBRE_CATEGORIA_EGRESO: Record<string, string> =
+  Object.fromEntries(CATEGORIAS_EGRESO.map((c) => [c.clave, c.nombre]))
+
+export const NOMBRE_METODO_PAGO: Record<string, string> = {
+  efectivo: '💵 Efectivo',
+  tarjeta: '💳 Tarjeta',
+  yape: '📱 Yape',
+  sin_cobrar: '⏳ Aún sin cobrar',
+}
+
+// Sugerencias para los desplegables de Finanzas ("Otro…" permite escribir)
+export const COSTOS_FIJOS_SUGERIDOS = [
+  'Alquiler', 'Luz', 'Agua', 'Internet', 'Gas', 'Licencias y permisos',
+  'Contador', 'Seguridad', 'Arbitrios',
+]
+
+export const ROLES_SUGERIDOS = [
+  'Cocina', 'Ayudante de cocina', 'Mozo / Moza', 'Caja', 'Limpieza', 'Administración',
+]
 
 export interface EgresosOut {
   egresos: EgresoOut[]
@@ -356,7 +396,18 @@ export interface FinanzasResumen {
   promedio_venta_dia: number
   dias_con_venta: number
   cobertura_recetas: { activos: number; con_receta: number }
+  egresos_por_categoria: { categoria: string; monto: number }[]
+  entradas_por_metodo: Record<string, number>
   por_dia: FinanzasDia[]
+}
+
+export interface FlujoFila {
+  etiqueta: string
+  desde: string
+  hasta: string
+  entro: number
+  egresos: number
+  compras: number
 }
 
 // Bebida embotellada de la lista fija (Inca Kola 500 ml…): no es un
@@ -718,10 +769,10 @@ export const api = {
   // --- Egresos del turno ("salió plata del cajón") ---
   egresosTurno: () => request<EgresosOut>('/api/caja/egresos'),
 
-  registrarEgreso: (concepto: string, monto: number) =>
+  registrarEgreso: (concepto: string, monto: number, categoria = 'otros') =>
     request<EgresosOut>('/api/caja/egresos', {
       method: 'POST',
-      body: JSON.stringify({ concepto, monto }),
+      body: JSON.stringify({ concepto, monto, categoria }),
     }),
 
   borrarEgreso: (id: number) =>
@@ -830,6 +881,10 @@ export const api = {
 
   finanzasResumen: (dias: number) =>
     request<FinanzasResumen>(`/api/finanzas/resumen?dias=${dias}`, {}, true),
+
+  finanzasFlujo: (agrupar: 'dia' | 'semana' | 'mes' | 'anio') =>
+    request<{ agrupar: string; filas: FlujoFila[] }>(
+      `/api/finanzas/flujo?agrupar=${agrupar}`, {}, true),
 
   // --- Estación de impresión (/ticketera) ---
   pendientesImpresion: () =>

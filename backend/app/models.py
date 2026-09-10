@@ -346,6 +346,8 @@ class EgresoCaja(Base):
     hora: Mapped[str] = mapped_column(String(8), nullable=False)
     concepto: Mapped[str] = mapped_column(String(120), nullable=False)
     monto: Mapped[float] = mapped_column(Float, nullable=False)
+    # Para agrupar en Finanzas: verduras, limpieza, adelantos, mantenimiento…
+    categoria: Mapped[str] = mapped_column(String(40), default="otros", nullable=False)
 
 
 class CostoFijo(Base):

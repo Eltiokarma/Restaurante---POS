@@ -200,6 +200,29 @@ def resumen_financiero(
         venta_diaria_necesaria = round(fijos_dia / (margen_pct / 100), 2)
     promedio_venta_dia = round(ventas / dias_con_venta, 2) if dias_con_venta else 0.0
 
+    # Salidas del cajón agrupadas por categoría (para el análisis)
+    egresos_por_categoria = [
+        {"categoria": cat, "monto": round(float(monto or 0.0), 2)}
+        for cat, monto in db.execute(
+            select(EgresoCaja.categoria, func.sum(EgresoCaja.monto))
+            .where(EgresoCaja.fecha >= desde, EgresoCaja.fecha <= hasta)
+            .group_by(EgresoCaja.categoria)
+            .order_by(func.sum(EgresoCaja.monto).desc())
+        ).all()
+    ]
+
+    # De dónde entró la plata: por método de pago (lo aún no cobrado, aparte)
+    entradas_por_metodo: dict[str, float] = {}
+    for metodo, monto in db.execute(
+        select(Orden.metodo_pago, func.sum(Orden.total))
+        .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada")
+        .group_by(Orden.metodo_pago)
+    ).all():
+        clave = metodo or "sin_cobrar"
+        entradas_por_metodo[clave] = round(
+            entradas_por_metodo.get(clave, 0.0) + float(monto or 0.0), 2
+        )
+
     # Cobertura de recetas: qué tan confiable es el costo de insumos
     activos = db.scalars(
         select(Plato.id).where(Plato.activo_hoy == True, Plato.categoria != "bebida")  # noqa: E712
@@ -228,5 +251,81 @@ def resumen_financiero(
         "promedio_venta_dia": promedio_venta_dia,
         "dias_con_venta": dias_con_venta,
         "cobertura_recetas": cobertura,
+        "egresos_por_categoria": egresos_por_categoria,
+        "entradas_por_metodo": entradas_por_metodo,
         "por_dia": por_dia,
     }
+
+
+# ---------- Flujo de caja agrupado (día / semana / mes / año) ----------
+
+MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
+                "Jul", "Ago", "Set", "Oct", "Nov", "Dic"]
+
+
+@router.get("/flujo")
+def flujo_de_caja(
+    agrupar: str = Query(default="dia", pattern="^(dia|semana|mes|anio)$"),
+    db: Session = Depends(get_db),
+):
+    """Lo que entró (ventas) y salió (egresos + compras) agrupado como el
+    dueño quiera mirarlo: por día, semana, mes o año."""
+    hasta = hoy_lima()
+    if agrupar == "dia":
+        desde = hasta - timedelta(days=29)
+    elif agrupar == "semana":
+        desde = hasta - timedelta(days=7 * 26 - 1)
+    elif agrupar == "mes":
+        desde = hasta - timedelta(days=365)
+    else:  # anio: desde el primer dato que exista
+        primera = db.scalar(select(func.min(Orden.fecha)))
+        desde = primera or hasta
+
+    ventas = dict(db.execute(
+        select(Orden.fecha, func.sum(Orden.total))
+        .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada")
+        .group_by(Orden.fecha)
+    ).all())
+    egresos = dict(db.execute(
+        select(EgresoCaja.fecha, func.sum(EgresoCaja.monto))
+        .where(EgresoCaja.fecha >= desde, EgresoCaja.fecha <= hasta)
+        .group_by(EgresoCaja.fecha)
+    ).all())
+    compras = dict(db.execute(
+        select(MovimientoInsumo.fecha, func.sum(MovimientoInsumo.costo_total))
+        .where(MovimientoInsumo.fecha >= desde, MovimientoInsumo.fecha <= hasta,
+               MovimientoInsumo.tipo == "compra")
+        .group_by(MovimientoInsumo.fecha)
+    ).all())
+
+    def clave_y_etiqueta(fecha):
+        if agrupar == "dia":
+            return fecha.isoformat(), f"{fecha.day:02d}/{fecha.month:02d}"
+        if agrupar == "semana":
+            lunes = fecha - timedelta(days=fecha.weekday())
+            return lunes.isoformat(), f"Sem {lunes.day:02d}/{lunes.month:02d}"
+        if agrupar == "mes":
+            return f"{fecha.year}-{fecha.month:02d}", f"{MESES_CORTOS[fecha.month - 1]} {fecha.year}"
+        return str(fecha.year), str(fecha.year)
+
+    filas: dict[str, dict] = {}
+    dias_totales = (hasta - desde).days + 1
+    for n in range(dias_totales):
+        fecha = desde + timedelta(days=n)
+        clave, etiqueta = clave_y_etiqueta(fecha)
+        fila = filas.setdefault(clave, {
+            "etiqueta": etiqueta, "desde": fecha.isoformat(), "hasta": fecha.isoformat(),
+            "entro": 0.0, "egresos": 0.0, "compras": 0.0,
+        })
+        fila["hasta"] = fecha.isoformat()
+        fila["entro"] += float(ventas.get(fecha) or 0.0)
+        fila["egresos"] += float(egresos.get(fecha) or 0.0)
+        fila["compras"] += float(compras.get(fecha) or 0.0)
+
+    resultado = []
+    for clave in sorted(filas):
+        f = filas[clave]
+        resultado.append({**f, "entro": round(f["entro"], 2),
+                          "egresos": round(f["egresos"], 2),
+                          "compras": round(f["compras"], 2)})
+    return {"agrupar": agrupar, "filas": resultado}

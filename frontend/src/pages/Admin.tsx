@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE } from '../api'
+import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, COSTOS_FIJOS_SUGERIDOS, NOMBRE_CATEGORIA, NOMBRE_CATEGORIA_EGRESO, NOMBRE_EMPAQUE, NOMBRE_METODO_PAGO, ROLES_SUGERIDOS } from '../api'
 import { IconoBillete, IconoEgreso, IconoEngranaje, IconoMovil, IconoTarjeta } from '../components/Iconos'
-import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, FinanzasFijos, FinanzasResumen, Insumo, MenuGuardadoOut, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
+import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, FinanzasFijos, FinanzasResumen, FlujoFila, Insumo, MenuGuardadoOut, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { Ticket } from '../components/Ticket'
 
 type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'finanzas' | 'cancelaciones' | 'voz' | 'config'
@@ -3860,11 +3860,17 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [resumen, setResumen] = useState<FinanzasResumen | null>(null)
   const [fijos, setFijos] = useState<FinanzasFijos | null>(null)
   const [error, setError] = useState('')
+  // Alta de costo fijo: desplegable con sugerencias + "Otro…" que escribe
+  const [nuevoCostoSel, setNuevoCostoSel] = useState(COSTOS_FIJOS_SUGERIDOS[0])
   const [nuevoCostoNombre, setNuevoCostoNombre] = useState('')
   const [nuevoCostoMonto, setNuevoCostoMonto] = useState('')
   const [nuevoTrabNombre, setNuevoTrabNombre] = useState('')
+  const [nuevoTrabRolSel, setNuevoTrabRolSel] = useState(ROLES_SUGERIDOS[0])
   const [nuevoTrabRol, setNuevoTrabRol] = useState('')
   const [nuevoTrabSueldo, setNuevoTrabSueldo] = useState('')
+  // Flujo de caja agrupado como quiera mirarse: día, semana, mes o año
+  const [agrupar, setAgrupar] = useState<'dia' | 'semana' | 'mes' | 'anio'>('dia')
+  const [flujo, setFlujo] = useState<FlujoFila[]>([])
 
   const cargar = useCallback(async () => {
     try {
@@ -3879,6 +3885,12 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
 
   useEffect(() => { cargar() }, [cargar])
 
+  useEffect(() => {
+    api.finanzasFlujo(agrupar)
+      .then((r) => setFlujo(r.filas))
+      .catch((e) => setError(manejarError(e, onSesionVencida)))
+  }, [agrupar, onSesionVencida])
+
   const ejecutar = async (accion: () => Promise<FinanzasFijos>) => {
     try {
       setFijos(await accion())
@@ -3892,32 +3904,36 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
 
   const agregarCosto = () => {
     const monto = parseFloat(nuevoCostoMonto)
-    if (!nuevoCostoNombre.trim() || !(monto > 0)) {
-      setError('Pon el nombre del gasto y cuánto es al mes (ej. Alquiler, 1500)')
+    const nombre = nuevoCostoSel === 'otro' ? nuevoCostoNombre.trim() : nuevoCostoSel
+    if (!nombre || !(monto > 0)) {
+      setError('Elige el gasto (o escribe otro) y pon cuánto es al mes')
       return
     }
-    ejecutar(() => api.crearCostoFijo(nuevoCostoNombre.trim(), monto))
+    ejecutar(() => api.crearCostoFijo(nombre, monto))
+    setNuevoCostoSel(COSTOS_FIJOS_SUGERIDOS[0])
     setNuevoCostoNombre('')
     setNuevoCostoMonto('')
   }
 
   const agregarTrabajador = () => {
     const sueldo = parseFloat(nuevoTrabSueldo)
+    const rol = nuevoTrabRolSel === 'otro' ? nuevoTrabRol.trim() : nuevoTrabRolSel
     if (!nuevoTrabNombre.trim() || !(sueldo > 0)) {
       setError('Pon el nombre de la persona y su sueldo al mes')
       return
     }
-    ejecutar(() => api.crearTrabajador(nuevoTrabNombre.trim(), nuevoTrabRol.trim(), sueldo))
+    ejecutar(() => api.crearTrabajador(nuevoTrabNombre.trim(), rol, sueldo))
     setNuevoTrabNombre('')
+    setNuevoTrabRolSel(ROLES_SUGERIDOS[0])
     setNuevoTrabRol('')
     setNuevoTrabSueldo('')
   }
 
   const fijosMes = (fijos?.total_costos_mes ?? 0) + (fijos?.total_planilla_mes ?? 0)
-  const maxDia = Math.max(1, ...(resumen?.por_dia ?? []).map((d) => Math.max(d.entro, d.egresos + d.compras)))
-  const diasConMovimiento = (resumen?.por_dia ?? []).filter((d) => d.entro > 0 || d.egresos > 0 || d.compras > 0)
+  const maxFila = Math.max(1, ...flujo.map((f) => Math.max(f.entro, f.egresos + f.compras)))
+  const filasConMovimiento = flujo.filter((f) => f.entro > 0 || f.egresos > 0 || f.compras > 0)
+  const totalCategorias = (resumen?.egresos_por_categoria ?? []).reduce((s, e) => s + e.monto, 0)
   const cobertura = resumen?.cobertura_recetas
-  const ddmm = (fecha: string) => `${fecha.slice(8, 10)}/${fecha.slice(5, 7)}`
   const gana = (resumen?.utilidad_estimada ?? 0) >= 0
   const alcanza = resumen?.venta_diaria_necesaria != null &&
     resumen.promedio_venta_dia >= resumen.venta_diaria_necesaria
@@ -3985,24 +4001,69 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
             </p>
           )}
 
-          <h3 className="fin-subtitulo">Flujo de caja: lo que entró y salió cada día</h3>
+          {(resumen.egresos_por_categoria.length > 0 ||
+            Object.keys(resumen.entradas_por_metodo).length > 0) && (
+            <div className="fin-desgloses">
+              {Object.keys(resumen.entradas_por_metodo).length > 0 && (
+                <div className="fin-editor">
+                  <h3>De dónde entró la plata</h3>
+                  {Object.entries(resumen.entradas_por_metodo)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([metodo, monto]) => (
+                      <div className="fin-cat-fila" key={metodo}>
+                        <span>{NOMBRE_METODO_PAGO[metodo] ?? metodo}</span>
+                        <span className="fin-cat-barra fin-cat-barra-entra" aria-hidden="true">
+                          <i style={{ width: `${resumen.ventas > 0 ? (monto / resumen.ventas) * 100 : 0}%` }} />
+                        </span>
+                        <span className="fin-cat-monto">{soles(monto)}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+              {resumen.egresos_por_categoria.length > 0 && (
+                <div className="fin-editor">
+                  <h3>Salidas del cajón por tipo de gasto</h3>
+                  {resumen.egresos_por_categoria.map((e) => (
+                    <div className="fin-cat-fila" key={e.categoria}>
+                      <span>{NOMBRE_CATEGORIA_EGRESO[e.categoria] ?? e.categoria}</span>
+                      <span className="fin-cat-barra" aria-hidden="true">
+                        <i style={{ width: `${totalCategorias > 0 ? (e.monto / totalCategorias) * 100 : 0}%` }} />
+                      </span>
+                      <span className="fin-cat-monto">{soles(e.monto)}</span>
+                    </div>
+                  ))}
+                  <p className="nota-admin">El tipo se elige al registrar cada egreso en la caja.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <h3 className="fin-subtitulo">Flujo de caja: lo que entró y salió</h3>
           <p className="nota-admin">
             Entró = ventas. Salió = egresos del cajón + compras de insumos (plata real, no recetas).
           </p>
-          {diasConMovimiento.length === 0 ? (
+          <div className="admin-acciones">
+            {([['dia', 'Por día'], ['semana', 'Por semana'], ['mes', 'Por mes'], ['anio', 'Por año']] as const).map(([valor, texto]) => (
+              <button key={valor} className={agrupar === valor ? 'boton-primario' : ''}
+                      onClick={() => setAgrupar(valor)}>
+                {texto}
+              </button>
+            ))}
+          </div>
+          {filasConMovimiento.length === 0 ? (
             <p className="nota-admin">Sin movimientos en el período.</p>
           ) : (
             <div className="fin-flujo">
-              {diasConMovimiento.map((d) => (
-                <div className="fin-dia" key={d.fecha}>
-                  <span className="fin-dia-fecha">{ddmm(d.fecha)}</span>
+              {filasConMovimiento.map((f) => (
+                <div className="fin-dia" key={f.desde}>
+                  <span className="fin-dia-fecha">{f.etiqueta}</span>
                   <span className="fin-dia-barras" aria-hidden="true">
-                    <i className="fin-barra-entro" style={{ width: `${(d.entro / maxDia) * 100}%` }} />
-                    <i className="fin-barra-salio" style={{ width: `${((d.egresos + d.compras) / maxDia) * 100}%` }} />
+                    <i className="fin-barra-entro" style={{ width: `${(f.entro / maxFila) * 100}%` }} />
+                    <i className="fin-barra-salio" style={{ width: `${((f.egresos + f.compras) / maxFila) * 100}%` }} />
                   </span>
                   <span className="fin-dia-cifras">
-                    <em className="fin-entro">+{soles(d.entro)}</em>
-                    <em className="fin-salio">−{soles(d.egresos + d.compras)}</em>
+                    <em className="fin-entro">+{soles(f.entro)}</em>
+                    <em className="fin-salio">−{soles(f.egresos + f.compras)}</em>
                   </span>
                 </div>
               ))}
@@ -4034,12 +4095,20 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
               </div>
             ))}
             <div className="fin-fila fin-fila-nueva">
-              <input placeholder="Ej. Alquiler" value={nuevoCostoNombre}
-                     onChange={(e) => setNuevoCostoNombre(e.target.value)} />
+              <select value={nuevoCostoSel} onChange={(e) => setNuevoCostoSel(e.target.value)}
+                      aria-label="Tipo de costo fijo">
+                {COSTOS_FIJOS_SUGERIDOS.map((n) => <option key={n} value={n}>{n}</option>)}
+                <option value="otro">Otro…</option>
+              </select>
               <input type="number" step="10" min="0" className="fin-monto" placeholder="S/ al mes"
                      value={nuevoCostoMonto} onChange={(e) => setNuevoCostoMonto(e.target.value)} />
               <button className="boton boton--sm boton--culantro" onClick={agregarCosto}>+ Agregar</button>
             </div>
+            {nuevoCostoSel === 'otro' && (
+              <input className="fin-otro" placeholder="Escribe el gasto (ej. Fumigación)"
+                     value={nuevoCostoNombre} autoFocus
+                     onChange={(e) => setNuevoCostoNombre(e.target.value)} />
+            )}
             <p className="fin-total">Total: <strong>{soles(fijos.total_costos_mes)}</strong> al mes</p>
           </div>
 
@@ -4071,12 +4140,20 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
             <div className="fin-fila fin-fila-planilla fin-fila-nueva">
               <input placeholder="Nombre" value={nuevoTrabNombre}
                      onChange={(e) => setNuevoTrabNombre(e.target.value)} />
-              <input placeholder="Rol (cocina, mozo…)" value={nuevoTrabRol}
-                     onChange={(e) => setNuevoTrabRol(e.target.value)} />
+              <select value={nuevoTrabRolSel} onChange={(e) => setNuevoTrabRolSel(e.target.value)}
+                      aria-label="Rol del trabajador">
+                {ROLES_SUGERIDOS.map((n) => <option key={n} value={n}>{n}</option>)}
+                <option value="otro">Otro…</option>
+              </select>
               <input type="number" step="50" min="0" className="fin-monto" placeholder="S/ al mes"
                      value={nuevoTrabSueldo} onChange={(e) => setNuevoTrabSueldo(e.target.value)} />
               <button className="boton boton--sm boton--culantro" onClick={agregarTrabajador}>+ Agregar</button>
             </div>
+            {nuevoTrabRolSel === 'otro' && (
+              <input className="fin-otro" placeholder="Escribe el rol (ej. Repartidor)"
+                     value={nuevoTrabRol} autoFocus
+                     onChange={(e) => setNuevoTrabRol(e.target.value)} />
+            )}
             <p className="fin-total">Total: <strong>{soles(fijos.total_planilla_mes)}</strong> al mes</p>
           </div>
         </div>
