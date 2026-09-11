@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, COSTOS_FIJOS_SUGERIDOS, NOMBRE_CATEGORIA, NOMBRE_CATEGORIA_EGRESO, NOMBRE_EMPAQUE, NOMBRE_METODO_PAGO, ROLES_SUGERIDOS } from '../api'
+import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, CATEGORIAS_MOVIMIENTO, COSTOS_FIJOS_SUGERIDOS, NOMBRE_CATEGORIA, NOMBRE_CATEGORIA_EGRESO, NOMBRE_CATEGORIA_MOVIMIENTO, NOMBRE_EMPAQUE, NOMBRE_METODO_PAGO, ROLES_SUGERIDOS } from '../api'
 import { IconoBillete, IconoEgreso, IconoEngranaje, IconoMovil, IconoTarjeta } from '../components/Iconos'
-import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, FinanzasFijos, FinanzasResumen, FlujoFila, Insumo, MenuGuardadoOut, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
+import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, FinanzasFijos, FinanzasResumen, FlujoFila, Insumo, MenuGuardadoOut, MesaEstado, MovimientoCaja, MovimientoKardex, MovimientosOut, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { TabTablero } from '../components/TabTablero'
+import { PorCobrar } from '../components/PorCobrar'
 import { Ticket } from '../components/Ticket'
 
 type Tab = 'tablero' | 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'finanzas' | 'cancelaciones' | 'voz' | 'config'
@@ -3915,6 +3916,161 @@ function GestorMesas({ onSesionVencida }: { onSesionVencida: () => void }) {
  * ¿entró más de lo que salió?, ¿estoy ganando?, ¿cuánto debo vender al
  * día para no perder?
  */
+/** La fecha de hoy tal como la ve el local (no en UTC). */
+function hoyISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * Plata que entró o salió sin ser una venta: el sobrante del cierre, una
+ * propina, una mesa que se fue sin pagar. El descuadre de cada cierre se
+ * anota solo; acá se agregan los de días pasados que estaban en el
+ * cuaderno y se corrige lo que haga falta.
+ */
+function PanelMovimientos({ onSesionVencida, alCambiar }: {
+  onSesionVencida: () => void
+  alCambiar: () => void
+}) {
+  const [datos, setDatos] = useState<MovimientosOut | null>(null)
+  const [error, setError] = useState('')
+  const [anotando, setAnotando] = useState(false)
+  const [fecha, setFecha] = useState(hoyISO)
+  const [tipo, setTipo] = useState<'entra' | 'sale'>('entra')
+  const [categoria, setCategoria] = useState('descuadre')
+  const [concepto, setConcepto] = useState('')
+  const [monto, setMonto] = useState('')
+
+  const cargar = useCallback(async () => {
+    try {
+      setDatos(await api.movimientos(90))
+      setError('')
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }, [onSesionVencida])
+
+  useEffect(() => { cargar() }, [cargar])
+
+  const guardar = async () => {
+    const valor = parseFloat(monto)
+    if (!concepto.trim() || !(valor > 0)) {
+      setError('Escribe de qué se trata y cuánto fue')
+      return
+    }
+    try {
+      setDatos(await api.anotarMovimiento({
+        fecha, tipo, concepto: concepto.trim(), monto: valor, categoria,
+      }))
+      setConcepto('')
+      setMonto('')
+      setAnotando(false)
+      setError('')
+      alCambiar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const borrar = async (m: MovimientoCaja) => {
+    if (!confirm(`¿Borrar "${m.concepto}" de ${soles(m.monto)}?`)) return
+    try {
+      setDatos(await api.borrarMovimiento(m.id))
+      setError('')
+      alCambiar()
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  const opciones = CATEGORIAS_MOVIMIENTO.filter((c) => c.tipo === 'ambos' || c.tipo === tipo)
+
+  return (
+    <div className="fin-editor fin-movimientos">
+      <h3>Otros movimientos de plata</h3>
+      <p className="nota-admin">
+        Lo que entra o sale sin ser una venta: el sobrante o faltante de un cierre (se anota
+        solo al cerrar la caja), una propina, una mesa que se fue sin pagar. Cuentan en el
+        flujo y en el análisis, pero no tocan el cajón de hoy.
+      </p>
+      {error && <p className="error-admin">{error}</p>}
+
+      {!anotando ? (
+        <button className="boton boton--md boton--papel" onClick={() => setAnotando(true)}>
+          + Anotar un movimiento
+        </button>
+      ) : (
+        <div className="fin-form">
+          <label>Fecha
+            <input type="date" value={fecha} max={hoyISO()}
+                   onChange={(e) => setFecha(e.target.value)} />
+          </label>
+          <label>¿Entró o salió?
+            <select value={tipo} onChange={(e) => {
+              const t = e.target.value as 'entra' | 'sale'
+              setTipo(t)
+              const sirve = CATEGORIAS_MOVIMIENTO.find(
+                (c) => c.clave === categoria && (c.tipo === 'ambos' || c.tipo === t))
+              if (!sirve) setCategoria('otros')
+            }}>
+              <option value="entra">Entró plata</option>
+              <option value="sale">Salió plata</option>
+            </select>
+          </label>
+          <label>Tipo
+            <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+              {opciones.map((c) => (
+                <option key={c.clave} value={c.clave}>{c.nombre}</option>
+              ))}
+            </select>
+          </label>
+          <label>¿De qué se trata?
+            <input placeholder="Exceso en el cajón" maxLength={160}
+                   value={concepto} onChange={(e) => setConcepto(e.target.value)} />
+          </label>
+          <label>S/
+            <input type="number" step="0.10" min="0" placeholder="98.00"
+                   value={monto} onChange={(e) => setMonto(e.target.value)} />
+          </label>
+          <button className="boton-primario" onClick={guardar}>Guardar</button>
+          <button className="boton boton--md boton--papel" onClick={() => setAnotando(false)}>
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      {datos && datos.movimientos.length > 0 && (
+        <>
+          <div className="fin-mov-totales">
+            <span className="fin-entro">+{soles(datos.total_entra)}</span>
+            <span className="fin-salio">−{soles(datos.total_sale)}</span>
+            {datos.total_cobranzas > 0 && (
+              <span className="nota-admin">
+                {soles(datos.total_cobranzas)} cobrados de días anteriores (no suman de nuevo:
+                esas ventas ya se contaron en su día)
+              </span>
+            )}
+          </div>
+          {datos.movimientos.map((m) => (
+            <div className="fin-mov-fila" key={m.id}>
+              <span className="fin-mov-fecha">{m.fecha.slice(8, 10)}/{m.fecha.slice(5, 7)}</span>
+              <span className="fin-mov-concepto">
+                {m.concepto}
+                <small>{NOMBRE_CATEGORIA_MOVIMIENTO[m.categoria] ?? m.categoria}</small>
+              </span>
+              <span className={m.tipo === 'entra' ? 'fin-entro' : 'fin-salio'}>
+                {m.tipo === 'entra' ? '+' : '−'}{soles(m.monto)}
+              </span>
+              <button className="boton boton--sm boton--papel" onClick={() => borrar(m)}
+                      aria-label={`Borrar ${m.concepto}`}>✕</button>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  )
+}
+
 function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [dias, setDias] = useState(30)
   const [resumen, setResumen] = useState<FinanzasResumen | null>(null)
@@ -3932,24 +4088,23 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [agrupar, setAgrupar] = useState<'dia' | 'semana' | 'mes' | 'anio'>('dia')
   const [flujo, setFlujo] = useState<FlujoFila[]>([])
 
+  // El flujo se recarga junto con lo demás: cobrar una deuda o anotar un
+  // descuadre cambia el día, y la gráfica tiene que verlo al toque.
   const cargar = useCallback(async () => {
     try {
-      const [r, f] = await Promise.all([api.finanzasResumen(dias), api.finanzasFijos()])
+      const [r, f, fl] = await Promise.all([
+        api.finanzasResumen(dias), api.finanzasFijos(), api.finanzasFlujo(agrupar),
+      ])
       setResumen(r)
       setFijos(f)
+      setFlujo(fl.filas)
       setError('')
     } catch (e) {
       setError(manejarError(e, onSesionVencida))
     }
-  }, [dias, onSesionVencida])
+  }, [dias, agrupar, onSesionVencida])
 
   useEffect(() => { cargar() }, [cargar])
-
-  useEffect(() => {
-    api.finanzasFlujo(agrupar)
-      .then((r) => setFlujo(r.filas))
-      .catch((e) => setError(manejarError(e, onSesionVencida)))
-  }, [agrupar, onSesionVencida])
 
   const ejecutar = async (accion: () => Promise<FinanzasFijos>) => {
     try {
@@ -4078,6 +4233,21 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
                         <span className="fin-cat-monto">{soles(monto)}</span>
                       </div>
                     ))}
+                  {resumen.ingresos_por_categoria.map((e) => (
+                    <div className="fin-cat-fila" key={e.categoria}>
+                      <span>{NOMBRE_CATEGORIA_MOVIMIENTO[e.categoria] ?? e.categoria}</span>
+                      <span className="fin-cat-barra fin-cat-barra-entra" aria-hidden="true">
+                        <i style={{ width: `${resumen.ventas > 0 ? (e.monto / resumen.ventas) * 100 : 0}%` }} />
+                      </span>
+                      <span className="fin-cat-monto">{soles(e.monto)}</span>
+                    </div>
+                  ))}
+                  {resumen.cobranzas > 0 && (
+                    <p className="nota-admin">
+                      Además se cobraron {soles(resumen.cobranzas)} de ventas de días anteriores;
+                      no suman de nuevo porque ya se contaron el día que se vendieron.
+                    </p>
+                  )}
                 </div>
               )}
               {resumen.egresos_por_categoria.length > 0 && (
@@ -4097,6 +4267,9 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
               )}
             </div>
           )}
+
+          <PorCobrar alCambiar={cargar} />
+          <PanelMovimientos onSesionVencida={onSesionVencida} alCambiar={cargar} />
 
           <h3 className="fin-subtitulo">Flujo de caja: lo que entró y salió</h3>
           <p className="nota-admin">

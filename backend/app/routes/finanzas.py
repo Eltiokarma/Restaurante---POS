@@ -22,8 +22,8 @@ from sqlalchemy.orm import Session
 from ..auth import requiere_admin
 from ..db import get_db
 from ..models import (
-    CostoFijo, EgresoCaja, MovimientoInsumo, Orden, OrdenItem, Plato,
-    RecetaItem, Trabajador, hoy_lima,
+    CostoFijo, EgresoCaja, MovimientoCaja, MovimientoInsumo, Orden, OrdenItem,
+    Plato, RecetaItem, Trabajador, ahora_lima, hoy_lima,
 )
 from ..services import consumo as servicio_consumo
 from ..services import inventario as servicio_inventario
@@ -34,6 +34,31 @@ router = APIRouter(
 )
 
 DIAS_DEL_MES = 30  # prorrateo simple: un mes de fonda son ~30 días
+
+# La cobranza es plata que entra hoy por una venta de OTRO día: esa venta
+# ya se contó el día que salió el plato, así que sumarla otra vez sería
+# contar dos veces lo mismo. Se muestra aparte, nunca dentro de "entró".
+CATEGORIA_YA_CONTADA = "cobranza"
+
+
+def _movimientos_por_dia(db: Session, desde: date, hasta: date, tipo: str) -> dict:
+    """Plata que entró o salió sin ser una venta ni una compra: el
+    descuadre de un cierre, una propina, lo que se fue sin pagar."""
+    return dict(db.execute(
+        select(MovimientoCaja.fecha, func.sum(MovimientoCaja.monto))
+        .where(MovimientoCaja.fecha >= desde, MovimientoCaja.fecha <= hasta,
+               MovimientoCaja.tipo == tipo,
+               MovimientoCaja.categoria != CATEGORIA_YA_CONTADA)
+        .group_by(MovimientoCaja.fecha)
+    ).all())
+
+
+def _total_cobranzas(db: Session, desde: date, hasta: date) -> float:
+    return round(float(db.scalar(
+        select(func.sum(MovimientoCaja.monto)).where(
+            MovimientoCaja.fecha >= desde, MovimientoCaja.fecha <= hasta,
+            MovimientoCaja.categoria == CATEGORIA_YA_CONTADA)
+    ) or 0.0), 2)
 
 
 class CostoFijoIn(BaseModel):
@@ -168,17 +193,25 @@ def resumen_financiero(
         .group_by(MovimientoInsumo.fecha)
     ).all())
 
+    # Y lo que entra o sale sin ser venta ni compra (descuadres, propinas,
+    # lo que se fue sin pagar)
+    otros_entra = _movimientos_por_dia(db, desde, hasta, "entra")
+    otros_sale = _movimientos_por_dia(db, desde, hasta, "sale")
+
     por_dia = []
     for n in range(dias):
         fecha = desde + timedelta(days=n)
         por_dia.append({
             "fecha": fecha.isoformat(),
-            "entro": round(float(ventas_por_dia.get(fecha) or 0.0), 2),
-            "egresos": round(float(egresos_por_dia.get(fecha) or 0.0), 2),
+            "entro": round(float(ventas_por_dia.get(fecha) or 0.0)
+                           + float(otros_entra.get(fecha) or 0.0), 2),
+            "egresos": round(float(egresos_por_dia.get(fecha) or 0.0)
+                             + float(otros_sale.get(fecha) or 0.0), 2),
             "compras": round(float(compras_por_dia.get(fecha) or 0.0), 2),
         })
 
-    ventas = round(sum(d["entro"] for d in por_dia), 2)
+    otros_ingresos = round(sum(float(v or 0.0) for v in otros_entra.values()), 2)
+    ventas = round(sum(d["entro"] for d in por_dia) - otros_ingresos, 2)
     egresos = round(sum(d["egresos"] for d in por_dia), 2)
     compras = round(sum(d["compras"] for d in por_dia), 2)
     dias_con_venta = sum(1 for d in por_dia if d["entro"] > 0)
@@ -203,14 +236,37 @@ def resumen_financiero(
         venta_diaria_necesaria = round(fijos_dia / (margen_pct / 100), 2)
     promedio_venta_dia = round(ventas / dias_con_venta, 2) if dias_con_venta else 0.0
 
-    # Salidas del cajón agrupadas por categoría (para el análisis)
+    # Salidas agrupadas por categoría (para el análisis): las del cajón y
+    # las que no pasan por él (un descuadre en contra, un incobrable)
+    por_categoria: dict[str, float] = {}
+    for cat, monto in db.execute(
+        select(EgresoCaja.categoria, func.sum(EgresoCaja.monto))
+        .where(EgresoCaja.fecha >= desde, EgresoCaja.fecha <= hasta)
+        .group_by(EgresoCaja.categoria)
+    ).all():
+        por_categoria[cat] = por_categoria.get(cat, 0.0) + float(monto or 0.0)
+    for cat, monto in db.execute(
+        select(MovimientoCaja.categoria, func.sum(MovimientoCaja.monto))
+        .where(MovimientoCaja.fecha >= desde, MovimientoCaja.fecha <= hasta,
+               MovimientoCaja.tipo == "sale")
+        .group_by(MovimientoCaja.categoria)
+    ).all():
+        por_categoria[cat] = por_categoria.get(cat, 0.0) + float(monto or 0.0)
     egresos_por_categoria = [
+        {"categoria": cat, "monto": round(monto, 2)}
+        for cat, monto in sorted(por_categoria.items(), key=lambda kv: -kv[1])
+    ]
+
+    # De dónde salió lo que NO es venta, para mostrarlo aparte
+    ingresos_por_categoria = [
         {"categoria": cat, "monto": round(float(monto or 0.0), 2)}
         for cat, monto in db.execute(
-            select(EgresoCaja.categoria, func.sum(EgresoCaja.monto))
-            .where(EgresoCaja.fecha >= desde, EgresoCaja.fecha <= hasta)
-            .group_by(EgresoCaja.categoria)
-            .order_by(func.sum(EgresoCaja.monto).desc())
+            select(MovimientoCaja.categoria, func.sum(MovimientoCaja.monto))
+            .where(MovimientoCaja.fecha >= desde, MovimientoCaja.fecha <= hasta,
+                   MovimientoCaja.tipo == "entra",
+                   MovimientoCaja.categoria != CATEGORIA_YA_CONTADA)
+            .group_by(MovimientoCaja.categoria)
+            .order_by(func.sum(MovimientoCaja.monto).desc())
         ).all()
     ]
 
@@ -255,6 +311,9 @@ def resumen_financiero(
         "dias_con_venta": dias_con_venta,
         "cobertura_recetas": cobertura,
         "egresos_por_categoria": egresos_por_categoria,
+        "ingresos_por_categoria": ingresos_por_categoria,
+        "otros_ingresos": otros_ingresos,
+        "cobranzas": _total_cobranzas(db, desde, hasta),
         "entradas_por_metodo": entradas_por_metodo,
         "por_dia": por_dia,
     }
@@ -293,11 +352,17 @@ def tablero(
         .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada")
         .group_by(Orden.fecha)
     ).all())
-    egresos_dia = dict(db.execute(
+    egresos_caja_dia = dict(db.execute(
         select(EgresoCaja.fecha, func.sum(EgresoCaja.monto))
         .where(EgresoCaja.fecha >= desde, EgresoCaja.fecha <= hasta)
         .group_by(EgresoCaja.fecha)
     ).all())
+    otros_sale_dia = _movimientos_por_dia(db, desde, hasta, "sale")
+    otros_entra_dia = _movimientos_por_dia(db, desde, hasta, "entra")
+    egresos_dia = {
+        f: float(egresos_caja_dia.get(f) or 0.0) + float(otros_sale_dia.get(f) or 0.0)
+        for f in set(egresos_caja_dia) | set(otros_sale_dia)
+    }
     compras_dia = dict(db.execute(
         select(MovimientoInsumo.fecha, func.sum(MovimientoInsumo.costo_total))
         .where(MovimientoInsumo.fecha >= desde, MovimientoInsumo.fecha <= hasta,
@@ -365,6 +430,8 @@ def tablero(
             "mermas": kardex["valor_mermas"],
             "compras": compras,
             "egresos": egresos,
+            "otros_ingresos": round(sum(float(v or 0.0) for v in otros_entra_dia.values()), 2),
+            "cobranzas": _total_cobranzas(db, desde, hasta),
             "margen_pct": round((ventas - costo) / ventas * 100, 1) if ventas > 0 else None,
             "dias_con_venta": dias_con_venta,
             "promedio_dia": round(ventas / dias_con_venta, 2) if dias_con_venta else 0.0,
@@ -375,6 +442,90 @@ def tablero(
         "top_platos": top_platos,
         "insumos": kardex["insumos"],
     }
+
+
+# ---------- Movimientos de caja: plata que entra o sale sin ser venta ----------
+#
+# El dueño: "el exceso de 98 se considera un ingreso extra con la categoría
+# de descuadre, hay negativo y positivo". Acá se anotan a mano los de
+# cualquier fecha (el descuadre del cierre se anota solo).
+
+
+class MovimientoIn(BaseModel):
+    fecha: date
+    tipo: str = Field(pattern="^(entra|sale)$")
+    concepto: str = Field(min_length=1, max_length=160)
+    monto: float = Field(gt=0, le=100_000)
+    categoria: str = Field(default="otros", min_length=1, max_length=40)
+
+
+def _movimiento_a_dict(m: MovimientoCaja) -> dict:
+    return {
+        "id": m.id,
+        "fecha": m.fecha.isoformat(),
+        "hora": m.hora,
+        "tipo": m.tipo,
+        "concepto": m.concepto,
+        "monto": round(m.monto, 2),
+        "categoria": m.categoria,
+        "automatico": m.cierre_id is not None or m.orden_id is not None,
+    }
+
+
+@router.get("/movimientos")
+def listar_movimientos(
+    dias: int = Query(default=60, ge=1, le=366),
+    db: Session = Depends(get_db),
+):
+    """Lo anotado en los últimos N días, lo más reciente primero."""
+    hasta = hoy_lima()
+    desde = hasta - timedelta(days=dias - 1)
+    movimientos = db.scalars(
+        select(MovimientoCaja)
+        .where(MovimientoCaja.fecha >= desde, MovimientoCaja.fecha <= hasta)
+        .order_by(MovimientoCaja.fecha.desc(), MovimientoCaja.id.desc())
+    ).all()
+    entra = round(sum(m.monto for m in movimientos if m.tipo == "entra"
+                      and m.categoria != CATEGORIA_YA_CONTADA), 2)
+    sale = round(sum(m.monto for m in movimientos if m.tipo == "sale"), 2)
+    return {
+        "desde": desde.isoformat(),
+        "hasta": hasta.isoformat(),
+        "movimientos": [_movimiento_a_dict(m) for m in movimientos],
+        "total_entra": entra,
+        "total_sale": sale,
+        "total_cobranzas": round(sum(m.monto for m in movimientos
+                                     if m.categoria == CATEGORIA_YA_CONTADA), 2),
+    }
+
+
+@router.post("/movimientos", status_code=201)
+def anotar_movimiento(payload: MovimientoIn, db: Session = Depends(get_db)):
+    """Anota a mano un movimiento de cualquier fecha. No toca ningún
+    cierre: es plata que ya se movió y solo faltaba registrarla."""
+    if payload.fecha > hoy_lima():
+        raise HTTPException(status_code=422, detail="Esa fecha todavía no llega")
+    db.add(MovimientoCaja(
+        fecha=payload.fecha,
+        hora=ahora_lima().strftime("%H:%M:%S"),
+        tipo=payload.tipo,
+        concepto=payload.concepto.strip(),
+        monto=round(payload.monto, 2),
+        categoria=payload.categoria.strip() or "otros",
+        afecta_caja=False,
+    ))
+    db.commit()
+    return listar_movimientos(dias=60, db=db)
+
+
+@router.delete("/movimientos/{movimiento_id}")
+def borrar_movimiento(movimiento_id: int, db: Session = Depends(get_db)):
+    movimiento = db.get(MovimientoCaja, movimiento_id)
+    if movimiento is None:
+        raise HTTPException(status_code=404, detail="Ese movimiento ya no existe")
+    db.delete(movimiento)
+    db.commit()
+    return listar_movimientos(dias=60, db=db)
 
 
 # ---------- Ventas anotadas a mano (días en que el POS no se usó) ----------
@@ -524,6 +675,8 @@ def flujo_de_caja(
                MovimientoInsumo.tipo == "compra")
         .group_by(MovimientoInsumo.fecha)
     ).all())
+    otros_entra = _movimientos_por_dia(db, desde, hasta, "entra")
+    otros_sale = _movimientos_por_dia(db, desde, hasta, "sale")
 
     def clave_y_etiqueta(fecha):
         if agrupar == "dia":
@@ -545,8 +698,8 @@ def flujo_de_caja(
             "entro": 0.0, "egresos": 0.0, "compras": 0.0,
         })
         fila["hasta"] = fecha.isoformat()
-        fila["entro"] += float(ventas.get(fecha) or 0.0)
-        fila["egresos"] += float(egresos.get(fecha) or 0.0)
+        fila["entro"] += float(ventas.get(fecha) or 0.0) + float(otros_entra.get(fecha) or 0.0)
+        fila["egresos"] += float(egresos.get(fecha) or 0.0) + float(otros_sale.get(fecha) or 0.0)
         fila["compras"] += float(compras.get(fecha) or 0.0)
 
     resultado = []

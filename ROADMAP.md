@@ -487,6 +487,26 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       barra vive pegada al borde inferior de la celda), caja con scroll propio y totales
       fijos al pie, más chips para ver solo A, solo B o solo C.
 
+- [x] **Por cobrar y otros movimientos de plata** (el dueño: "sin cobrar suele ser un pago
+      futuro que necesita ser levantado desde el sistema; -43 puede ser una mesa que se fue
+      sin pagar o también un pagaré futuro; el exceso de 98 se considera un ingreso extra
+      con la categoría de descuadre, hay negativo y positivo"): tabla nueva
+      `movimientos_caja` para la plata que entra o sale SIN ser una venta, con `cierre_id`
+      (a qué caja pertenece) y `afecta_caja` (si además mueve el efectivo esperado de ese
+      cierre). Cuatro casos:
+      **(1) cobranza** — `POST /api/orders/{id}/cobrar` levanta una deuda de CUALQUIER día;
+      si la venta es de una fecha anterior y se paga en efectivo, el billete entra al cajón
+      de hoy (movimiento con `afecta_caja`) pero la venta sigue contada en SU día y la
+      cobranza NO suma de nuevo en Finanzas;
+      **(2) incobrable** — `POST /api/orders/{id}/incobrable` anota un gasto del mismo monto
+      (la venta ya estaba contada, el neto queda en cero) sin tocar el cajón;
+      **(3) descuadre** — al cerrar la caja, el sobrante o faltante queda anotado solo
+      (entra/sale según el signo) y re-cerrar lo reemplaza en vez de acumularlo;
+      **(4) a mano** — `GET/POST/DELETE /api/finanzas/movimientos` para los de días pasados
+      que estaban en el cuaderno. Todo entra en el flujo, en el resumen por categoría y en
+      el tablero. En pantalla: panel "Por cobrar" en caja (solo deudas de otros días) y en
+      Finanzas, más "Otros movimientos de plata" con su formulario.
+
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
       hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.

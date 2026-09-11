@@ -6,6 +6,7 @@ const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
 import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
 import { menusEnPedido, TarjetaOfertaMenu } from '../components/TarjetaOfertaMenu'
 import { AvisoImpresion } from '../components/AvisoImpresion'
+import { PorCobrar } from '../components/PorCobrar'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { IconoBillete, IconoSilla } from '../components/Iconos'
 import { TarjetaPlato } from '../components/TarjetaPlato'
@@ -949,6 +950,9 @@ export function Caja() {
           </div>
         </div>
       )}
+
+      {/* Deudas de días anteriores: las de hoy ya se ven en su ticket */}
+      <PorCobrar soloOtrosDias alCambiar={cargarCaja} />
 
       {estadoCaja && (estadoCaja.abierta || (estadoCaja.cerrada && egresos.length > 0)) && (
         <div className="caja-panel caja-egresos">

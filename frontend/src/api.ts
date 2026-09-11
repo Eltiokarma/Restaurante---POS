@@ -284,8 +284,31 @@ export const CATEGORIAS_EGRESO: { clave: string; nombre: string }[] = [
   { clave: 'otros', nombre: '📦 Otros' },
 ]
 
-export const NOMBRE_CATEGORIA_EGRESO: Record<string, string> =
-  Object.fromEntries(CATEGORIAS_EGRESO.map((c) => [c.clave, c.nombre]))
+export const NOMBRE_CATEGORIA_EGRESO: Record<string, string> = {
+  ...Object.fromEntries(CATEGORIAS_EGRESO.map((c) => [c.clave, c.nombre])),
+  // Salidas que no pasan por el cajón pero sí por las cuentas
+  descuadre: '⚖️ Descuadre de caja',
+  incobrable: '🚶 Se fue sin pagar',
+  cobranza: '🤝 Cobro de otro día',
+  propina: '🙏 Propinas',
+  reintegro: '↩️ Devolución de un proveedor',
+  prestamo: '🏦 Préstamo o aporte',
+}
+
+// Movimientos de plata que no son venta: el descuadre de un cierre, el
+// cobro de una venta de otro día, lo que se fue sin pagar.
+export const CATEGORIAS_MOVIMIENTO: { clave: string; nombre: string; tipo: 'entra' | 'sale' | 'ambos' }[] = [
+  { clave: 'descuadre', nombre: '⚖️ Descuadre de caja (sobró o faltó)', tipo: 'ambos' },
+  { clave: 'incobrable', nombre: '🚶 Se fue sin pagar', tipo: 'sale' },
+  { clave: 'cobranza', nombre: '🤝 Cobro de una venta de otro día', tipo: 'entra' },
+  { clave: 'propina', nombre: '🙏 Propinas', tipo: 'entra' },
+  { clave: 'reintegro', nombre: '↩️ Devolución de un proveedor', tipo: 'entra' },
+  { clave: 'prestamo', nombre: '🏦 Préstamo o aporte', tipo: 'ambos' },
+  { clave: 'otros', nombre: '📦 Otros', tipo: 'ambos' },
+]
+
+export const NOMBRE_CATEGORIA_MOVIMIENTO: Record<string, string> =
+  Object.fromEntries(CATEGORIAS_MOVIMIENTO.map((c) => [c.clave, c.nombre]))
 
 export const NOMBRE_METODO_PAGO: Record<string, string> = {
   efectivo: '💵 Efectivo',
@@ -399,6 +422,9 @@ export interface FinanzasResumen {
   dias_con_venta: number
   cobertura_recetas: { activos: number; con_receta: number }
   egresos_por_categoria: { categoria: string; monto: number }[]
+  ingresos_por_categoria: { categoria: string; monto: number }[]
+  otros_ingresos: number
+  cobranzas: number
   entradas_por_metodo: Record<string, number>
   por_dia: FinanzasDia[]
 }
@@ -455,6 +481,8 @@ export interface Tablero {
     compras: number
     egresos: number
     margen_pct: number | null
+    otros_ingresos: number
+    cobranzas: number
     dias_con_venta: number
     promedio_dia: number
     mejor_dia: TableroDia | null
@@ -463,6 +491,43 @@ export interface Tablero {
   por_dia_semana: { dia: string; total: number; veces: number; promedio: number }[]
   top_platos: { nombre: string; cantidad: number; total: number }[]
   insumos: InsumoTablero[]
+}
+
+export interface OrdenPorCobrar {
+  id: number
+  fecha: string
+  numero_orden_dia: number
+  hora: string
+  total: number
+  mesas: number[]
+  dias: number
+}
+
+export interface PorCobrar {
+  pendientes: OrdenPorCobrar[]
+  total_pendiente: number
+  sin_metodo: OrdenPorCobrar[]
+  total_sin_metodo: number
+}
+
+export interface MovimientoCaja {
+  id: number
+  fecha: string
+  hora: string
+  tipo: 'entra' | 'sale'
+  concepto: string
+  monto: number
+  categoria: string
+  automatico: boolean
+}
+
+export interface MovimientosOut {
+  desde: string
+  hasta: string
+  movimientos: MovimientoCaja[]
+  total_entra: number
+  total_sale: number
+  total_cobranzas: number
 }
 
 export interface FlujoFila {
@@ -952,6 +1017,27 @@ export const api = {
 
   finanzasResumen: (dias: number) =>
     request<FinanzasResumen>(`/api/finanzas/resumen?dias=${dias}`, {}, true),
+
+  // Pagos pendientes de cualquier día (caja y admin los ven igual)
+  porCobrar: () => request<PorCobrar>('/api/orders/por-cobrar'),
+  // Distinto de cobrarOrden: este levanta una deuda de CUALQUIER día y,
+  // si es de una fecha anterior, deja la cobranza anotada en el cajón de hoy
+  cobrarPendiente: (id: number, metodo_pago: string) =>
+    request<{ id: number; metodo_pago: string; cobranza_registrada: boolean }>(
+      `/api/orders/${id}/cobrar`, { method: 'POST', body: JSON.stringify({ metodo_pago }) }),
+  marcarIncobrable: (id: number) =>
+    request<{ id: number; monto: number }>(
+      `/api/orders/${id}/incobrable`, { method: 'POST' }),
+
+  // Movimientos de caja que no son venta (descuadres, propinas…)
+  movimientos: (dias = 60) =>
+    request<MovimientosOut>(`/api/finanzas/movimientos?dias=${dias}`, {}, true),
+  anotarMovimiento: (datos: {
+    fecha: string; tipo: 'entra' | 'sale'; concepto: string; monto: number; categoria: string
+  }) => request<MovimientosOut>('/api/finanzas/movimientos',
+    { method: 'POST', body: JSON.stringify(datos) }, true),
+  borrarMovimiento: (id: number) =>
+    request<MovimientosOut>(`/api/finanzas/movimientos/${id}`, { method: 'DELETE' }, true),
 
   // El período va por días (últimos N) o por rango exacto desde/hasta
   tablero: (periodo: { dias: number } | { desde: string; hasta: string }) => {
