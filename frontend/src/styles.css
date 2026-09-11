@@ -7704,3 +7704,162 @@ select:focus-visible {
   .tb-tabla-caja { max-height: 70vh; }
   .tb-filtros-ayuda { display: none; }
 }
+
+/* ============================================================
+   POR COBRAR y OTROS MOVIMIENTOS
+   "Sin cobrar suele ser un pago futuro que necesita ser levantado
+   desde el sistema" (el dueño). El panel vive en la caja —donde se
+   recibe la plata— y en Finanzas. Los descuadres y lo que se fue sin
+   pagar se anotan como movimientos, con signo.
+   ============================================================ */
+.pc-caja {
+  margin: 14px 0;
+  padding: 14px 16px;
+  background: var(--papel-alto);
+  border: 2px solid var(--linea-fuerte);
+  border-left: 10px solid var(--aji);
+  border-radius: var(--r);
+}
+
+.pc-cabecera {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pc-cabecera h3 {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-size: 1.15rem;
+}
+
+.pc-total {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--achiote-hondo);
+}
+
+.pc-lista {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pc-fila {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-top: 1px solid var(--linea);
+}
+
+.pc-quien {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.pc-cuando, .pc-mesa {
+  font-size: 12.5px;
+  color: var(--tinta-suave);
+}
+
+.pc-monto {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  min-width: 82px;
+}
+
+.pc-acciones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  align-items: center;
+}
+
+.pc-pregunta { font-size: 13px; color: var(--tinta-media); }
+
+.pc-perdido {
+  background: var(--papel-hondo);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+}
+
+/* ---- Otros movimientos (Finanzas) ---- */
+.fin-movimientos .fin-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
+.fin-movimientos .fin-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--tinta-media);
+}
+
+.fin-movimientos .fin-form input,
+.fin-movimientos .fin-form select {
+  min-height: var(--toque-min);
+  padding: 6px 10px;
+  border: 2px solid var(--linea-fuerte);
+  border-radius: var(--r-chico);
+  background: var(--papel-alto);
+  font: inherit;
+}
+
+.fin-mov-totales {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 12px 0 6px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-mov-fila {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--linea);
+  font-size: 13.5px;
+}
+
+.fin-mov-fecha {
+  min-width: 44px;
+  color: var(--tinta-suave);
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-mov-concepto {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.fin-mov-concepto small { font-size: 11.5px; color: var(--tinta-suave); }
+
+.fin-mov-fila .fin-entro,
+.fin-mov-fila .fin-salio,
+.fin-mov-totales .fin-entro,
+.fin-mov-totales .fin-salio {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .pc-acciones { margin-left: 0; width: 100%; }
+}

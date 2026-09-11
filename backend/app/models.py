@@ -350,6 +350,45 @@ class EgresoCaja(Base):
     categoria: Mapped[str] = mapped_column(String(40), default="otros", nullable=False)
 
 
+class MovimientoCaja(Base):
+    """Plata que entra o sale y NO es una venta del POS.
+
+    Cuatro casos reales del cuaderno del dueño:
+    - `descuadre`: al cerrar sobró o faltó plata. Se registra SOLO para
+      la contabilidad (el sobrante ya está físicamente en el cajón), por
+      eso `afecta_caja=False`: sumarlo al esperado anularía la diferencia
+      que el cierre acaba de medir.
+    - `cobranza`: se cobró una venta de OTRO día ("pago futuro levantado
+      desde el sistema"). Esa plata sí entra al cajón de hoy, así que va
+      con `afecta_caja=True`; en Finanzas NO cuenta como ingreso nuevo,
+      porque la venta ya se contó el día que se vendió.
+    - `incobrable`: la mesa se fue sin pagar. La venta quedó contada, así
+      que se anota el gasto del mismo monto y el neto queda en cero.
+    - propinas, reintegros y demás: entran o salen y sí son plata nueva.
+
+    `cierre_id` dice a qué caja pertenece (para el resumen del turno) y
+    `afecta_caja` si además mueve el efectivo esperado de ESE cierre.
+    """
+
+    __tablename__ = "movimientos_caja"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fecha: Mapped[date] = mapped_column(Date, nullable=False)
+    hora: Mapped[str] = mapped_column(String(8), nullable=False)
+    # entra | sale
+    tipo: Mapped[str] = mapped_column(String(6), nullable=False)
+    concepto: Mapped[str] = mapped_column(String(160), nullable=False)
+    monto: Mapped[float] = mapped_column(Float, nullable=False)
+    # descuadre | cobranza | incobrable | propina | reintegro | otros
+    categoria: Mapped[str] = mapped_column(String(40), default="otros", nullable=False)
+    cierre_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cierres_caja.id"), nullable=True
+    )
+    afecta_caja: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    orden_id: Mapped[int | None] = mapped_column(ForeignKey("ordenes.id"), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
+
+
 class CostoFijo(Base):
     """Gasto fijo del mes (alquiler, luz, agua, internet…): alimenta la
     utilidad estimada y el punto de equilibrio de Finanzas. No mueve la

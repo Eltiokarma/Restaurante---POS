@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import requiere_admin
 from ..db import get_db
-from ..models import CierreCaja, EgresoCaja, Orden, ahora_lima, hoy_lima
+from ..models import CierreCaja, EgresoCaja, MovimientoCaja, Orden, ahora_lima, hoy_lima
 
 router = APIRouter(prefix="/api/caja", tags=["caja"])
 
@@ -150,6 +150,54 @@ def _total_egresos(egresos: list[EgresoCaja]) -> float:
     return round(sum(e.monto for e in egresos), 2)
 
 
+def _movimientos_de(db: Session, registro: CierreCaja | None) -> list[MovimientoCaja]:
+    """Movimientos de ESTA caja que sí mueven el efectivo del cajón
+    (hoy: el cobro en efectivo de una venta de un día anterior)."""
+    if registro is None:
+        return []
+    return list(db.scalars(
+        select(MovimientoCaja).where(
+            MovimientoCaja.cierre_id == registro.id,
+            MovimientoCaja.afecta_caja == True,  # noqa: E712
+        ).order_by(MovimientoCaja.id)
+    ).all())
+
+
+def _neto_movimientos(movimientos: list[MovimientoCaja]) -> float:
+    return round(sum(m.monto if m.tipo == "entra" else -m.monto for m in movimientos), 2)
+
+
+def _registrar_descuadre(db: Session, registro: CierreCaja) -> None:
+    """Deja el sobrante o faltante del cierre anotado como movimiento.
+
+    Pedido del dueño: "el exceso se considera un ingreso extra con la
+    categoría de descuadre, hay negativo y positivo". No toca el cajón
+    (`afecta_caja=False`): esa plata ya está —o ya no está— ahí; esto es
+    solo para que Finanzas lo vea. Re-cerrar reemplaza el anterior."""
+    for viejo in db.scalars(select(MovimientoCaja).where(
+        MovimientoCaja.cierre_id == registro.id,
+        MovimientoCaja.categoria == "descuadre",
+    )).all():
+        db.delete(viejo)
+
+    diferencia = registro.diferencia or 0.0
+    if abs(diferencia) < 0.01:
+        return
+    sobra = diferencia > 0
+    hora = (registro.hora_cierre or "")[:5]
+    db.add(MovimientoCaja(
+        fecha=registro.fecha,
+        hora=registro.hora_cierre or ahora_lima().strftime("%H:%M:%S"),
+        tipo="entra" if sobra else "sale",
+        concepto=("Sobró en el cierre" if sobra else "Faltó en el cierre")
+                 + (f" de las {hora}" if hora else ""),
+        monto=round(abs(diferencia), 2),
+        categoria="descuadre",
+        cierre_id=registro.id,
+        afecta_caja=False,
+    ))
+
+
 def _registros_de_hoy(db: Session) -> list[CierreCaja]:
     return list(db.scalars(
         select(CierreCaja).where(CierreCaja.fecha == hoy_lima()).order_by(CierreCaja.id)
@@ -214,11 +262,14 @@ def cerrar(payload: CierreIn, db: Session = Depends(get_db)):
 
     ventas = _ventas_de_hoy(db, registro.desde_orden_id)
     egresos = _total_egresos(_egresos_de(db, registro))
+    # Cobros de ventas de días anteriores: plata que entró hoy al cajón
+    # sin ser venta de hoy (y por eso no está en ventas_efectivo).
+    movimientos = _neto_movimientos(_movimientos_de(db, registro))
     # Los egresos salieron del cajón y lo "por cobrar" nunca entró: bajan
     # el esperado. Los vueltos por dar están de más en el cajón: lo suben.
     esperado_efectivo = round(
         registro.monto_apertura + ventas["ventas_efectivo"] - egresos
-        - ventas["por_cobrar"] + ventas["vueltos_pendientes"], 2,
+        - ventas["por_cobrar"] + ventas["vueltos_pendientes"] + movimientos, 2,
     )
     registro.hora_cierre = ahora_lima().strftime("%H:%M:%S")
     registro.monto_contado = round(payload.monto_contado, 2)
@@ -232,6 +283,8 @@ def cerrar(payload: CierreIn, db: Session = Depends(get_db)):
     registro.diferencia = round(registro.monto_contado - esperado_efectivo, 2)
     if payload.notas.strip():
         registro.notas = payload.notas.strip()
+    db.flush()
+    _registrar_descuadre(db, registro)
     db.commit()
     _encolar_resumen_de_cierre(db, registro)
     return _a_dict(registro, ventas, turno, egresos)
@@ -280,6 +333,7 @@ def resumen_de_cierre(db: Session, registro: CierreCaja) -> dict:
         "egresos_total": registro.egresos if registro.egresos is not None else _total_egresos(egresos),
         "por_cobrar": registro.por_cobrar or 0.0,
         "vueltos_pendientes": registro.vueltos_pendientes or 0.0,
+        "cobrado_de_otros_dias": _neto_movimientos(_movimientos_de(db, registro)),
         "monto_contado": registro.monto_contado or 0.0,
         "diferencia": registro.diferencia or 0.0,
     }

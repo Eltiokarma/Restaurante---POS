@@ -860,3 +860,146 @@ def registrar_vuelto(orden_id: int, payload: VueltoIn, db: Session = Depends(get
     orden.pago_pendiente = False
     db.commit()
     return {"id": orden.id, "vuelto_pendiente": orden.vuelto_pendiente}
+
+
+# ---------- Pagos que quedaron pendientes (de cualquier día) ----------
+#
+# El dueño lo dijo así: "sin cobrar suele ser un pago futuro que necesita
+# ser levantado desde el sistema". Un ticket puede quedar debiendo hoy y
+# cobrarse el jueves; hasta ahora eso solo se veía en la caja del día y
+# después se perdía de vista.
+
+
+def _dias_desde(fecha: date) -> int:
+    return (hoy_lima() - fecha).days
+
+
+@router.get("/por-cobrar")
+def pagos_por_cobrar(db: Session = Depends(get_db)):
+    """Todo lo que está debiendo, de cualquier fecha.
+
+    - `pendientes`: tickets marcados "falta pagar". Son los que hay que
+      levantar (cobrar o dar por perdidos).
+    - `sin_metodo`: ventas de días ya pasados en las que nadie registró
+      con qué se pagó. La caja de ese día las cuadró como efectivo; van
+      aparte solo para que el dueño sepa que ahí falta información.
+    """
+    ordenes = db.scalars(
+        select(Orden).where(Orden.estado != "anulada").order_by(Orden.fecha, Orden.numero_orden_dia)
+    ).all()
+
+    def fila(o: Orden) -> dict:
+        return {
+            "id": o.id,
+            "fecha": o.fecha.isoformat(),
+            "numero_orden_dia": o.numero_orden_dia,
+            "hora": o.hora,
+            "total": round(o.total, 2),
+            "mesas": json.loads(o.mesa_ids or "[]"),
+            "dias": _dias_desde(o.fecha),
+        }
+
+    pendientes = [fila(o) for o in ordenes if o.pago_pendiente]
+    hoy = hoy_lima()
+    sin_metodo = [
+        fila(o) for o in ordenes
+        if not o.pago_pendiente and o.metodo_pago is None and o.fecha < hoy
+    ]
+    return {
+        "pendientes": pendientes,
+        "total_pendiente": round(sum(f["total"] for f in pendientes), 2),
+        "sin_metodo": sin_metodo,
+        "total_sin_metodo": round(sum(f["total"] for f in sin_metodo), 2),
+    }
+
+
+@router.post("/{orden_id}/cobrar")
+def cobrar_pendiente(orden_id: int, payload: PagoIn, db: Session = Depends(get_db)):
+    """Levanta un pago pendiente: la plata entró recién ahora.
+
+    Si la venta es de un día anterior y se cobra en EFECTIVO, ese billete
+    entra al cajón de hoy pero la venta sigue contada en su día: se anota
+    un movimiento de caja "cobranza" para que el cierre de hoy lo espere.
+    En Finanzas la cobranza NO suma como ingreso nuevo (sería contar la
+    misma venta dos veces)."""
+    from ..models import MovimientoCaja
+    from .caja import _turno_actual
+
+    if payload.metodo_pago not in METODOS_PAGO:
+        raise HTTPException(status_code=422, detail=f"Método inválido: {payload.metodo_pago}")
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if orden.estado == "anulada":
+        raise HTTPException(status_code=409, detail="Una orden anulada no se cobra")
+
+    orden.metodo_pago = payload.metodo_pago
+    orden.pago_pendiente = False
+
+    ahora = ahora_lima()
+    movimiento = None
+    if orden.fecha < ahora.date():
+        registro, _ = _turno_actual(db)
+        abierta = registro is not None and registro.hora_cierre is None
+        en_efectivo = payload.metodo_pago == "efectivo"
+        movimiento = MovimientoCaja(
+            fecha=ahora.date(),
+            hora=ahora.strftime("%H:%M:%S"),
+            tipo="entra",
+            concepto=f"Cobro del ticket #{orden.numero_orden_dia} "
+                     f"del {orden.fecha.strftime('%d/%m')}",
+            monto=round(orden.total, 2),
+            categoria="cobranza",
+            cierre_id=registro.id if (abierta and en_efectivo) else None,
+            # Solo el efectivo entra físicamente al cajón de hoy
+            afecta_caja=bool(abierta and en_efectivo),
+            orden_id=orden.id,
+        )
+        db.add(movimiento)
+
+    db.commit()
+    return {
+        "id": orden.id,
+        "metodo_pago": orden.metodo_pago,
+        "cobranza_registrada": movimiento is not None,
+    }
+
+
+@router.post("/{orden_id}/incobrable")
+def dar_por_perdido(orden_id: int, db: Session = Depends(get_db)):
+    """La mesa se fue sin pagar y no se va a recuperar.
+
+    La venta ya quedó contada el día que salió, así que se anota un gasto
+    del mismo monto con categoría "incobrable": el neto queda en cero y
+    el dueño ve cuánta plata se le fue por esa vía. No toca el cajón (esa
+    plata nunca estuvo ahí)."""
+    from ..models import MovimientoCaja
+
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if orden.estado == "anulada":
+        raise HTTPException(status_code=409, detail="Una orden anulada no se cobra")
+
+    ya = db.scalar(
+        select(MovimientoCaja).where(
+            MovimientoCaja.orden_id == orden.id,
+            MovimientoCaja.categoria == "incobrable",
+        )
+    )
+    if ya is None:
+        ahora = ahora_lima()
+        db.add(MovimientoCaja(
+            fecha=orden.fecha,
+            hora=ahora.strftime("%H:%M:%S"),
+            tipo="sale",
+            concepto=f"Se fue sin pagar: ticket #{orden.numero_orden_dia} "
+                     f"del {orden.fecha.strftime('%d/%m')}",
+            monto=round(orden.total, 2),
+            categoria="incobrable",
+            afecta_caja=False,
+            orden_id=orden.id,
+        ))
+    orden.pago_pendiente = False
+    db.commit()
+    return {"id": orden.id, "incobrable": True, "monto": round(orden.total, 2)}
