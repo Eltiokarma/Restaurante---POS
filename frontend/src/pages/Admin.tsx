@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, COSTOS_FIJOS_SUGERIDOS, NOMBRE_CATEGORIA, NOMBRE_CATEGORIA_EGRESO, NOMBRE_EMPAQUE, NOMBRE_METODO_PAGO, ROLES_SUGERIDOS } from '../api'
 import { IconoBillete, IconoEgreso, IconoEngranaje, IconoMovil, IconoTarjeta } from '../components/Iconos'
 import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, FinanzasFijos, FinanzasResumen, FlujoFila, Insumo, MenuGuardadoOut, MesaEstado, MovimientoKardex, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
+import { TabTablero } from '../components/TabTablero'
 import { Ticket } from '../components/Ticket'
 
-type Tab = 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'finanzas' | 'cancelaciones' | 'voz' | 'config'
+type Tab = 'tablero' | 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'finanzas' | 'cancelaciones' | 'voz' | 'config'
 
 interface PlatoEditable {
   id?: number
@@ -55,6 +56,7 @@ export function Admin() {
       <header className="admin-cabecera">
         <h1><IconoEngranaje tam={26} /> Administración</h1>
         <nav className="admin-tabs">
+          <button className={tab === 'tablero' ? 'activa' : ''} onClick={() => setTab('tablero')}>Tablero</button>
           <button className={tab === 'resumen' ? 'activa' : ''} onClick={() => setTab('resumen')}>Resumen</button>
           <button className={tab === 'menu' ? 'activa' : ''} onClick={() => setTab('menu')}>Menú del día</button>
           <button className={tab === 'ordenes' ? 'activa' : ''} onClick={() => setTab('ordenes')}>Órdenes</button>
@@ -97,6 +99,7 @@ export function Admin() {
         </button>
       </header>
       <main className="admin-contenido">
+        {tab === 'tablero' && <TabTablero onSesionVencida={() => setLogueado(false)} />}
         {tab === 'resumen' && <TabResumen onSesionVencida={() => setLogueado(false)} />}
         {tab === 'menu' && <TabMenu onSesionVencida={() => setLogueado(false)} />}
         {tab === 'ordenes' && <TabOrdenes />}

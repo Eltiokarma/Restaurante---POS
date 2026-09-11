@@ -101,6 +101,29 @@ def resumen(db: Session, desde: date, hasta: date) -> dict:
         })
     detalle.sort(key=lambda d: (-d["consumido_soles"], d["nombre"]))
 
+    # Clasificación ABC (Pareto del valor consumido, como pide el spec del
+    # kardex): A = el 80% del gasto, B = hasta el 95%, C = la cola larga.
+    # Sirve para saber qué insumos vigilar de cerca y cuáles no.
+    total_valor = sum(d["consumido_soles"] for d in detalle)
+    acumulado = 0.0
+    for d in detalle:
+        pct = (d["consumido_soles"] / total_valor * 100) if total_valor > 0 else 0.0
+        # La clase se decide con el acumulado ANTES de sumar este insumo:
+        # así el más caro siempre es A aunque él solo pase del 80%, y el
+        # que completa el 80% cuenta como A (convención de Pareto).
+        previo = acumulado
+        acumulado += pct
+        d["pct_valor"] = round(pct, 1)
+        d["pct_acumulado"] = round(min(acumulado, 100.0), 1)
+        if total_valor <= 0 or d["consumido_soles"] <= 0:
+            d["clase_abc"] = "-"
+        elif previo < 80.0:
+            d["clase_abc"] = "A"
+        elif previo < 95.0:
+            d["clase_abc"] = "B"
+        else:
+            d["clase_abc"] = "C"
+
     return {
         "desde": desde.isoformat(),
         "hasta": hasta.isoformat(),

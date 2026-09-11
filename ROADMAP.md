@@ -465,6 +465,18 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       día —o ligado a sus órdenes— se resta del stock y se borra, así lo consumido vuelve
       sin dejar movimientos fantasma. Panel propio en Admin → Configuración, al lado de
       "Empezar limpio" (que sigue siendo el borrado total de antes de abrir).
+- [x] **Tablero** (pedido del dueño: "una tabla linda tipo Power BI, ingresos, egresos,
+      colores, gráficas de barras"): primera pestaña del Admin, con rango de 7/30/90 días.
+      `GET /api/finanzas/tablero?dias=` devuelve todo de un viaje — 5 tarjetas grandes
+      (vendido, insumos usados, margen, salió del cajón, mermas), venta por día, promedio
+      por día de la semana, los 12 platos que más salen y el consumo de insumos con
+      **clasificación ABC (Pareto)** calculada en `services/consumo.py` (A = los pocos que
+      se llevan el 80% del gasto, B hasta 95%, C la cola; la clase se decide con el
+      acumulado ANTES de sumar el insumo, así el más caro siempre es A). La tabla es tipo
+      Excel: se ordena tocando el título, se busca por nombre, trae barra dentro de la
+      celda, totales al pie y **descarga CSV** (con BOM y números en formato peruano para
+      que Excel lo abra bien).
+
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
       hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.
@@ -520,3 +532,4 @@ Pagos integrados (Yape/tarjeta), control de stock y mermas, app nativa, multi-lo
 | 14c | Los trabajos de impresión (ticket de prueba incluido) salen de la cola al CONFIRMARSE, nunca al servirse | El ticket de prueba se consumía al entregarse a quien imprime: si la impresora no respondía — el caso exacto que el botón diagnostica — el trabajo se perdía y el admin veía "encolado ✔" sin que saliera nada. |
 | 14 | El local NO debe depender de una PC: /ticketera en una tablet Android con la app RawBT también atiende la cola ESC/POS (rawbt:base64 vía iframe + enlace con gesto como respaldo) | Decisión del dueño: solo tablets. RawBT hace de driver de la impresora de red en la propia tablet; la misma cola sirve para tablet (RawBT) o PC (puente) — se usa una de las dos. El lanzamiento va por iframe oculto porque navegar la página a un esquema bloqueado la deja "colgada". |
 | 15 | Menú editable: quitar un tiempo descuenta lo configurado en `menu_tiempos.descuento_si_se_quita` (snapshot en `orden_menus.omitidos_json`); los agregados (+presa…) viven en `menu_agregados` y entran como `OrdenItem`s con `es_agregado=True` y `plato_id NULL` | Decisión del dueño (2026-09-04): "sin sopa" sí baja un poco el precio, y pedir una sopa aparte cuesta el precio de porción extra (S/ 3). El total sigue siendo del backend: base − descuentos + recargos + extras + agregados, nunca negativo por unidad. Al no ser platos, los agregados no descuentan kardex todavía. |
+| 16 | Los colores de las gráficas del Tablero son **azul mayólica `#0f6ea8` (entra) y achiote `#b03a22` (sale)**, no el verde/rojo del resto del sistema | El par verde/rojo que veníamos usando (`#2f6b3a`/`#b03a22`) se valida en ΔE 5.9 bajo protanopia: para una persona con daltonismo (≈8% de los hombres) son el mismo color, y en las barras el color es la ÚNICA pista. El par azul/achiote da ΔE 20.2 y pasa las cuatro pruebas. La escala ABC usa un solo tono en tres pasos (`#7d2515`/`#b03a22`/`#d98b75`), que es lo correcto para algo ordenado A>B>C. Queda pendiente migrar las barras de Finanzas al mismo par. |

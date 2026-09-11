@@ -203,3 +203,51 @@ def test_venta_manual_de_un_dia_pasado(client, admin_headers, menu_ejemplo, db):
         "fecha": (hoy_lima() + timedelta(days=1)).isoformat(), "efectivo": 10,
     }, headers=admin_headers)
     assert r.status_code == 422
+
+
+def test_tablero(client, admin_headers, menu_ejemplo):
+    """El tablero devuelve, de una sola llamada, los números grandes, la
+    venta por día, qué día de la semana vende más, los platos que más
+    salen y los insumos ya clasificados por ABC."""
+    r = client.post("/api/insumos", json={"nombre": "Carne", "unidad": "kg",
+                                          "costo_unitario": 20.0}, headers=admin_headers)
+    caro = r.json()["id"]
+    r = client.post("/api/insumos", json={"nombre": "Sal", "unidad": "kg",
+                                          "costo_unitario": 1.0}, headers=admin_headers)
+    barato = r.json()["id"]
+    client.put(f"/api/insumos/recetas/{menu_ejemplo['Lomo saltado']}", json={"items": [
+        {"insumo_id": caro, "cantidad": 0.2}, {"insumo_id": barato, "cantidad": 0.01},
+    ]}, headers=admin_headers)
+
+    r = client.post("/api/orders", json={"items": [
+        {"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 3, "nota": ""},
+    ]})
+    venta = r.json()["orden"]["total"]
+
+    d = client.get("/api/finanzas/tablero?dias=30", headers=admin_headers).json()
+    assert d["dias"] == 30 and len(d["por_dia"]) == 30
+    assert d["kpis"]["ventas"] == venta
+    assert d["kpis"]["dias_con_venta"] == 1
+    assert d["kpis"]["promedio_dia"] == venta
+    assert d["kpis"]["mejor_dia"]["ventas"] == venta
+    # Costo: 3 × (0.2 kg × 20 + 0.01 × 1) = 12.03
+    assert d["kpis"]["costo_insumos"] == 12.03
+    assert d["kpis"]["margen_pct"] == round((venta - 12.03) / venta * 100, 1)
+
+    # Qué día de la semana vende más: hoy tiene el promedio, los otros 0
+    con_venta = [x for x in d["por_dia_semana"] if x["veces"] > 0]
+    assert len(con_venta) == 1 and con_venta[0]["promedio"] == venta
+    assert len(d["por_dia_semana"]) == 7
+
+    # Los platos que más salen
+    assert d["top_platos"][0]["nombre"] == "Lomo saltado"
+    assert d["top_platos"][0]["cantidad"] == 3
+
+    # ABC: la carne se lleva el grueso del gasto (A), la sal es la cola
+    por_nombre = {i["nombre"]: i for i in d["insumos"]}
+    assert por_nombre["Carne"]["clase_abc"] == "A"
+    assert por_nombre["Carne"]["pct_valor"] > 99.0
+    assert por_nombre["Sal"]["clase_abc"] in ("B", "C")
+    assert por_nombre["Sal"]["pct_acumulado"] == 100.0
+
+    assert client.get("/api/finanzas/tablero?dias=3", headers=admin_headers).status_code == 422

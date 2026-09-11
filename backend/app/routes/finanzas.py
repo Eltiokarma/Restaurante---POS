@@ -260,6 +260,111 @@ def resumen_financiero(
     }
 
 
+# ---------- Tablero: la foto completa del negocio en una pantalla ----------
+
+DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+
+@router.get("/tablero")
+def tablero(
+    dias: int = Query(default=30, ge=7, le=366),
+    db: Session = Depends(get_db),
+):
+    """Todo lo que el tablero pinta, en una sola llamada: los números
+    grandes, la venta por día, qué día de la semana vende más, los platos
+    que más salen y la tabla de insumos ya clasificada (ABC)."""
+    hasta = hoy_lima()
+    desde = hasta - timedelta(days=dias - 1)
+
+    ventas_dia = dict(db.execute(
+        select(Orden.fecha, func.sum(Orden.total))
+        .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada")
+        .group_by(Orden.fecha)
+    ).all())
+    egresos_dia = dict(db.execute(
+        select(EgresoCaja.fecha, func.sum(EgresoCaja.monto))
+        .where(EgresoCaja.fecha >= desde, EgresoCaja.fecha <= hasta)
+        .group_by(EgresoCaja.fecha)
+    ).all())
+    compras_dia = dict(db.execute(
+        select(MovimientoInsumo.fecha, func.sum(MovimientoInsumo.costo_total))
+        .where(MovimientoInsumo.fecha >= desde, MovimientoInsumo.fecha <= hasta,
+               MovimientoInsumo.tipo == "compra")
+        .group_by(MovimientoInsumo.fecha)
+    ).all())
+
+    por_dia = []
+    acumulado_semana = [[0.0, 0] for _ in range(7)]  # [total, días con venta]
+    for n in range(dias):
+        fecha = desde + timedelta(days=n)
+        venta = round(float(ventas_dia.get(fecha) or 0.0), 2)
+        por_dia.append({
+            "fecha": fecha.isoformat(),
+            "etiqueta": f"{fecha.day:02d}/{fecha.month:02d}",
+            "dia_semana": DIAS_SEMANA[fecha.weekday()],
+            "ventas": venta,
+            "egresos": round(float(egresos_dia.get(fecha) or 0.0), 2),
+            "compras": round(float(compras_dia.get(fecha) or 0.0), 2),
+        })
+        if venta > 0:
+            acumulado_semana[fecha.weekday()][0] += venta
+            acumulado_semana[fecha.weekday()][1] += 1
+
+    # Qué día de la semana vende más (promedio de los días que abrió)
+    por_dia_semana = [
+        {
+            "dia": DIAS_SEMANA[i],
+            "total": round(total, 2),
+            "veces": veces,
+            "promedio": round(total / veces, 2) if veces else 0.0,
+        }
+        for i, (total, veces) in enumerate(acumulado_semana)
+    ]
+
+    # Los platos que más salen (por cantidad; el nombre viene del snapshot)
+    top_platos = [
+        {"nombre": nombre, "cantidad": int(cantidad or 0), "total": round(float(monto or 0.0), 2)}
+        for nombre, cantidad, monto in db.execute(
+            select(OrdenItem.nombre_snapshot, func.sum(OrdenItem.cantidad),
+                   func.sum(OrdenItem.cantidad * OrdenItem.precio_snapshot))
+            .join(Orden, OrdenItem.orden_id == Orden.id)
+            .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada",
+                   OrdenItem.es_cargo == False)  # noqa: E712
+            .group_by(OrdenItem.nombre_snapshot)
+            .order_by(func.sum(OrdenItem.cantidad).desc())
+            .limit(12)
+        ).all()
+    ]
+
+    kardex = servicio_consumo.resumen(db, desde, hasta)
+    ventas = round(sum(d["ventas"] for d in por_dia), 2)
+    egresos = round(sum(d["egresos"] for d in por_dia), 2)
+    compras = round(sum(d["compras"] for d in por_dia), 2)
+    dias_con_venta = sum(1 for d in por_dia if d["ventas"] > 0)
+    costo = kardex["valor_consumo"]
+
+    return {
+        "desde": desde.isoformat(),
+        "hasta": hasta.isoformat(),
+        "dias": dias,
+        "kpis": {
+            "ventas": ventas,
+            "costo_insumos": costo,
+            "mermas": kardex["valor_mermas"],
+            "compras": compras,
+            "egresos": egresos,
+            "margen_pct": round((ventas - costo) / ventas * 100, 1) if ventas > 0 else None,
+            "dias_con_venta": dias_con_venta,
+            "promedio_dia": round(ventas / dias_con_venta, 2) if dias_con_venta else 0.0,
+            "mejor_dia": max((d for d in por_dia), key=lambda d: d["ventas"], default=None),
+        },
+        "por_dia": por_dia,
+        "por_dia_semana": por_dia_semana,
+        "top_platos": top_platos,
+        "insumos": kardex["insumos"],
+    }
+
+
 # ---------- Ventas anotadas a mano (días en que el POS no se usó) ----------
 
 def _norm(nombre: str) -> str:
