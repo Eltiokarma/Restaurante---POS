@@ -7502,3 +7502,205 @@ select:focus-visible {
   .tb-kpi-hero .tb-kpi-cifra { font-size: 1.8rem; }
   .tb-tabla { font-size: 12.5px; }
 }
+
+/* ============================================================
+   TABLERO v2 — elegir el día, todos los platos y tabla compacta
+   Pedidos del dueño: poder elegir fechas, ver también los platos
+   que menos salen y que la tabla no ocupe media pantalla.
+   La tabla pasa a UNA línea por fila (la unidad y el % viajan al
+   lado del número, no debajo) y vive dentro de una caja con
+   scroll propio: la página ya no crece con cada insumo nuevo.
+   ============================================================ */
+
+/* ---- Elegir el período: mismos botones del admin, sin margen de más ---- */
+.tb-rango { margin-bottom: 0; }
+
+.tb-fechas {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  background: var(--papel-hondo);
+  border: 2px solid var(--linea);
+  border-radius: var(--r);
+}
+
+.tb-fechas label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--tinta-media);
+}
+
+.tb-fechas input {
+  min-height: var(--toque-min);
+  padding: 6px 10px;
+  border: 2px solid var(--linea-fuerte);
+  border-radius: var(--r-chico);
+  background: var(--papel-alto);
+  font: inherit;
+}
+
+.tb-fechas button {
+  padding: 10px 16px;
+  min-height: var(--toque-min);
+  font: inherit;
+  font-weight: 700;
+  background: var(--papel-alto);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  border: 0;
+  border-radius: var(--r-chico);
+  cursor: pointer;
+}
+
+.tb-fechas .boton-primario {
+  background: var(--achiote);
+  color: #fff;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+}
+
+.tb-fechas button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.tb-enlace {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--tinta-media);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Las barras del día son botones: tocarlas filtra a ese día */
+.tb-columnas .tb-col {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--r-chico);
+}
+
+.tb-columnas button.tb-col:hover i,
+.tb-columnas button.tb-col:focus-visible i { filter: brightness(1.15); }
+
+.tb-columnas button.tb-col:focus-visible {
+  outline: 3px solid var(--tb-entra);
+  outline-offset: 2px;
+}
+
+/* ---- Ranking de platos: se despliega y scrollea dentro ---- */
+.tb-ranking-largo {
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.tb-ver-mas {
+  margin-top: 10px;
+  border: 0;
+  background: none;
+  padding: 6px 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--tinta-media);
+  cursor: pointer;
+}
+
+.tb-ver-mas:hover { text-decoration: underline; }
+
+/* ---- Filtros de clase de la tabla ---- */
+.tb-filtros {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0 2px;
+}
+
+.tb-chip {
+  padding: 6px 12px;
+  border: 2px solid var(--linea-fuerte);
+  border-radius: 999px;
+  background: var(--papel-alto);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--tinta-media);
+  cursor: pointer;
+}
+
+.tb-chip-on {
+  background: var(--tinta);
+  border-color: var(--tinta);
+  color: var(--papel-alto);
+}
+
+.tb-filtros-ayuda {
+  font-size: 12px;
+  color: var(--tinta-suave);
+}
+
+/* ---- La tabla, compacta y con su propio scroll ---- */
+.tb-tabla-caja {
+  max-height: 60vh;
+  overflow: auto;
+  margin-top: 8px;
+  border: 1px solid var(--linea);
+  border-radius: var(--r-chico);
+}
+
+.tb-tabla { margin-top: 0; font-size: 13px; }
+
+.tb-tabla th button { padding: 8px; }
+
+.tb-tabla td {
+  padding: 4px 8px;          /* una línea por fila, nada de aire de más */
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.tb-tabla tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+}
+
+/* La unidad y el detalle viajan al costado, ya no en una segunda línea */
+.tb-insumo { display: inline; font-weight: 700; color: var(--tinta); }
+
+.tb-unidad {
+  display: inline;
+  margin-left: 5px;
+  font-size: 11px;
+  color: var(--tinta-suave);
+}
+
+.tb-tabla td small {
+  display: inline;
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--tinta-suave);
+}
+
+/* La barra vive DENTRO de la celda, pegada abajo: no suma altura */
+.tb-td-gasto { position: relative; }
+
+.tb-td-gasto .tb-celda-barra {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 1px;
+  height: 3px;
+  margin: 0;
+  background: transparent;
+}
+
+@media (max-width: 720px) {
+  .tb-tabla-caja { max-height: 70vh; }
+  .tb-filtros-ayuda { display: none; }
+}

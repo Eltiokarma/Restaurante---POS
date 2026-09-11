@@ -267,14 +267,26 @@ DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", 
 
 @router.get("/tablero")
 def tablero(
-    dias: int = Query(default=30, ge=7, le=366),
+    dias: int = Query(default=30, ge=1, le=366),
+    desde: date | None = Query(default=None, description="Inicio del rango (manda sobre dias)"),
+    hasta: date | None = Query(default=None, description="Fin del rango; por defecto hoy"),
     db: Session = Depends(get_db),
 ):
     """Todo lo que el tablero pinta, en una sola llamada: los números
     grandes, la venta por día, qué día de la semana vende más, los platos
-    que más salen y la tabla de insumos ya clasificada (ABC)."""
-    hasta = hoy_lima()
-    desde = hasta - timedelta(days=dias - 1)
+    que se vendieron y la tabla de insumos ya clasificada (ABC).
+
+    El período se puede pedir de dos maneras: `dias` (los últimos N) o un
+    rango exacto `desde`/`hasta` — que es lo que usa el dueño cuando toca
+    un día en la gráfica o elige fechas a mano."""
+    hasta = hasta or hoy_lima()
+    if desde is None:
+        desde = hasta - timedelta(days=dias - 1)
+    if desde > hasta:
+        raise HTTPException(status_code=400, detail="La fecha 'desde' no puede ser posterior a 'hasta'")
+    dias = (hasta - desde).days + 1
+    if dias > 366:
+        raise HTTPException(status_code=400, detail="El rango no puede pasar de un año")
 
     ventas_dia = dict(db.execute(
         select(Orden.fecha, func.sum(Orden.total))
@@ -321,7 +333,8 @@ def tablero(
         for i, (total, veces) in enumerate(acumulado_semana)
     ]
 
-    # Los platos que más salen (por cantidad; el nombre viene del snapshot)
+    # TODOS los platos vendidos, del que más sale al que menos: el dueño
+    # mira las dos puntas de la lista (qué se repite y qué casi no se pide).
     top_platos = [
         {"nombre": nombre, "cantidad": int(cantidad or 0), "total": round(float(monto or 0.0), 2)}
         for nombre, cantidad, monto in db.execute(
@@ -332,7 +345,6 @@ def tablero(
                    OrdenItem.es_cargo == False)  # noqa: E712
             .group_by(OrdenItem.nombre_snapshot)
             .order_by(func.sum(OrdenItem.cantidad).desc())
-            .limit(12)
         ).all()
     ]
 

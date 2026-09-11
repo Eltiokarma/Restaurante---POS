@@ -477,6 +477,16 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       celda, totales al pie y **descarga CSV** (con BOM y números en formato peruano para
       que Excel lo abra bien).
 
+- [x] **Tablero v2** (los tres pedidos del dueño sobre la primera versión): (1) **elegir
+      el día**: además de 7/30/90 días hay "Elegir fechas" con rango libre, y tocar una
+      barra de la gráfica deja el tablero entero en ESE día (`GET /api/finanzas/tablero`
+      acepta `desde`/`hasta`, no solo `dias`); (2) **todos los platos**, no solo los 12
+      primeros — la lista se abre con "Ver los N platos", avisa cuál es el que menos sale y
+      se descarga en CSV, porque lo que no se vende también es información; (3) **la tabla
+      ocupa la mitad**: una línea por fila (la unidad y el % van al costado del número, la
+      barra vive pegada al borde inferior de la celda), caja con scroll propio y totales
+      fijos al pie, más chips para ver solo A, solo B o solo C.
+
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
       hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.
