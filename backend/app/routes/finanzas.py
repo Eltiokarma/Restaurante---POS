@@ -11,7 +11,8 @@ y planilla) y responde las tres preguntas que importan:
 La utilidad usa el CONSUMO TEÓRICO de insumos (recetas × ventas): si
 pocas recetas están armadas, el resumen lo avisa con la cobertura.
 """
-from datetime import timedelta
+import unicodedata
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -21,10 +22,12 @@ from sqlalchemy.orm import Session
 from ..auth import requiere_admin
 from ..db import get_db
 from ..models import (
-    CostoFijo, EgresoCaja, MovimientoInsumo, Orden, Plato, RecetaItem,
-    Trabajador, hoy_lima,
+    CostoFijo, EgresoCaja, MovimientoInsumo, Orden, OrdenItem, Plato,
+    RecetaItem, Trabajador, hoy_lima,
 )
 from ..services import consumo as servicio_consumo
+from ..services import inventario as servicio_inventario
+from ..services import orders as servicio_ordenes
 
 router = APIRouter(
     prefix="/api/finanzas", tags=["finanzas"], dependencies=[Depends(requiere_admin)]
@@ -254,6 +257,113 @@ def resumen_financiero(
         "egresos_por_categoria": egresos_por_categoria,
         "entradas_por_metodo": entradas_por_metodo,
         "por_dia": por_dia,
+    }
+
+
+# ---------- Ventas anotadas a mano (días en que el POS no se usó) ----------
+
+def _norm(nombre: str) -> str:
+    s = unicodedata.normalize("NFD", nombre.lower().strip())
+    return "".join(c for c in s if unicodedata.category(c) != "Mn")
+
+
+class LineaManualIn(BaseModel):
+    nombre: str = Field(min_length=1, max_length=120)
+    cantidad: int = Field(gt=0, le=999)
+    # Sin precio: se usa el del plato del catálogo que coincida por nombre
+    precio: float | None = Field(default=None, ge=0)
+
+
+class VentaManualIn(BaseModel):
+    fecha: date
+    efectivo: float = Field(default=0.0, ge=0, le=100_000)
+    tarjeta: float = Field(default=0.0, ge=0, le=100_000)
+    yape: float = Field(default=0.0, ge=0, le=100_000)
+    lineas: list[LineaManualIn] = Field(default_factory=list, max_length=60)
+
+
+@router.post("/ventas-manuales", status_code=201)
+def registrar_venta_manual(payload: VentaManualIn, db: Session = Depends(get_db)):
+    """Registra la venta de UN día contada a mano (cuaderno del dueño).
+
+    Crea una orden "manual" por método de pago con el MONTO DECLARADO
+    como total (la autoridad es el cuaderno: los precios por plato de un
+    conteo a mano no siempre cuadran con el total real). Las líneas van
+    como items de la primera orden: alimentan el ranking de platos y, si
+    el plato tiene receta, descuentan el kardex FECHADO en ese día.
+    """
+    hoy = hoy_lima()
+    if payload.fecha > hoy:
+        raise HTTPException(status_code=422, detail="La fecha no puede ser futura")
+    if payload.fecha < hoy - timedelta(days=366):
+        raise HTTPException(status_code=422, detail="Máximo un año hacia atrás")
+    montos = [("efectivo", round(payload.efectivo, 2)),
+              ("tarjeta", round(payload.tarjeta, 2)),
+              ("yape", round(payload.yape, 2))]
+    montos = [(m, v) for m, v in montos if v > 0]
+    if not montos:
+        raise HTTPException(status_code=422, detail="Pon cuánto entró por al menos un método")
+
+    # Resolver líneas contra el catálogo (por nombre, sin tildes)
+    platos = {_norm(p.nombre): p for p in db.scalars(select(Plato)).all()}
+    resueltas = []
+    for linea in payload.lineas:
+        plato = platos.get(_norm(linea.nombre))
+        precio = linea.precio if linea.precio is not None else (plato.precio if plato else None)
+        if precio is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"'{linea.nombre}' no está en el catálogo: manda su precio",
+            )
+        resueltas.append((plato, linea.nombre, linea.cantidad, round(precio, 2)))
+
+    # Mismo lock que la creación normal: el correlativo del día es sagrado
+    with servicio_ordenes._lock_creacion:
+        base = db.scalar(
+            select(func.max(Orden.numero_orden_dia)).where(Orden.fecha == payload.fecha)
+        ) or 0
+        ordenes = []
+        for n, (metodo, monto) in enumerate(montos, start=1):
+            orden = Orden(
+                numero_orden_dia=base + n,
+                fecha=payload.fecha,
+                hora="14:00:00",
+                total=monto,
+                estado="entregado",
+                impreso=True,
+                tipo_servicio="sala",
+                origen="manual",
+                metodo_pago=metodo,
+            )
+            db.add(orden)
+            ordenes.append(orden)
+        db.flush()
+
+        # Todas las líneas en la primera orden (el conteo del día vive una vez)
+        principal = ordenes[0]
+        for plato, nombre, cantidad, precio in resueltas:
+            db.add(OrdenItem(
+                orden_id=principal.id,
+                plato_id=plato.id if plato else None,
+                nombre_snapshot=plato.nombre if plato else nombre,
+                precio_snapshot=precio,
+                cantidad=cantidad,
+                es_cargo=plato is None,
+                estado="entregado",
+            ))
+        db.flush()
+        db.refresh(principal)
+        servicio_inventario.consumir_por_orden(db, principal, fecha=payload.fecha)
+        db.commit()
+
+    ligadas = sum(1 for p, *_ in resueltas if p is not None)
+    return {
+        "fecha": payload.fecha.isoformat(),
+        "ordenes": [{"id": o.id, "numero": o.numero_orden_dia,
+                     "metodo_pago": o.metodo_pago, "total": o.total} for o in ordenes],
+        "total": round(sum(v for _, v in montos), 2),
+        "lineas_ligadas_al_catalogo": ligadas,
+        "lineas_libres": len(resueltas) - ligadas,
     }
 
 

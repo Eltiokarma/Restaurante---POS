@@ -24,12 +24,14 @@ _lock_inventario = threading.Lock()
 
 def _registrar(db: Session, insumo: Insumo, tipo: str, delta: float,
                referencia: str, costo_total: float | None = None,
-               orden_id: int | None = None) -> None:
+               orden_id: int | None = None, fecha=None) -> None:
+    # fecha: las ventas anotadas a mano fechan su consumo en SU día,
+    # no en el día en que se digitaron
     ahora = ahora_lima()
     insumo.stock_actual = round(insumo.stock_actual + delta, 4)
     db.add(MovimientoInsumo(
         insumo_id=insumo.id,
-        fecha=ahora.date(),
+        fecha=fecha or ahora.date(),
         hora=ahora.strftime("%H:%M:%S"),
         tipo=tipo,
         cantidad=round(delta, 4),
@@ -39,8 +41,10 @@ def _registrar(db: Session, insumo: Insumo, tipo: str, delta: float,
     ))
 
 
-def consumir_por_orden(db: Session, orden: Orden) -> None:
-    """Descuenta insumos según las recetas de los platos de la orden."""
+def consumir_por_orden(db: Session, orden: Orden, fecha=None) -> None:
+    """Descuenta insumos según las recetas de los platos de la orden.
+
+    fecha: una venta anotada a mano consume en el día de la venta."""
     with _lock_inventario:
         referencia = f"orden #{orden.numero_orden_dia:03d}"
         for item in orden.items:
@@ -54,7 +58,7 @@ def consumir_por_orden(db: Session, orden: Orden) -> None:
                 if insumo is None:
                     continue
                 _registrar(db, insumo, "consumo", -ri.cantidad * item.cantidad,
-                           referencia, orden_id=orden.id)
+                           referencia, orden_id=orden.id, fecha=fecha)
 
 
 def consumir_directo(db: Session, insumo: Insumo, cantidad: float,
