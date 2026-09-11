@@ -1414,7 +1414,11 @@ export function subtotalMenu(linea: MenuCarrito): number {
 }
 
 export function soles(monto: number): string {
-  return `S/ ${monto.toFixed(2)}`
+  // Espacio DURO tras "S/" y separador de miles peruano: la cifra nunca
+  // se parte en dos líneas ni deja el "S/" solo al final del renglón.
+  const [entera, decimales] = Math.abs(monto).toFixed(2).split('.')
+  const miles = entera.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${monto < 0 ? '−' : ''}S/\u00a0${miles}.${decimales}`
 }
 
 export const NOMBRE_CATEGORIA: Record<string, string> = {

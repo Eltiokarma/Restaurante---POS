@@ -168,3 +168,98 @@ export function IconoAspa({ tam = 24, className }: Props) {
     </svg>
   )
 }
+
+/* ------------------------------------------------------------------
+   Iconos de sección del rail del admin (rediseño): geométricos,
+   monocromo, 24×24 y en `currentColor` — el rail les da el color de
+   la sección cuando están activos.
+   ------------------------------------------------------------------ */
+
+/** Tablero: barras verticales */
+export function IconoTablero({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <path d="M5 20V11M12 20V4M19 20v-6" />
+    </svg>
+  )
+}
+
+/** Resumen: disco partido */
+export function IconoDisco({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5v8.5h8.5" />
+    </svg>
+  )
+}
+
+/** Menú del día: pizarra con dos líneas */
+export function IconoPizarra({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <path d="M7.5 10h9M7.5 14h5.5" />
+    </svg>
+  )
+}
+
+/** Órdenes: ticket */
+export function IconoTicket({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <path d="M5.5 3.5h13v17l-2.2-1.6-2.2 1.6-2.1-1.6-2.2 1.6-2.1-1.6-2.2 1.6z" />
+      <path d="M9 9h6M9 13h4" />
+    </svg>
+  )
+}
+
+/** Insumos: frasco con relleno */
+export function IconoFrasco({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <path d="M9 3.5h6M10 3.5v3.2L6.2 15a3.4 3.4 0 0 0 3 5.5h5.6a3.4 3.4 0 0 0 3-5.5L14 6.7V3.5" />
+      <path d="M7.2 14h9.6" />
+    </svg>
+  )
+}
+
+/** Finanzas: moneda con barra */
+export function IconoMoneda({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7v10M9 9.5h6M9 14.5h6" />
+    </svg>
+  )
+}
+
+/** Canceladas: círculo con aspa */
+export function IconoCirculoAspa({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9 9l6 6M15 9l-6 6" />
+    </svg>
+  )
+}
+
+/** Voz: micrófono */
+export function IconoMicrofono({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <rect x="9" y="3" width="6" height="10.5" rx="3" />
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3" />
+    </svg>
+  )
+}
+
+/** Ajustes: disco con punto */
+export function IconoAjustes({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}

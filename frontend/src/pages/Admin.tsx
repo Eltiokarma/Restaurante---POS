@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, CATEGORIAS_MOVIMIENTO, COSTOS_FIJOS_SUGERIDOS, NOMBRE_CATEGORIA, NOMBRE_CATEGORIA_EGRESO, NOMBRE_CATEGORIA_MOVIMIENTO, NOMBRE_EMPAQUE, NOMBRE_METODO_PAGO, ROLES_SUGERIDOS } from '../api'
-import { IconoBillete, IconoEgreso, IconoEngranaje, IconoMovil, IconoTarjeta } from '../components/Iconos'
+import { IconoAjustes, IconoAspa, IconoBillete, IconoEgreso, IconoMovil, IconoTarjeta } from '../components/Iconos'
 import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, FinanzasFijos, FinanzasResumen, FlujoFila, Insumo, MenuGuardadoOut, MesaEstado, MovimientoCaja, MovimientoKardex, MovimientosOut, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { TabTablero } from '../components/TabTablero'
 import { PorCobrar } from '../components/PorCobrar'
+import { CabeceraVista, SECCIONES } from '../components/CabeceraVista'
+import type { Tab } from '../components/CabeceraVista'
 import { Ticket } from '../components/Ticket'
-
-type Tab = 'tablero' | 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'finanzas' | 'cancelaciones' | 'voz' | 'config'
 
 interface PlatoEditable {
   id?: number
@@ -20,96 +20,135 @@ interface PlatoEditable {
   sinonimos: string[]
 }
 
-const TABS_EXTRA: { id: Tab; texto: string }[] = [
-  { id: 'cancelaciones', texto: 'Cancelaciones' },
-  { id: 'voz', texto: 'Voz' },
-  { id: 'config', texto: 'Configuración' },
-]
+const DIAS_LARGOS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+  'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre']
+
+/** "Jueves 11 de setiembre · 2:57 p.m." */
+function fechaLarga(d: Date): string {
+  const dia = DIAS_LARGOS[d.getDay()]
+  const hora = d.toLocaleTimeString('es-PE', { hour: 'numeric', minute: '2-digit' })
+  return `${dia[0].toUpperCase()}${dia.slice(1)} ${d.getDate()} de ${MESES_LARGOS[d.getMonth()]} · ${hora}`
+}
+
+/**
+ * La barra de arriba: dónde estoy parado (el local y la hora) y las dos
+ * cosas que el dueño mira sin entrar a ninguna sección — si la caja está
+ * abierta y cuánto hay en cocina.
+ */
+function TopbarAdmin() {
+  const [local, setLocal] = useState('')
+  const [caja, setCaja] = useState<CajaEstado | null>(null)
+  const [enCocina, setEnCocina] = useState(0)
+  const [ahora, setAhora] = useState(() => new Date())
+
+  useEffect(() => {
+    const reloj = setInterval(() => setAhora(new Date()), 30_000)
+    return () => clearInterval(reloj)
+  }, [])
+
+  useEffect(() => {
+    let vivo = true
+    const traer = async () => {
+      try {
+        const [cfg, cj, ords] = await Promise.all([
+          api.config(), api.cajaHoy(), api.ordenesHoy(),
+        ])
+        if (!vivo) return
+        setLocal(cfg.nombre_local)
+        setCaja(cj)
+        setEnCocina(ords.ordenes.filter(
+          (o) => o.estado === 'pendiente' || o.estado === 'preparando').length)
+      } catch {
+        /* la topbar es informativa: si falla, no estorba el trabajo */
+      }
+    }
+    traer()
+    const t = setInterval(traer, 30_000)
+    return () => { vivo = false; clearInterval(t) }
+  }, [])
+
+  return (
+    <header className="ad-topbar">
+      <div className="ad-cenefa" aria-hidden="true" />
+      <div className="ad-topbar-fila">
+        <div className="ad-topbar-local">
+          <span className="ad-topbar-nombre">{local || 'Administración'}</span>
+          <span className="ad-topbar-fecha">{fechaLarga(ahora)}</span>
+        </div>
+        <div className="ad-topbar-chips">
+          {caja?.abierta && (
+            <span className="ad-chip ad-chip-caja">
+              <i className="ad-punto" aria-hidden="true" />
+              Caja abierta
+              <em>fondo {soles(caja.monto_apertura ?? 0)}</em>
+            </span>
+          )}
+          {enCocina > 0 && (
+            <span className="ad-chip ad-chip-cocina">
+              <i className="ad-triangulo" aria-hidden="true" />
+              {enCocina} en cocina
+            </span>
+          )}
+        </div>
+      </div>
+    </header>
+  )
+}
 
 export function Admin() {
   const [logueado, setLogueado] = useState(() => getAdminToken() !== '')
-  const [tab, setTab] = useState<Tab>('resumen')
-  // Tabs de uso ocasional agrupadas tras el "⋯" (auditoría visual, h. 07)
-  const [tabsExtraAbierto, setTabsExtraAbierto] = useState(false)
-
-  useEffect(() => {
-    if (!tabsExtraAbierto) return
-    const alTocarFuera = (ev: MouseEvent) => {
-      if (!(ev.target as HTMLElement).closest('.menu-mas')) setTabsExtraAbierto(false)
-    }
-    const alTeclear = (ev: KeyboardEvent) => {
-      if (ev.key === 'Escape') setTabsExtraAbierto(false)
-    }
-    document.addEventListener('click', alTocarFuera)
-    document.addEventListener('keydown', alTeclear)
-    return () => {
-      document.removeEventListener('click', alTocarFuera)
-      document.removeEventListener('keydown', alTeclear)
-    }
-  }, [tabsExtraAbierto])
+  const [tab, setTab] = useState<Tab>('tablero')
 
   if (!logueado) {
     return <AdminLogin onOk={() => setLogueado(true)} />
   }
 
+  const vencida = () => setLogueado(false)
+
   return (
-    <div className="pantalla-admin">
-      <header className="admin-cabecera">
-        <h1><IconoEngranaje tam={26} /> Administración</h1>
-        <nav className="admin-tabs">
-          <button className={tab === 'tablero' ? 'activa' : ''} onClick={() => setTab('tablero')}>Tablero</button>
-          <button className={tab === 'resumen' ? 'activa' : ''} onClick={() => setTab('resumen')}>Resumen</button>
-          <button className={tab === 'menu' ? 'activa' : ''} onClick={() => setTab('menu')}>Menú del día</button>
-          <button className={tab === 'ordenes' ? 'activa' : ''} onClick={() => setTab('ordenes')}>Órdenes</button>
-          <button className={tab === 'insumos' ? 'activa' : ''} onClick={() => setTab('insumos')}>Insumos</button>
-          <button className={tab === 'finanzas' ? 'activa' : ''} onClick={() => setTab('finanzas')}>Finanzas</button>
-          <div className="menu-mas">
-            <button
-              className={`boton-mas ${TABS_EXTRA.some((t) => t.id === tab) ? 'activa' : ''}`}
-              aria-haspopup="menu"
-              aria-expanded={tabsExtraAbierto}
-              aria-label="Más secciones"
-              onClick={() => setTabsExtraAbierto((v) => !v)}
-            >
-              ⋯
-            </button>
-            {tabsExtraAbierto && (
-              <div className="popover-mas" role="menu">
-                {TABS_EXTRA.map((t) => (
-                  <button
-                    key={t.id}
-                    role="menuitem"
-                    className={tab === t.id ? 'activa' : ''}
-                    onClick={() => { setTab(t.id); setTabsExtraAbierto(false) }}
-                  >
-                    {t.texto}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </nav>
+    <div className={`pantalla-admin ad-seccion-${tab}`}>
+      <nav className="ad-rail" aria-label="Secciones del administrador">
+        <div className="ad-cenefa" aria-hidden="true" />
+        <div className="ad-marca" aria-hidden="true">A</div>
+        {SECCIONES.map((s) => (
+          <button
+            key={s.id}
+            className={`ad-rail-item ad-color-${s.id} ${tab === s.id ? 'activa' : ''}`}
+            aria-current={tab === s.id ? 'page' : undefined}
+            title={s.titulo}
+            onClick={() => setTab(s.id)}
+          >
+            <span className="ad-rail-marca" aria-hidden="true" />
+            <s.Icono tam={24} />
+            <span className="ad-rail-rotulo">{s.rotulo}</span>
+          </button>
+        ))}
+        <div className="ad-rail-relleno" />
         <button
-          className="boton-salir"
-          onClick={() => {
-            clearAdminToken()
-            setLogueado(false)
-          }}
+          className="ad-rail-salir"
+          onClick={() => { clearAdminToken(); setLogueado(false) }}
         >
           Salir
         </button>
-      </header>
-      <main className="admin-contenido">
-        {tab === 'tablero' && <TabTablero onSesionVencida={() => setLogueado(false)} />}
-        {tab === 'resumen' && <TabResumen onSesionVencida={() => setLogueado(false)} />}
-        {tab === 'menu' && <TabMenu onSesionVencida={() => setLogueado(false)} />}
-        {tab === 'ordenes' && <TabOrdenes />}
-        {tab === 'insumos' && <TabInsumos onSesionVencida={() => setLogueado(false)} />}
-        {tab === 'finanzas' && <TabFinanzas onSesionVencida={() => setLogueado(false)} />}
-        {tab === 'cancelaciones' && <TabCancelaciones onSesionVencida={() => setLogueado(false)} />}
-        {tab === 'voz' && <TabVoz onSesionVencida={() => setLogueado(false)} />}
-        {tab === 'config' && <TabConfig onSesionVencida={() => setLogueado(false)} />}
-      </main>
+      </nav>
+
+      <div className="ad-columna">
+        <TopbarAdmin />
+        <main className="admin-contenido">
+          <div className="ad-lienzo">
+            {tab === 'tablero' && <TabTablero onSesionVencida={vencida} />}
+            {tab === 'resumen' && <TabResumen onSesionVencida={vencida} />}
+            {tab === 'menu' && <TabMenu onSesionVencida={vencida} />}
+            {tab === 'ordenes' && <TabOrdenes />}
+            {tab === 'insumos' && <TabInsumos onSesionVencida={vencida} />}
+            {tab === 'finanzas' && <TabFinanzas onSesionVencida={vencida} />}
+            {tab === 'cancelaciones' && <TabCancelaciones onSesionVencida={vencida} />}
+            {tab === 'voz' && <TabVoz onSesionVencida={vencida} />}
+            {tab === 'config' && <TabConfig onSesionVencida={vencida} />}
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
@@ -142,7 +181,7 @@ function AdminLogin({ onOk }: { onOk: () => void }) {
   return (
     <div className="pantalla-admin admin-login">
       <form onSubmit={entrar} className="login-caja">
-        <h1><IconoEngranaje tam={26} /> Administración</h1>
+        <h1><IconoAjustes tam={26} /> Administración</h1>
         <input
           type="password"
           placeholder="Contraseña"
@@ -240,14 +279,15 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
 
   return (
     <div>
-      <div className="admin-acciones">
+      <CabeceraVista id="resumen">
         {(['hoy', '7', '30'] as Periodo[]).map((p) => (
-          <button key={p} className={periodo === p ? 'boton-primario' : ''} onClick={() => setPeriodo(p)}>
+          <button key={p} className={`ad-chip-periodo ${periodo === p ? 'activo' : ''}`}
+                  onClick={() => setPeriodo(p)}>
             {p === 'hoy' ? 'Hoy' : `Últimos ${p} días`}
           </button>
         ))}
-        <button onClick={descargar}>⬇️ Descargar CSV ({NOMBRE_PERIODO[periodo]})</button>
-      </div>
+        <button className="ad-chip-csv" onClick={descargar}>CSV</button>
+      </CabeceraVista>
 
       <div className="tiles-resumen">
         <div className="tile">
@@ -512,7 +552,7 @@ function SeccionMenusGuardados({ onSesionVencida, onCargado }: {
                 </span>
               </div>
               <button className="boton-primario" onClick={() => cargar(g)}>▶ Cargar hoy</button>
-              <button onClick={() => borrar(g)}>🗑</button>
+              <button onClick={() => borrar(g)}><IconoAspa tam={18} /></button>
             </div>
           ))}
         </div>
@@ -718,6 +758,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
 
   return (
     <div>
+      <CabeceraVista id="menu" />
       <div className="admin-acciones">
         <button onClick={agregar}>+ Agregar plato</button>
         <div className="menu-empezar-envoltorio">
@@ -1583,6 +1624,7 @@ function TabVoz({ onSesionVencida }: { onSesionVencida: () => void }) {
   const m = panel.metricas
   return (
     <div>
+      <CabeceraVista id="voz" />
       <p className="nota-admin">
         Cada semana revisa los <strong>corregidos y descartados</strong>: las palabras que el
         sistema no entendió se agregan como sinónimos en Menú del día. Así la precisión sube
@@ -1784,6 +1826,7 @@ function TabOrdenes() {
 
   return (
     <div>
+      <CabeceraVista id="ordenes" />
       <div className="total-dia">
         <div className="cifra">
           <span>Vendido</span>
@@ -2285,6 +2328,7 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
 
   return (
     <div>
+      <CabeceraVista id="insumos" />
       <nav className="subtabs">
         <button className={seccion === 'despensa' ? 'activa' : ''} onClick={() => setSeccion('despensa')}>
           🧺 Despensa {porAgotarse.length > 0 && <span className="subtab-alerta">{porAgotarse.length}</span>}
@@ -3229,6 +3273,7 @@ function TabCancelaciones({ onSesionVencida }: { onSesionVencida: () => void }) 
 
   return (
     <div>
+      <CabeceraVista id="cancelaciones" />
       <p className="nota-admin">
         Pedidos cancelados durante la ventana de cancelación. Si son muchos, algo del flujo está
         confundiendo a los clientes.
@@ -3285,7 +3330,9 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
   }
 
   return (
-    <div className="form-config">
+    <>
+      <CabeceraVista id="config" />
+      <div className="form-config">
       <label>
         Nombre del local
         <input value={config.nombre_local} onChange={(e) => setConfig({ ...config, nombre_local: e.target.value })} />
@@ -3504,7 +3551,8 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
       <GestorMesas onSesionVencida={onSesionVencida} />
       <EmpezarLimpio onSesionVencida={onSesionVencida} />
       <BorrarUnDia onSesionVencida={onSesionVencida} />
-    </div>
+      </div>
+    </>
   )
 }
 
@@ -4155,14 +4203,14 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
 
   return (
     <section>
-      <h2>Finanzas</h2>
-      <div className="admin-acciones">
+      <CabeceraVista id="finanzas">
         {[7, 30].map((d) => (
-          <button key={d} className={dias === d ? 'boton-primario' : ''} onClick={() => setDias(d)}>
+          <button key={d} className={`ad-chip-periodo ${dias === d ? 'activo' : ''}`}
+                  onClick={() => setDias(d)}>
             Últimos {d} días
           </button>
         ))}
-      </div>
+      </CabeceraVista>
       {error && <p className="error-admin">{error}</p>}
 
       {resumen && (
@@ -4277,11 +4325,15 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
           </p>
           <div className="admin-acciones">
             {([['dia', 'Por día'], ['semana', 'Por semana'], ['mes', 'Por mes'], ['anio', 'Por año']] as const).map(([valor, texto]) => (
-              <button key={valor} className={agrupar === valor ? 'boton-primario' : ''}
+              <button key={valor} className={`ad-chip-periodo ${agrupar === valor ? 'activo' : ''}`}
                       onClick={() => setAgrupar(valor)}>
                 {texto}
               </button>
             ))}
+          </div>
+          <div className="fin-leyenda">
+            <span><i className="entro" aria-hidden="true" />entró</span>
+            <span><i className="salio" aria-hidden="true" />salió</span>
           </div>
           {filasConMovimiento.length === 0 ? (
             <p className="nota-admin">Sin movimientos en el período.</p>
@@ -4324,7 +4376,7 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
                          if (v > 0 && v !== c.monto_mensual) ejecutar(() => api.editarCostoFijo(c.id, c.nombre, v))
                        }} />
                 <button className="boton boton--sm boton--papel" aria-label={`Quitar ${c.nombre}`}
-                        onClick={() => ejecutar(() => api.borrarCostoFijo(c.id))}>🗑</button>
+                        onClick={() => ejecutar(() => api.borrarCostoFijo(c.id))}><IconoAspa tam={18} /></button>
               </div>
             ))}
             <div className="fin-fila fin-fila-nueva">
@@ -4342,7 +4394,7 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
                      value={nuevoCostoNombre} autoFocus
                      onChange={(e) => setNuevoCostoNombre(e.target.value)} />
             )}
-            <p className="fin-total">Total: <strong>{soles(fijos.total_costos_mes)}</strong> al mes</p>
+            <p className="fin-total"><span>Total al mes</span><strong>{soles(fijos.total_costos_mes)}</strong></p>
           </div>
 
           <div className="fin-editor">
@@ -4367,7 +4419,7 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
                          if (v > 0 && v !== t.sueldo_mensual) ejecutar(() => api.editarTrabajador(t.id, t.nombre, t.rol, v))
                        }} />
                 <button className="boton boton--sm boton--papel" aria-label={`Quitar a ${t.nombre}`}
-                        onClick={() => ejecutar(() => api.borrarTrabajador(t.id))}>🗑</button>
+                        onClick={() => ejecutar(() => api.borrarTrabajador(t.id))}><IconoAspa tam={18} /></button>
               </div>
             ))}
             <div className="fin-fila fin-fila-planilla fin-fila-nueva">
@@ -4387,7 +4439,7 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
                      value={nuevoTrabRol} autoFocus
                      onChange={(e) => setNuevoTrabRol(e.target.value)} />
             )}
-            <p className="fin-total">Total: <strong>{soles(fijos.total_planilla_mes)}</strong> al mes</p>
+            <p className="fin-total"><span>Total al mes</span><strong>{soles(fijos.total_planilla_mes)}</strong></p>
           </div>
         </div>
       )}

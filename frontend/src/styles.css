@@ -7863,3 +7863,822 @@ select:focus-visible {
 @media (max-width: 720px) {
   .pc-acciones { margin-left: 0; width: 100%; }
 }
+
+/* ============================================================
+   ADMIN REDISEÑADO — rail lateral, topbar y cabecera de vista
+   Handoff del diseñador: las 9 pestañas horizontales pasan a un rail
+   fijo con UN COLOR POR SECCIÓN; ese mismo color vuelve en la
+   versalita del título y en el borde de las tarjetas de la vista, así
+   el dueño sabe dónde está parado sin leer. Nada de emoji sueltos:
+   los iconos son SVG geométricos en currentColor.
+   ============================================================ */
+
+/* Color de cada sección (se usa con .ad-color-<seccion>) */
+.ad-color-tablero { --ad-color: var(--achiote-hondo); }
+.ad-color-resumen { --ad-color: var(--achiote); }
+.ad-color-menu { --ad-color: var(--culantro); }
+.ad-color-ordenes { --ad-color: var(--mayolica); }
+.ad-color-insumos { --ad-color: var(--aji); }
+.ad-color-finanzas { --ad-color: var(--culantro-hondo); }
+.ad-color-cancelaciones { --ad-color: var(--st-anulada); }
+.ad-color-voz { --ad-color: var(--mayolica); }
+.ad-color-config { --ad-color: var(--tinta-media); }
+
+.pantalla-admin:not(.admin-login) {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh;
+  background: var(--papel-hondo);
+}
+
+/* La cenefa fija de arriba la dibujan el rail y la topbar */
+.pantalla-admin:not(.admin-login)::before { content: none; }
+
+.ad-cenefa {
+  height: 7px;
+  flex: 0 0 7px;
+  background: var(--cenefa);
+  background-size: 40px 40px;
+}
+
+/* ---- Rail ---- */
+.ad-rail {
+  width: 112px;
+  flex: 0 0 112px;
+  background: var(--tinta);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding-bottom: 14px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.ad-marca {
+  width: 46px;
+  height: 46px;
+  margin: 16px auto;
+  border-radius: 8px;
+  background: var(--achiote);
+  color: var(--papel-alto);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--fuente-display);
+  font-size: 26px;
+  line-height: 1;
+  padding-bottom: 3px;
+}
+
+.ad-rail-item {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: #b6a794;
+  height: 76px;
+  flex: 0 0 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ad-rail-item svg { color: var(--tinta-suave); }
+
+.ad-rail-item:hover { filter: brightness(1.35); }
+
+.ad-rail-item.activa {
+  background: var(--papel-alto);
+  color: var(--tinta);
+}
+
+.ad-rail-item.activa svg { color: var(--ad-color); }
+
+.ad-rail-marca {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: transparent;
+}
+
+.ad-rail-item.activa .ad-rail-marca { background: var(--ad-color); }
+
+.ad-rail-rotulo {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-rail-relleno { flex: 1; }
+
+.ad-rail-salir {
+  margin: 0 12px;
+  padding: 12px 0;
+  border: 1px solid #4a3c31;
+  background: transparent;
+  color: #b6a794;
+  border-radius: 8px;
+  font: 700 11px/1 var(--fuente-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.ad-rail-salir:hover { border-color: var(--achiote); color: #f0ded4; }
+
+/* ---- Columna de contenido ---- */
+.ad-columna {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ad-topbar {
+  background: var(--papel-alto);
+  border-bottom: 1px solid var(--linea);
+}
+
+.ad-topbar-fila {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 32px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.ad-topbar-local { min-width: 0; }
+
+.ad-topbar-nombre {
+  display: block;
+  font-family: var(--fuente-display);
+  font-size: 25px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.ad-topbar-fecha {
+  display: block;
+  font-size: 12px;
+  color: var(--tinta-suave);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.ad-topbar-chips {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ad-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  padding: 9px 16px 9px 13px;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ad-chip em {
+  font-style: normal;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-chip-caja {
+  background: var(--culantro-tenue);
+  border: 1px solid #bcd8bd;
+  color: var(--culantro-hondo);
+}
+
+.ad-chip-caja em { color: var(--culantro); }
+
+.ad-punto {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--culantro);
+  flex: 0 0 11px;
+}
+
+.ad-chip-cocina {
+  background: var(--aji-tenue);
+  border: 1px solid #e6cf95;
+  color: var(--aji-hondo);
+}
+
+/* Forma + color: el triángulo también se ve en blanco y negro */
+.ad-triangulo {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 10px solid var(--st-pendiente);
+  flex: 0 0 12px;
+}
+
+.pantalla-admin:not(.admin-login) .admin-contenido {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  padding: 26px 32px 60px;
+  margin: 0;
+}
+
+.ad-lienzo {
+  max-width: 1320px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+/* ---- Cabecera de cada vista ---- */
+.ad-cabecera-vista {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+  min-width: 0;
+}
+
+.ad-titulo-vista { min-width: 0; }
+
+.ad-versalita {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ad-color);
+  border-bottom: 3px solid var(--ad-color);
+  padding-bottom: 4px;
+}
+
+.ad-cabecera-vista h1 {
+  font-family: var(--fuente-display);
+  font-size: 34px;
+  line-height: 1.1;
+  margin: 6px 0 0;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.ad-controles-vista {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ad-chip-periodo {
+  min-height: 52px;
+  padding: 0 22px;
+  border-radius: 10px;
+  border: 1px solid var(--linea-fuerte);
+  background: transparent;
+  color: var(--tinta-media);
+  font: 700 14px/1 var(--fuente-ui);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.ad-chip-periodo.activo {
+  background: var(--achiote);
+  border-color: var(--achiote);
+  color: var(--papel-alto);
+}
+
+.ad-chip-csv {
+  min-height: 52px;
+  padding: 0 20px;
+  border-radius: 10px;
+  border: 1px dashed var(--linea-fuerte);
+  background: transparent;
+  color: var(--tinta-media);
+  font: 700 13px/1 var(--fuente-ui);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.ad-chip-csv:hover { border-color: var(--mayolica); color: var(--mayolica); }
+
+/* En pantallas angostas el rail se vuelve una tira horizontal */
+@media (max-width: 860px) {
+  .pantalla-admin:not(.admin-login) { flex-direction: column; }
+
+  .ad-rail {
+    width: auto;
+    flex: none;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    padding: 0 8px;
+  }
+
+  .ad-rail .ad-cenefa, .ad-marca, .ad-rail-relleno { display: none; }
+  .ad-rail-item { flex: 0 0 88px; height: 68px; }
+  .ad-rail-marca { top: auto; height: 5px; width: 100%; left: 0; bottom: 0; }
+  .ad-rail-salir { margin: 0 0 0 auto; padding: 12px 14px; }
+  .pantalla-admin:not(.admin-login) .admin-contenido { padding: 20px 16px 48px; }
+  .ad-topbar-fila { padding: 12px 16px; }
+}
+
+/* ============================================================
+   TABLERO v3 — el rediseño del handoff
+   Tarjetas con borde superior de color, gráficas con eje propio y
+   la tabla ABC dentro de UN solo scroller (cabecera y total pegados).
+   ============================================================ */
+.tablero { --ad-color: var(--achiote-hondo); }
+
+/* ---- Tarjetas de cifra ---- */
+.tablero .tb-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+  gap: 16px;
+  margin: 0 0 20px;
+}
+
+.tablero .tb-kpi {
+  gap: 6px;
+  padding: 20px 22px;
+  border: 1px solid var(--linea);
+  border-top: 4px solid var(--tb-tema, var(--linea-fuerte));
+  border-radius: 16px;
+  box-shadow: none;
+  min-width: 0;
+}
+
+.tablero .tb-kpi-hero { border-left: 1px solid var(--linea); }
+
+.tema-vendido { --tb-tema: var(--achiote); }
+.tema-insumos { --tb-tema: var(--aji-hondo); }
+.tema-margen { --tb-tema: var(--culantro); }
+.tema-cajon { --tb-tema: var(--mayolica); }
+.tema-mermas { --tb-tema: var(--st-anulada); }
+
+.tablero .tb-kpi-cifra {
+  font-family: var(--fuente-display);
+  font-size: clamp(26px, 2.4vw, 38px);
+  line-height: 1.05;
+  font-weight: 400;
+}
+
+.tablero .tb-kpi-hero .tb-kpi-cifra { font-size: clamp(34px, 3.4vw, 50px); }
+
+/* ---- Paneles ---- */
+.tablero .tb-panel {
+  border: 1px solid var(--linea);
+  border-radius: 16px;
+  padding: 22px 26px 18px;
+  min-width: 0;
+}
+
+.tb-panel-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tb-panel-rotulo {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--tinta-suave);
+}
+
+.tb-panel-nota {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--tinta-suave);
+}
+
+/* Píldora del día elegido: dice dónde estás y cómo salir */
+.tb-pildora {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--tinta);
+  border-radius: 999px;
+  background: var(--tinta);
+  color: var(--papel-alto);
+  font: 700 13px/1 var(--fuente-ui);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tb-pildora i { font-style: normal; opacity: 0.75; }
+
+/* ---- Gráfica por día ---- */
+.tablero .tb-columnas {
+  gap: 4px;
+  height: 180px;
+  background-image: none;
+  border-left: 1px solid var(--linea);
+  border-bottom: 1px solid var(--linea-fuerte);
+}
+
+.tablero .tb-eje {
+  height: 180px;
+  font-size: 10.5px;
+}
+
+.tablero .tb-col i {
+  max-width: 26px;
+  border-radius: 4px 4px 2px 2px;
+  background: #c58a72;                  /* el día común */
+}
+
+.tablero .tb-col i.es-maximo { background: var(--achiote); }
+.tablero .tb-col i.es-elegido { background: var(--tinta); }
+
+/* ---- Qué día vende más ---- */
+.tb-semana { margin-top: 10px; }
+
+.tb-semana-barras {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 170px;
+  border-bottom: 1px solid var(--linea-fuerte);
+}
+
+.tb-semana-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 100%;
+}
+
+.tb-semana-col i {
+  display: block;
+  width: 100%;
+  max-width: 44px;
+  min-height: 2px;
+  border-radius: 5px 5px 2px 2px;
+  background: #a8c2a6;
+}
+
+.tb-semana-col i.es-mejor { background: var(--culantro); }
+
+.tb-semana-dias {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tb-semana-dias span {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+}
+
+/* ---- Ranking de platos ---- */
+.tablero .tb-rank-fila {
+  grid-template-columns: minmax(120px, 1fr) minmax(60px, 1.2fr) 42px;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.tablero .tb-rank-barra { height: 12px; }
+.tablero .tb-rank-barra i { border-radius: 6px; background: var(--achiote); }
+
+/* ---- Tabla ABC ---- */
+.tb-tabla-titulo {
+  font-family: var(--fuente-display);
+  font-size: 24px;
+  font-weight: 400;
+  margin: 0 0 10px;
+}
+
+.tablero .tb-tabla-controles {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-left: 0;
+}
+
+.tb-tabla-busqueda {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.tablero .tb-filtros { margin: 0; }
+
+.tablero .tb-chip {
+  min-height: var(--toque-min);
+  padding: 0 20px;
+  font-size: 14px;
+}
+
+.tablero .tb-chip-on {
+  background: var(--tinta);
+  border-color: var(--tinta);
+  color: var(--papel-alto);
+}
+
+.tablero .tb-busca {
+  min-width: 210px;
+  min-height: var(--toque-min);
+  border-radius: 10px;
+}
+
+.ad-chip-csv--sm { min-height: var(--toque-min); padding: 0 16px; }
+
+.tb-ayuda {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--tinta-suave);
+}
+
+/* Un solo scroller: cabecera arriba, total abajo, ambos pegados */
+.tablero .tb-tabla-caja {
+  border: 1px solid var(--linea);
+  border-radius: 12px;
+  max-height: 560px;
+  overflow: auto;
+}
+
+.tablero .tb-tabla { min-width: 772px; font-size: 14px; }
+
+.tablero .tb-tabla th {
+  background: var(--papel-hondo);
+  border-bottom: 1px solid var(--linea-fuerte);
+  z-index: 2;
+}
+
+.tablero .tb-tabla th button {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 12px 8px;
+}
+
+.tablero .tb-tabla td {
+  border-bottom: 1px solid var(--papel-hondo);
+  padding: 11px 8px;
+}
+
+.tablero .tb-tabla tbody tr { background: var(--papel-alto); }
+.tablero .tb-tabla tbody tr:nth-child(even) { background: var(--papel-alto); }
+.tablero .tb-tabla tbody tr:hover { background: var(--papel-hondo); }
+
+/* El color de la clase ABC vive en el borde izquierdo de la fila */
+.tb-fila-a td:first-child { box-shadow: inset 4px 0 0 var(--achiote); }
+.tb-fila-b td:first-child { box-shadow: inset 4px 0 0 var(--aji-hondo); }
+.tb-fila-c td:first-child { box-shadow: inset 4px 0 0 var(--tinta-suave); }
+
+.tb-td-insumo {
+  max-width: 260px;
+  overflow: hidden;
+}
+
+.tablero .tb-insumo {
+  font-family: var(--fuente-display);
+  font-size: 16.5px;
+  font-weight: 400;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  display: inline-block;
+}
+
+.tablero .tb-abc {
+  min-width: 32px;
+  height: 30px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.tablero .tb-abc-b { background: var(--aji-hondo); color: var(--papel-alto); }
+.tablero .tb-abc-c { background: var(--tinta-suave); color: var(--papel-alto); }
+
+.tablero .tb-td-gasto .tb-celda-barra { height: 4px; border-radius: 2px; bottom: 3px; }
+.tb-fila-a .tb-celda-barra i { background: var(--achiote); }
+.tb-fila-b .tb-celda-barra i { background: var(--aji-hondo); }
+.tb-fila-c .tb-celda-barra i { background: var(--tinta-suave); }
+
+.tablero .tb-tabla tfoot td {
+  background: var(--papel-hondo);
+  border-top: 1px solid var(--linea-fuerte);
+  padding: 14px 8px;
+}
+
+@media (max-width: 720px) {
+  .tablero .tb-panel { padding: 18px 16px 14px; }
+  .tb-tabla-busqueda { margin-left: 0; }
+}
+
+/* La cifra hero necesita dos casillas: "S/ 6,481.00" en serif de 44px
+   no entra en una tarjeta de 196px y se salía del borde. */
+@media (min-width: 1100px) {
+  .tablero .tb-kpi-hero { grid-column: span 2; }
+}
+
+.tablero .tb-kpi-hero .tb-kpi-cifra { font-size: clamp(32px, 3vw, 44px); }
+
+.tablero .tb-ver-mas { min-height: var(--toque-min); font-weight: 700; }
+
+/* ============================================================
+   FINANZAS v3 — el rediseño del handoff
+   Tarjetas con borde de color, franja de equilibrio, flujo con las
+   dos barras separadas y —lo que más molestaba— las filas de fijos y
+   planilla con PISO REAL, así se apilan solas en vez de recortar
+   "Luis Gamarra" o "Ayudante de cocina".
+   ============================================================ */
+.pantalla-admin .ad-seccion-finanzas,
+.ad-seccion-finanzas { --ad-color: var(--culantro-hondo); }
+
+.fin-tarjetas {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+  margin: 0 0 18px;
+}
+
+.fin-tarjeta {
+  padding: 20px 22px;
+  border: 1px solid var(--linea);
+  border-top: 4px solid var(--fin-tema, var(--linea-fuerte));
+  border-radius: 16px;
+  min-width: 0;
+}
+
+.fin-tarjeta:nth-child(1) { --fin-tema: var(--mayolica); }
+.fin-tarjeta:nth-child(2) { --fin-tema: var(--aji-hondo); }
+.fin-tarjeta:nth-child(3) { --fin-tema: var(--tinta-suave); }
+
+.fin-tarjeta.fin-gana { --fin-tema: var(--culantro); }
+.fin-tarjeta.fin-pierde { --fin-tema: var(--achiote); }
+
+.fin-cifra {
+  font-family: var(--fuente-display);
+  font-size: clamp(24px, 2.2vw, 34px);
+  line-height: 1.05;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fin-equilibrio {
+  padding: 18px 22px;
+  border-radius: 14px;
+  border-left: 6px solid var(--st-pendiente);
+}
+
+/* Filas con piso real: cuando el panel se angosta, se apilan */
+.fin-fila {
+  grid-template-columns: minmax(130px, 1fr) 112px 48px;
+  gap: 10px;
+}
+
+.fin-fila-planilla {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.fin-fila-planilla .fin-monto { grid-column: auto; }
+
+.fin-fila-nueva { grid-template-columns: minmax(130px, 1fr) 112px auto; }
+
+.fin-fila-planilla.fin-fila-nueva {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.fin-fila input, .fin-fila select { min-width: 0; }
+
+.fin-fila button {
+  min-width: 48px;
+  min-height: var(--toque-min);
+}
+
+.fin-editores { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+
+.fin-editor {
+  border-radius: 16px;
+  padding: 20px 22px;
+  min-width: 0;
+}
+
+.fin-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 2px solid var(--tinta);
+  text-align: left;
+}
+
+.fin-total strong {
+  font-family: var(--fuente-display);
+  font-size: 26px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+  white-space: nowrap;
+}
+
+/* Flujo: dos barras separadas y las cifras sin partirse */
+.fin-dia-cifras em { white-space: nowrap; }
+
+.fin-leyenda {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 6px 0 10px;
+  font-size: 12.5px;
+  color: var(--tinta-media);
+}
+
+.fin-leyenda span { display: inline-flex; align-items: center; gap: 7px; }
+
+.fin-leyenda i {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.fin-leyenda .entro { background: var(--culantro); }
+.fin-leyenda .salio { background: var(--achiote); }
+
+/* La fila de alta también se apila: el select de roles y el "+ Agregar"
+   no entran juntos cuando el panel queda angosto. */
+.fin-fila-nueva,
+.fin-fila-planilla.fin-fila-nueva {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.fin-fila-nueva button { min-width: 0; }
+
+/* 5 px de más hacían salir el botón de quitar: la columna del monto
+   cede primero y el nombre tiene su propio piso. */
+.fin-fila { grid-template-columns: minmax(110px, 1fr) minmax(90px, 104px) 48px; }
+
+/* Filas de fijos y planilla: columnas con piso propio, y por debajo de
+   760 px cada campo en su renglón (nada de nombres recortados). */
+.fin-fila-planilla {
+  grid-template-columns: minmax(130px, 1fr) minmax(110px, 1fr) minmax(90px, 104px) 48px;
+}
+
+.fin-fila-nueva {
+  grid-template-columns: minmax(110px, 1fr) minmax(84px, 100px) minmax(100px, auto);
+}
+
+.fin-fila-planilla.fin-fila-nueva {
+  grid-template-columns: minmax(110px, 1fr) minmax(100px, 1fr) minmax(84px, 100px) minmax(100px, auto);
+}
+
+.fin-fila-nueva button {
+  min-width: 0;
+  white-space: nowrap;
+  padding-inline: 14px;
+}
+
+@media (max-width: 760px) {
+  .fin-fila,
+  .fin-fila-planilla,
+  .fin-fila-nueva,
+  .fin-fila-planilla.fin-fila-nueva {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Los dos paneles solo van lado a lado cuando de verdad entran: con
+   420 px de piso, a 900 px de pantalla se apilan y nada se recorta. */
+.fin-editores { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }

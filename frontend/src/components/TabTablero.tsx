@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, ApiError, clearAdminToken, soles } from '../api'
 import type { InsumoTablero, Tablero } from '../api'
+import { CabeceraVista } from './CabeceraVista'
 
 /** Columnas ordenables de la tabla de insumos. */
 type Columna = 'nombre' | 'clase_abc' | 'consumido_soles' | 'comprado_soles' |
@@ -107,6 +108,9 @@ export function TabTablero({ onSesionVencida }: { onSesionVencida: () => void })
 
   useEffect(() => { cargar() }, [cargar])
 
+  /** Volver del día suelto al período de siempre. */
+  const volverAlPeriodo = () => { setPeriodo({ dias: 30 }); setEligiendo(false) }
+
   /** Tocar una barra = mirar SOLO ese día. */
   const verSoloEseDia = (fecha: string) => {
     setDesdeTxt(fecha)
@@ -147,8 +151,8 @@ export function TabTablero({ onSesionVencida }: { onSesionVencida: () => void })
     [['Plato', 'Cantidad', 'Vendido S/'],
      ...(datos?.top_platos ?? []).map((p) => [p.nombre, p.cantidad, p.total])])
 
-  if (error) return <section><h2>Tablero</h2><p className="error-admin">{error}</p></section>
-  if (!datos) return <section><h2>Tablero</h2><p className="nota-admin">Cargando…</p></section>
+  if (error) return <section className="tablero"><CabeceraVista id="tablero" /><p className="error-admin">{error}</p></section>
+  if (!datos) return <section className="tablero"><CabeceraVista id="tablero" /><p className="nota-admin">Cargando…</p></section>
 
   const k = datos.kpis
   const unDia = datos.desde === datos.hasta
@@ -171,21 +175,18 @@ export function TabTablero({ onSesionVencida }: { onSesionVencida: () => void })
 
   return (
     <section className="tablero">
-      <div className="tablero-cabecera">
-        <h2>Tablero</h2>
-        <div className="admin-acciones tb-rango">
-          {[7, 30, 90].map((d) => (
-            <button key={d} className={'dias' in periodo && periodo.dias === d ? 'boton-primario' : ''}
-                    onClick={() => { setPeriodo({ dias: d }); setEligiendo(false) }}>
-              {d} días
-            </button>
-          ))}
-          <button className={'desde' in periodo ? 'boton-primario' : ''}
-                  onClick={() => setEligiendo((v) => !v)}>
-            📅 Elegir fechas
+      <CabeceraVista id="tablero">
+        {[7, 30, 90].map((d) => (
+          <button key={d} className={`ad-chip-periodo ${'dias' in periodo && periodo.dias === d ? 'activo' : ''}`}
+                  onClick={() => { setPeriodo({ dias: d }); setEligiendo(false) }}>
+            {d} días
           </button>
-        </div>
-      </div>
+        ))}
+        <button className={`ad-chip-periodo ${'desde' in periodo ? 'activo' : ''}`}
+                onClick={() => setEligiendo((v) => !v)}>
+          Elegir fechas
+        </button>
+      </CabeceraVista>
 
       {eligiendo && (
         <div className="tb-fechas">
@@ -218,95 +219,115 @@ export function TabTablero({ onSesionVencida }: { onSesionVencida: () => void })
         )}
       </p>
 
-      {/* Los números grandes: cada uno es una cifra, no una gráfica */}
+      {/* Los números grandes: cada uno es una cifra, no una gráfica.
+          El borde de arriba los distingue de un vistazo. */}
       <div className="tb-kpis">
-        <div className="tb-kpi tb-kpi-hero">
+        <div className="tb-kpi tb-kpi-hero tema-vendido">
           <span className="tb-kpi-rotulo">Vendido</span>
           <span className="tb-kpi-cifra">{soles(k.ventas)}</span>
           <span className="tb-kpi-pie">{soles(k.promedio_dia)} por día</span>
         </div>
-        <div className="tb-kpi">
+        <div className="tb-kpi tema-insumos">
           <span className="tb-kpi-rotulo">Insumos usados</span>
           <span className="tb-kpi-cifra">{soles(k.costo_insumos)}</span>
           <span className="tb-kpi-pie">lo que se cocinó, según recetas</span>
         </div>
-        <div className="tb-kpi">
+        <div className="tb-kpi tema-margen">
           <span className="tb-kpi-rotulo">Margen</span>
           <span className="tb-kpi-cifra">{k.margen_pct != null ? `${k.margen_pct}%` : '—'}</span>
           <span className="tb-kpi-pie">queda después de la comida</span>
         </div>
-        <div className="tb-kpi">
+        <div className="tb-kpi tema-cajon">
           <span className="tb-kpi-rotulo">Salió del cajón</span>
           <span className="tb-kpi-cifra">{soles(k.egresos + k.compras)}</span>
           <span className="tb-kpi-pie">compras {soles(k.compras)} · gastos {soles(k.egresos)}</span>
         </div>
-        <div className="tb-kpi">
+        <div className="tb-kpi tema-mermas">
           <span className="tb-kpi-rotulo">Mermas</span>
           <span className="tb-kpi-cifra">{soles(k.mermas)}</span>
           <span className="tb-kpi-pie">lo que se botó</span>
         </div>
       </div>
 
-      {/* Venta por día: una sola serie, un solo color, sin leyenda */}
+      {/* Venta por día: una sola serie, un solo color, sin leyenda.
+          Tocar una barra deja el tablero entero en ESE día. */}
       <div className="tb-panel">
-        <h3>Cuánto se vendió cada día</h3>
+        <div className="tb-panel-cabecera">
+          <span className="tb-panel-rotulo">Cuánto se vendió cada día</span>
+          {unDia ? (
+            <button className="tb-pildora" onClick={volverAlPeriodo}>
+              {fechaCorta(datos.desde)} · {soles(k.ventas)} <i aria-hidden="true">✕</i>
+            </button>
+          ) : (
+            <span className="tb-panel-nota">toca una barra para ver solo ese día</span>
+          )}
+        </div>
         {conVenta.length === 0 ? (
           <p className="nota-admin">Sin ventas en el período.</p>
         ) : (
-          <>
-            <p className="nota-admin">Toca una barra para ver solo ese día.</p>
-            <div className="tb-plot">
-              <div className="tb-eje" aria-hidden="true">
-                <span>{marcaEje(topeDia)}</span>
-                <span>{marcaEje(topeDia / 2)}</span>
-                <span>0</span>
-              </div>
-              <div className="tb-columnas">
-              {conVenta.map((d) => (
-                <button className="tb-col" key={d.fecha} type="button"
-                        onClick={() => verSoloEseDia(d.fecha)}
-                        aria-label={`Ver solo ${d.dia_semana} ${d.etiqueta}`}
-                        title={`${d.dia_semana} ${d.etiqueta}: ${soles(d.ventas)} — toca para ver solo este día`}>
-                  {d.ventas === maxDia && <span className="tb-col-valor">{soles(d.ventas)}</span>}
-                  <i className="tb-barra-venta" style={{ height: `${(d.ventas / topeDia) * 100}%` }} />
-                  <span className="tb-col-x">{d.etiqueta}</span>
-                </button>
-              ))}
-              </div>
+          <div className="tb-plot">
+            <div className="tb-eje" aria-hidden="true">
+              <span>{marcaEje(topeDia)}</span>
+              <span>{marcaEje(topeDia / 2)}</span>
+              <span>0</span>
             </div>
-          </>
+            <div className="tb-columnas">
+            {conVenta.map((d) => (
+              <button className="tb-col" key={d.fecha} type="button"
+                      onClick={() => verSoloEseDia(d.fecha)}
+                      aria-label={`Ver solo ${d.dia_semana} ${d.etiqueta}`}
+                      title={`${d.dia_semana} ${d.etiqueta}: ${soles(d.ventas)} — toca para ver solo este día`}>
+                {d.ventas === maxDia && !unDia && (
+                  <span className="tb-col-valor">{soles(d.ventas)}</span>
+                )}
+                <i className={`tb-barra-venta${unDia ? ' es-elegido' : d.ventas === maxDia ? ' es-maximo' : ''}`}
+                   style={{ height: `${(d.ventas / topeDia) * 100}%` }} />
+                <span className="tb-col-x">{d.etiqueta}</span>
+              </button>
+            ))}
+            </div>
+          </div>
         )}
       </div>
 
       <div className="tb-dos">
-        {/* Qué día de la semana rinde más (el histograma que pediste) */}
+        {/* Qué día de la semana rinde más. Las etiquetas van en una fila
+            propia bajo el eje: así nunca se montan con las barras. */}
         <div className="tb-panel">
-          <h3>Qué día vende más</h3>
-          <p className="nota-admin">Promedio de los días que abriste.</p>
-          <div className="tb-columnas tb-columnas-semana">
-            {datos.por_dia_semana.map((d) => (
-              <div className="tb-col" key={d.dia}
-                   title={d.veces ? `${d.dia}: ${soles(d.promedio)} en promedio (${d.veces} ${d.veces === 1 ? 'vez' : 'veces'})` : `${d.dia}: sin servicio`}>
-                {d.dia === mejorDiaSemana?.dia && d.promedio > 0 && (
-                  <span className="tb-col-valor">{soles(d.promedio)}</span>
-                )}
-                <i className="tb-barra-venta" style={{ height: `${(d.promedio / topeSemana) * 100}%` }} />
-                <span className="tb-col-x">{d.dia.slice(0, 3)}</span>
-              </div>
-            ))}
+          <div className="tb-panel-cabecera">
+            <span className="tb-panel-rotulo">Qué día vende más</span>
+          </div>
+          <p className="nota-admin">
+            Promedio de los días que abriste
+            {mejorDiaSemana && mejorDiaSemana.promedio > 0 &&
+              ` · mejor: ${mejorDiaSemana.dia} (${soles(mejorDiaSemana.promedio)})`}
+          </p>
+          <div className="tb-semana">
+            <div className="tb-semana-barras">
+              {datos.por_dia_semana.map((d) => (
+                <div className="tb-semana-col" key={d.dia}
+                     title={d.veces ? `${d.dia}: ${soles(d.promedio)} en promedio (${d.veces} ${d.veces === 1 ? 'vez' : 'veces'})` : `${d.dia}: sin servicio`}>
+                  <i className={d.dia === mejorDiaSemana?.dia && d.promedio > 0 ? 'es-mejor' : ''}
+                     style={{ height: `${(d.promedio / topeSemana) * 100}%` }} />
+                </div>
+              ))}
+            </div>
+            <div className="tb-semana-dias" aria-hidden="true">
+              {datos.por_dia_semana.map((d) => (
+                <span key={d.dia}>{d.dia.slice(0, 3)}</span>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Todos los platos, del que más sale al que menos */}
         <div className="tb-panel">
-          <div className="tb-tabla-cabecera">
-            <h3>Qué platos salen (y cuáles no)</h3>
+          <div className="tb-panel-cabecera">
+            <span className="tb-panel-rotulo">Qué platos salen (y cuáles no)</span>
             {platos.length > 0 && (
-              <div className="tb-tabla-controles">
-                <button className="boton boton--sm boton--papel" onClick={descargarPlatos}>
-                  ⬇️ Excel (CSV)
-                </button>
-              </div>
+              <button className="ad-chip-csv ad-chip-csv--sm" onClick={descargarPlatos}>
+                Excel (CSV)
+              </button>
             )}
           </div>
           {platos.length === 0 ? (
@@ -343,26 +364,26 @@ export function TabTablero({ onSesionVencida }: { onSesionVencida: () => void })
 
       {/* La tabla: el corazón del pedido */}
       <div className="tb-panel">
-        <div className="tb-tabla-cabecera">
-          <h3>En qué se va la plata de la cocina</h3>
-          <div className="tb-tabla-controles">
+        <h3 className="tb-tabla-titulo">En qué se va la plata de la cocina</h3>
+        <div className="tb-tabla-controles">
+          <div className="tb-filtros">
+            {([['todas', `Todos (${datos.insumos.length})`],
+               ['A', `A · vigilar (${cuenta('A')})`],
+               ['B', `B · medio (${cuenta('B')})`],
+               ['C', `C · poco peso (${cuenta('C')})`]] as const).map(([id, texto]) => (
+              <button key={id} className={clase === id ? 'tb-chip tb-chip-on' : 'tb-chip'}
+                      onClick={() => setClase(id)}>{texto}</button>
+            ))}
+          </div>
+          <div className="tb-tabla-busqueda">
             <input className="tb-busca" placeholder="Buscar insumo…" value={busca}
                    aria-label="Buscar insumo" onChange={(e) => setBusca(e.target.value)} />
-            <button className="boton boton--sm boton--papel" onClick={descargarInsumos}>⬇️ Excel (CSV)</button>
+            <button className="ad-chip-csv ad-chip-csv--sm" onClick={descargarInsumos}>Excel (CSV)</button>
           </div>
         </div>
-        <div className="tb-filtros">
-          {([['todas', `Todos (${datos.insumos.length})`],
-             ['A', `A · vigilar (${cuenta('A')})`],
-             ['B', `B · medio (${cuenta('B')})`],
-             ['C', `C · poco peso (${cuenta('C')})`]] as const).map(([id, texto]) => (
-            <button key={id} className={clase === id ? 'tb-chip tb-chip-on' : 'tb-chip'}
-                    onClick={() => setClase(id)}>{texto}</button>
-          ))}
-          <span className="tb-filtros-ayuda">
-            <strong>A</strong> = los pocos que se llevan el 80% del gasto · toca un título para ordenar
-          </span>
-        </div>
+        <p className="tb-ayuda">
+          <strong>A</strong> = los pocos insumos que se llevan el 80% del gasto · toca un título para ordenar
+        </p>
         <div className="tb-tabla-caja">
           <table className="tb-tabla">
             <thead>
@@ -379,9 +400,9 @@ export function TabTablero({ onSesionVencida }: { onSesionVencida: () => void })
             </thead>
             <tbody>
               {insumos.map((i) => (
-                <tr key={i.id} className={i.clase_abc === 'A' ? 'fila-a' : ''}>
-                  <td>
-                    <span className="tb-insumo">{i.nombre}</span>
+                <tr key={i.id} className={`tb-fila-${i.clase_abc.toLowerCase()}`}>
+                  <td className="tb-td-insumo">
+                    <span className="tb-insumo" title={i.nombre}>{i.nombre}</span>
                     <span className="tb-unidad">{i.unidad}</span>
                   </td>
                   <td><span className={`tb-abc tb-abc-${i.clase_abc.toLowerCase()}`}
