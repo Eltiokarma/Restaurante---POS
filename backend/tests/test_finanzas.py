@@ -239,9 +239,15 @@ def test_tablero(client, admin_headers, menu_ejemplo):
     assert len(con_venta) == 1 and con_venta[0]["promedio"] == venta
     assert len(d["por_dia_semana"]) == 7
 
-    # Los platos que más salen
-    assert d["top_platos"][0]["nombre"] == "Lomo saltado"
+    # Los platos: TODOS los vendidos, del que más sale al que menos
+    # (el dueño también mira la cola de la lista, no solo el top)
+    client.post("/api/orders", json={"items": [
+        {"plato_id": menu_ejemplo["Chicha morada"], "cantidad": 1, "nota": ""},
+    ]})
+    d = client.get("/api/finanzas/tablero?dias=30", headers=admin_headers).json()
+    assert [p["nombre"] for p in d["top_platos"]] == ["Lomo saltado", "Chicha morada"]
     assert d["top_platos"][0]["cantidad"] == 3
+    assert d["top_platos"][-1]["cantidad"] == 1
 
     # ABC: la carne se lleva el grueso del gasto (A), la sal es la cola
     por_nombre = {i["nombre"]: i for i in d["insumos"]}
@@ -250,4 +256,34 @@ def test_tablero(client, admin_headers, menu_ejemplo):
     assert por_nombre["Sal"]["clase_abc"] in ("B", "C")
     assert por_nombre["Sal"]["pct_acumulado"] == 100.0
 
-    assert client.get("/api/finanzas/tablero?dias=3", headers=admin_headers).status_code == 422
+
+def test_tablero_por_rango_de_fechas(client, admin_headers, menu_ejemplo):
+    """Se puede pedir un rango exacto —incluido UN solo día, que es lo que
+    pasa cuando el dueño toca una barra de la gráfica."""
+    from app.models import hoy_lima
+    from datetime import timedelta
+
+    r = client.post("/api/orders", json={"items": [
+        {"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 2, "nota": ""},
+    ]})
+    venta = r.json()["orden"]["total"]
+
+    hoy = hoy_lima()
+    ayer = hoy - timedelta(days=1)
+
+    d = client.get(f"/api/finanzas/tablero?desde={hoy}&hasta={hoy}",
+                   headers=admin_headers).json()
+    assert d["dias"] == 1 and len(d["por_dia"]) == 1
+    assert d["desde"] == d["hasta"] == hoy.isoformat()
+    assert d["kpis"]["ventas"] == venta
+
+    # Un día sin servicio: el tablero responde en cero, no falla
+    d = client.get(f"/api/finanzas/tablero?desde={ayer}&hasta={ayer}",
+                   headers=admin_headers).json()
+    assert d["kpis"]["ventas"] == 0 and d["kpis"]["dias_con_venta"] == 0
+    assert d["top_platos"] == []
+
+    # Rango al revés: se rechaza con un mensaje, no con un 500
+    r = client.get(f"/api/finanzas/tablero?desde={hoy}&hasta={ayer}",
+                   headers=admin_headers)
+    assert r.status_code == 400

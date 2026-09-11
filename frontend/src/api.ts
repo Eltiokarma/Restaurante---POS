@@ -953,7 +953,13 @@ export const api = {
   finanzasResumen: (dias: number) =>
     request<FinanzasResumen>(`/api/finanzas/resumen?dias=${dias}`, {}, true),
 
-  tablero: (dias: number) => request<Tablero>(`/api/finanzas/tablero?dias=${dias}`, {}, true),
+  // El período va por días (últimos N) o por rango exacto desde/hasta
+  tablero: (periodo: { dias: number } | { desde: string; hasta: string }) => {
+    const q = 'dias' in periodo
+      ? `dias=${periodo.dias}`
+      : `desde=${periodo.desde}&hasta=${periodo.hasta}`
+    return request<Tablero>(`/api/finanzas/tablero?${q}`, {}, true)
+  },
 
   finanzasFlujo: (agrupar: 'dia' | 'semana' | 'mes' | 'anio') =>
     request<{ agrupar: string; filas: FlujoFila[] }>(
