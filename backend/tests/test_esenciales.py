@@ -183,3 +183,62 @@ def test_se_puede_editar_el_minimo(client, admin_headers, db):
     r = client.put(f"/api/insumos/{insumo.id}", json={"stock_minimo": 8.0},
                    headers=admin_headers)
     assert r.json()["stock_minimo"] == 8.0 and r.json()["bajo_minimo"] is True
+
+
+def test_borrar_un_dia_de_prueba(client, admin_headers, menu_ejemplo, db):
+    """Borrar UN día (el de las pruebas) sin tocar los demás: se van sus
+    órdenes, su caja y sus egresos, y el kardex devuelve lo consumido."""
+    from datetime import timedelta
+    from app.models import MovimientoInsumo, Orden, hoy_lima
+    from sqlalchemy import select
+
+    r = client.post("/api/insumos", json={"nombre": "Arroz", "unidad": "kg",
+                                          "costo_unitario": 4.0}, headers=admin_headers)
+    insumo_id = r.json()["id"]
+    client.post(f"/api/insumos/{insumo_id}/movimientos",
+                json={"tipo": "compra", "cantidad": 10, "costo_total": 40.0},
+                headers=admin_headers)
+    client.put(f"/api/insumos/recetas/{menu_ejemplo['Lomo saltado']}",
+               json={"items": [{"insumo_id": insumo_id, "cantidad": 0.5}]},
+               headers=admin_headers)
+    stock_antes = client.get("/api/insumos", headers=admin_headers).json()["insumos"][0]["stock_actual"]
+
+    # Día de prueba (ayer) y día real (hoy): solo se va el primero
+    ayer = hoy_lima() - timedelta(days=1)
+    client.post("/api/finanzas/ventas-manuales", json={
+        "fecha": ayer.isoformat(), "efectivo": 50.0,
+        "lineas": [{"nombre": "Lomo saltado", "cantidad": 4}],
+    }, headers=admin_headers)
+    r = client.post("/api/orders", json={"items": [
+        {"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 1, "nota": ""},
+    ]})
+    venta_real = r.json()["orden"]["total"]
+    client.post("/api/caja/abrir", json={"monto_apertura": 100})
+    client.post("/api/caja/egresos", json={"concepto": "Gas", "monto": 20.0})
+
+    # Consumieron los dos días: ayer 4 × 0.5 kg y hoy 1 × 0.5 kg
+    stock_con_prueba = client.get("/api/insumos", headers=admin_headers).json()["insumos"][0]["stock_actual"]
+    assert round(stock_antes - stock_con_prueba, 2) == 2.5
+
+    assert client.post("/api/mantenimiento/borrar-dia",
+                       json={"fecha": ayer.isoformat(), "confirmacion": "nop"},
+                       headers=admin_headers).status_code == 422
+
+    r = client.post("/api/mantenimiento/borrar-dia",
+                    json={"fecha": ayer.isoformat(), "confirmacion": "BORRAR"},
+                    headers=admin_headers)
+    assert r.status_code == 200, r.text
+    borrado = r.json()["borrado"]
+    assert borrado["ordenes"] == 1 and borrado["ventas"] == 50.0
+
+    # El día real quedó intacto; el de prueba desapareció
+    assert db.scalars(select(Orden).where(Orden.fecha == ayer)).all() == []
+    hoy_ordenes = db.scalars(select(Orden).where(Orden.fecha == hoy_lima())).all()
+    assert len(hoy_ordenes) == 1 and hoy_ordenes[0].total == venta_real
+    assert client.get("/api/caja/egresos").json()["total"] == 20.0
+
+    # El kardex devolvió SOLO lo de la venta borrada (2.0 kg): el consumo
+    # del día real (0.5 kg) sigue descontado
+    stock_final = client.get("/api/insumos", headers=admin_headers).json()["insumos"][0]["stock_actual"]
+    assert round(stock_final, 2) == round(stock_antes - 0.5, 2)
+    assert db.scalars(select(MovimientoInsumo).where(MovimientoInsumo.fecha == ayer)).all() == []

@@ -3499,6 +3499,7 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
 
       <GestorMesas onSesionVencida={onSesionVencida} />
       <EmpezarLimpio onSesionVencida={onSesionVencida} />
+      <BorrarUnDia onSesionVencida={onSesionVencida} />
     </div>
   )
 }
@@ -3767,6 +3768,62 @@ function EmpezarLimpio({ onSesionVencida }: { onSesionVencida: () => void }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Borrar UN día: cuando entre días reales quedó uno de prueba. "Empezar
+ * limpio" borra todo y sirve antes de abrir; esto sirve después.
+ */
+function BorrarUnDia({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [fecha, setFecha] = useState('')
+  const [confirmacion, setConfirmacion] = useState('')
+  const [mensaje, setMensaje] = useState('')
+  const [error, setError] = useState('')
+
+  const borrar = async () => {
+    setError('')
+    setMensaje('')
+    try {
+      const { borrado } = await api.borrarDia(fecha, confirmacion)
+      setMensaje(
+        `Listo: del ${borrado.fecha} se borraron ${borrado.ordenes} pedido(s) ` +
+        `por ${soles(borrado.ventas)}, ${borrado.cierres_caja} caja(s), ` +
+        `${borrado.egresos} egreso(s) y ${borrado.movimientos_kardex} movimiento(s) ` +
+        `de kardex (lo consumido volvió al stock).`,
+      )
+      setConfirmacion('')
+      setFecha('')
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  return (
+    <div className="panel-peligro">
+      <h3 className="subtitulo-resumen">🗓 Borrar un día suelto</h3>
+      <p className="nota-admin">
+        Para cuando entre días de verdad quedó uno de prueba. Se va TODO lo de ese día
+        (pedidos, caja, egresos) y el kardex devuelve lo que esas ventas consumieron.
+        Los otros días no se tocan.
+      </p>
+      <div className="fin-fila fin-fila-nueva">
+        <input type="date" value={fecha} aria-label="Día a borrar"
+               onChange={(e) => setFecha(e.target.value)} />
+        <input placeholder="Escribe BORRAR" value={confirmacion}
+               aria-label="Confirmación para borrar el día"
+               onChange={(e) => setConfirmacion(e.target.value)} />
+        <button
+          className="boton boton--sm boton--peligro"
+          disabled={!fecha || confirmacion.trim().toUpperCase() !== 'BORRAR'}
+          onClick={borrar}
+        >
+          Borrar ese día
+        </button>
+      </div>
+      {mensaje && <div className="banner-ok">{mensaje}</div>}
+      {error && <div className="banner-error">{error}</div>}
     </div>
   )
 }

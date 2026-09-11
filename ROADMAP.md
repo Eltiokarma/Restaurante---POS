@@ -458,6 +458,13 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       (`GET /api/finanzas/flujo?agrupar=…`; semana empieza lunes, 26 semanas, 12 meses,
       años desde el primer dato). Las altas de costos fijos y de rol en planilla son
       **desplegables con "Otro…"** que abre un campo libre.
+- [x] **Borrar un día suelto** (pedido del dueño: entre días reales quedaron días de
+      prueba): `POST /api/mantenimiento/borrar-dia` con fecha + palabra BORRAR se lleva
+      TODO lo de ese día (órdenes con ítems y menús, tickets de gaseosas, tandas,
+      cancelaciones, la caja y sus egresos) y **deshace el kardex**: cada movimiento de ese
+      día —o ligado a sus órdenes— se resta del stock y se borra, así lo consumido vuelve
+      sin dejar movimientos fantasma. Panel propio en Admin → Configuración, al lado de
+      "Empezar limpio" (que sigue siendo el borrado total de antes de abrir).
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
       hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.

@@ -403,6 +403,17 @@ export interface FinanzasResumen {
   por_dia: FinanzasDia[]
 }
 
+export interface DiaBorrado {
+  fecha: string
+  ordenes: number
+  ventas: number
+  movimientos_kardex: number
+  cierres_caja: number
+  egresos: number
+  cancelaciones: number
+  tandas: number
+}
+
 export interface FlujoFila {
   etiqueta: string
   desde: string
@@ -804,6 +815,13 @@ export const api = {
 
   // --- Empezar limpio (admin): borra el movimiento de las pruebas ---
   resumenDatos: () => request<ResumenDatos>('/api/mantenimiento/datos', {}, true),
+
+  // Borra el movimiento de UN día (el de las pruebas), sin tocar el resto
+  borrarDia: (fecha: string, confirmacion: string) =>
+    request<{ borrado: DiaBorrado }>('/api/mantenimiento/borrar-dia', {
+      method: 'POST',
+      body: JSON.stringify({ fecha, confirmacion }),
+    }, true),
 
   reiniciarDatos: (confirmacion: string, reiniciarStock: boolean) =>
     request<{ borrado: ResumenDatos; stock_reiniciado: boolean }>('/api/mantenimiento/reiniciar', {
