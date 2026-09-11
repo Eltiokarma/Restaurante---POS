@@ -248,6 +248,8 @@ def test_tablero(client, admin_headers, menu_ejemplo):
     assert [p["nombre"] for p in d["top_platos"]] == ["Lomo saltado", "Chicha morada"]
     assert d["top_platos"][0]["cantidad"] == 3
     assert d["top_platos"][-1]["cantidad"] == 1
+    # Cada plato trae su categoría: el ranking se colorea con ella
+    assert [p["categoria"] for p in d["top_platos"]] == ["fondo", "bebida"]
 
     # ABC: la carne se lleva el grueso del gasto (A), la sal es la cola
     por_nombre = {i["nombre"]: i for i in d["insumos"]}
@@ -255,6 +257,25 @@ def test_tablero(client, admin_headers, menu_ejemplo):
     assert por_nombre["Carne"]["pct_valor"] > 99.0
     assert por_nombre["Sal"]["clase_abc"] in ("B", "C")
     assert por_nombre["Sal"]["pct_acumulado"] == 100.0
+
+
+def test_el_ranking_solo_trae_platos_del_catalogo(client, admin_headers, menu_ejemplo):
+    """Lo anotado a mano que no existe en el catálogo entra como cargo,
+    así que no ensucia el ranking de platos (ni su color)."""
+    from app.models import hoy_lima
+
+    client.post("/api/finanzas/ventas-manuales", json={
+        "fecha": hoy_lima().isoformat(), "efectivo": 35.0,
+        "lineas": [
+            {"nombre": "Lomo saltado", "cantidad": 1},
+            {"nombre": "Especial", "cantidad": 1, "precio": 20.0},
+        ],
+    }, headers=admin_headers)
+
+    d = client.get("/api/finanzas/tablero?dias=7", headers=admin_headers).json()
+    nombres = [p["nombre"] for p in d["top_platos"]]
+    assert "Lomo saltado" in nombres and "Especial" not in nombres
+    assert all(p["categoria"] for p in d["top_platos"])
 
 
 def test_tablero_por_rango_de_fechas(client, admin_headers, menu_ejemplo):

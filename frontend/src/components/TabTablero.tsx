@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, ApiError, clearAdminToken, soles } from '../api'
+import { api, ApiError, clearAdminToken, soles, NOMBRE_CATEGORIA } from '../api'
 import type { InsumoTablero, Tablero } from '../api'
 import { CabeceraVista } from './CabeceraVista'
 
@@ -168,6 +168,9 @@ export function TabTablero({ onSesionVencida }: { onSesionVencida: () => void })
   const platosVisibles = todosLosPlatos ? platos : platos.slice(0, PLATOS_VISIBLES)
   const maxPlato = Math.max(1, ...platos.map((p) => p.cantidad))
   const elQueMenosSale = platos.length ? platos[platos.length - 1] : null
+  // Solo las categorías que de verdad salieron: una leyenda con entradas
+  // que no existen es ruido
+  const categoriasPresentes = [...new Set(platos.map((p) => p.categoria))]
 
   const totalGasto = datos.insumos.reduce((s, i) => s + i.consumido_soles, 0)
   const maxGasto = Math.max(1, ...datos.insumos.map((i) => i.consumido_soles))
@@ -334,17 +337,27 @@ export function TabTablero({ onSesionVencida }: { onSesionVencida: () => void })
             <p className="nota-admin">Todavía no se vendió nada en el período.</p>
           ) : (
             <>
+              <div className="tb-rank-leyenda">
+                {categoriasPresentes.map((c) => (
+                  <span key={c}>
+                    <i className={`cat-${c}`} aria-hidden="true" />
+                    {NOMBRE_CATEGORIA[c] ?? 'Otros'}
+                  </span>
+                ))}
+              </div>
               {elQueMenosSale && platos.length > PLATOS_VISIBLES && (
                 <p className="nota-admin">
                   El que menos sale: <strong>{elQueMenosSale.nombre}</strong> ({elQueMenosSale.cantidad}).
                 </p>
               )}
               <div className={`tb-ranking${todosLosPlatos ? ' tb-ranking-largo' : ''}`}>
-                {platosVisibles.map((p) => (
-                  <div className="tb-rank-fila" key={p.nombre} title={`${p.cantidad} vendidos · ${soles(p.total)}`}>
-                    <span className="tb-rank-nombre">{p.nombre}</span>
+  {platosVisibles.map((p) => (
+                  <div className="tb-rank-fila" key={p.nombre}
+                       title={`${p.nombre}: ${p.cantidad} vendidos · ${soles(p.total)} · ${NOMBRE_CATEGORIA[p.categoria] ?? 'Otros'}`}>
+                    <span className="tb-rank-nombre" title={p.nombre}>{p.nombre}</span>
                     <span className="tb-rank-barra">
-                      <i style={{ width: `${(p.cantidad / maxPlato) * 100}%` }} />
+                      <i className={`cat-${p.categoria}`}
+                         style={{ width: `${(p.cantidad / maxPlato) * 100}%` }} />
                     </span>
                     <span className="tb-rank-cifra">{p.cantidad}</span>
                   </div>

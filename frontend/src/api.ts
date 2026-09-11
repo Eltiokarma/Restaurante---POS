@@ -489,7 +489,7 @@ export interface Tablero {
   }
   por_dia: TableroDia[]
   por_dia_semana: { dia: string; total: number; veces: number; promedio: number }[]
-  top_platos: { nombre: string; cantidad: number; total: number }[]
+  top_platos: { nombre: string; cantidad: number; total: number; categoria: string }[]
   insumos: InsumoTablero[]
 }
 

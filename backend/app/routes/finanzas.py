@@ -400,12 +400,21 @@ def tablero(
 
     # TODOS los platos vendidos, del que más sale al que menos: el dueño
     # mira las dos puntas de la lista (qué se repite y qué casi no se pide).
+    # La categoría viene del plato del catálogo (LEFT JOIN: las líneas
+    # libres del cuaderno no tienen plato, y esas quedan en "otros").
     top_platos = [
-        {"nombre": nombre, "cantidad": int(cantidad or 0), "total": round(float(monto or 0.0), 2)}
-        for nombre, cantidad, monto in db.execute(
+        {
+            "nombre": nombre,
+            "cantidad": int(cantidad or 0),
+            "total": round(float(monto or 0.0), 2),
+            "categoria": categoria or "otros",
+        }
+        for nombre, cantidad, monto, categoria in db.execute(
             select(OrdenItem.nombre_snapshot, func.sum(OrdenItem.cantidad),
-                   func.sum(OrdenItem.cantidad * OrdenItem.precio_snapshot))
+                   func.sum(OrdenItem.cantidad * OrdenItem.precio_snapshot),
+                   func.max(Plato.categoria))
             .join(Orden, OrdenItem.orden_id == Orden.id)
+            .join(Plato, OrdenItem.plato_id == Plato.id, isouter=True)
             .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada",
                    OrdenItem.es_cargo == False)  # noqa: E712
             .group_by(OrdenItem.nombre_snapshot)

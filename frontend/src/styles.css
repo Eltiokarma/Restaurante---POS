@@ -8371,7 +8371,8 @@ select:focus-visible {
 }
 
 .tablero .tb-rank-barra { height: 12px; }
-.tablero .tb-rank-barra i { border-radius: 6px; background: var(--achiote); }
+/* El color lo pone la categoría del plato (.cat-*), no esta regla */
+.tablero .tb-rank-barra i { border-radius: 6px; }
 
 /* ---- Tabla ABC ---- */
 .tb-tabla-titulo {
@@ -9513,3 +9514,38 @@ select:focus-visible {
 }
 
 .ad-lienzo .tb-tabla th button { min-height: 0; }
+
+/* ============================================================
+   RANKING DE PLATOS POR CATEGORÍA
+   El color dice qué tipo de plato es; la leyenda lo traduce. El color
+   NUNCA es la única pista: cada barra lleva su nombre y su cantidad al
+   lado, que es lo que de verdad se lee.
+   ============================================================ */
+.tb-rank-leyenda {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 10px 0 4px;
+  font-size: 12.5px;
+  color: var(--tinta-media);
+}
+
+.tb-rank-leyenda span { display: inline-flex; align-items: center; gap: 7px; }
+
+.tb-rank-leyenda i,
+.tablero .tb-rank-barra i { border-radius: 6px; }
+
+.tb-rank-leyenda i { width: 11px; height: 11px; border-radius: 3px; }
+
+/* Con el selector completo: la regla vieja `.tb-rank-barra i` es más
+   específica que una clase suelta y se comía el color de la categoría. */
+.tb-rank-leyenda i.cat-entrada,
+.tb-rank-barra i.cat-entrada { background: var(--mayolica); }
+.tb-rank-leyenda i.cat-fondo,
+.tb-rank-barra i.cat-fondo { background: var(--achiote); }
+.tb-rank-leyenda i.cat-bebida,
+.tb-rank-barra i.cat-bebida { background: var(--aji); }
+.tb-rank-leyenda i.cat-postre,
+.tb-rank-barra i.cat-postre { background: var(--culantro); }
+.tb-rank-leyenda i.cat-otros,
+.tb-rank-barra i.cat-otros { background: var(--tinta-suave); }
