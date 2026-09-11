@@ -414,6 +414,57 @@ export interface DiaBorrado {
   tandas: number
 }
 
+// ---------- Tablero: la foto del negocio en una pantalla ----------
+export interface InsumoTablero {
+  id: number
+  nombre: string
+  unidad: string
+  consumido: number
+  consumido_soles: number
+  comprado: number
+  comprado_soles: number
+  merma: number
+  merma_soles: number
+  ajuste: number
+  stock_actual: number
+  bajo_minimo: boolean
+  dias_stock: number | null
+  // Pareto del gasto: A = el 80% de la plata, B hasta 95%, C la cola
+  clase_abc: string
+  pct_valor: number
+  pct_acumulado: number
+}
+
+export interface TableroDia {
+  fecha: string
+  etiqueta: string
+  dia_semana: string
+  ventas: number
+  egresos: number
+  compras: number
+}
+
+export interface Tablero {
+  desde: string
+  hasta: string
+  dias: number
+  kpis: {
+    ventas: number
+    costo_insumos: number
+    mermas: number
+    compras: number
+    egresos: number
+    margen_pct: number | null
+    dias_con_venta: number
+    promedio_dia: number
+    mejor_dia: TableroDia | null
+  }
+  por_dia: TableroDia[]
+  por_dia_semana: { dia: string; total: number; veces: number; promedio: number }[]
+  top_platos: { nombre: string; cantidad: number; total: number }[]
+  insumos: InsumoTablero[]
+}
+
 export interface FlujoFila {
   etiqueta: string
   desde: string
@@ -901,6 +952,8 @@ export const api = {
 
   finanzasResumen: (dias: number) =>
     request<FinanzasResumen>(`/api/finanzas/resumen?dias=${dias}`, {}, true),
+
+  tablero: (dias: number) => request<Tablero>(`/api/finanzas/tablero?dias=${dias}`, {}, true),
 
   finanzasFlujo: (agrupar: 'dia' | 'semana' | 'mes' | 'anio') =>
     request<{ agrupar: string; filas: FlujoFila[] }>(

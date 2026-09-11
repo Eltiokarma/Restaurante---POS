@@ -7149,3 +7149,356 @@ select:focus-visible {
 }
 
 .fin-cat-barra-entra i { background: var(--culantro); }
+
+/* ============================================================
+   TABLERO (Admin → Tablero)
+   Paleta validada con el verificador de la guía de datos:
+   azul mayólica #0f6ea8 (plata que entra) y achiote #b03a22 (gasto)
+   separan ΔE 20.2 en protanopia — el verde/rojo de antes daba 5.9,
+   o sea que un daltónico no los distinguía. Las clases ABC usan una
+   rampa ordinal de un solo tono (achiote oscuro → claro).
+   Reglas aplicadas: barras ≤24px con la punta redondeada 4px y
+   cuadrada en la base, rejilla de 1px sólida y recesiva, el texto
+   nunca lleva el color de la serie.
+   ============================================================ */
+.tablero {
+  --tb-entra: #0f6ea8;
+  --tb-sale: #b03a22;
+  --tb-abc-a: #7d2515;
+  --tb-abc-b: #b03a22;
+  --tb-abc-c: #d98b75;
+  --tb-rejilla: #e6ddca;
+}
+
+.tablero-cabecera {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+/* ---- Los números grandes ---- */
+.tb-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin: 16px 0 24px;
+}
+
+.tb-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 16px 18px;
+  background: var(--papel-alto);
+  border: 2px solid var(--linea);
+  border-radius: var(--r);
+  box-shadow: var(--sombra-papel);
+}
+
+.tb-kpi-hero {
+  border-left: 10px solid var(--tb-entra);
+}
+
+.tb-kpi-rotulo {
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tinta-media);
+}
+
+.tb-kpi-cifra {
+  font-family: var(--fuente-ui);
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+  white-space: nowrap;   /* "S/ 6481.00" nunca se parte en dos líneas */
+}
+
+.tb-kpi-hero .tb-kpi-cifra { font-size: 1.95rem; }
+
+.tb-kpi-pie {
+  font-size: 12.5px;
+  color: var(--tinta-suave);
+  line-height: 1.35;
+}
+
+/* ---- Paneles ---- */
+.tb-panel {
+  margin-bottom: 22px;
+  padding: 18px 20px;
+  background: var(--papel-alto);
+  border: 2px solid var(--linea);
+  border-radius: var(--r);
+}
+
+.tb-panel h3 {
+  margin: 0 0 4px;
+  font-family: var(--fuente-display);
+  font-size: 1.25rem;
+}
+
+.tb-dos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 18px;
+}
+
+.tb-dos .tb-panel { margin-bottom: 0; }
+
+/* ---- Gráfica de columnas ---- */
+.tb-plot {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.tb-eje {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 190px;
+  padding-bottom: 22px; /* deja libre la banda de las fechas */
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta-suave);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tb-columnas {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;              /* la superficie separa: nunca un borde */
+  flex: 1;
+  height: 190px;
+  padding-top: 18px;     /* aire para la cifra que corona la barra más alta */
+  box-sizing: border-box;
+  overflow-x: auto;
+  /* Rejilla: 1px sólida, un paso fuera de la superficie, recesiva */
+  background-image: repeating-linear-gradient(
+    to top, transparent 0, transparent calc(25% - 1px),
+    var(--tb-rejilla) calc(25% - 1px), var(--tb-rejilla) 25%
+  );
+  background-size: 100% calc(100% - 22px);
+  background-repeat: no-repeat;
+}
+
+.tb-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 38px;       /* el slot da aire a la fecha de abajo */
+  height: 100%;
+  position: relative;
+}
+
+.tb-col i {
+  display: block;
+  width: 100%;
+  max-width: 24px;       /* la barra nunca llena su casilla: el resto es aire */
+  /* punta redondeada arriba, cuadrada en la línea base */
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+}
+
+.tb-barra-venta { background: var(--tb-entra); }
+.tb-barra-gasto { background: var(--tb-sale); }
+
+.tb-col-valor {
+  position: absolute;
+  top: -17px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--tinta);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.tb-col-x {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  color: var(--tinta-suave);
+  white-space: nowrap;
+}
+
+.tb-columnas-semana .tb-col i { max-width: 34px; }
+
+/* ---- Ranking de platos ---- */
+.tb-ranking {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.tb-rank-fila {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.5fr) minmax(60px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.tb-rank-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tinta);
+}
+
+.tb-rank-barra {
+  display: block;
+  height: 12px;
+}
+
+.tb-rank-barra i {
+  display: block;
+  height: 100%;
+  background: var(--tb-entra);
+  border-radius: 0 4px 4px 0;   /* punta del dato redondeada */
+  min-width: 2px;
+}
+
+.tb-rank-cifra {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+}
+
+/* ---- La tabla tipo Excel ---- */
+.tb-tabla-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.tb-tabla-controles {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.tb-busca {
+  min-height: var(--toque-min);
+  min-width: 180px;
+  padding: 6px 12px;
+  border: 2px solid var(--linea-fuerte);
+  border-radius: var(--r-chico);
+  background: var(--papel-alto);
+  font: inherit;
+}
+
+.tb-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  margin-top: 10px;
+}
+
+.tb-tabla th {
+  position: sticky;
+  top: 0;
+  background: var(--papel-hondo);
+  border-bottom: 2px solid var(--linea-fuerte);
+  text-align: left;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.tb-tabla th button {
+  width: 100%;
+  padding: 10px 8px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 800;
+  color: var(--tinta-media);
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.tb-tabla th.num, .tb-tabla td.num { text-align: right; }
+.tb-tabla th.num button { text-align: right; }
+
+.tb-tabla td {
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--linea);
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+}
+
+.tb-tabla tbody tr:nth-child(even) { background: rgba(34, 26, 20, 0.02); }
+.tb-tabla tbody tr:hover { background: var(--aji-tenue); }
+.tb-tabla tr.fila-a td:first-child { box-shadow: inset 4px 0 0 var(--tb-abc-a); }
+
+.tb-tabla tfoot td {
+  border-top: 2px solid var(--linea-fuerte);
+  border-bottom: 0;
+  background: var(--papel-hondo);
+}
+
+.tb-insumo { display: block; font-weight: 700; color: var(--tinta); }
+.tb-unidad { display: block; font-size: 11.5px; color: var(--tinta-suave); }
+
+.tb-tabla td small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--tinta-suave);
+}
+
+/* Barra dentro de la celda: magnitud del gasto sin salir de la tabla */
+.tb-celda-barra {
+  display: block;
+  height: 6px;
+  margin-bottom: 3px;
+  background: var(--papel-hondo);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.tb-celda-barra i {
+  display: block;
+  height: 100%;
+  background: var(--tb-sale);
+  border-radius: 999px;
+  min-width: 2px;
+}
+
+/* Clases ABC: rampa ordinal de un solo tono (oscuro = más peso) */
+.tb-abc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  padding: 3px 7px;
+  border-radius: var(--r-chico);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--papel-alto);
+}
+
+.tb-abc-a { background: var(--tb-abc-a); }
+.tb-abc-b { background: var(--tb-abc-b); }
+.tb-abc-c { background: var(--tb-abc-c); color: var(--tinta); }
+.tb-abc--, .tb-abc-\- {
+  background: var(--papel-hondo);
+  color: var(--tinta-suave);
+}
+
+.tb-negativo { color: var(--achiote-hondo); font-weight: 800; }
+.tb-urgente { color: var(--achiote-hondo); font-weight: 800; }
+.tb-aviso { color: var(--aji-hondo) !important; }
+
+@media (max-width: 720px) {
+  .tb-kpi-hero .tb-kpi-cifra { font-size: 1.8rem; }
+  .tb-tabla { font-size: 12.5px; }
+}
