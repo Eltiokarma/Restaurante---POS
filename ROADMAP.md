@@ -529,7 +529,10 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       **Insumos**: cada ficha lleva su medidor de nivel (verde / ají / rayado en negativo).
       **Canceladas**: anillo con la tasa. **Voz**: dona de aceptado/corregido/descartado.
       **Ajustes**: formulario en dos columnas, casillas como filas-botón de 56 px y el salón
-      como grilla de fichas de 96 px.
+      como grilla de fichas de 96 px. El **ranking de platos se colorea por categoría**
+      (entrada mayólica, fondo achiote, bebida ají, postre culantro) con su leyenda: para eso
+      `GET /api/finanzas/tablero` devuelve ahora la `categoria` de cada plato, con LEFT JOIN al
+      catálogo. El color es pista redundante: cada barra ya lleva su nombre y su cantidad.
 
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
