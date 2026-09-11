@@ -8682,3 +8682,834 @@ select:focus-visible {
 /* Los dos paneles solo van lado a lado cuando de verdad entran: con
    420 px de piso, a 900 px de pantalla se apilan y nada se recorta. */
 .fin-editores { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+
+/* ============================================================
+   RESUMEN v3 — la foto del día
+   La cifra grande manda, y debajo se ve de dónde salió esa plata.
+   El "arco del servicio" reemplaza las barras de horas: se lee de un
+   golpe a qué hora se llena el local.
+   ============================================================ */
+.ad-seccion-resumen { --ad-color: var(--achiote); }
+
+.rs-fila-alta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 20px;
+  min-width: 0;
+  margin-bottom: 20px;
+}
+
+.rs-hero,
+.rs-pod,
+.rs-panel {
+  background: var(--papel-alto);
+  border: 1px solid var(--linea);
+  border-radius: 16px;
+  min-width: 0;
+}
+
+.rs-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 24px 26px;
+  box-shadow: var(--sombra-papel);
+}
+
+.rs-franja {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: var(--achiote);
+}
+
+.rs-rotulo {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+  font-weight: 700;
+}
+
+.rs-cifra {
+  display: block;
+  font-family: var(--fuente-display);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(40px, 4.6vw, 68px);
+  line-height: 1;
+  margin: 10px 0 4px;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.rs-barra-pagos {
+  display: flex;
+  gap: 4px;
+  height: 26px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 18px;
+}
+
+.rs-barra-pagos i { display: block; min-width: 3px; }
+
+.rs-pago-efectivo { background: var(--culantro); }
+.rs-pago-yape { background: var(--mayolica); }
+.rs-pago-tarjeta { background: var(--aji); }
+
+.rs-leyenda {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.rs-leyenda span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--tinta-media);
+  white-space: nowrap;
+}
+
+.rs-leyenda i {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.rs-leyenda em {
+  font-style: normal;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+}
+
+.rs-pods {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+  gap: 20px;
+  min-width: 0;
+}
+
+.rs-pod {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 22px;
+  border-top: 4px solid var(--rs-tema, var(--linea-fuerte));
+}
+
+.tema-ordenes { --rs-tema: var(--mayolica); }
+.tema-ticket { --rs-tema: var(--culantro); }
+.tema-tiempo { --rs-tema: var(--aji); }
+.tema-canceladas { --rs-tema: var(--st-anulada); }
+
+.rs-pod-cifra {
+  font-family: var(--fuente-display);
+  font-size: clamp(26px, 2.4vw, 38px);
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  margin-top: auto;
+}
+
+.rs-pie {
+  font-size: 12px;
+  color: var(--tinta-suave);
+  overflow-wrap: anywhere;
+}
+
+.rs-panel {
+  padding: 22px 26px 18px;
+  margin-bottom: 20px;
+}
+
+/* ---- Salió de la olla: cada bloquecito es un plato ---- */
+.rs-olla {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rs-olla-fila {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(42px, 150px) 78px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rs-olla-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.rs-olla-barra {
+  height: 20px;
+  border-radius: 3px;
+  min-width: 4px;
+}
+
+.rs-olla-cifra {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Arco del servicio ---- */
+.rs-arco {
+  position: relative;
+  height: 220px;
+  margin-top: 8px;
+}
+
+.rs-rayo {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  width: 13px;
+  margin-left: -6.5px;
+  transform-origin: bottom center;
+  border-radius: 7px 7px 3px 3px;
+  background: linear-gradient(180deg, #e4cdbd, #e8d8c8);
+}
+
+.rs-rayo.es-fuerte { background: #d08a6f; }
+.rs-rayo.es-pico { background: linear-gradient(180deg, var(--achiote), var(--achiote-hondo)); }
+
+.rs-arco-centro {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  text-align: center;
+  background: var(--papel-alto);
+  border-radius: 999px 999px 8px 8px;
+  padding: 8px 18px 6px;
+}
+
+.rs-arco-hora {
+  display: block;
+  font-family: var(--fuente-display);
+  font-size: 30px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rs-arco-marcas {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--tinta-suave);
+  font-variant-numeric: tabular-nums;
+}
+
+/* La barra va PEGADA al nombre, no al otro extremo de la pantalla:
+   el nombre tiene tope y la fila se alinea a la izquierda. */
+.rs-olla-fila {
+  grid-template-columns: minmax(130px, 360px) 150px 60px;
+  justify-content: start;
+}
+
+/* La pastilla de la hora pico va sobre el abanico, nunca debajo */
+.rs-arco { overflow: hidden; }
+.rs-arco-centro { z-index: 2; }
+.rs-rayo { z-index: 1; }
+
+/* ============================================================
+   MENÚ DEL DÍA v3 — la pizarra
+   Las tarjetas dejan de ser "la versión de celular" y pasan a ser LA
+   vista: una pizarra de platos con su precio grande y un toggle de
+   56 px que se toca sin apuntar. La tabla editable se retira; cada
+   plato se afina en su propia ficha (el botón ⋯), que ya tenía todos
+   los campos.
+   ============================================================ */
+.ad-seccion-menu { --ad-color: var(--culantro); }
+
+.tabla-menu-envoltorio { display: none; }
+
+.menu-tarjetas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 16px;
+  margin-top: 6px;
+}
+
+@media (max-width: 900px) {
+  .menu-tarjetas { grid-template-columns: 1fr; }
+}
+
+.menu-tarjetas .plato-tarjeta {
+  border-radius: 16px;
+  padding: 20px 22px;
+  gap: 12px;
+  min-width: 0;
+}
+
+.menu-tarjetas .plato-tarjeta.sale-hoy { border-left-width: 1.5px; }
+
+.menu-tarjetas .plato-tarjeta.no-sale-hoy {
+  background: #eee7da;
+  opacity: 0.62;
+}
+
+.menu-tarjetas .plato-tarjeta-cabecera { align-items: flex-start; }
+
+.menu-tarjetas .plato-tarjeta-datos > strong {
+  font-family: var(--fuente-display);
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.menu-tarjetas .plato-tarjeta-precio {
+  margin-left: auto;
+  font-family: var(--fuente-display);
+  font-size: 30px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.menu-tarjetas .plato-tarjeta-acciones {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.menu-tarjetas .toggle-sale-hoy {
+  flex: 1;
+  min-height: 56px;
+  border-radius: 12px;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 0 14px;
+  font-weight: 700;
+}
+
+.menu-tarjetas .plato-tarjeta.sale-hoy .toggle-sale-hoy {
+  background: var(--culantro-tenue);
+  color: var(--culantro-hondo);
+  box-shadow: inset 0 0 0 2px #bcd8bd;
+}
+
+.menu-tarjetas .plato-tarjeta.no-sale-hoy .toggle-sale-hoy {
+  background: #e2d9c8;
+  color: var(--tinta-media);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+}
+
+.menu-tarjetas .boton-mas-plato {
+  min-width: 56px;
+  min-height: 56px;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  background: var(--papel-alto);
+  font-size: 20px;
+}
+
+/* ============================================================
+   ÓRDENES v3 — cada ticket es una fila-tarjeta
+   El estado manda: borde izquierdo de 6 px con su color, y la
+   etiqueta sigue trayendo forma + color + palabra. La tabla de
+   escritorio se retira: la misma fila sirve en tablet y en PC.
+   ============================================================ */
+.ad-seccion-ordenes { --ad-color: var(--mayolica); }
+
+.tabla-ordenes-envoltorio { display: none; }
+
+.ordenes-tarjetas {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ordenes-tarjetas .orden-tarjeta {
+  display: grid;
+  grid-template-columns: 66px 58px minmax(160px, 1fr) 132px 96px 48px;
+  align-items: center;
+  gap: 14px;
+  background: var(--papel-alto);
+  border: 1px solid var(--linea);
+  border-left: 6px solid var(--st-pendiente);
+  border-radius: 12px;
+  padding: 12px 16px;
+  min-width: 0;
+}
+
+.orden-tarjeta:has(.etiqueta-preparando) { border-left-color: var(--st-preparando); }
+.orden-tarjeta:has(.etiqueta-listo) { border-left-color: var(--st-listo); }
+.orden-tarjeta:has(.etiqueta-entregado) { border-left-color: var(--st-entregado); }
+
+.orden-tarjeta:has(.etiqueta-anulada) {
+  border-left-color: var(--st-anulada);
+  background-image: repeating-linear-gradient(135deg,
+    var(--papel-alto) 0 9px, rgba(165, 42, 28, 0.06) 9px 18px);
+}
+
+.ordenes-tarjetas .orden-tarjeta-cabecera {
+  display: contents;                 /* cada dato cae en su columna */
+}
+
+.ordenes-tarjetas .orden-tarjeta-numero {
+  font-family: var(--fuente-display);
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ordenes-tarjetas .orden-tarjeta-hora {
+  font-size: 13px;
+  color: var(--tinta-suave);
+  font-variant-numeric: tabular-nums;
+}
+
+.ordenes-tarjetas .orden-tarjeta-total {
+  grid-column: 5;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ordenes-tarjetas .orden-partidas {
+  grid-column: 3;
+  grid-row: 1;
+  margin: 0;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 13.5px;
+}
+
+.ordenes-tarjetas .etiqueta-estado { grid-column: 4; justify-self: start; }
+
+.ordenes-tarjetas .orden-tarjeta-pie {
+  grid-column: 6;
+  grid-row: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ordenes-tarjetas .boton-reimprimir {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  font-size: 0;                      /* solo el icono: el texto es su aria-label */
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--linea-fuerte);
+  background: var(--papel-alto);
+}
+
+.ordenes-tarjetas .boton-reimprimir::before {
+  content: '⎙';
+  font-size: 20px;
+  line-height: 1;
+  color: var(--tinta-media);
+}
+
+.ordenes-tarjetas .boton-reimprimir:hover { background: var(--mayolica-tenue); }
+
+@media (max-width: 900px) {
+  .ordenes-tarjetas .orden-tarjeta {
+    grid-template-columns: 60px 1fr auto;
+    row-gap: 8px;
+  }
+  .ordenes-tarjetas .orden-partidas { grid-column: 1 / -1; grid-row: auto; }
+  .ordenes-tarjetas .orden-tarjeta-pie { grid-column: 3; grid-row: 1; }
+  .ordenes-tarjetas .orden-tarjeta-total { grid-column: 2; }
+  .ordenes-tarjetas .etiqueta-estado { grid-column: 1 / -1; }
+}
+
+/* ============================================================
+   CONFIGURACIÓN v3 — dos columnas y controles que se tocan
+   Los checkboxes pasan a filas-botón de 56 px y las mesas a una
+   grilla de fichas de 96 px: se ve el salón, no una lista.
+   ============================================================ */
+.ad-seccion-config { --ad-color: var(--tinta-media); }
+
+.ad-seccion-config .form-config {
+  max-width: none;
+  background: var(--papel-alto);
+  border: 1px solid var(--linea);
+  border-radius: 16px;
+  padding: 22px 26px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px 26px;
+  align-items: start;
+}
+
+.ad-seccion-config .form-config > .nota-admin,
+.ad-seccion-config .form-config > p,
+.ad-seccion-config .form-config > .banner-ok,
+.ad-seccion-config .form-config > .banner-error,
+.ad-seccion-config .form-config > h3,
+.ad-seccion-config .form-config > .boton-grande,
+.ad-seccion-config .form-config > .gestor-mesas,
+.ad-seccion-config .form-config > .panel-peligro {
+  grid-column: 1 / -1;
+}
+
+.ad-seccion-config .form-config label { min-width: 0; font-size: 13px; color: var(--tinta-media); }
+
+.ad-seccion-config .form-config input,
+.ad-seccion-config .form-config select {
+  min-height: 52px;
+  border-radius: 10px;
+  font-size: 1rem;
+  min-width: 0;
+}
+
+/* Las casillas se vuelven una fila entera que se puede tocar */
+.ad-seccion-config .config-toggle {
+  grid-column: 1 / -1;
+  min-height: 56px;
+  align-items: center;
+  padding: 0 16px;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 12px;
+  font-size: 15px;
+  color: var(--tinta-media);
+  cursor: pointer;
+}
+
+.ad-seccion-config .config-toggle:has(input:checked) {
+  background: var(--papel-alto);
+  border-color: var(--culantro);
+  color: var(--tinta);
+}
+
+.ad-seccion-config .config-toggle input { flex: 0 0 26px; border-radius: 7px; }
+
+.ad-seccion-config .boton-grande { min-height: 56px; }
+
+/* ---- El salón ---- */
+.gestor-mesas .mesas-lista,
+.ad-seccion-config .mesas-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  gap: 12px;
+}
+
+.ad-seccion-config .mesas-lista .mesa-fila {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 96px;
+  padding: 12px;
+  border: 2.5px solid var(--linea-fuerte);
+  border-radius: 12px;
+  background: var(--papel-alto);
+  min-width: 0;
+}
+
+.ad-seccion-config .mesas-lista .mesa-fila input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  font-family: var(--fuente-display);
+  font-size: 18px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.ad-seccion-config .mesas-lista .mesa-fila .config-toggle {
+  grid-column: auto;
+  min-height: 38px;
+  padding: 0 8px;
+  border: 0;
+  font-size: 12.5px;
+}
+
+.ad-seccion-config .mesas-lista .mesa-fila .config-toggle input { width: 20px; height: 20px; flex: 0 0 20px; }
+
+.ad-seccion-config .mesas-lista .mesa-fila:has(.badge-mesa) {
+  border-color: var(--achiote);
+  background-image: repeating-linear-gradient(135deg,
+    var(--achiote-tenue) 0 6px, #f2cdc1 6px 12px);
+}
+
+.ad-seccion-config .badge-mesa {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--achiote-hondo);
+}
+
+/* ============================================================
+   INSUMOS v3 — la despensa se ve, no se lee
+   Cada insumo es una ficha con su medidor de nivel a la izquierda:
+   verde cuando alcanza, ají cuando está bajo el mínimo y rayado
+   cuando el stock quedó en negativo (falta registrar compras).
+   ============================================================ */
+.ad-seccion-insumos { --ad-color: var(--aji); }
+
+.tabla-despensa-envoltorio { display: none; }
+
+.despensa-tarjetas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 14px;
+}
+
+.despensa-tarjetas .insumo-tarjeta {
+  position: relative;
+  padding-left: 30px;
+  border-radius: 16px;
+  min-width: 0;
+}
+
+.insumo-nivel {
+  position: absolute;
+  left: 10px;
+  top: 14px;
+  bottom: 14px;
+  width: 10px;
+  border-radius: 3px 3px 6px 6px;
+  background: var(--papel-hondo);
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+
+.insumo-nivel i {
+  display: block;
+  width: 100%;
+  background: var(--culantro);
+  border-radius: 2px 2px 5px 5px;
+}
+
+.insumo-tarjeta.esta-bajo .insumo-nivel i { background: var(--aji); }
+
+.insumo-tarjeta.esta-negativo .insumo-nivel {
+  box-shadow: inset 0 0 0 1.5px var(--st-anulada);
+  background-image: repeating-linear-gradient(135deg,
+    var(--achiote-tenue) 0 5px, #f0bfb2 5px 10px);
+}
+
+/* ============================================================
+   CANCELADAS v3 — un anillo y la lista al lado
+   ============================================================ */
+.ad-seccion-cancelaciones { --ad-color: var(--st-anulada); }
+
+.cn-columnas {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: 20px;
+  min-width: 0;
+}
+
+@media (max-width: 800px) {
+  .cn-columnas { grid-template-columns: 1fr; }
+}
+
+.cn-panel {
+  background: var(--papel-alto);
+  border: 1px solid var(--linea);
+  border-radius: 16px;
+  padding: 22px 26px;
+  min-width: 0;
+}
+
+.cn-anillo {
+  width: 170px;
+  height: 170px;
+  margin: 6px auto 0;
+  border-radius: 50%;
+  background: conic-gradient(var(--st-anulada) 0 var(--cn-arco, 0deg),
+    var(--papel-hondo) var(--cn-arco, 0deg) 360deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cn-disco {
+  width: 126px;
+  height: 126px;
+  border-radius: 50%;
+  background: var(--papel-alto);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.cn-disco strong {
+  font-family: var(--fuente-display);
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.cn-pie { text-align: center; margin-top: 14px; }
+
+.cn-lista { display: flex; flex-direction: column; }
+
+.cn-fila {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) 96px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--papel-hondo);
+  background-image: repeating-linear-gradient(135deg,
+    transparent 0 9px, rgba(165, 42, 28, 0.05) 9px 18px);
+}
+
+.cn-hora { font-size: 13px; color: var(--tinta-suave); font-variant-numeric: tabular-nums; }
+
+.cn-items {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.cn-total {
+  text-align: right;
+  font-weight: 700;
+  color: var(--st-anulada);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   VOZ v3 — la dona de aciertos
+   ============================================================ */
+.ad-seccion-voz { --ad-color: var(--mayolica); }
+
+.vz-fila { margin: 14px 0 18px; }
+
+.vz-panel {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  flex-wrap: wrap;
+  background: var(--papel-alto);
+  border: 1px solid var(--linea);
+  border-radius: 16px;
+  padding: 22px 26px;
+  min-width: 0;
+}
+
+.vz-dona {
+  width: 190px;
+  height: 190px;
+  flex: 0 0 190px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--culantro) 0 var(--vz-acep, 0deg),
+    var(--aji) var(--vz-acep, 0deg) var(--vz-corr, 0deg),
+    var(--st-anulada) var(--vz-corr, 0deg) 360deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vz-disco {
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: var(--papel-alto);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.vz-disco strong {
+  font-family: var(--fuente-display);
+  font-size: 42px;
+  font-weight: 400;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.vz-disco em { font-style: normal; font-size: 20px; }
+
+.vz-leyenda {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vz-leyenda span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--tinta-media);
+}
+
+.vz-leyenda i { width: 12px; height: 12px; border-radius: 3px; }
+.vz-leyenda em { font-style: normal; font-weight: 700; color: var(--tinta); font-variant-numeric: tabular-nums; }
+.vz-c-acep { background: var(--culantro); }
+.vz-c-corr { background: var(--aji); }
+.vz-c-desc { background: var(--st-anulada); }
+
+/* Dos recortes que quedaban: el botón de merma en la ficha de insumo y
+   la barra de guardado del menú cuando la pantalla se angosta. */
+.despensa-tarjetas .insumo-tarjeta-acciones { flex-wrap: wrap; }
+.despensa-tarjetas .boton-accion.es-merma { min-width: 56px; }
+
+.barra-guardado { flex-wrap: wrap; }
+.barra-guardado .cuenta-cambios { min-width: 0; }
+
+/* El margen negativo de la barra de guardado venía de cuando el admin
+   tenía padding de celular; con el lienzo nuevo sobra y desbordaba. */
+@media (max-width: 900px) {
+  .barra-guardado { margin-inline: 0; }
+}
+
+/* La fila de alta se vuelve flexible: cuando no entra, envuelve en vez
+   de recortar el botón. */
+.fin-fila-nueva,
+.fin-fila-planilla.fin-fila-nueva {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fin-fila-nueva > * { flex: 1 1 120px; min-width: 0; }
+.fin-fila-nueva > button { flex: 0 0 auto; }
+
+/* Las filas de planilla también envuelven: un rol largo empuja el
+   sueldo al renglón de abajo en vez de recortar el botón de quitar. */
+.fin-fila-planilla {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fin-fila-planilla > input { flex: 1 1 120px; min-width: 0; }
+.fin-fila-planilla > .fin-monto { flex: 0 1 104px; }
+.fin-fila-planilla > button { flex: 0 0 48px; }
+
+/* Piso táctil del admin: ningún campo ni botón por debajo de 44 px,
+   salvo los títulos ordenables de la tabla (ahí manda la densidad). */
+.ad-lienzo input:not([type='checkbox']):not([type='radio']),
+.ad-lienzo select,
+.ad-lienzo button:not(.tb-tabla button):not(.ad-chip-csv--sm) {
+  min-height: 44px;
+}
+
+.ad-lienzo .tb-tabla th button { min-height: 0; }

@@ -507,6 +507,30 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       el tablero. En pantalla: panel "Por cobrar" en caja (solo deudas de otros días) y en
       Finanzas, más "Otros movimientos de plata" con su formulario.
 
+- [x] **Rediseño del admin** (handoff de diseño del dueño: "está muy fea, 0 creatividad, hay
+      texto que se sale, faltan cosas"): las 9 pestañas horizontales pasan a un **rail lateral
+      fijo de 112 px con un color por sección** (tablero achiote hondo, resumen achiote, menú
+      culantro, órdenes mayólica, insumos ají, finanzas culantro hondo, canceladas anulada, voz
+      mayólica, ajustes tinta media); ese color vuelve en la versalita del título, en el borde
+      de las tarjetas y en el icono del rail. **Topbar** con el nombre del local, la fecha y dos
+      chips vivos: caja abierta (con su fondo) y cuántas órdenes hay en cocina (triángulo +
+      color, legible sin depender del matiz). Nueve **iconos SVG** de sección en
+      `Iconos.tsx`. Cada vista estrena su cabecera (`CabeceraVista`) con los controles propios a
+      la derecha. **Antidesborde**: `soles()` con espacio duro y separador de miles, grillas con
+      piso real (`minmax`), filas que envuelven en vez de recortar y un verificador en
+      navegador que recorre las 9 vistas a 1400/1100/900 px y falla si algo se sale.
+      **Tablero**: tarjetas con borde de color, píldora del día elegido, semana con etiquetas
+      fuera del eje y tabla ABC en un solo scroller con cabecera y total pegados. **Resumen**:
+      tarjeta hero con barra apilada de métodos de pago, 4 pods, "salió de la olla" con barras
+      contables (un bloquecito = un plato) y el **arco del servicio** en vez de las barras de
+      horas. **Menú**: la pizarra de tarjetas deja de ser "la versión de celular" y pasa a ser
+      la vista (la tabla editable se retira; cada plato se afina en su ficha). **Órdenes**:
+      filas-tarjeta con borde del color del estado y trama diagonal en las anuladas.
+      **Insumos**: cada ficha lleva su medidor de nivel (verde / ají / rayado en negativo).
+      **Canceladas**: anillo con la tasa. **Voz**: dona de aceptado/corregido/descartado.
+      **Ajustes**: formulario en dos columnas, casillas como filas-botón de 56 px y el salón
+      como grilla de fichas de 96 px.
+
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
       hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.

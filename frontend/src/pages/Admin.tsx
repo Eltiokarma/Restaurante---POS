@@ -233,6 +233,7 @@ function rangoDe(periodo: Periodo): { desde: string; hasta: string } {
 }
 
 function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [pagos, setPagos] = useState<Record<string, number>>({})
   const [periodo, setPeriodo] = useState<Periodo>('hoy')
   const [stats, setStats] = useState<StatsOut | null>(null)
   const [error, setError] = useState('')
@@ -244,6 +245,10 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
           ? api.statsHoy()
           : api.statsRango(rangoDe(periodo).desde, rangoDe(periodo).hasta)
       consulta.then(setStats).catch((e) => setError(manejarError(e, onSesionVencida)))
+      // El desglose por método vive en Finanzas; acá solo se pinta
+      api.finanzasResumen(periodo === 'hoy' ? 1 : Number(periodo))
+        .then((r) => setPagos(r.entradas_por_metodo))
+        .catch(() => setPagos({}))
     }
     cargar()
     const intervalo = window.setInterval(cargar, 30_000)
@@ -257,9 +262,6 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
   const maxHora = Math.max(1, ...stats.ordenes_por_hora.map((h) => h.cantidad))
   const maxDia = Math.max(1, ...stats.ventas_por_dia.map((d) => d.total))
   // El color marca lo que está por ENCIMA del promedio; el pico va rotulado
-  const promedioHora =
-    stats.ordenes_por_hora.reduce((s, h) => s + h.cantidad, 0) /
-    Math.max(1, stats.ordenes_por_hora.length)
   const promedioDia =
     stats.ventas_por_dia.reduce((s, d) => s + d.total, 0) /
     Math.max(1, stats.ventas_por_dia.length)
@@ -277,6 +279,12 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
     api.descargarVentasCsv(desde, hasta).catch(() => setError('No se pudo descargar el CSV'))
   }
 
+  // De dónde salió la plata del período: la barra apilada del hero.
+  // Lo aún sin cobrar no se pinta (no entró a ningún lado todavía).
+  const metodos = Object.entries(pagos)
+    .filter(([clave, monto]) => clave !== 'sin_cobrar' && monto > 0)
+    .sort((a, b) => b[1] - a[1])
+
   return (
     <div>
       <CabeceraVista id="resumen">
@@ -289,58 +297,90 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
         <button className="ad-chip-csv" onClick={descargar}>CSV</button>
       </CabeceraVista>
 
-      <div className="tiles-resumen">
-        <div className="tile">
-          <span className="tile-etiqueta">Total vendido ({NOMBRE_PERIODO[periodo]})</span>
-          <span className="tile-valor">{soles(stats.total_vendido)}</span>
-        </div>
-        <div className="tile">
-          <span className="tile-etiqueta">Órdenes</span>
-          <span className="tile-valor">{stats.num_ordenes}</span>
-        </div>
-        <div className="tile">
-          <span className="tile-etiqueta">Tiempo promedio por pedido</span>
-          <span className="tile-valor">{formatearDuracion(stats.duracion_promedio_seg)}</span>
-          <span className="tile-detalle">de tocar la pantalla a confirmar</span>
-        </div>
-        <div className="tile">
-          <span className="tile-etiqueta">Cancelaciones en la ventana</span>
-          <span className="tile-valor">{stats.num_cancelaciones}</span>
-          <span className="tile-detalle">
-            {stats.num_cancelaciones > 0
-              ? `${(stats.tasa_cancelacion * 100).toFixed(1)}% de los intentos — ${soles(stats.total_cancelado)}`
-              : 'ninguna hoy 🎉'}
-          </span>
+      <div className="rs-fila-alta">
+        {/* La cifra del día, con de dónde salió esa plata debajo */}
+        <section className="rs-hero">
+          <span className="rs-franja" aria-hidden="true" />
+          <span className="rs-rotulo">Vendido {NOMBRE_PERIODO[periodo]}</span>
+          <span className="rs-cifra">{soles(stats.total_vendido)}</span>
+          {metodos.length > 0 && (
+            <>
+              <div className="rs-barra-pagos" aria-hidden="true">
+                {metodos.map(([clave, monto]) => (
+                  <i key={clave} className={`rs-pago-${clave}`}
+                     style={{ flex: monto }} title={`${NOMBRE_METODO_PAGO[clave] ?? clave}: ${soles(monto)}`} />
+                ))}
+              </div>
+              <div className="rs-leyenda">
+                {metodos.map(([clave, monto]) => (
+                  <span key={clave}>
+                    <i className={`rs-pago-${clave}`} aria-hidden="true" />
+                    {(NOMBRE_METODO_PAGO[clave] ?? clave).replace(/^[^ ]+ /, '')}
+                    <em>{soles(monto)}</em>
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+
+        <div className="rs-pods">
+          <div className="rs-pod tema-ordenes">
+            <span className="rs-rotulo">Órdenes</span>
+            <span className="rs-pod-cifra">{stats.num_ordenes}</span>
+            <span className="rs-pie">tickets del período</span>
+          </div>
+          <div className="rs-pod tema-ticket">
+            <span className="rs-rotulo">Ticket promedio</span>
+            <span className="rs-pod-cifra">
+              {soles(stats.num_ordenes > 0 ? stats.total_vendido / stats.num_ordenes : 0)}
+            </span>
+            <span className="rs-pie">por pedido</span>
+          </div>
+          <div className="rs-pod tema-tiempo">
+            <span className="rs-rotulo">De tocar a confirmar</span>
+            <span className="rs-pod-cifra">{formatearDuracion(stats.duracion_promedio_seg)}</span>
+            <span className="rs-pie">lo que tarda el cliente</span>
+          </div>
+          <div className="rs-pod tema-canceladas">
+            <span className="rs-rotulo">Canceladas</span>
+            <span className="rs-pod-cifra">{stats.num_cancelaciones}</span>
+            <span className="rs-pie">
+              {stats.num_cancelaciones > 0
+                ? `${(stats.tasa_cancelacion * 100).toFixed(1)}% de los intentos · ${soles(stats.total_cancelado)}`
+                : 'ninguna en el período'}
+            </span>
+          </div>
         </div>
       </div>
 
-      <h3 className="subtitulo-resumen">Ventas por plato</h3>
-      {stats.ventas_por_plato.length === 0 ? (
-        <p className="nota-admin">Todavía no hay ventas hoy.</p>
-      ) : (
-        <div className="tabla-desplazable"><table className="tabla-admin tabla-resumen">
-          <thead>
-            <tr>
-              <th>Plato</th>
-              <th className="col-cantidad">Cantidad</th>
-              <th></th>
-              <th className="col-total">Total</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="rs-panel">
+        <div className="tb-panel-cabecera">
+          <span className="tb-panel-rotulo">Salió de la olla</span>
+          <span className="tb-panel-nota">cada bloquecito es un plato vendido</span>
+        </div>
+        {stats.ventas_por_plato.length === 0 ? (
+          <p className="nota-admin">Todavía no hay ventas en el período.</p>
+        ) : (
+          <div className="rs-olla">
             {stats.ventas_por_plato.map((v) => (
-              <tr key={v.nombre}>
-                <td>{v.nombre}</td>
-                <td className="col-cantidad">{v.cantidad}</td>
-                <td className="celda-barra">
-                  <div className="barra-proporcion" style={{ width: `${(v.cantidad / maxCantidad) * 100}%` }} />
-                </td>
-                <td className="col-total">{soles(v.total)}</td>
-              </tr>
+              <div className="rs-olla-fila" key={v.nombre}
+                   title={`${v.nombre}: ${v.cantidad} · ${soles(v.total)}`}>
+                <span className="rs-olla-nombre" title={v.nombre}>{v.nombre}</span>
+                <span className="rs-olla-barra" aria-hidden="true"
+                      style={{
+                        width: `${(v.cantidad / maxCantidad) * 100}%`,
+                        // Cada bloque = una unidad vendida: se cuenta con la vista
+                        backgroundImage: `repeating-linear-gradient(90deg, var(--achiote) 0 ${
+                          Math.max(2, 150 / maxCantidad - 3)}px, transparent ${
+                          Math.max(2, 150 / maxCantidad - 3)}px ${Math.max(3, 150 / maxCantidad)}px)`,
+                      }} />
+                <span className="rs-olla-cifra">{v.cantidad}</span>
+              </div>
             ))}
-          </tbody>
-        </table></div>
-      )}
+          </div>
+        )}
+      </div>
 
       {periodo !== 'hoy' && stats.ventas_por_dia.length > 0 && (
         <>
@@ -373,30 +413,38 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
       <HistorialCierres onSesionVencida={onSesionVencida} />
 
       {stats.ordenes_por_hora.length > 0 && (
-        <>
-          <h3 className="subtitulo-resumen">Órdenes por hora{periodo !== 'hoy' ? ' (acumulado del período)' : ''}</h3>
-          <div className="barras-horas barras-fluidas">
-            <p className="pico-grafico">
-              pico {horaPico.hora}:00 · {horaPico.cantidad} {horaPico.cantidad === 1 ? 'orden' : 'órdenes'}
-            </p>
-            <div className="fila-barras">
-              {stats.ordenes_por_hora.map((h) => (
-                <div
-                  className={`barra-hora ${h.cantidad > promedioHora ? 'sobre-promedio' : ''}`}
-                  key={h.hora} title={`${h.cantidad} órdenes entre ${h.hora}:00 y ${h.hora}:59`}
-                >
-                  <span className="barra-hora-valor">{h.cantidad}</span>
-                  <div className="barra-hora-relleno" style={{ height: `${(h.cantidad / maxHora) * 100}%` }} />
-                </div>
-              ))}
-            </div>
-            <div className="fila-etiquetas">
-              {stats.ordenes_por_hora.map((h) => (
-                <span className="barra-hora-etiqueta" key={h.hora}>{h.hora}</span>
-              ))}
+        <div className="rs-panel">
+          <div className="tb-panel-cabecera">
+            <span className="tb-panel-rotulo">
+              Arco del servicio{periodo !== 'hoy' ? ' (acumulado del período)' : ''}
+            </span>
+          </div>
+          {/* Las barras salen en abanico desde el centro: se ve de un
+              golpe a qué hora se llena el local. */}
+          <div className="rs-arco">
+            {stats.ordenes_por_hora.map((h, i) => {
+              const n = stats.ordenes_por_hora.length
+              const angulo = n > 1 ? -78 + (i * 156) / (n - 1) : 0
+              const alto = 58 + 132 * (h.cantidad / maxHora)
+              const clase = h.cantidad === maxHora ? 'es-pico'
+                : h.cantidad > maxHora * 0.5 ? 'es-fuerte' : ''
+              return (
+                <i key={h.hora} className={`rs-rayo ${clase}`}
+                   style={{ transform: `rotate(${angulo}deg)`, height: `${alto}px` }}
+                   title={`${h.cantidad} ${h.cantidad === 1 ? 'orden' : 'órdenes'} entre ${h.hora}:00 y ${h.hora}:59`} />
+              )
+            })}
+            <div className="rs-arco-centro">
+              <span className="rs-arco-hora">{horaPico.hora}:00</span>
+              <span className="rs-rotulo">hora pico</span>
             </div>
           </div>
-        </>
+          <div className="rs-arco-marcas" aria-hidden="true">
+            <span>{stats.ordenes_por_hora[0].hora}:00</span>
+            <span>{stats.ordenes_por_hora[Math.floor(stats.ordenes_por_hora.length / 2)].hora}:00</span>
+            <span>{stats.ordenes_por_hora[stats.ordenes_por_hora.length - 1].hora}:00</span>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -1630,18 +1678,30 @@ function TabVoz({ onSesionVencida }: { onSesionVencida: () => void }) {
         sistema no entendió se agregan como sinónimos en Menú del día. Así la precisión sube
         semana a semana. El toggle de encendido está en Configuración.
       </p>
+      {/* La dona: qué parte de lo que escuchó salió bien a la primera */}
+      <div className="vz-fila">
+        <div className="vz-panel">
+          <div className="vz-dona" style={{
+            ['--vz-acep' as string]: `${m.pct_aceptado * 3.6}deg`,
+            ['--vz-corr' as string]: `${(m.pct_aceptado + m.pct_corregido) * 3.6}deg`,
+          }}>
+            <span className="vz-disco">
+              <strong>{m.pct_aceptado}<em>%</em></strong>
+              <span className="rs-rotulo">sin corregir</span>
+            </span>
+          </div>
+          <div className="vz-leyenda">
+            <span><i className="vz-c-acep" aria-hidden="true" />Aceptado<em>{m.pct_aceptado}%</em></span>
+            <span><i className="vz-c-corr" aria-hidden="true" />Corregido<em>{m.pct_corregido}%</em></span>
+            <span><i className="vz-c-desc" aria-hidden="true" />Descartado<em>{m.pct_descartado}%</em></span>
+          </div>
+        </div>
+      </div>
+
       <div className="tiles-resumen">
         <div className="tile">
           <span className="tile-etiqueta">Pedidos por voz hoy</span>
           <span className="tile-valor">{m.total}</span>
-        </div>
-        <div className="tile">
-          <span className="tile-etiqueta">Aceptado sin corrección</span>
-          <span className="tile-valor">{m.pct_aceptado}%</span>
-        </div>
-        <div className="tile">
-          <span className="tile-etiqueta">Corregido / Descartado</span>
-          <span className="tile-valor">{m.pct_corregido}% / {m.pct_descartado}%</span>
         </div>
         <div className="tile">
           <span className="tile-etiqueta">Latencia promedio</span>
@@ -1962,6 +2022,13 @@ function TabOrdenes() {
 const UNIDADES_INSUMO = ['kg', 'g', 'l', 'ml', 'unidad', 'atado']
 
 const redondear = (n: number) => Math.round(n * 1000) / 1000
+
+/** Qué tan lleno está el frasco: 100% = el doble del mínimo avisado. */
+function nivelDespensa(i: Insumo): number {
+  if (i.stock_actual <= 0) return 0
+  const lleno = i.stock_minimo > 0 ? i.stock_minimo * 2 : i.stock_actual
+  return Math.max(4, Math.min(100, (i.stock_actual / lleno) * 100))
+}
 
 function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [insumos, setInsumos] = useState<Insumo[]>([])
@@ -2421,7 +2488,13 @@ function TabInsumos({ onSesionVencida }: { onSesionVencida: () => void }) {
                   Conté) a 56px, sin scroll horizontal escondido (h. 13) */}
               <div className="despensa-tarjetas">
                 {insumosFiltrados.map((i) => (
-                  <div className={`insumo-tarjeta ${i.bajo_minimo ? 'esta-bajo' : ''}`} key={i.id}>
+                  <div className={`insumo-tarjeta ${i.bajo_minimo ? 'esta-bajo' : ''} ${i.stock_actual < 0 ? 'esta-negativo' : ''}`} key={i.id}>
+                    {/* Medidor: cuánto queda respecto de lo que se
+                        considera "lleno" (el doble del mínimo, o lo que
+                        haya si no hay mínimo puesto). */}
+                    <span className="insumo-nivel" aria-hidden="true">
+                      <i style={{ height: `${nivelDespensa(i)}%` }} />
+                    </span>
                     <div className="insumo-tarjeta-cabecera">
                       <span className="insumo-tarjeta-nombre">{i.nombre}</span>
                       {i.bajo_minimo && <span className="insumo-tarjeta-aviso">se está acabando</span>}
@@ -3265,11 +3338,19 @@ function TabCancelaciones({ onSesionVencida }: { onSesionVencida: () => void }) 
   >([])
   const [error, setError] = useState('')
 
+  const [ordenesHoy, setOrdenesHoy] = useState(0)
+
   useEffect(() => {
     api.cancelacionesHoy()
       .then((data) => setCancelaciones(data.cancelaciones))
       .catch((e) => setError(manejarError(e, onSesionVencida)))
+    // Para la tasa hace falta el otro lado de la cuenta: los que sí salieron
+    api.ordenesHoy().then((d) => setOrdenesHoy(d.ordenes.length)).catch(() => setOrdenesHoy(0))
   }, [onSesionVencida])
+
+  const perdido = cancelaciones.reduce((s, c) => s + c.total, 0)
+  const intentos = ordenesHoy + cancelaciones.length
+  const tasa = intentos > 0 ? cancelaciones.length / intentos : 0
 
   return (
     <div>
@@ -3279,27 +3360,41 @@ function TabCancelaciones({ onSesionVencida }: { onSesionVencida: () => void }) 
         confundiendo a los clientes.
       </p>
       {error && <div className="banner-error">{error}</div>}
-      <div className="tabla-desplazable"><table className="tabla-admin">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Hora</th>
-            <th>Items</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cancelaciones.map((c) => (
-            <tr key={c.id}>
-              <td>{c.fecha}</td>
-              <td>{c.hora}</td>
-              <td>{c.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(', ')}</td>
-              <td>{soles(c.total)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table></div>
-      {cancelaciones.length === 0 && !error && <p className="nota-admin">Sin cancelaciones hoy 🎉</p>}
+
+      <div className="cn-columnas">
+        {/* El anillo dice de un vistazo cuánto se cayó antes de cocinarse */}
+        <div className="cn-panel">
+          <div className="cn-anillo" style={{ ['--cn-arco' as string]: `${tasa * 360}deg` }}>
+            <span className="cn-disco">
+              <strong>{cancelaciones.length}</strong>
+              <span className="rs-rotulo">canceladas hoy</span>
+            </span>
+          </div>
+          <p className="nota-admin cn-pie">
+            {cancelaciones.length === 0
+              ? 'Ninguna hoy: la ventana de cancelación está haciendo bien su trabajo.'
+              : `${(tasa * 100).toFixed(1)}% de los intentos · ${soles(perdido)} que no llegaron a cocina.`}
+          </p>
+        </div>
+
+        <div className="cn-panel">
+          {cancelaciones.length === 0 ? (
+            <p className="nota-admin">Sin cancelaciones hoy.</p>
+          ) : (
+            <div className="cn-lista">
+              {cancelaciones.map((c) => (
+                <div className="cn-fila" key={c.id}>
+                  <span className="cn-hora">{c.hora}</span>
+                  <span className="cn-items" title={c.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(', ')}>
+                    {c.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(', ')}
+                  </span>
+                  <span className="cn-total">{soles(c.total)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
