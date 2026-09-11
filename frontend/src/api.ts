@@ -279,6 +279,8 @@ export const CATEGORIAS_EGRESO: { clave: string; nombre: string }[] = [
   { clave: 'transporte', nombre: '🚚 Transporte y taxi' },
   { clave: 'adelantos', nombre: '💵 Adelantos al personal' },
   { clave: 'tramites', nombre: '📄 Trámites e impuestos' },
+  { clave: 'perecibles', nombre: '🧊 Perecibles (frescos)' },
+  { clave: 'no_perecibles', nombre: '🥫 No perecibles' },
   { clave: 'otros', nombre: '📦 Otros' },
 ]
 

@@ -145,3 +145,61 @@ def test_flujo_agrupado(client, admin_headers, menu_ejemplo, db):
 
     r = client.get("/api/finanzas/flujo?agrupar=rarisimo", headers=admin_headers)
     assert r.status_code == 422
+
+
+def test_venta_manual_de_un_dia_pasado(client, admin_headers, menu_ejemplo, db):
+    """El cuaderno del dueño entra al sistema: órdenes fechadas en SU día,
+    una por método con el monto declarado, líneas al ranking y kardex
+    descontado en esa fecha."""
+    from datetime import timedelta
+    from app.models import MovimientoInsumo, hoy_lima
+    from sqlalchemy import select
+
+    # Receta para que la venta manual descuente kardex
+    r = client.post("/api/insumos", json={"nombre": "Arroz", "unidad": "kg",
+                                          "costo_unitario": 4.0}, headers=admin_headers)
+    insumo_id = r.json()["id"]
+    client.put(f"/api/insumos/recetas/{menu_ejemplo['Lomo saltado']}",
+               json={"items": [{"insumo_id": insumo_id, "cantidad": 0.12}]},
+               headers=admin_headers)
+
+    ayer = hoy_lima() - timedelta(days=1)
+    r = client.post("/api/finanzas/ventas-manuales", json={
+        "fecha": ayer.isoformat(),
+        "efectivo": 601.5, "yape": 247.0,
+        "lineas": [
+            {"nombre": "Lomo saltado", "cantidad": 25},
+            {"nombre": "Táper", "cantidad": 18, "precio": 1.0},
+        ],
+    }, headers=admin_headers)
+    assert r.status_code == 201, r.text
+    datos = r.json()
+    assert datos["total"] == 848.5
+    assert [o["metodo_pago"] for o in datos["ordenes"]] == ["efectivo", "yape"]
+    assert [o["numero"] for o in datos["ordenes"]] == [1, 2]
+    assert datos["lineas_ligadas_al_catalogo"] == 1 and datos["lineas_libres"] == 1
+
+    # El flujo y el desglose por método ven la venta EN ese día
+    flujo = client.get("/api/finanzas/flujo?agrupar=dia", headers=admin_headers).json()
+    fila_ayer = next(f for f in flujo["filas"] if f["desde"] == ayer.isoformat())
+    assert fila_ayer["entro"] == 848.5
+    resumen = client.get("/api/finanzas/resumen?dias=7", headers=admin_headers).json()
+    assert resumen["entradas_por_metodo"]["efectivo"] == 601.5
+    assert resumen["entradas_por_metodo"]["yape"] == 247.0
+
+    # El kardex consumió FECHADO en ayer: 25 × 0.12 kg de arroz
+    mov = db.scalars(select(MovimientoInsumo).where(
+        MovimientoInsumo.tipo == "consumo")).all()
+    assert len(mov) == 1 and mov[0].fecha == ayer
+    assert round(mov[0].cantidad, 2) == -3.0
+
+    # Línea sin catálogo y sin precio → 422; fecha futura → 422
+    r = client.post("/api/finanzas/ventas-manuales", json={
+        "fecha": ayer.isoformat(), "efectivo": 10,
+        "lineas": [{"nombre": "Cosa inventada", "cantidad": 1}],
+    }, headers=admin_headers)
+    assert r.status_code == 422 and "catálogo" in r.json()["detail"]
+    r = client.post("/api/finanzas/ventas-manuales", json={
+        "fecha": (hoy_lima() + timedelta(days=1)).isoformat(), "efectivo": 10,
+    }, headers=admin_headers)
+    assert r.status_code == 422
