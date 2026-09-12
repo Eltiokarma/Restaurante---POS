@@ -39,12 +39,12 @@ export const SECCIONES: {
 export function CabeceraVista({ id, children }: { id: Tab; children?: ReactNode }) {
   const seccion = SECCIONES.find((s) => s.id === id) ?? SECCIONES[0]
   return (
-    <div className="ad-cabecera-vista">
-      <div className="ad-titulo-vista">
-        <span className={`ad-versalita ad-color-${id}`}>{seccion.versalita}</span>
+    <div className="fd-cabecera-vista">
+      <div className="fd-titulo-vista">
+        <span className={`fd-versalita fd-color-${id}`}>{seccion.versalita}</span>
         <h1>{seccion.titulo}</h1>
       </div>
-      {children && <div className="ad-controles-vista">{children}</div>}
+      {children && <div className="fd-controles-vista">{children}</div>}
     </div>
   )
 }

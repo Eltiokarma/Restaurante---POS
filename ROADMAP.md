@@ -542,6 +542,15 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       (`max-age=31536000, immutable`): al desplegar, la pantalla se actualiza sola en cuanto
       el navegador recarga, sin Ctrl+F5, y sin perder velocidad.
 
+- [x] **El bloqueador de publicidad borraba el menú del admin**: el dueño no veía la barra
+      lateral en su PC y sí en el celular. Las clases del rediseño empezaban con `ad-` (de
+      admin) y EasyList —la lista de filtros que usan TODOS los bloqueadores— trae la regla
+      genérica `##.ad-rail` (más otras 1158 que empiezan con `.ad-`), así que el navegador
+      borraba la navegación entera. El prefijo pasó a `fd-` (de fonda) en las 158
+      apariciones, y `tests/test_clases_css.py` falla si alguna clase vuelve a parecerse a
+      un anuncio. Verificado inyectando los filtros reales de EasyList en el navegador: la
+      barra sobrevive.
+
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
       hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.

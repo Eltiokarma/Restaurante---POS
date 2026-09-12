@@ -69,24 +69,24 @@ function TopbarAdmin() {
   }, [])
 
   return (
-    <header className="ad-topbar">
-      <div className="ad-cenefa" aria-hidden="true" />
-      <div className="ad-topbar-fila">
-        <div className="ad-topbar-local">
-          <span className="ad-topbar-nombre">{local || 'Administración'}</span>
-          <span className="ad-topbar-fecha">{fechaLarga(ahora)}</span>
+    <header className="fd-topbar">
+      <div className="fd-cenefa" aria-hidden="true" />
+      <div className="fd-topbar-fila">
+        <div className="fd-topbar-local">
+          <span className="fd-topbar-nombre">{local || 'Administración'}</span>
+          <span className="fd-topbar-fecha">{fechaLarga(ahora)}</span>
         </div>
-        <div className="ad-topbar-chips">
+        <div className="fd-topbar-chips">
           {caja?.abierta && (
-            <span className="ad-chip ad-chip-caja">
-              <i className="ad-punto" aria-hidden="true" />
+            <span className="fd-chip fd-chip-caja">
+              <i className="fd-punto" aria-hidden="true" />
               Caja abierta
               <em>fondo {soles(caja.monto_apertura ?? 0)}</em>
             </span>
           )}
           {enCocina > 0 && (
-            <span className="ad-chip ad-chip-cocina">
-              <i className="ad-triangulo" aria-hidden="true" />
+            <span className="fd-chip fd-chip-cocina">
+              <i className="fd-triangulo" aria-hidden="true" />
               {enCocina} en cocina
             </span>
           )}
@@ -107,36 +107,36 @@ export function Admin() {
   const vencida = () => setLogueado(false)
 
   return (
-    <div className={`pantalla-admin ad-seccion-${tab}`}>
-      <nav className="ad-rail" aria-label="Secciones del administrador">
-        <div className="ad-cenefa" aria-hidden="true" />
-        <div className="ad-marca" aria-hidden="true">A</div>
+    <div className={`pantalla-admin fd-seccion-${tab}`}>
+      <nav className="fd-rail" aria-label="Secciones del administrador">
+        <div className="fd-cenefa" aria-hidden="true" />
+        <div className="fd-marca" aria-hidden="true">A</div>
         {SECCIONES.map((s) => (
           <button
             key={s.id}
-            className={`ad-rail-item ad-color-${s.id} ${tab === s.id ? 'activa' : ''}`}
+            className={`fd-rail-item fd-color-${s.id} ${tab === s.id ? 'activa' : ''}`}
             aria-current={tab === s.id ? 'page' : undefined}
             title={s.titulo}
             onClick={() => setTab(s.id)}
           >
-            <span className="ad-rail-marca" aria-hidden="true" />
+            <span className="fd-rail-marca" aria-hidden="true" />
             <s.Icono tam={24} />
-            <span className="ad-rail-rotulo">{s.rotulo}</span>
+            <span className="fd-rail-rotulo">{s.rotulo}</span>
           </button>
         ))}
-        <div className="ad-rail-relleno" />
+        <div className="fd-rail-relleno" />
         <button
-          className="ad-rail-salir"
+          className="fd-rail-salir"
           onClick={() => { clearAdminToken(); setLogueado(false) }}
         >
           Salir
         </button>
       </nav>
 
-      <div className="ad-columna">
+      <div className="fd-columna">
         <TopbarAdmin />
         <main className="admin-contenido">
-          <div className="ad-lienzo">
+          <div className="fd-lienzo">
             {tab === 'tablero' && <TabTablero onSesionVencida={vencida} />}
             {tab === 'resumen' && <TabResumen onSesionVencida={vencida} />}
             {tab === 'menu' && <TabMenu onSesionVencida={vencida} />}
@@ -289,12 +289,12 @@ function TabResumen({ onSesionVencida }: { onSesionVencida: () => void }) {
     <div>
       <CabeceraVista id="resumen">
         {(['hoy', '7', '30'] as Periodo[]).map((p) => (
-          <button key={p} className={`ad-chip-periodo ${periodo === p ? 'activo' : ''}`}
+          <button key={p} className={`fd-chip-periodo ${periodo === p ? 'activo' : ''}`}
                   onClick={() => setPeriodo(p)}>
             {p === 'hoy' ? 'Hoy' : `Últimos ${p} días`}
           </button>
         ))}
-        <button className="ad-chip-csv" onClick={descargar}>CSV</button>
+        <button className="fd-chip-csv" onClick={descargar}>CSV</button>
       </CabeceraVista>
 
       <div className="rs-fila-alta">
@@ -4300,7 +4300,7 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
     <section>
       <CabeceraVista id="finanzas">
         {[7, 30].map((d) => (
-          <button key={d} className={`ad-chip-periodo ${dias === d ? 'activo' : ''}`}
+          <button key={d} className={`fd-chip-periodo ${dias === d ? 'activo' : ''}`}
                   onClick={() => setDias(d)}>
             Últimos {d} días
           </button>
@@ -4420,7 +4420,7 @@ function TabFinanzas({ onSesionVencida }: { onSesionVencida: () => void }) {
           </p>
           <div className="admin-acciones">
             {([['dia', 'Por día'], ['semana', 'Por semana'], ['mes', 'Por mes'], ['anio', 'Por año']] as const).map(([valor, texto]) => (
-              <button key={valor} className={`ad-chip-periodo ${agrupar === valor ? 'activo' : ''}`}
+              <button key={valor} className={`fd-chip-periodo ${agrupar === valor ? 'activo' : ''}`}
                       onClick={() => setAgrupar(valor)}>
                 {texto}
               </button>
