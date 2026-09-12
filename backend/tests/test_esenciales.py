@@ -242,3 +242,28 @@ def test_borrar_un_dia_de_prueba(client, admin_headers, menu_ejemplo, db):
     stock_final = client.get("/api/insumos", headers=admin_headers).json()["insumos"][0]["stock_actual"]
     assert round(stock_final, 2) == round(stock_antes - 0.5, 2)
     assert db.scalars(select(MovimientoInsumo).where(MovimientoInsumo.fecha == ayer)).all() == []
+
+
+# ---------- Caché del frontend ----------
+
+def test_el_index_se_revalida_y_los_assets_se_cachean(client, tmp_path, monkeypatch):
+    """El navegador no debe quedarse con una pantalla vieja.
+
+    Le pasó al dueño: en el celular veía el diseño nuevo y en la PC el
+    anterior. El index.html se revalida siempre; los archivos con hash en
+    el nombre se pueden cachear para siempre."""
+    from app import main
+
+    if not main.FRONTEND_DIST.is_dir():
+        import pytest
+        pytest.skip("sin build del frontend")
+
+    r = client.get("/admin")
+    assert r.status_code == 200
+    assert r.headers.get("cache-control") == main.CACHE_INDEX
+
+    assets = list((main.FRONTEND_DIST / "assets").glob("*.js"))
+    assert assets, "el build no tiene assets"
+    r = client.get(f"/assets/{assets[0].name}")
+    assert r.status_code == 200
+    assert r.headers.get("cache-control") == main.CACHE_ASSETS

@@ -534,6 +534,14 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       `GET /api/finanzas/tablero` devuelve ahora la `categoria` de cada plato, con LEFT JOIN al
       catálogo. El color es pista redundante: cada barra ya lleva su nombre y su cantidad.
 
+- [x] **Caché del frontend** (el dueño: "en el celular veo los botones y en la PC no"): el
+      servidor no mandaba ninguna cabecera de caché, así que el navegador podía quedarse con
+      un `index.html` viejo —y con él, una pantalla vieja— por tiempo indefinido. Ahora el
+      index se revalida siempre (`no-cache, must-revalidate`) y los assets, que llevan el
+      hash del contenido en el nombre, se cachean para siempre
+      (`max-age=31536000, immutable`): al desplegar, la pantalla se actualiza sola en cuanto
+      el navegador recarga, sin Ctrl+F5, y sin perder velocidad.
+
 - [ ] **Impresora "cloud"** (Star CloudPRNT / Epson Server Direct Print) como opción para
       cuando se renueve el hardware: la impresora pregunta sola a nuestro servidor y no
       hace falta ni app ni PC ni tablet-jefe. No comprar solo por esto.

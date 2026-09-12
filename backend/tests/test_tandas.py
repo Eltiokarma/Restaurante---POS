@@ -46,7 +46,23 @@ def _hora(minutos_atras: int) -> str:
     return (datetime.now(LIMA) - timedelta(minutes=minutos_atras)).strftime("%H:%M:%S")
 
 
+def _saltar_si_cruza_medianoche(minutos: int) -> None:
+    """Estos tests simulan pedidos de "hace N minutos".
+
+    Entre las 00:00 y las 00:N de Lima esa hora cae en el día de AYER y el
+    pedido, que se crea con la fecha de hoy, queda con una espera negativa:
+    el test fallaba solo por la hora a la que se corriera. Se salta esa
+    franja en vez de inventar un resultado."""
+    import pytest
+
+    ahora = datetime.now(LIMA)
+    if ahora.hour == 0 and ahora.minute < minutos:
+        pytest.skip(f"faltan {minutos - ahora.minute} min de día para simular "
+                    f"un pedido de hace {minutos} minutos")
+
+
 def test_particion_por_ventana_y_tope(client, db):
+    _saltar_si_cruza_medianoche(20)
     ids = _platos(db)
     # Ventana de 10 min y tope de 4 (defaults): tres órdenes juntas y una tardía
     o1 = _orden(client, [(ids["Ají de gallina"], 1)], hora=_hora(20))
@@ -171,6 +187,7 @@ def test_capacidad_tanda_editable_en_el_menu(client, db, admin_headers):
 # ---------- Métricas y estimado de tiempo de servido ----------
 
 def test_servido_se_registra_y_alimenta_el_estimado(client, db):
+    _saltar_si_cruza_medianoche(12)
     ids = _platos(db)
     # Un ticket ya servido (pedido hace 12 min) fija el promedio del día
     previa = _orden(client, [(ids["Ají de gallina"], 1)], hora=_hora(12))
@@ -204,6 +221,7 @@ def test_sin_historia_no_hay_estimado(client, db):
 
 
 def test_avanzar_ticket_suelto_tambien_sella_el_servido(client, db):
+    _saltar_si_cruza_medianoche(7)
     ids = _platos(db)
     orden = _orden(client, [(ids["Ají de gallina"], 1)], hora=_hora(7))
     # La cocina atiende el ticket por separado (tarjeta de abajo)
