@@ -310,8 +310,26 @@ def health():
 # las rutas /api se registran antes y siempre tienen prioridad.
 FRONTEND_DIST = BACKEND_DIR.parent / "frontend" / "dist"
 
+# Cómo se cachea cada cosa. Sin esto el navegador guardaba el index.html
+# a su criterio y podía quedarse MESES con una versión vieja de la pantalla
+# (le pasó al dueño: en el celular veía la versión nueva y en la PC la
+# anterior, sin barra lateral). Los assets llevan el hash del contenido en
+# el nombre, así que esos sí se pueden cachear para siempre.
+CACHE_INDEX = "no-cache, must-revalidate"
+CACHE_ASSETS = "public, max-age=31536000, immutable"
+
+
+class AssetsCacheados(StaticFiles):
+    """Los archivos con hash en el nombre no cambian nunca: caché eterna."""
+
+    def file_response(self, *args, **kwargs):  # type: ignore[override]
+        respuesta = super().file_response(*args, **kwargs)
+        respuesta.headers["Cache-Control"] = CACHE_ASSETS
+        return respuesta
+
+
 if FRONTEND_DIST.is_dir():
-    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+    app.mount("/assets", AssetsCacheados(directory=FRONTEND_DIST / "assets"), name="assets")
 
     @app.get("/{ruta:path}", include_in_schema=False)
     def spa(ruta: str):
@@ -320,5 +338,10 @@ if FRONTEND_DIST.is_dir():
         # resolve() + is_relative_to impiden escapar de dist/ con "..".
         archivo = (FRONTEND_DIST / ruta).resolve()
         if ruta and archivo.is_file() and archivo.is_relative_to(FRONTEND_DIST.resolve()):
+            if archivo.suffix == ".html":
+                return FileResponse(archivo, headers={"Cache-Control": CACHE_INDEX})
             return FileResponse(archivo)
-        return FileResponse(FRONTEND_DIST / "index.html")
+        # El index SIEMPRE se revalida: al desplegar, la pantalla se actualiza
+        # sola en cuanto el navegador recarga, sin Ctrl+F5.
+        return FileResponse(FRONTEND_DIST / "index.html",
+                            headers={"Cache-Control": CACHE_INDEX})
