@@ -43,6 +43,11 @@ empieza por su primer bloque sin pedir contexto.**
   vistas de cliente, sin dependencias de hover; nada de scroll horizontal de página (las
   tablas anchas scrollean dentro de su caja); modales con `max-height` en `dvh` y scroll
   interno. Estas reglas las hereda la futura app.
+- Nombres de clase CSS: NUNCA con prefijo `ad-`, `ads-`, `sponsor-`, `promo-` ni parecidos.
+  EasyList —la lista que usan todos los bloqueadores— trae `##.ad-rail` y más de mil reglas
+  `##.ad-*`: una clase así desaparece en el navegador del usuario y parece un bug del
+  sistema (pasó con la barra lateral del admin). El prefijo del admin es `fd-` (fonda) y
+  `tests/test_clases_css.py` falla si vuelve a colarse uno peligroso.
 - Moneda: soles con 2 decimales; el backend es la autoridad de totales.
 - Endpoints admin protegidos con `Depends(requiere_admin)` (token HMAC de 12h, header
   `X-Admin-Token`). Cliente, cocina y ticketera no llevan auth (app de LAN).

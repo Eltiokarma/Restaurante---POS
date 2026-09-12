@@ -180,12 +180,12 @@ export function TabTablero({ onSesionVencida }: { onSesionVencida: () => void })
     <section className="tablero">
       <CabeceraVista id="tablero">
         {[7, 30, 90].map((d) => (
-          <button key={d} className={`ad-chip-periodo ${'dias' in periodo && periodo.dias === d ? 'activo' : ''}`}
+          <button key={d} className={`fd-chip-periodo ${'dias' in periodo && periodo.dias === d ? 'activo' : ''}`}
                   onClick={() => { setPeriodo({ dias: d }); setEligiendo(false) }}>
             {d} días
           </button>
         ))}
-        <button className={`ad-chip-periodo ${'desde' in periodo ? 'activo' : ''}`}
+        <button className={`fd-chip-periodo ${'desde' in periodo ? 'activo' : ''}`}
                 onClick={() => setEligiendo((v) => !v)}>
           Elegir fechas
         </button>
@@ -328,7 +328,7 @@ export function TabTablero({ onSesionVencida }: { onSesionVencida: () => void })
           <div className="tb-panel-cabecera">
             <span className="tb-panel-rotulo">Qué platos salen (y cuáles no)</span>
             {platos.length > 0 && (
-              <button className="ad-chip-csv ad-chip-csv--sm" onClick={descargarPlatos}>
+              <button className="fd-chip-csv fd-chip-csv--sm" onClick={descargarPlatos}>
                 Excel (CSV)
               </button>
             )}
@@ -391,7 +391,7 @@ export function TabTablero({ onSesionVencida }: { onSesionVencida: () => void })
           <div className="tb-tabla-busqueda">
             <input className="tb-busca" placeholder="Buscar insumo…" value={busca}
                    aria-label="Buscar insumo" onChange={(e) => setBusca(e.target.value)} />
-            <button className="ad-chip-csv ad-chip-csv--sm" onClick={descargarInsumos}>Excel (CSV)</button>
+            <button className="fd-chip-csv fd-chip-csv--sm" onClick={descargarInsumos}>Excel (CSV)</button>
           </div>
         </div>
         <p className="tb-ayuda">
