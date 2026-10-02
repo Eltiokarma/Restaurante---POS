@@ -10364,3 +10364,21 @@ select:focus-visible {
   font: inherit;
   cursor: pointer;
 }
+
+/* Platos por defecto: aplicar (un toque) y configurar, separados */
+.barra-personas-defectos {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.barra-personas-aplicar {
+  background: var(--culantro-tenue);
+  box-shadow: inset 0 0 0 2px var(--culantro);
+  color: var(--culantro-hondo);
+}
+
+.barra-personas-aplicar:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

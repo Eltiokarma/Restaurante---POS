@@ -11,20 +11,32 @@ import type { DefectoMenu, useCarrito } from '../hooks/useCarrito'
  * repartir con deslizador o contadores, y el empaque repartido.
  */
 
-export function BarraPersonas({ menu, personas, total, onMas, onMenos, onDefecto }: {
+export function BarraPersonas({ menu, personas, total, onMas, onMenos, onDefecto, onAplicarDefecto }: {
   menu: MenuHoy
   personas: number
   total: number
   onMas: () => void
   onMenos: () => void
-  onDefecto?: () => void // solo caja
+  onDefecto?: () => void // abre la configuración de los platos por defecto
+  // Pone los platos por defecto a todas las personas (undefined = aún no hay)
+  onAplicarDefecto?: () => void
 }) {
   return (
     <div className="barra-personas">
       {onDefecto && (
-        <button className="barra-personas-defecto" onClick={onDefecto}>
-          ⚙ Platos por defecto
-        </button>
+        <div className="barra-personas-defectos">
+          <button
+            className="barra-personas-defecto barra-personas-aplicar"
+            onClick={onAplicarDefecto}
+            disabled={!onAplicarDefecto || personas === 0}
+            title={onAplicarDefecto ? 'Poner los platos por defecto a todas las personas' : 'Primero configura los platos por defecto'}
+          >
+            ✓ Aplicar por defecto
+          </button>
+          <button className="barra-personas-defecto" onClick={onDefecto}>
+            ⚙ Configurar
+          </button>
+        </div>
       )}
       <button
         className="barra-personas-boton" onClick={onMenos} disabled={personas === 0}

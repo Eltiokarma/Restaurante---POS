@@ -727,12 +727,7 @@ export function Caja() {
             const nuevos = { ...defectos, [editandoDefecto.id]: d }
             setDefectos(nuevos)
             guardarDefectos(nuevos)
-            if (aplicar) {
-              const menu = editandoDefecto
-              const n = menusEnPedido(carrito.menus, menu.id)
-              for (let i = 0; i < n; i++) carrito.quitarUltimoMenu(menu.id)
-              for (let i = 0; i < n; i++) carrito.agregarMenuCompleto(menu, true, d)
-            }
+            if (aplicar) carrito.aplicarDefecto(editandoDefecto.id, d)
             setEditandoDefecto(null)
           }}
         />
@@ -1194,6 +1189,7 @@ export function Caja() {
                   onMas={() => agregarPersona(m)}
                   onMenos={() => carrito.quitarUltimoMenu(m.id)}
                   onDefecto={() => setEditandoDefecto(m)}
+                  onAplicarDefecto={defectos[m.id] ? () => carrito.aplicarDefecto(m.id, defectos[m.id]) : undefined}
                 />
               ))}
             </div>
