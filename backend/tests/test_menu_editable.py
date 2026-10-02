@@ -207,6 +207,8 @@ def test_comanda_agrupada_por_tiempos(client, db, fonda):
     assert "2 x Asado con puré -> sin frijoles".encode("cp850") in datos
     # Sin mesa elegida, el ticket lo dice; y la entrega va en el impreso
     assert b"SIN MESA" in datos
+    # La mesa sale en letra doble (ancho y alto), como el número de orden
+    assert b"\x1d!\x11\x1bE\x01SIN MESA" in datos
     assert b"ENTREGA: POR TIEMPOS" in datos
 
 

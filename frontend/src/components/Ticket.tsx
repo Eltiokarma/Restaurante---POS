@@ -78,9 +78,9 @@ function TicketCuerpo({ orden, local, id }: Props & { id?: string }) {
         </div>
       )}
       {orden.mesas.length > 0 ? (
-        <div className="ticket-servicio">🪑 MESA: {orden.mesas.join(' + ')}</div>
+        <div className="ticket-servicio ticket-mesa">🪑 MESA: {orden.mesas.join(' + ')}</div>
       ) : orden.tipo_servicio !== 'llevar' ? (
-        <div className="ticket-servicio">🪑 SIN MESA</div>
+        <div className="ticket-servicio ticket-mesa">🪑 SIN MESA</div>
       ) : null}
       {orden.items.length + orden.menus.length >= 2 || orden.menus.length > 0 ? (
         <div className="ticket-servicio ticket-entrega">

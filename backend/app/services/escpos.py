@@ -82,14 +82,16 @@ def render_orden(
     elif orden.tipo_servicio == "mixto":
         partes.append(_texto("* MIXTO - parte para llevar *"))
     mesas = json.loads(orden.mesa_ids or "[]")
-    partes.append(NEGRITA_ON)
+    # La mesa en letra doble, como el número de orden: el mozo la busca
+    # de un vistazo al sacar el plato (pedido del dueño)
+    partes += [DOBLE_TAMANO, NEGRITA_ON]
     if mesas and not orden.mesa_liberada:
         nombres = local.get("mesas") or {}
         partes.append(_texto("MESA: " + " + ".join(nombres.get(m, f"#{m}") for m in mesas)))
     elif orden.tipo_servicio != "llevar":
         # Pedido del dueño: si nadie eligió mesa, que el ticket lo diga
         partes.append(_texto("SIN MESA"))
-    partes.append(NEGRITA_OFF)
+    partes += [NEGRITA_OFF, TAMANO_NORMAL]
     if len(orden.items) + len(orden.menus) >= 2 or orden.menus:
         # La entrega en letra grande: es la instrucción que cocina y el
         # mozo tienen que ver primero (pedido del dueño)
