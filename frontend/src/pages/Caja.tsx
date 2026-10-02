@@ -3,10 +3,9 @@ import { api, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATEGORIA, NOM
 import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuCaja, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, TicketBebidaOut } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
-import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
 import { menusEnPedido } from '../components/TarjetaOfertaMenu'
 import {
-  BarraPersonas, guardarDefectos, Hoja, HojaDefecto, leerDefectos, useRepartoMenus,
+  BarraPersonas, guardarDefectos, Hoja, HojaDefecto, leerDefectos, useTicketsPersonas,
 } from '../components/RepartoMenu'
 import { AvisoImpresion } from '../components/AvisoImpresion'
 import { PorCobrar } from '../components/PorCobrar'
@@ -117,7 +116,7 @@ export function Caja() {
   const cargoTaper = precioTaper * unidadesEnTaper(carrito.items, carrito.menus)
   const totalConCargos = carrito.totalSoles + cargoTaper
   const { sincronizarConMenu } = carrito
-  const reparto = useRepartoMenus(carrito, empaquesOfrecidos)
+  const tickets = useTicketsPersonas(carrito, { empaques: empaquesOfrecidos, precioTaper, conEspera: true })
 
   // Pedido por personas: "platos por defecto" por menú (guardados en esta
   // caja) y, por defecto, el pedido arranca con UNA persona
@@ -700,7 +699,7 @@ export function Caja() {
         </button>
         <span className="caja-total-dia">Vendido hoy: <strong>{soles(totalVendido)}</strong></span>
       </header>
-      {reparto.hojas}
+      {tickets.hojas}
       {editandoDefecto && (
         <HojaDefecto
           menu={editandoDefecto}
@@ -1201,27 +1200,8 @@ export function Caja() {
             <div className="caja-carrito">
               <h3 className="titulo-categoria">Pedido en armado</h3>
               <SugerenciaMenu items={carrito.items} menus={menusHoy} onConvertir={carrito.convertirEnMenu} />
-              {carrito.menus.map((m, idx) => (
-                <TarjetaMenuCarrito
-                  key={`menu-${idx}`}
-                  linea={m}
-                  numero={idx + 1}
-                  onCambiarEleccion={(t, p) => carrito.cambiarEleccion(idx, t, p)}
-                  onAlternarOmitido={(t) => carrito.alternarOmitido(idx, t)}
-                  onCambiarAgregado={(a, d) => carrito.cambiarAgregado(idx, a, d)}
-                  onCambiarExtra={(t, pl, d) => carrito.cambiarExtraMenu(idx, t, pl, d)}
-                  onCambiarCantidad={(d) => carrito.cambiarCantidadMenu(idx, d)}
-                  onDuplicar={() => carrito.duplicarMenu(idx)}
-                  onCambiarEmpaque={(e) => carrito.cambiarEmpaqueMenu(idx, e)}
-                  onCambiarEmpaqueTiempo={(t, e) => carrito.cambiarEmpaqueTiempo(idx, t, e)}
-                  onCambiarNota={(n) => carrito.cambiarNotaMenu(idx, n)}
-                  empaquesOfrecidos={empaquesOfrecidos}
-                  precioTaper={precioTaper}
-                  {...reparto.propsTarjeta(m)}
-                  onAlternarEspera={(t) => carrito.alternarEspera(idx, t)}
-                  onCambiarEntrega={(e) => carrito.cambiarEntregaMenu(idx, e)}
-                />
-              ))}
+              {/* Un ticket vertical por persona (boceto del dueño) */}
+              {tickets.grilla}
               {carrito.items.map((i) => (
                 <div className="caja-carrito-item" key={i.plato.id}>
                   <span className="caja-carrito-nombre">

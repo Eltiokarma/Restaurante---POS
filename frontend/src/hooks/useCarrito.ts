@@ -211,6 +211,20 @@ export function useCarrito() {
     [],
   )
 
+  // Dejar un tiempo "sin elegir" en UNA persona (el ticket sale igual y lo dice)
+  const quitarEleccion = useCallback((idx: number, tiempoOrden: number) => {
+    setMenus((prev) => prev.map((m, i) => {
+      if (i !== idx) return m
+      const elecciones = { ...m.elecciones }
+      delete elecciones[tiempoOrden]
+      return {
+        ...m, elecciones,
+        omitidos: m.omitidos.filter((o) => o !== tiempoOrden),
+        espera: (m.espera ?? []).filter((t) => t !== tiempoOrden),
+      }
+    }))
+  }, [])
+
   // Entrega POR PERSONA: todo junto o por tiempos
   const cambiarEntregaMenu = useCallback((idx: number, entrega: Entrega) => {
     setMenus((prev) => prev.map((m, i) => (i === idx ? { ...m, entrega } : m)))
@@ -461,6 +475,7 @@ export function useCarrito() {
     repartirEmpaque,
     cambiarEntregaMenu,
     alternarEspera,
+    quitarEleccion,
     cambiarEleccion,
     alternarOmitido,
     cambiarAgregado,

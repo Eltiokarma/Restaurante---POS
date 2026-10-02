@@ -2,9 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, menuAPayload, precioUnitarioMenu, soles, tiemposPendientes, unidadesEnTaper } from '../api'
 import type { ConfigOut, DatosLocal, Entrega, MenuHoy, MesaEstado, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { describirMenu } from '../components/describirMenu'
-import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
 import { menusEnPedido, TarjetaOfertaMenu } from '../components/TarjetaOfertaMenu'
-import { BarraPersonas, useRepartoMenus } from '../components/RepartoMenu'
+import { BarraPersonas, useTicketsPersonas } from '../components/RepartoMenu'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
@@ -63,10 +62,8 @@ export function Cliente() {
   // Con 30+ mesas la parrilla come la pantalla: vive plegada y lo elegido
   // se ve en la cabecera del pliegue
   const [mostrarMesas, setMostrarMesas] = useState(false)
-  // Guía de lo que falta (4b): la barra de abajo nombra el hueco y lo
-  // persigue — "IR AHÍ" abre la tarjeta del menú incompleto y la hace latir
-  const [abrirTics, setAbrirTics] = useState<Record<number, number>>({})
-  const [perseguida, setPerseguida] = useState<number | null>(null)
+  // Guía de lo que falta (4b): la barra de abajo nombra el hueco y "IR AHÍ"
+  // abre las opciones de ese plato en el ticket de la persona
   // La flecha de "IR AHÍ" rebota SOLO si la tarjeta pendiente quedó fuera
   // de vista (detalle del handoff: movimiento permanente en táctil cansa)
   const [pendienteALaVista, setPendienteALaVista] = useState(true)
@@ -76,14 +73,14 @@ export function Cliente() {
   // Lo que el backend reclamaría con un 422 al final, dicho desde el
   // principio y con el mismo lenguaje (espejo de la validación)
   const pendientesMenus = carrito.menus.flatMap((m, idx) =>
-    tiemposPendientes(m).map((t) => ({ idx, rotulo: t.rotulo, numero: idx + 1 })),
+    tiemposPendientes(m).map((t) => ({ idx, rotulo: t.rotulo, numero: idx + 1, orden: t.orden })),
   )
 
   const primerPendienteIdx = carrito.menus.findIndex((m) => tiemposPendientes(m).length > 0)
 
   useEffect(() => {
     if (primerPendienteIdx < 0) return
-    const objetivo = document.getElementById(`tarjeta-menu-${primerPendienteIdx}`)
+    const objetivo = document.getElementById(`ticket-persona-${primerPendienteIdx}`)
     if (!objetivo || typeof IntersectionObserver === 'undefined') return
     const observador = new IntersectionObserver(
       ([entrada]) => setPendienteALaVista(entrada.isIntersecting),
@@ -96,12 +93,12 @@ export function Cliente() {
   const irAlPendiente = () => {
     const primero = pendientesMenus[0]
     if (!primero) return
-    setAbrirTics((prev) => ({ ...prev, [primero.idx]: (prev[primero.idx] ?? 0) + 1 }))
-    setPerseguida(primero.idx)
-    window.setTimeout(() => setPerseguida(null), 1600)
+    // "IR AHÍ": lleva al ticket de esa persona y abre las opciones del
+    // plato que le falta, listas para tocar
     document
-      .getElementById(`tarjeta-menu-${primero.idx}`)
+      .getElementById(`ticket-persona-${primero.idx}`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    tickets.abrirTiempo(primero.idx, primero.orden)
   }
   // Para el campo origen de la orden: qué canales llenaron el carrito
   const usoVoz = useRef(false)
@@ -198,8 +195,8 @@ export function Cliente() {
   const soloMenusConfig = config?.terminal_solo_menus ?? true
   // Regla del local: qué empaques se ofrecen hoy y cuánto cuesta el táper
   const empaquesOfrecidos = config?.empaques_ofrecidos ?? EMPAQUES
-  const reparto = useRepartoMenus(carrito, empaquesOfrecidos)
   const precioTaper = config?.precio_taper ?? 0
+  const tickets = useTicketsPersonas(carrito, { empaques: empaquesOfrecidos, precioTaper, conEspera: false })
   const tapers = unidadesEnTaper(carrito.items, carrito.menus)
   const cargoTaper = precioTaper * tapers
   const totalConCargos = carrito.totalSoles + cargoTaper
@@ -540,32 +537,8 @@ export function Cliente() {
         </div>
         )}
         <div className="lista-resumen">
-          {carrito.menus.map((m, idx) => (
-            <div
-              key={`menu-${idx}`}
-              id={`tarjeta-menu-${idx}`}
-              className={`${perseguida === idx ? 'tarjeta-perseguida' : ''} ${primerPendienteIdx === idx ? 'primera-incompleta' : ''}`}
-            >
-            <TarjetaMenuCarrito
-              linea={m}
-              numero={idx + 1}
-              onCambiarEleccion={(t, p) => carrito.cambiarEleccion(idx, t, p)}
-              onAlternarOmitido={(t) => carrito.alternarOmitido(idx, t)}
-              onCambiarAgregado={(a, d) => carrito.cambiarAgregado(idx, a, d)}
-              onCambiarExtra={(t, pl, d) => carrito.cambiarExtraMenu(idx, t, pl, d)}
-              onCambiarCantidad={(d) => carrito.cambiarCantidadMenu(idx, d)}
-              onDuplicar={() => carrito.duplicarMenu(idx)}
-              onCambiarEmpaque={(e) => carrito.cambiarEmpaqueMenu(idx, e)}
-              onCambiarEmpaqueTiempo={(t, e) => carrito.cambiarEmpaqueTiempo(idx, t, e)}
-              onCambiarNota={(n) => carrito.cambiarNotaMenu(idx, n)}
-              empaquesOfrecidos={empaquesOfrecidos}
-              precioTaper={precioTaper}
-              abrirTic={abrirTics[idx] ?? 0}
-              {...reparto.propsTarjeta(m)}
-              onCambiarEntrega={(e) => carrito.cambiarEntregaMenu(idx, e)}
-            />
-            </div>
-          ))}
+          {/* Un ticket vertical por persona (boceto del dueño) */}
+          {tickets.grilla}
           {carrito.items.map((i) => (
             <div className="linea-resumen linea-con-empaque" key={i.plato.id}>
               <div className="linea-resumen-fila">
@@ -684,7 +657,7 @@ export function Cliente() {
                     <span className="guia-kicker">
                       Falta {pendientesMenus.length} cosa{pendientesMenus.length === 1 ? '' : 's'}
                     </span>
-                    Elegir {pendientesMenus[0].rotulo.toLowerCase()} del Menú {pendientesMenus[0].numero}
+                    Elegir {pendientesMenus[0].rotulo.toLowerCase()} de la Persona {pendientesMenus[0].numero}
                   </span>
                   <button className="boton-ir-ahi" onClick={irAlPendiente}>
                     IR AHÍ <span className={pendienteALaVista ? '' : 'flecha-rebota'} aria-hidden="true">↓</span>
@@ -737,7 +710,7 @@ export function Cliente() {
             onCerrar={() => setVozAbierta(false)}
           />
         )}
-        {reparto.hojas}
+        {tickets.hojas}
         <AvisoInactividad {...inactividad} />
       </div>
     )
