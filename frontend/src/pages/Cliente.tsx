@@ -495,15 +495,6 @@ export function Cliente() {
             {/* Una tarjeta = una persona: + y − grandes y el monto a la vista */}
             {menusHoy.map((m) => (
               <div key={m.id} className="combo">
-                <div className="combo-resumen-tiempos">
-                  {m.tiempos.map((t) => (
-                    <div key={t.orden}>
-                      {t.alternativas.length === 1
-                        ? `${t.alternativas[0].nombre} (incluido)`
-                        : t.alternativas.map((a) => a.nombre).join(' / ')}
-                    </div>
-                  ))}
-                </div>
                 <BarraPersonas
                   menu={m}
                   personas={menusEnPedido(carrito.menus, m.id)}
@@ -522,20 +513,8 @@ export function Cliente() {
           </div>
         )}
         <SugerenciaMenu items={carrito.items} menus={menusHoy} onConvertir={carrito.convertirEnMenu} />
-        {carrito.totalItems > 0 && (
-        <div className="selector-servicio">
-          <span className="selector-servicio-titulo">¿Cómo va cada plato?</span>
-          <div className="selector-servicio-botones fila-todos">
-            <span className="etiqueta-todos">Todos:</span>
-            {empaquesOfrecidos.map((e) => (
-              <button key={e} className="boton-servicio boton-empaque" onClick={() => carrito.empaqueParaTodos(e)}>
-                {NOMBRE_EMPAQUE[e]}
-                {e === 'taper' && precioTaper > 0 && <small> +{soles(precioTaper)}</small>}
-              </button>
-            ))}
-          </div>
-        </div>
-        )}
+        {/* Sin "¿Cómo va cada plato? Todos:" (pedido del dueño): el empaque se
+            elige en la letra de cada plato del ticket, para una o para todas */}
         <div className="lista-resumen">
           {/* Un ticket vertical por persona (boceto del dueño) */}
           {tickets.grilla}
