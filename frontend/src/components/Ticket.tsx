@@ -83,7 +83,7 @@ function TicketCuerpo({ orden, local, id }: Props & { id?: string }) {
         <div className="ticket-servicio ticket-mesa">🪑 SIN MESA</div>
       ) : null}
       {orden.items.length + orden.menus.length >= 2 || orden.menus.length > 0 ? (
-        <div className="ticket-servicio ticket-entrega">
+        <div className="ticket-servicio">
           ENTREGA: {lineaEntrega(orden).texto}
         </div>
       ) : null}
