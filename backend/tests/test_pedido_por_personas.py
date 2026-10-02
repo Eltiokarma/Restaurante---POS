@@ -98,3 +98,108 @@ def test_caja_carga_un_menu_guardado(client, admin_headers, fonda):
     assert r.status_code == 200
     hoy = client.get("/api/menu/today").json()["menus"][0]
     assert "Tallarín rojo" in [a["nombre"] for a in hoy["tiempos"][1]["alternativas"]]
+
+
+def test_nombre_de_la_persona_sale_en_la_comanda(client, db, fonda):
+    r = client.post("/api/orders", json={"menus": [
+        _menu(fonda, nombre_persona="  Juan "),
+        {"menu_id": fonda["menu_id"], "cantidad": 1,
+         "elecciones": {"1": fonda["platos"]["Sopa criolla"]}, "nombre_persona": "Ana"},
+    ]})
+    assert r.status_code == 201
+    assert [m["nombre_persona"] for m in r.json()["orden"]["menus"]] == ["Juan", "Ana"]
+    orden = db.query(Orden).one()
+    texto = render_orden(orden, {"nombre": "Fonda"}).decode("cp850", errors="ignore")
+    assert "Asado con puré (JUAN)" in texto
+    assert "SEGUNDO SIN ELEGIR (ANA)" in texto
+
+
+def test_nombre_demasiado_largo_se_rechaza(client, fonda):
+    r = client.post("/api/orders", json={"menus": [_menu(fonda, nombre_persona="x" * 41)]})
+    assert r.status_code == 422
+
+
+def test_cierre_viejo_no_sale_por_el_puente(client, db):
+    """Un cierre de hace semanas (el puente estuvo apagado) no se imprime
+    de la nada: se descarta de la cola. El de hoy sí sale."""
+    from datetime import timedelta
+
+    from app.models import CierreCaja, Config, hoy_lima
+    from app.routes.impresion import CLAVE_CIERRE
+
+    viejo = CierreCaja(fecha=hoy_lima() - timedelta(days=20), hora_apertura="08:00:00",
+                       monto_apertura=0, hora_cierre="21:00:00")
+    db.add(viejo)
+    db.commit()
+    db.add(Config(clave=CLAVE_CIERRE, valor=str(viejo.id)))
+    db.commit()
+    trabajos = client.get("/api/print/cola").json()["trabajos"]
+    assert [t for t in trabajos if t["tipo"] == "cierre"] == []
+
+    hoy = CierreCaja(fecha=hoy_lima(), hora_apertura="08:00:00", monto_apertura=0,
+                     hora_cierre="21:00:00")
+    db.add(hoy)
+    db.commit()
+    db.get(Config, CLAVE_CIERRE).valor = str(hoy.id)
+    db.commit()
+    trabajos = client.get("/api/print/cola").json()["trabajos"]
+    assert [t["tipo"] for t in trabajos] == ["cierre"]
+
+
+def test_elegir_despues_lo_que_quedo_sin_elegir(client, fonda):
+    r = client.post("/api/orders", json={"entrega": "junto", "menus": [{
+        "menu_id": fonda["menu_id"], "cantidad": 1,
+        "elecciones": {"1": fonda["platos"]["Sopa criolla"]},
+    }]})
+    orden = r.json()["orden"]
+    om = orden["menus"][0]
+    assert om["pendientes"] == ["Segundo"]
+    total_antes = orden["total"]
+
+    # El bistec tiene recargo S/ 2 y sale al momento
+    r = client.post(f"/api/orders/{orden['id']}/menus/{om['id']}/elegir",
+                    json={"tiempo_orden": 2, "plato_id": fonda["platos"]["Bistec frito"]})
+    assert r.status_code == 200
+    despues = r.json()
+    menu = despues["menus"][0]
+    assert menu["pendientes"] == []
+    assert "Bistec frito" in [i["nombre"] for i in menu["items"]]
+    assert despues["total"] == round(total_antes + 2.0, 2)
+    assert menu["entrega"] == "separado"  # al momento: esa persona va por tiempos
+
+    # Elegir otra vez el mismo tiempo ya no se puede
+    r = client.post(f"/api/orders/{orden['id']}/menus/{om['id']}/elegir",
+                    json={"tiempo_orden": 2, "plato_id": fonda["platos"]["Tallarín rojo"]})
+    assert r.status_code == 409
+
+
+def test_elegir_fuera_de_las_opciones_se_rechaza(client, fonda):
+    r = client.post("/api/orders", json={"menus": [{
+        "menu_id": fonda["menu_id"], "cantidad": 1,
+        "elecciones": {"1": fonda["platos"]["Sopa criolla"]},
+    }]})
+    orden = r.json()["orden"]
+    om = orden["menus"][0]
+    r = client.post(f"/api/orders/{orden['id']}/menus/{om['id']}/elegir",
+                    json={"tiempo_orden": 2, "plato_id": fonda["platos"]["Chicha morada"]})
+    assert r.status_code == 422
+
+
+def test_soltar_lo_que_espera_lo_manda_a_la_tanda(client, fonda):
+    r = client.post("/api/orders", json={"menus": [_menu(fonda, espera=[2])]})
+    item = next(i for i in r.json()["orden"]["menus"][0]["items"] if i["tiempo_orden"] == 2)
+    nombres = lambda: {p["nombre"] for t in client.get("/api/orders/tandas").json()["tandas"] for p in t["platos"]}  # noqa: E731
+    assert "Asado con puré" not in nombres()
+    assert client.post(f"/api/orders/items/{item['id']}/soltar").status_code == 200
+    assert "Asado con puré" in nombres()
+
+
+def test_tiempos_por_persona_en_la_comanda(client, db, fonda):
+    client.post("/api/orders", json={"entrega": "junto", "menus": [
+        _menu(fonda, "Bistec frito", entrega="separado"),
+        _menu(fonda, entrega="junto"),
+    ]})
+    orden = db.query(Orden).one()
+    texto = render_orden(orden, {"nombre": "Fonda"}).decode("cp850", errors="ignore")
+    assert "Bistec frito (TIEMPOS)" in texto
+    assert "Asado con puré (TIEMPOS)" not in texto

@@ -113,7 +113,11 @@ export function useCarrito() {
       const preferido = defecto?.elecciones[t.orden]
       if (preferido !== undefined && t.alternativas.some((a) => a.plato_id === preferido)) {
         elecciones[t.orden] = preferido
-      } else if ((preElegir && !defecto) || t.alternativas.length === 1) {
+      } else if (
+        // Sin default para este tiempo, o el default ya no está hoy (cargaron
+        // otro menú): regla de siempre
+        (preElegir && (!defecto || preferido !== undefined)) || t.alternativas.length === 1
+      ) {
         elecciones[t.orden] = eleccionPorDefecto(t)
       }
       const empaque = defecto?.empaques[t.orden]
@@ -129,7 +133,12 @@ export function useCarrito() {
   const quitarUltimoMenu = useCallback((menuId: number) => {
     setMenus((prev) => {
       const ultimo = prev.map((m) => m.menu.id).lastIndexOf(menuId)
-      return ultimo === -1 ? prev : prev.filter((_, i) => i !== ultimo)
+      if (ultimo === -1) return prev
+      // Una tarjeta con cantidad 2 ("＋ Más") son dos personas: baja una
+      if (prev[ultimo].cantidad > 1) {
+        return prev.map((m, i) => (i === ultimo ? { ...m, cantidad: m.cantidad - 1 } : m))
+      }
+      return prev.filter((_, i) => i !== ultimo)
     })
   }, [])
 
@@ -223,6 +232,11 @@ export function useCarrito() {
         espera: (m.espera ?? []).filter((t) => t !== tiempoOrden),
       }
     }))
+  }, [])
+
+  // Nombre opcional de la persona del ticket ("Juan")
+  const cambiarNombreMenu = useCallback((idx: number, nombre: string) => {
+    setMenus((prev) => prev.map((m, i) => (i === idx ? { ...m, nombre_persona: nombre } : m)))
   }, [])
 
   // Entrega POR PERSONA: todo junto o por tiempos
@@ -430,9 +444,20 @@ export function useCarrito() {
           const nuevo = menuPorId.get(m.menu.id)
           if (!nuevo) return m
           const tiempos = new Set(nuevo.tiempos.map((t) => t.orden))
+          // Un plato que se sacó del menú de hoy (o se agotó) deja ese tiempo
+          // "sin elegir" a la vista, en vez de una elección escondida que el
+          // backend rechazaría con 409 una y otra vez
+          const vale = (t: number, platoId: number) =>
+            nuevo.tiempos.find((x) => x.orden === t)?.alternativas.some((a) => a.plato_id === platoId) ?? false
+          const elecciones = Object.fromEntries(
+            Object.entries(m.elecciones).filter(([t, p]) => vale(Number(t), p)),
+          ) as Record<number, number>
           return {
             ...m,
             menu: nuevo,
+            elecciones,
+            extras: m.extras.filter((e) => vale(e.tiempo_orden, e.plato_id)),
+            espera: (m.espera ?? []).filter((t) => elecciones[t] !== undefined),
             omitidos: m.omitidos.filter((o) => tiempos.has(o)),
             empaques: Object.fromEntries(
               Object.entries(m.empaques).filter(([k]) => tiempos.has(Number(k))),
@@ -476,6 +501,7 @@ export function useCarrito() {
     cambiarEntregaMenu,
     alternarEspera,
     quitarEleccion,
+    cambiarNombreMenu,
     cambiarEleccion,
     alternarOmitido,
     cambiarAgregado,

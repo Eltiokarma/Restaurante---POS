@@ -53,15 +53,16 @@ def _items_activos(orden: Orden, categorias: dict[int, str]) -> tuple[list[Orden
     tanda, esperan su entrada). El gating solo aplica a "separado", y por
     grupo de entrega (cada persona con la suya). Los platos "va a
     esperar" (reservados) no entran a ninguna tanda hasta que los pidan."""
-    pendientes = [
+    cocinables = [
         i for i in orden.items
-        if i.estado in _PENDIENTES and _va_a_cocina(i, categorias) and not i.espera
+        if i.estado in _PENDIENTES and _va_a_cocina(i, categorias)
     ]
-    grupos: dict[object, str] = {}
+    pendientes = [i for i in cocinables if not i.espera]
+    # La entrada pendiente se cuenta CON las reservadas: si la sopa de una
+    # persona "por tiempos" espera, su segundo tampoco sale antes
     entrada_pendiente: set[object] = set()
-    for i in pendientes:
-        clave, entrega = _grupo_entrega(i, orden)
-        grupos[clave] = entrega
+    for i in cocinables:
+        clave, _ = _grupo_entrega(i, orden)
         if categorias.get(i.plato_id) == "entrada":
             entrada_pendiente.add(clave)
     entran, esperan = [], []

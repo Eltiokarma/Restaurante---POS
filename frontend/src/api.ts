@@ -105,12 +105,15 @@ export interface MenuCarrito {
   entrega?: Entrega
   // Tiempos "va a esperar" (reservados): cocina no los saca aún (caja)
   espera?: number[]
+  // Nombre opcional de la persona ("Juan"): sale en la comanda de cocina
+  nombre_persona?: string
 }
 
 // Estado POR ÍTEM (§3): la cocina tacha porciones, no tickets enteros
 export type EstadoItem = 'pendiente' | 'preparando' | 'listo' | 'entregado'
 
 export interface OrdenItemOut {
+  id?: number
   // Línea de cobro (ej. "Táper × 3"): al total y al ticket, no a cocina
   es_cargo?: boolean
   // Categoría del plato (null si el plato salió del catálogo): cocina
@@ -141,10 +144,15 @@ export interface OrdenMenuOut {
   subtotal: number
   // Tiempos que el cliente quitó ("Sin sopa"), con el descuento aplicado
   omitidos: { rotulo: string; descuento: number }[]
+  id?: number
+  menu_id?: number | null
   // Tiempos que la persona aún no eligió (salen "SIN ELEGIR")
   pendientes?: string[]
+  pendientes_detalle?: { tiempo_orden: number; rotulo: string }[]
   // Entrega de ESTE menú (cada persona la suya)
   entrega?: Entrega
+  // Nombre opcional de la persona
+  nombre_persona?: string
   items: OrdenMenuItemOut[]
 }
 
@@ -713,6 +721,7 @@ export interface MenuOrdenIn {
   nota?: string
   entrega?: Entrega
   espera?: number[]
+  nombre_persona?: string
 }
 
 // Menú del día como lo ve la caja: plantillas con TODAS sus alternativas
@@ -782,6 +791,7 @@ export function menuAPayload(m: MenuCarrito): MenuOrdenIn {
     entrega: entregaDeMenu(m),
     // Solo lo elegido puede esperar
     espera: (m.espera ?? []).filter((t) => m.elecciones[t] !== undefined && !m.omitidos.includes(t)),
+    nombre_persona: (m.nombre_persona ?? '').trim(),
   }
 }
 
@@ -805,6 +815,17 @@ export const api = {
         items, menus, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega,
       }),
     }),
+
+  // La persona eligió después lo que quedó "sin elegir" (desde caja)
+  elegirPendiente: (ordenId: number, ordenMenuId: number, tiempoOrden: number, platoId: number) =>
+    request<OrdenOut>(`/api/orders/${ordenId}/menus/${ordenMenuId}/elegir`, {
+      method: 'POST',
+      body: JSON.stringify({ tiempo_orden: tiempoOrden, plato_id: platoId }),
+    }),
+
+  // "Ya lo piden": el plato reservado pasa a la cola normal de cocina
+  soltarEspera: (itemId: number) =>
+    request<{ id: number; espera: boolean }>(`/api/orders/items/${itemId}/soltar`, { method: 'POST' }),
 
   corregirEntrega: (ordenId: number, entrega: Entrega) =>
     request<{ id: number; entrega: Entrega }>(`/api/orders/${ordenId}/entrega`, {

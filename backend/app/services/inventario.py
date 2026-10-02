@@ -61,6 +61,21 @@ def consumir_por_orden(db: Session, orden: Orden, fecha=None) -> None:
                            referencia, orden_id=orden.id, fecha=fecha)
 
 
+def consumir_item(db: Session, orden: Orden, item) -> None:
+    """Descuenta los insumos de UN ítem agregado después (la persona eligió
+    su segundo cuando la orden ya estaba registrada)."""
+    if item.plato_id is None:
+        return
+    with _lock_inventario:
+        referencia = f"orden #{orden.numero_orden_dia:03d}"
+        receta = db.scalars(select(RecetaItem).where(RecetaItem.plato_id == item.plato_id)).all()
+        for ri in receta:
+            insumo = db.get(Insumo, ri.insumo_id)
+            if insumo is not None:
+                _registrar(db, insumo, "consumo", -ri.cantidad * item.cantidad,
+                           referencia, orden_id=orden.id)
+
+
 def consumir_directo(db: Session, insumo: Insumo, cantidad: float,
                      referencia: str, orden_id: int | None = None) -> None:
     """Consumo sin receta (bebidas embotelladas: 1 venta = N botellas).

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, menuAPayload, precioUnitarioMenu, soles, tiemposPendientes, unidadesEnTaper } from '../api'
+import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, menuAPayload, precioUnitarioMenu, soles, subtotalMenu, tiemposPendientes, unidadesEnTaper } from '../api'
 import type { ConfigOut, DatosLocal, Entrega, MenuHoy, MesaEstado, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { describirMenu } from '../components/describirMenu'
 import { menusEnPedido, TarjetaOfertaMenu } from '../components/TarjetaOfertaMenu'
-import { BarraPersonas, useTicketsPersonas } from '../components/RepartoMenu'
+import {
+  BarraPersonas, guardarDefectos, HojaDefecto, leerDefectos, useTicketsPersonas,
+} from '../components/RepartoMenu'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
@@ -67,13 +69,15 @@ export function Cliente() {
   // La flecha de "IR AHÍ" rebota SOLO si la tarjeta pendiente quedó fuera
   // de vista (detalle del handoff: movimiento permanente en táctil cansa)
   const [pendienteALaVista, setPendienteALaVista] = useState(true)
-  // Riel de pasos 4a (decisión del dueño: el resumen necesita orientación)
-  const [tocaronEntrega, setTocaronEntrega] = useState(false)
 
   // Lo que el backend reclamaría con un 422 al final, dicho desde el
   // principio y con el mismo lenguaje (espejo de la validación)
   const pendientesMenus = carrito.menus.flatMap((m, idx) =>
-    tiemposPendientes(m).map((t) => ({ idx, rotulo: t.rotulo, numero: idx + 1, orden: t.orden })),
+    tiemposPendientes(m).map((t) => ({
+      idx, rotulo: t.rotulo, orden: t.orden,
+      // Mismo número que dice el ticket: se cuenta dentro de su menú
+      numero: carrito.menus.slice(0, idx + 1).filter((x) => x.menu.id === m.menu.id).length,
+    })),
   )
 
   const primerPendienteIdx = carrito.menus.findIndex((m) => tiemposPendientes(m).length > 0)
@@ -169,7 +173,6 @@ export function Cliente() {
       setEntrega('junto')
       setMesasElegidas([])
       setMostrarMesas(false)
-      setTocaronEntrega(false)
       usoVoz.current = false
       usoTactil.current = false
       setPantalla('inicio')
@@ -196,6 +199,10 @@ export function Cliente() {
   // Regla del local: qué empaques se ofrecen hoy y cuánto cuesta el táper
   const empaquesOfrecidos = config?.empaques_ofrecidos ?? EMPAQUES
   const precioTaper = config?.precio_taper ?? 0
+  // "Platos por defecto" de ESTA terminal (pedido del dueño, por ahora):
+  // cada persona nueva arranca con ellos
+  const [defectos, setDefectos] = useState(leerDefectos)
+  const [editandoDefecto, setEditandoDefecto] = useState<MenuHoy | null>(null)
   const tickets = useTicketsPersonas(carrito, { empaques: empaquesOfrecidos, precioTaper, conEspera: false })
   const tapers = unidadesEnTaper(carrito.items, carrito.menus)
   const cargoTaper = precioTaper * tapers
@@ -226,7 +233,7 @@ export function Cliente() {
     const menus = (await cargarMenu()) ?? menusHoy
     const directoAlPedido = soloMenusConfig && menus.length > 0
     // Pedido por personas: se arranca con UNA (el + suma más)
-    if (directoAlPedido) carrito.agregarMenuCompleto(menus[0], false)
+    if (directoAlPedido) carrito.agregarMenuCompleto(menus[0], false, defectos[menus[0].id])
     setPantalla(directoAlPedido ? 'resumen' : 'menu')
     empezando.current = false
   }
@@ -451,7 +458,7 @@ export function Cliente() {
     return (
       <div className="pantalla pantalla-resumen">
         {soloMenus ? (
-          <div className="cabecera-menu cabecera-en-pedido">
+          <div className="cabecera-menu cabecera-en-pedido cabecera-compacta">
             <button className="boton-cancelar-todo" onClick={() => setConfirmandoCancelarTodo(true)}>
               ← Cancelar todo
             </button>
@@ -465,30 +472,7 @@ export function Cliente() {
         ) : (
           <h1>Tu pedido</h1>
         )}
-        {(() => {
-          const pasos = [
-            { rotulo: 'Cantidad', hecho: carrito.totalItems > 0 },
-            { rotulo: 'Ármalo', hecho: carrito.totalItems > 0 && pendientesMenus.length === 0 },
-            // Con menús, cada persona trae su "todo junto" y se cambia en su tarjeta
-            { rotulo: 'Junto o Separado', hecho: tocaronEntrega || hayAlMomento || carrito.menus.length > 0 },
-            { rotulo: 'Confirma', hecho: false },
-          ]
-          const actual = pasos.findIndex((p) => !p.hecho)
-          return (
-            <ol className="riel-pasos">
-              {pasos.map((p, i) => (
-                <li
-                  key={p.rotulo}
-                  className={`riel-paso ${p.hecho ? 'paso-hecho' : i === actual ? 'paso-actual' : 'paso-pendiente'}`}
-                  aria-current={i === actual ? 'step' : undefined}
-                >
-                  <span className="riel-punto" aria-hidden="true" />
-                  <span className="riel-rotulo">{p.rotulo}</span>
-                </li>
-              ))}
-            </ol>
-          )
-        })()}
+        {/* Sin riel de pasos (pedido del dueño): el espacio es para los tickets */}
         {errorConexion && <div className="banner-error">{errorConexion}</div>}
         {soloMenus && (
           <div className="oferta-menus">
@@ -498,8 +482,11 @@ export function Cliente() {
                 <BarraPersonas
                   menu={m}
                   personas={menusEnPedido(carrito.menus, m.id)}
-                  total={totalConCargos}
-                  onMas={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m, false) }}
+                  total={menusHoy.length > 1
+                    ? carrito.menus.filter((x) => x.menu.id === m.id).reduce((s, x) => s + subtotalMenu(x), 0)
+                    : totalConCargos}
+                  onMas={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m, false, defectos[m.id]) }}
+                  onDefecto={() => setEditandoDefecto(m)}
                   onMenos={() => carrito.quitarUltimoMenu(m.id)}
                 />
               </div>
@@ -601,7 +588,7 @@ export function Cliente() {
                   key={e}
                   className={`boton-entrega ${entregaEfectiva === e ? 'entrega-activa' : ''}`}
                   disabled={e === 'junto' && hayAlMomento}
-                  onClick={() => { setEntrega(e); setTocaronEntrega(true) }}
+                  onClick={() => setEntrega(e)}
                 >
                   {NOMBRE_ENTREGA[e].titulo}
                   <small>{NOMBRE_ENTREGA[e].detalle}</small>
@@ -690,6 +677,27 @@ export function Cliente() {
           />
         )}
         {tickets.hojas}
+        {editandoDefecto && (
+          <HojaDefecto
+            menu={editandoDefecto}
+            defecto={defectos[editandoDefecto.id] ?? { elecciones: {}, omitidos: [], empaques: {} }}
+            empaques={empaquesOfrecidos}
+            personas={menusEnPedido(carrito.menus, editandoDefecto.id)}
+            onCerrar={() => setEditandoDefecto(null)}
+            onGuardar={(d, aplicar) => {
+              const nuevos = { ...defectos, [editandoDefecto.id]: d }
+              setDefectos(nuevos)
+              guardarDefectos(nuevos)
+              if (aplicar) {
+                const menu = editandoDefecto
+                const n = menusEnPedido(carrito.menus, menu.id)
+                for (let i = 0; i < n; i++) carrito.quitarUltimoMenu(menu.id)
+                for (let i = 0; i < n; i++) carrito.agregarMenuCompleto(menu, false, d)
+              }
+              setEditandoDefecto(null)
+            }}
+          />
+        )}
         <AvisoInactividad {...inactividad} />
       </div>
     )

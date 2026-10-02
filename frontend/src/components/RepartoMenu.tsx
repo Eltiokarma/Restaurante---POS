@@ -271,7 +271,7 @@ const LETRA_EMPAQUE: Record<Empaque, string> = { mesa: 'M', taper: 'T', bolsa: '
  *  platos; a la derecha de cada uno el circulito "va a esperar" (caja) y
  *  la letra del empaque. Tocar el plato abre sus opciones; tocar la letra,
  *  el empaque. Lo demás (agregados, porciones, nota) en "＋ Más". */
-export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmpaque, onEspera, onEntrega, onMas, onQuitar }: {
+export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmpaque, onEspera, onEntrega, onMas, onQuitar, onNombre }: {
   linea: MenuCarrito
   numero: number
   domId: string
@@ -282,6 +282,7 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
   onEntrega: (e: Entrega) => void
   onMas: () => void
   onQuitar: () => void
+  onNombre: (nombre: string) => void
 }) {
   const espera = linea.espera ?? []
   const alMomento = menuConAlMomento(linea)
@@ -296,6 +297,15 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
         <span>{soles(subtotalMenu(linea))}</span>
         <button className="ticket-persona-quitar" onClick={onQuitar} aria-label={`Quitar persona ${numero}`}>✕</button>
       </div>
+      {/* Nombre opcional: sale en la comanda de cocina ("Lomo (JUAN)") */}
+      <input
+        className="ticket-persona-nombre"
+        placeholder="Nombre (opcional)"
+        maxLength={40}
+        value={linea.nombre_persona ?? ''}
+        onChange={(e) => onNombre(e.target.value)}
+        aria-label={`Nombre de la persona ${numero} (opcional)`}
+      />
       {linea.menu.tiempos.filter((t) => t.alternativas.length > 0).map((t) => {
         const quitado = linea.omitidos.includes(t.orden)
         const elegida = t.alternativas.find((a) => a.plato_id === linea.elecciones[t.orden])
@@ -320,7 +330,7 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
               </button>
             )}
             <button
-              className="ticket-persona-empaque"
+              className={`ticket-persona-empaque empaque-${empaque}`}
               disabled={quitado}
               onClick={() => onEmpaque(t.orden)}
               aria-label={`${t.rotulo}: ${NOMBRE_EMPAQUE[empaque]}`}
@@ -565,6 +575,7 @@ export function useTicketsPersonas(carrito: Carrito, opciones: {
             onEntrega={(e) => carrito.cambiarEntregaMenu(idx, e)}
             onMas={() => setHoja({ tipo: 'mas', idx })}
             onQuitar={() => carrito.quitarMenu(idx)}
+            onNombre={(n) => carrito.cambiarNombreMenu(idx, n)}
           />
         )
       })}

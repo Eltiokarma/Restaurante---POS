@@ -133,24 +133,34 @@ def render_orden(
     for om in orden.menus:
         for omitido in om.omitidos():
             rotulo = omitido["rotulo"].upper()
-            sin_por_rotulo[rotulo] = sin_por_rotulo.get(rotulo, 0) + 1
+            sin_por_rotulo[rotulo] = sin_por_rotulo.get(rotulo, 0) + om.cantidad
     for rotulo, veces in sin_por_rotulo.items():
         cuantos = f"{veces} " if veces > 1 else ""
         partes.append(_texto(f"** {cuantos}SIN {rotulo} **"))
     # Lo que una persona aún no eligió también va arriba: el ticket sale
     # igual y cocina sabe que falta ("2 SEGUNDO SIN ELEGIR")
-    pendientes_por_rotulo: dict[str, int] = {}
+    pendientes_por_rotulo: dict[tuple[str, str], int] = {}
     for om in orden.menus:
         for pendiente in om.pendientes():
-            rotulo = pendiente["rotulo"].upper()
-            pendientes_por_rotulo[rotulo] = pendientes_por_rotulo.get(rotulo, 0) + om.cantidad
-    for rotulo, veces in pendientes_por_rotulo.items():
+            clave_p = (pendiente["rotulo"].upper(), (om.nombre_persona or "").upper())
+            pendientes_por_rotulo[clave_p] = pendientes_por_rotulo.get(clave_p, 0) + om.cantidad
+    for (rotulo, persona), veces in pendientes_por_rotulo.items():
         cuantos = f"{veces} " if veces > 1 else ""
-        partes.append(_texto(f"** {cuantos}{rotulo} SIN ELEGIR **"))
+        de_quien = f" ({persona})" if persona else ""
+        partes.append(_texto(f"** {cuantos}{rotulo} SIN ELEGIR{de_quien} **"))
     if sin_por_rotulo or pendientes_por_rotulo:
         partes.append(_texto(""))
 
+    # Nombre de la persona (opcional) de cada menú: va al costado de sus
+    # platos para que cocina y el mozo sepan de quién es cada uno
+    persona_de_menu = {om.id: (om.nombre_persona or "").strip().upper() for om in orden.menus}
+    # Si las personas salen distinto (unas junto, otras por tiempos), cada
+    # plato de quien va por tiempos lo dice: la línea de arriba solo cuenta
+    entrega_de_menu = {om.id: om.entrega or orden.entrega for om in orden.menus}
+    mixta = "/" in _linea_entrega(orden, categorias)
+
     # Juntar iguales: mismo plato + mismo empaque + misma observación
+    # (+ misma persona, si tiene nombre)
     grupos: dict[tuple, dict] = {}
     for item in orden.items:
         if es_bebida(item):
@@ -160,6 +170,8 @@ def render_orden(
             bucket, item.nombre_snapshot, item.empaque,
             _nota_de(item) or nota_por_item.get(item.id, ""),
             item.es_extra, item.es_agregado, item.espera,
+            persona_de_menu.get(item.orden_menu_id, ""),
+            mixta and entrega_de_menu.get(item.orden_menu_id, orden.entrega) == "separado",
         )
         grupo = grupos.setdefault(clave, {"cantidad": 0, "monto": 0.0})
         grupo["cantidad"] += item.cantidad
@@ -179,7 +191,7 @@ def render_orden(
         primera_seccion = False
         partes += [NEGRITA_ON, _texto(titulo), NEGRITA_OFF]
         for clave in del_grupo:
-            _, nombre_plato, empaque, nota, es_extra, es_agregado, espera = clave
+            _, nombre_plato, empaque, nota, es_extra, es_agregado, espera, persona, por_tiempos = clave
             datos = grupos[clave]
             if es_agregado:
                 nombre = f"** +{datos['cantidad']} {nombre_plato.upper()} **"
@@ -190,6 +202,10 @@ def render_orden(
                 if espera:
                     # "Va a esperar": reservado, cocina no lo saca todavía
                     nombre += " (ESPERA)"
+            if persona:
+                nombre += f" ({persona})"
+            if por_tiempos:
+                nombre += " (TIEMPOS)"
             # En OTROS (gaseosas y cargos sin plato) no van montos: la
             # comanda es para cocina, la plata se ve en caja
             monto = "" if bucket is None else (_soles(datos["monto"]) if datos["monto"] > 0 else "")

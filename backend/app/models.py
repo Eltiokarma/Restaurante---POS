@@ -212,6 +212,8 @@ class OrdenMenu(Base):
     # Tiempos que la persona todavía no eligió (el ticket sale igual y lo
     # dice: "SEGUNDO: SIN ELEGIR"). JSON de [{"tiempo_orden", "rotulo"}]
     pendientes_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    # Nombre opcional de la persona ("Juan"): sale en la comanda de cocina
+    nombre_persona: Mapped[str] = mapped_column(String(40), default="", nullable=False)
     # Entrega de ESTE menú (cada persona sale "junto" o "separado").
     # None = hereda la de la orden (órdenes antiguas y la terminal vieja)
     entrega: Mapped[str | None] = mapped_column(String(10), nullable=True)

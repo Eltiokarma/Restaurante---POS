@@ -10223,3 +10223,144 @@ select:focus-visible {
 .pantalla-caja .ticket-persona-mas {
   min-height: 56px;
 }
+
+/* Color POR EMPAQUE en la letra del ticket (pedido del dueño): de un
+   vistazo se ve qué va a la mesa y qué se lleva */
+.ticket-persona-empaque.empaque-mesa {
+  background: var(--mayolica-tenue);
+  box-shadow: inset 0 0 0 2px var(--mayolica);
+  color: var(--mayolica);
+}
+
+.ticket-persona-empaque.empaque-taper {
+  background: var(--achiote-tenue);
+  box-shadow: inset 0 0 0 2px var(--achiote);
+  color: var(--achiote-hondo);
+}
+
+.ticket-persona-empaque.empaque-bolsa {
+  background: var(--culantro-tenue);
+  box-shadow: inset 0 0 0 2px var(--culantro);
+  color: var(--culantro-hondo);
+}
+
+.ticket-persona-empaque.empaque-lonchera {
+  background: var(--aji-tenue);
+  box-shadow: inset 0 0 0 2px var(--aji);
+  color: var(--aji-hondo);
+}
+
+/* Nombre opcional de la persona */
+.ticket-persona-nombre {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 10px;
+  border: 1.5px dashed var(--linea-fuerte);
+  border-radius: var(--r-chico);
+  background: var(--papel);
+  font: inherit;
+  font-weight: 700;
+}
+
+.item-menu-persona {
+  text-transform: uppercase;
+}
+
+/* Terminal: cabecera compacta y sin riel; los tickets ocupan la pantalla */
+.pantalla-resumen {
+  max-width: 1200px;
+}
+
+.cabecera-compacta {
+  padding: 8px 16px;
+  gap: 12px;
+}
+
+.cabecera-compacta h1 {
+  font-size: 1.4rem;
+}
+
+.cabecera-compacta .boton-cancelar-todo {
+  min-height: 64px;
+  padding: 0 14px;
+  font-size: 1rem;
+}
+
+.cabecera-compacta .boton-pedir-voz {
+  min-height: 64px;
+}
+
+/* Tickets de la terminal: 3 por fila, más grandes */
+.pantalla-resumen .tickets-personas {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.pantalla-resumen .ticket-persona {
+  padding: 12px;
+  gap: 10px;
+}
+
+.pantalla-resumen .ticket-persona-cabecera strong {
+  font-size: 1.35rem;
+}
+
+.pantalla-resumen .ticket-persona-cabecera span {
+  font-size: 1.15rem;
+}
+
+.pantalla-resumen .ticket-persona-plato {
+  min-height: 84px;
+  font-size: 1.25rem;
+}
+
+.pantalla-resumen .ticket-persona-plato small {
+  font-size: 0.78rem;
+}
+
+.pantalla-resumen .ticket-persona-empaque {
+  width: 80px;
+  height: 84px;
+  font-size: 2rem;
+}
+
+.pantalla-resumen .ticket-persona-entrega,
+.pantalla-resumen .ticket-persona-mas,
+.pantalla-resumen .ticket-persona-nombre {
+  min-height: 64px;
+  font-size: 1.1rem;
+}
+
+/* Pantallas muy angostas (celular): 3 no entran legibles */
+@media (max-width: 560px) {
+  .pantalla-resumen .tickets-personas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Caja: elegir después lo que una persona dejó "sin elegir" */
+.caja-orden-pendientes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 2px dashed var(--aji);
+  border-radius: var(--r-chico);
+  background: var(--aji-tenue);
+}
+
+.caja-pendiente {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Cocina: soltar lo reservado */
+.item-espera-boton {
+  min-height: 48px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

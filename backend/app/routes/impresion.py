@@ -6,6 +6,7 @@ impresora de red y marca cada orden como impresa con el endpoint que ya
 existe (POST /api/orders/{id}/printed). Así el backend puede vivir en la
 nube (Railway) y la impresora en la red del restaurante.
 """
+from datetime import timedelta
 import base64
 import json
 
@@ -112,7 +113,11 @@ def cola_de_impresion(db: Session = Depends(get_db)):
         from .caja import resumen_de_cierre
 
         cierre = db.get(CierreCaja, int(marca_cierre.valor))
-        if cierre is not None and cierre.hora_cierre is not None:
+        # Igual que las gaseosas: un cierre viejo (el puente estuvo apagado
+        # días) no debe salir de la nada. Vale el de hoy o el de ayer (un
+        # turno que cierra pasada la medianoche).
+        reciente = cierre is not None and cierre.fecha >= hoy_lima() - timedelta(days=1)
+        if cierre is not None and cierre.hora_cierre is not None and reciente:
             trabajos.append({
                 "tipo": "cierre",
                 "orden_id": None,

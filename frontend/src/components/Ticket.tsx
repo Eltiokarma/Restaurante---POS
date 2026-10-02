@@ -84,6 +84,7 @@ export function Ticket({ orden, local }: Props) {
               <tr>
                 <td>
                   {menu.cantidad} × {menu.nombre}
+                  {menu.nombre_persona && <strong> — {menu.nombre_persona.toUpperCase()}</strong>}
                   {menu.entrega === 'separado' && lineaEntrega(orden).texto.includes('/') && ' · POR TIEMPOS'}
                   {menu.nota && <div className="ticket-item-nota">→ {menu.nota}</div>}
                 </td>
