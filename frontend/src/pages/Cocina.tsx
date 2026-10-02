@@ -115,6 +115,15 @@ export function Cocina() {
     cargar()
   }
 
+  // "Ya lo piden": el plato reservado entra a la cola normal
+  const soltarEspera = async (itemId: number) => {
+    try {
+      await api.soltarEspera(itemId)
+    } finally {
+      cargar()
+    }
+  }
+
   const avanzar = async (orden: OrdenOut) => {
     const siguiente = SIGUIENTE_ESTADO[orden.estado]
     if (!siguiente) return
@@ -414,6 +423,7 @@ export function Cocina() {
                   <li key={`menu-${m}`} className="item-menu-bloque">
                     <span className="item-menu-titulo">
                       <strong>{menu.cantidad} ×</strong> {menu.nombre}
+                      {menu.nombre_persona && <strong className="item-menu-persona"> · {menu.nombre_persona}</strong>}
                       {menu.entrega === 'separado' && lineaEntrega(orden).texto.includes('/') && (
                         <span className="item-extra-tag">⏱ por tiempos</span>
                       )}
@@ -434,7 +444,15 @@ export function Cocina() {
                           {item.es_agregado ? <strong>＋{item.cantidad} {item.nombre.toUpperCase()}</strong>
                             : <>{item.cantidad} × {item.nombre}</>}
                           {item.es_extra && <span className="item-extra-tag">extra</span>}
-                          {item.espera && <span className="item-espera-tag">⏸ ESPERA</span>}
+                          {item.espera && (
+                            <button
+                              className="item-espera-tag item-espera-boton"
+                              onClick={() => item.id !== undefined && soltarEspera(item.id)}
+                              title="Ya lo piden: pasa a la cola"
+                            >
+                              ⏸ ESPERA · ▶ ya lo piden
+                            </button>
+                          )}
                           {item.empaque !== 'mesa' && (
                             <span className="item-empaque">{NOMBRE_EMPAQUE[item.empaque]}</span>
                           )}

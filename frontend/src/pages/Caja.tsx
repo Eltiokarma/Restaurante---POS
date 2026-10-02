@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, menuAPayload, soles, tiemposPendientes, unidadesEnTaper } from '../api'
+import { api, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, lineaEntrega, menuAPayload, soles, subtotalMenu, tiemposPendientes, unidadesEnTaper } from '../api'
 import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuCaja, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, TicketBebidaOut } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
@@ -226,6 +226,22 @@ export function Caja() {
       cargarOrdenes()
     } catch {
       setError('No se pudo liberar la mesa')
+    }
+  }
+
+  // Lo que una persona dejó "sin elegir" se decide aquí, ya registrada la orden
+  const elegirPendiente = async (
+    orden: OrdenOut, ordenMenuId: number | undefined, tiempoOrden: number, platoId: number, nombre: string,
+  ) => {
+    if (ordenMenuId === undefined) return
+    try {
+      await api.elegirPendiente(orden.id, ordenMenuId, tiempoOrden, platoId)
+      setMensaje(`#${String(orden.numero_orden_dia).padStart(3, '0')}: ${nombre} agregado — cocina ya lo ve`)
+      setError('')
+      cargarOrdenes()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo elegir')
+      cargarMenu()
     }
   }
 
@@ -1171,7 +1187,10 @@ export function Caja() {
                   key={m.id}
                   menu={m}
                   personas={menusEnPedido(carrito.menus, m.id)}
-                  total={totalConCargos}
+                  // El monto de ESTE menú (con varios menús, cada barra el suyo)
+                  total={menusHoy.length > 1
+                    ? carrito.menus.filter((x) => x.menu.id === m.id).reduce((s, x) => s + subtotalMenu(x), 0)
+                    : totalConCargos}
                   onMas={() => agregarPersona(m)}
                   onMenos={() => carrito.quitarUltimoMenu(m.id)}
                   onDefecto={() => setEditandoDefecto(m)}
@@ -1304,7 +1323,10 @@ export function Caja() {
                   )}
                   {(o.items.length + o.menus.length >= 2 || o.menus.length > 0) && (
                     <span className="badge-servicio">
-                      {o.entrega === 'junto' ? 'Sale junto' : 'Por tiempos'}
+                      {/* Cada persona puede salir distinto: la línea real, no solo la de la orden */}
+                      {lineaEntrega(o).texto === 'TODO JUNTO' ? 'Sale junto'
+                        : lineaEntrega(o).texto === 'POR TIEMPOS' ? 'Por tiempos'
+                          : lineaEntrega(o).texto.toLowerCase()}
                     </span>
                   )}
                   {o.pago_pendiente && (
@@ -1318,6 +1340,35 @@ export function Caja() {
                   <span className="caja-orden-hora">{o.hora.slice(0, 5)}</span>
                   <span className="caja-orden-total">{soles(o.total)}</span>
                 </div>
+                {o.estado !== 'anulada' && o.menus.some((m) => (m.pendientes_detalle ?? []).length > 0) && (
+                  <div className="caja-orden-pendientes">
+                    {o.menus.flatMap((m, mi) =>
+                      (m.pendientes_detalle ?? []).map((p) => {
+                        const tiempo = menusHoy
+                          .find((x) => x.id === m.menu_id)
+                          ?.tiempos.find((t) => t.orden === p.tiempo_orden)
+                        return (
+                          <div key={`${mi}-${p.tiempo_orden}`} className="caja-pendiente">
+                            <span className="cobro-etiqueta">
+                              {m.nombre_persona ? `${m.nombre_persona}: ` : `Persona ${mi + 1}: `}
+                              {p.rotulo} sin elegir →
+                            </span>
+                            {(tiempo?.alternativas ?? []).map((a) => (
+                              <button
+                                key={a.plato_id}
+                                className="boton-cobro"
+                                onClick={() => elegirPendiente(o, m.id, p.tiempo_orden, a.plato_id, a.nombre)}
+                              >
+                                {a.nombre}{a.recargo > 0 ? ` +${soles(a.recargo)}` : ''}
+                              </button>
+                            ))}
+                            {!tiempo && <em>(ese menú ya no está hoy)</em>}
+                          </div>
+                        )
+                      }),
+                    )}
+                  </div>
+                )}
                 <div className="caja-orden-items">
                   {o.menus.length > 0 && (
                     <span>
@@ -1453,9 +1504,9 @@ export function Caja() {
                           {(o.items.length + o.menus.length >= 2 || o.menus.length > 0) && (
                             <button role="menuitem" onClick={() => {
                               setMenuAbierto(null)
-                              corregirEntrega(o, o.entrega === 'junto' ? 'separado' : 'junto')
+                              corregirEntrega(o, lineaEntrega(o).separado ? 'junto' : 'separado')
                             }}>
-                              Cambiar a {o.entrega === 'junto' ? 'por tiempos' : 'todo junto'}
+                              Cambiar a {lineaEntrega(o).separado ? 'todo junto' : 'por tiempos'}
                             </button>
                           )}
                           {o.estado !== 'entregado' && (

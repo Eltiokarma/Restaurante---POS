@@ -70,6 +70,8 @@ class MenuIn(BaseModel):
     entrega: str | None = None
     # Tiempos "va a esperar" (reservados): cocina no los saca aún
     espera: list[int] = Field(default_factory=list, max_length=6)
+    # Nombre opcional de la persona ("Juan"): sale en la comanda de cocina
+    nombre_persona: str = Field(default="", max_length=40)
 
 
 class OrdenIn(BaseModel):
@@ -202,6 +204,7 @@ def _orden_a_dict(
 
 def _item_a_dict(item, categorias: dict[int, str] | None = None) -> dict:
     return {
+        "id": item.id,
         "nombre": item.nombre_snapshot,
         "es_cargo": item.es_cargo,
         # Un plato borrado del catálogo queda sin categoría: cocina lo muestra
@@ -222,6 +225,8 @@ def _orden_menu_a_dict(orden: Orden, om, categorias: dict[int, str] | None = Non
     items_menu.sort(key=lambda i: (i.es_agregado, i.es_extra, i.tiempo_orden or 0))
     omitidos = om.omitidos()
     return {
+        "id": om.id,
+        "menu_id": om.menu_id,
         "nombre": om.nombre_snapshot,
         "precio": om.precio_snapshot,
         "cantidad": om.cantidad,
@@ -229,7 +234,10 @@ def _orden_menu_a_dict(orden: Orden, om, categorias: dict[int, str] | None = Non
         "omitidos": [{"rotulo": o["rotulo"], "descuento": o["descuento"]} for o in omitidos],
         # Lo que la persona aún no eligió (sale en el ticket) y su entrega
         "pendientes": [p["rotulo"] for p in om.pendientes()],
+        # Con su tiempo, para que la caja pueda elegirlo después
+        "pendientes_detalle": om.pendientes(),
         "entrega": om.entrega or orden.entrega,
+        "nombre_persona": om.nombre_persona,
         "items": [
             {**_item_a_dict(i, categorias), "tiempo_orden": i.tiempo_orden,
              "es_extra": i.es_extra, "es_agregado": i.es_agregado, "espera": i.espera}
@@ -779,6 +787,100 @@ def corregir_entrega(orden_id: int, payload: EntregaIn, db: Session = Depends(ge
         om.entrega = None
     db.commit()
     return {"id": orden.id, "entrega": orden.entrega}
+
+
+class EleccionPendienteIn(BaseModel):
+    tiempo_orden: int
+    plato_id: int
+
+
+@router.post("/{orden_id}/menus/{orden_menu_id}/elegir")
+def elegir_pendiente(
+    orden_id: int, orden_menu_id: int, payload: EleccionPendienteIn, db: Session = Depends(get_db),
+):
+    """La persona eligió DESPUÉS lo que quedó "sin elegir" (se decide en
+    caja): entra el plato a la orden con el mismo criterio que al crearla
+    (alternativa válida, plato disponible, recargo al total, kardex)."""
+    from ..models import Config, MenuPlantilla, OrdenMenu, OrdenItem, Plato
+    from ..services.cocina import recalcular_estado_orden
+    from ..services.inventario import consumir_item
+
+    orden = db.get(Orden, orden_id)
+    om = db.get(OrdenMenu, orden_menu_id)
+    if orden is None or om is None or om.orden_id != orden.id:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if orden.estado == "anulada":
+        raise HTTPException(status_code=409, detail="La orden está anulada")
+    pendientes = om.pendientes()
+    if not any(p["tiempo_orden"] == payload.tiempo_orden for p in pendientes):
+        raise HTTPException(status_code=409, detail="Ese tiempo ya estaba elegido")
+    plantilla = db.get(MenuPlantilla, om.menu_id) if om.menu_id else None
+    tiempo = next((t for t in plantilla.tiempos if t.orden == payload.tiempo_orden), None) if plantilla else None
+    alternativa = next(
+        (a for a in tiempo.alternativas if a.plato_id == payload.plato_id), None
+    ) if tiempo else None
+    if alternativa is None:
+        raise HTTPException(status_code=422, detail="Ese plato no es una opción de este tiempo")
+    plato = db.get(Plato, payload.plato_id)
+    if plato is None or not plato.activo_hoy:
+        raise HTTPException(status_code=409, detail=f"'{plato.nombre if plato else 'El plato'}' ya no está disponible")
+
+    # Empaque: el que ya llevan los otros platos de esa persona
+    hermanos = [i for i in orden.items if i.orden_menu_id == om.id and not i.es_agregado]
+    empaque = hermanos[0].empaque if hermanos else "mesa"
+    item = OrdenItem(
+        plato_id=plato.id,
+        nombre_snapshot=plato.nombre,
+        precio_snapshot=alternativa.recargo,
+        cantidad=om.cantidad,
+        empaque=empaque,
+        nota="",
+        tiempo_orden=tiempo.orden,
+        es_extra=False,
+    )
+    item.orden_menu = om
+    orden.items.append(item)
+    total = orden.total + alternativa.recargo * om.cantidad
+    # Si va en táper y el local cobra el táper, la línea de cobro crece
+    registro_taper = db.get(Config, "precio_taper")
+    precio_taper = max(0.0, float(registro_taper.valor)) if registro_taper else 0.0
+    if empaque == "taper" and precio_taper > 0:
+        cargo = next((i for i in orden.items if i.es_cargo and i.nombre_snapshot == "Táper"), None)
+        if cargo is None:
+            orden.items.append(OrdenItem(
+                plato_id=None, nombre_snapshot="Táper", precio_snapshot=precio_taper,
+                cantidad=om.cantidad, empaque="mesa", nota="", es_cargo=True, estado="entregado",
+            ))
+        else:
+            cargo.cantidad += om.cantidad
+        total += precio_taper * om.cantidad
+    orden.total = round(total, 2)
+    # Un plato al momento no sale "todo junto": esa persona pasa a por tiempos
+    if plato.sale_al_momento and (om.entrega or orden.entrega) == "junto":
+        om.entrega = "separado"
+    om.pendientes_json = json.dumps(
+        [p for p in pendientes if p["tiempo_orden"] != payload.tiempo_orden], ensure_ascii=False,
+    )
+    db.flush()
+    consumir_item(db, orden, item)
+    recalcular_estado_orden(orden)
+    db.commit()
+    db.refresh(orden)
+    return _orden_a_dict(orden, _mapa_mesas(db), _mapa_categorias(db))
+
+
+@router.post("/items/{item_id}/soltar")
+def soltar_espera(item_id: int, db: Session = Depends(get_db)):
+    """"Ya lo piden": el plato reservado ("va a esperar") pasa a la cola
+    normal de cocina (tandas y Por salir)."""
+    from ..models import OrdenItem
+
+    item = db.get(OrdenItem, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Plato no encontrado")
+    item.espera = False
+    db.commit()
+    return {"id": item.id, "espera": False}
 
 
 @router.post("/{orden_id}/liberar-mesa")

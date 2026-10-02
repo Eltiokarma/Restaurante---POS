@@ -144,6 +144,7 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
         nota=pedido.get("nota", "").strip(),
         omitidos_json=json.dumps(omitidos, ensure_ascii=False),
         entrega=entrega_menu,
+        nombre_persona=(pedido.get("nombre_persona") or "").strip()[:40],
     )
     pendientes: list[dict] = []
     orden.menus.append(orden_menu)
@@ -235,6 +236,8 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
             nota="",
             tiempo_orden=tiempo.orden,
             es_extra=True,
+            # La porción extra de un plato reservado también espera
+            espera=tiempo.orden in en_espera,
         )
         item.orden_menu = orden_menu
         orden.items.append(item)

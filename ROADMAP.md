@@ -153,6 +153,17 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       contadores); en caja, además, el circulito "va a esperar". Agregados, porciones y
       nota quedan en "＋ Más" (la tarjeta completa de antes). La guía "IR AHÍ" de la
       terminal abre directo el plato que falta.
+- [x] **Ticket con nombre y ajustes de la terminal** (2026-10-02): nombre opcional por
+      persona (`orden_menus.nombre_persona`) que sale en la comanda ("Lomo (JUAN)"),
+      cocina y ticket; letra de empaque con color propio (M azul, T achiote, B culantro,
+      L ají); terminal sin riel de pasos ni lista de platos ni fila "Todos", cabecera
+      compacta y tickets más grandes, 3 por fila; "Platos por defecto" también en la
+      terminal (por ahora, por equipo). Después de registrar: la caja **elige lo que
+      quedó sin elegir** (`POST /api/orders/{id}/menus/{om}/elegir`: recargo, táper,
+      kardex y "al momento" como al crear) y cocina **suelta lo reservado** ("ESPERA · ▶
+      ya lo piden", `POST /api/orders/items/{id}/soltar`). La comanda marca "(TIEMPOS)"
+      en los platos de quien va por tiempos cuando las personas difieren. Un cierre de
+      caja de hace días ya no sale por el puente (solo hoy/ayer).
 - [x] **Solo caja**: "Platos por defecto" por menú (guardados en esa PC) con los que
       arranca cada persona nueva, y el **circulito "va a esperar"** por plato
       (`orden_items.espera`): sale "(ESPERA)" en la comanda, no entra a las tandas ni a
