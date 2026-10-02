@@ -37,6 +37,11 @@ class ServicioImpresion : Service() {
         const val NOTIFICACION_ID = 1
         private const val INTERVALO_MS = 3_000L
         private const val TIMEOUT_HTTP_MS = 15_000
+        // "Espera larga": el POS tiene la respuesta abierta hasta que entra
+        // un ticket (o pasan ESPERA_S segundos). El ticket sale al toque
+        // en vez de esperar al siguiente sondeo de 3 s.
+        private const val ESPERA_S = 20
+        private const val TIMEOUT_ESPERA_MS = (ESPERA_S + 15) * 1000
         private const val TIMEOUT_IMPRESORA_MS = 10_000
 
         fun iniciar(c: Context) {
@@ -98,6 +103,10 @@ class ServicioImpresion : Service() {
     private fun ciclo() {
         var avisoSinIp = false
         while (corriendo) {
+            // Si la consulta ya esperó en el servidor, se vuelve a preguntar
+            // sin dormir; ante errores (o un POS antiguo que responde al
+            // toque) se duerme lo de siempre para no martillar la red
+            var volverYa = false
             try {
                 val urlBase = Ajustes.url(this)
                 if (urlBase.isEmpty()) {
@@ -105,8 +114,9 @@ class ServicioImpresion : Service() {
                     dormir(); continue
                 }
 
+                val inicio = System.currentTimeMillis()
                 val cola: JSONObject = try {
-                    api(urlBase, "/api/print/cola", "GET")
+                    api(urlBase, "/api/print/cola?esperar=$ESPERA_S", "GET", TIMEOUT_ESPERA_MS)
                 } catch (e: RespuestaHttp) {
                     if (e.codigo == 401) {
                         Registro.anotar("✖ El POS rechazó el PIN: revísalo en la pantalla")
@@ -136,6 +146,9 @@ class ServicioImpresion : Service() {
                 }
                 avisoSinIp = false
                 if (trabajos.length() == 0) notificar("Esperando tickets…")
+                // Hubo trabajos, o el POS de verdad esperó (no es uno antiguo):
+                // la siguiente consulta va sin pausa
+                volverYa = trabajos.length() > 0 || System.currentTimeMillis() - inicio >= 1_000
 
                 for (i in 0 until trabajos.length()) {
                     if (!corriendo) break
@@ -172,7 +185,7 @@ class ServicioImpresion : Service() {
             } catch (e: Exception) {
                 Registro.anotar("✖ Error inesperado: ${e.message ?: e.javaClass.simpleName}")
             }
-            if (!dormir()) break
+            if (!volverYa && !dormir()) break
         }
     }
 
@@ -204,26 +217,28 @@ class ServicioImpresion : Service() {
 
     private class RespuestaHttp(val codigo: Int) : Exception("HTTP $codigo")
 
-    private fun api(urlBase: String, ruta: String, metodo: String): JSONObject {
+    // Sin disconnect(): leyendo la respuesta completa, Android reutiliza la
+    // conexión (keep-alive) y se ahorra el saludo TLS de cada consulta
+    private fun api(urlBase: String, ruta: String, metodo: String, timeoutLecturaMs: Int = TIMEOUT_HTTP_MS): JSONObject {
         val conexion = URL(urlBase + ruta).openConnection() as HttpURLConnection
-        try {
-            conexion.requestMethod = metodo
-            conexion.connectTimeout = TIMEOUT_HTTP_MS
-            conexion.readTimeout = TIMEOUT_HTTP_MS
-            val pin = Ajustes.pin(this)
-            if (pin.isNotEmpty()) conexion.setRequestProperty("X-Pin-Local", pin)
-            if (metodo == "POST") {
-                conexion.doOutput = true
-                conexion.setRequestProperty("Content-Type", "application/json")
-                conexion.outputStream.use { it.write("{}".toByteArray()) }
-            }
-            val codigo = conexion.responseCode
-            if (codigo >= 400) throw RespuestaHttp(codigo)
-            val cuerpo = conexion.inputStream.bufferedReader().use { it.readText() }
-            return if (cuerpo.isBlank()) JSONObject() else JSONObject(cuerpo)
-        } finally {
-            conexion.disconnect()
+        conexion.requestMethod = metodo
+        conexion.connectTimeout = TIMEOUT_HTTP_MS
+        conexion.readTimeout = timeoutLecturaMs
+        val pin = Ajustes.pin(this)
+        if (pin.isNotEmpty()) conexion.setRequestProperty("X-Pin-Local", pin)
+        if (metodo == "POST") {
+            conexion.doOutput = true
+            conexion.setRequestProperty("Content-Type", "application/json")
+            conexion.outputStream.use { it.write("{}".toByteArray()) }
         }
+        val codigo = conexion.responseCode
+        if (codigo >= 400) {
+            // Vaciar el error también deja la conexión reutilizable
+            try { conexion.errorStream?.use { it.readBytes() } } catch (_: Exception) {}
+            throw RespuestaHttp(codigo)
+        }
+        val cuerpo = conexion.inputStream.bufferedReader().use { it.readText() }
+        return if (cuerpo.isBlank()) JSONObject() else JSONObject(cuerpo)
     }
 
     private fun imprimir(ip: String, puerto: Int, datos: ByteArray) {

@@ -7,10 +7,11 @@ existe (POST /api/orders/{id}/printed). Así el backend puede vivir en la
 nube (Railway) y la impresora en la red del restaurante.
 """
 from datetime import timedelta
+import time
 import base64
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -75,7 +76,27 @@ def confirmar_bebida_impresa(ticket_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/cola")
-def cola_de_impresion(db: Session = Depends(get_db)):
+def cola_de_impresion(
+    esperar: float = Query(default=0, ge=0, le=25),
+    db: Session = Depends(get_db),
+):
+    """Cola de impresión. Con ``esperar`` (segundos, "espera larga"): si no
+    hay nada pendiente, la respuesta se queda abierta hasta que entre un
+    ticket o se cumpla el tiempo. Así la app de la tablet se entera al
+    instante en vez de preguntar cada 3 segundos. Sin ``esperar`` responde
+    de una (apps y puentes antiguos siguen igual)."""
+    limite = time.monotonic() + esperar
+    while True:
+        respuesta = _armar_cola(db)
+        if respuesta["trabajos"] or time.monotonic() >= limite:
+            return respuesta
+        # Termina la lectura para ver lo que otros commitearon (SQLite WAL
+        # mantiene la foto de la transacción abierta)
+        db.rollback()
+        time.sleep(0.3)
+
+
+def _armar_cola(db: Session) -> dict:
     """Trabajos pendientes en bytes ESC/POS (base64) + datos de la impresora.
 
     Sin auth de admin (el PIN del local aplica como en toda la API): el
