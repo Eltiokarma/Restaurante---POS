@@ -324,7 +324,11 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
         const empaque = linea.empaques[t.orden] ?? linea.empaque
         return (
           <div key={t.orden} className={`ticket-persona-linea ${quitado ? 'linea-tachada' : ''}`}>
-            <button className="ticket-persona-plato" onClick={() => onTiempo(t.orden)}>
+            <button
+              // Cada tiempo con su tono (entrada, segundo…) para guiar la vista
+              className={`ticket-persona-plato tiempo-${Math.min(t.orden, 4)}`}
+              onClick={() => onTiempo(t.orden)}
+            >
               <small>{t.rotulo}</small>
               <span className={!quitado && !elegida ? 'linea-sin-elegir' : ''}>
                 {quitado ? `Sin ${t.rotulo.toLowerCase()}` : elegida ? elegida.nombre : 'toca para elegir'}
@@ -354,12 +358,12 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
       })}
       <div className="ticket-persona-pie">
         <button
-          className={`ticket-persona-entrega ${entrega === 'separado' ? 'entrega-tiempos' : ''}`}
+          className={`ticket-persona-entrega ${entrega === 'separado' ? 'entrega-tiempos' : 'entrega-junto'}`}
           disabled={alMomento}
           onClick={() => onEntrega(entrega === 'junto' ? 'separado' : 'junto')}
           title={alMomento ? 'Lleva un plato al momento: sale por tiempos' : 'Cambiar cómo sale'}
         >
-          {entrega === 'junto' ? '🍽 Junto' : '⏱ Tiempos'}
+          {entrega === 'junto' ? '🍽 Todo junto' : '⏱ Por tiempos'}
         </button>
         <button className="ticket-persona-mas" onClick={onMas}>
           ＋ Más{extras > 0 ? ` (${extras})` : ''}{linea.nota.trim() ? ' 📝' : ''}
@@ -547,11 +551,11 @@ export function useTicketsPersonas(carrito: Carrito, opciones: {
       // "＋ Más": la tarjeta completa de siempre (agregados, porciones, nota…)
       const idx = hoja.idx
       hojas = (
-        <Hoja titulo={`Persona ${persona + 1} — más opciones`} onCerrar={cerrar}>
+        <Hoja titulo={`Persona ${persona + 1} — ¿algo más?`} onCerrar={cerrar}>
           <TarjetaMenuCarrito
             linea={lineaAbierta}
             numero={persona + 1}
-            abrirTic={1}
+            soloExtras
             onCambiarEleccion={(t, p) => carrito.cambiarEleccion(idx, t, p)}
             onAlternarOmitido={(t) => carrito.alternarOmitido(idx, t)}
             onCambiarAgregado={(a, d) => carrito.cambiarAgregado(idx, a, d)}

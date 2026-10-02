@@ -29,6 +29,9 @@ interface Props {
   onAlternarEspera?: (tiempoOrden: number) => void
   // Cada persona sale todo junto o por tiempos
   onCambiarEntrega?: (entrega: Entrega) => void
+  // Hoja "＋ Más" del ticket por persona: solo lo extra (táper, porciones,
+  // agregados) y la nota; lo demás ya está en el ticket
+  soloExtras?: boolean
 }
 
 /** Chip con stepper −/+: lo usan las porciones extra y los agregados */
@@ -72,7 +75,7 @@ export function TarjetaMenuCarrito({
   linea, numero, onCambiarEleccion, onAlternarOmitido, onCambiarAgregado, onCambiarExtra,
   onCambiarCantidad, onDuplicar, onCambiarEmpaque, onCambiarEmpaqueTiempo, onCambiarNota,
   empaquesOfrecidos = EMPAQUES, precioTaper = 0, abrirTic = 0,
-  onParaTodas, onEmpaqueTodas, onAlternarEspera, onCambiarEntrega,
+  onParaTodas, onEmpaqueTodas, onAlternarEspera, onCambiarEntrega, soloExtras = false,
 }: Props) {
   const espera = linea.espera ?? []
   const alMomento = menuConAlMomento(linea)
@@ -112,6 +115,77 @@ export function TarjetaMenuCarrito({
   const nExtras =
     linea.extras.reduce((s, e) => s + e.cantidad, 0) +
     linea.agregados.reduce((s, a) => s + a.cantidad, 0)
+
+  if (soloExtras) {
+    const todoEnTaper = linea.empaque === 'taper' && Object.keys(linea.empaques).length === 0
+    return (
+      <div className="tarjeta-menu tarjeta-menu-extras">
+        <div className="pliegue-extras">
+          <span className="pliegue-titulo">➕ ¿Algo más?</span>
+          {empaquesOfrecidos.includes('taper') && (
+            <div className="menu-agregados">
+              <span className="extras-titulo">Para llevar:</span>
+              <div className="chips-agregados">
+                <button
+                  className={`boton-servicio boton-empaque ${todoEnTaper ? 'servicio-activo' : ''}`}
+                  onClick={() => onCambiarEmpaque(todoEnTaper ? 'mesa' : 'taper')}
+                  aria-pressed={todoEnTaper}
+                >
+                  {todoEnTaper ? '✔ ' : ''}{nombreEmpaque('taper', precioTaper)}
+                </button>
+              </div>
+            </div>
+          )}
+          {hayPorciones && (
+            <div className="menu-agregados">
+              <span className="extras-titulo">¿Una porción más? (aparte de la incluida)</span>
+              <div className="chips-agregados">
+                {linea.menu.tiempos
+                  .filter((t) => t.precio_extra > 0 && !linea.omitidos.includes(t.orden))
+                  .flatMap((t) =>
+                    t.alternativas.map((a) => (
+                      <ChipStepper
+                        key={`${t.orden}-${a.plato_id}`}
+                        etiqueta={a.nombre}
+                        precio={t.precio_extra + a.recargo}
+                        cantidad={cantidadExtra(t.orden, a.plato_id)}
+                        onCambiar={(d) => onCambiarExtra(t.orden, a.plato_id, d)}
+                      />
+                    )),
+                  )}
+              </div>
+            </div>
+          )}
+          {hayAgregados && (
+            <div className="menu-agregados">
+              <span className="extras-titulo">Agregar al menú:</span>
+              <div className="chips-agregados">
+                {linea.menu.agregados.map((a) => (
+                  <ChipStepper
+                    key={a.id}
+                    etiqueta={a.nombre}
+                    precio={a.precio}
+                    cantidad={linea.agregados.find((x) => x.agregado.id === a.id)?.cantidad ?? 0}
+                    onCambiar={(d) => onCambiarAgregado(a, d)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <input
+          className="input-nota-plato"
+          placeholder="📝 Algún cambio: sin ají, poco arroz…"
+          maxLength={150}
+          value={linea.nota}
+          onChange={(e) => onCambiarNota(e.target.value)}
+        />
+        <div className="tarjeta-menu-cuenta">
+          <span className="tarjeta-menu-total">Total <strong>{soles(subtotalMenu(linea))}</strong></span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={`tarjeta-menu ${abierta ? 'tarjeta-menu-abierta' : ''} ${completo ? 'menu-completo' : 'menu-incompleto'}`}>
