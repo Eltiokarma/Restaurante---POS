@@ -10382,3 +10382,56 @@ select:focus-visible {
   opacity: 0.45;
   cursor: default;
 }
+
+/* Cada tiempo del ticket con su tono (pedido del dueño): la entrada en
+   ají, el segundo en terracota; la franja de la izquierda guía la vista */
+.ticket-persona-plato.tiempo-1 {
+  background: var(--aji-tenue);
+  box-shadow: inset 6px 0 0 var(--aji), inset 0 0 0 1.5px var(--linea-fuerte);
+  padding-left: 14px;
+}
+
+.ticket-persona-plato.tiempo-2 {
+  background: #f8e3da;
+  box-shadow: inset 6px 0 0 var(--achiote), inset 0 0 0 1.5px var(--linea-fuerte);
+  padding-left: 14px;
+}
+
+.ticket-persona-plato.tiempo-3,
+.ticket-persona-plato.tiempo-4 {
+  box-shadow: inset 6px 0 0 var(--linea-fuerte), inset 0 0 0 1.5px var(--linea-fuerte);
+  padding-left: 14px;
+}
+
+/* Todo junto / Por tiempos: dos colores sólidos, uno para cada uno */
+.ticket-persona-entrega.entrega-junto {
+  background: var(--culantro);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+  color: #fff;
+}
+
+.ticket-persona-entrega.entrega-tiempos {
+  background: var(--mayolica);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+  color: #fff;
+}
+
+.ticket-persona-entrega:disabled {
+  opacity: 1;
+}
+
+/* Hoja "＋ Más": solo lo extra */
+.tarjeta-menu-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.tarjeta-menu-extras .pliegue-titulo {
+  font-weight: 800;
+  font-size: 1.1rem;
+}
