@@ -175,7 +175,10 @@ def cola_de_impresion(db: Session = Depends(get_db)):
             "tipo": "orden",
             "orden_id": orden.id,
             "numero": f"{orden.numero_orden_dia:03d}",
-            "datos_b64": base64.b64encode(render_orden(orden, local, columnas, categorias)).decode(),
+            # 2 comandas = los mismos bytes dos veces (cada una con su corte)
+            "datos_b64": base64.b64encode(
+                render_orden(orden, local, columnas, categorias) * max(1, orden.copias or 1)
+            ).decode(),
         })
 
     return {

@@ -86,6 +86,16 @@ function Stepper({ valor, puedeSumar, onCambiar, etiqueta }: {
   )
 }
 
+/** Paleta por plato: cada opción de un tiempo tiene su color según su
+ *  lugar (1ª, 2ª, 3ª…), igual en el ticket y en la hoja de opciones, para
+ *  reconocer de un vistazo qué plato lleva cada persona. */
+export const COLORES_PLATO = 6
+export function clasePlato(alternativas: { plato_id: number }[], platoId: number | undefined): string {
+  if (platoId === undefined) return ''
+  const i = alternativas.findIndex((a) => a.plato_id === platoId)
+  return i < 0 ? '' : `plato-color-${i % COLORES_PLATO}`
+}
+
 /** Hoja de UN tiempo (dibujo 4 y 7): tocar el plato del ticket abre las
  *  opciones. Arriba, para ESTA persona; con varias personas, al lado de
  *  cada opción "☐ Todas", y abajo 50/50 y el reparto exacto (dibujo 4.1:
@@ -129,7 +139,7 @@ export function HojaTiempo({ tiempoOrden, persona, lineas, onCerrar, onEsta, onS
         {opciones.map((a) => (
           <div key={a.plato_id} className="rh-fila">
             <button
-              className={`rh-opcion ${elegido === a.plato_id ? 'rh-opcion-activa' : ''}`}
+              className={`rh-opcion ${clasePlato(opciones, a.plato_id)} ${elegido === a.plato_id ? 'rh-opcion-activa' : ''}`}
               onClick={() => onEsta(a.plato_id)}
             >
               <span>{elegido === a.plato_id ? '● ' : '○ '}{a.nombre}</span>
@@ -326,7 +336,7 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
           <div key={t.orden} className={`ticket-persona-linea ${quitado ? 'linea-tachada' : ''}`}>
             <button
               // Cada tiempo con su tono (entrada, segundo…) para guiar la vista
-              className={`ticket-persona-plato tiempo-${Math.min(t.orden, 4)}`}
+              className={`ticket-persona-plato tiempo-${Math.min(t.orden, 4)} ${!quitado && elegida && t.alternativas.length > 1 ? clasePlato(t.alternativas, elegida.plato_id) : ''}`}
               onClick={() => onTiempo(t.orden)}
             >
               <small>{t.rotulo}</small>

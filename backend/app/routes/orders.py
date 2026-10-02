@@ -87,6 +87,8 @@ class OrdenIn(BaseModel):
     mesa_ids: list[int] = Field(default_factory=list, max_length=10)
     # junto (default) | separado — cómo sale el pedido
     entrega: str = "junto"
+    # Comandas a imprimir: 1 normal, 2 = una extra para la guía
+    copias: int = Field(default=1, ge=1, le=3)
 
 
 class EstadoIn(BaseModel):
@@ -187,6 +189,7 @@ def _orden_a_dict(
         "pago_pendiente": orden.pago_pendiente,
         "vuelto_pendiente": orden.vuelto_pendiente,
         "entrega": orden.entrega,
+        "copias": orden.copias,
         "mesa_ids": ids_mesa,
         "mesas": [mapa_mesas.get(i, f"#{i}") for i in ids_mesa],
         "mesa_liberada": orden.mesa_liberada,
@@ -311,6 +314,7 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+    orden.copias = payload.copias
     # Mesas asignadas al crear (la caja las manda al sentar al grupo)
     if payload.mesa_ids:
         orden.mesa_ids = json.dumps(payload.mesa_ids)
@@ -526,6 +530,7 @@ def reimprimir(orden_id: int, db: Session = Depends(get_db)):
     if orden is None:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     orden.impreso = False
+    orden.copias = 1  # la reimpresión sale una sola vez
     db.commit()
     return {"id": orden.id, "impreso": False}
 
@@ -757,6 +762,7 @@ def trasladar_mesa(payload: TrasladoIn, db: Session = Depends(get_db)):
         orden.mesa_ids = json.dumps(nuevas)
         if payload.reimprimir:
             orden.impreso = False
+            orden.copias = 1  # la reimpresión sale una sola vez
         movidas.append(orden)
 
     if not movidas:

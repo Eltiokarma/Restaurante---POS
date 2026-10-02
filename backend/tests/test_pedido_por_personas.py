@@ -203,3 +203,34 @@ def test_tiempos_por_persona_en_la_comanda(client, db, fonda):
     texto = render_orden(orden, {"nombre": "Fonda"}).decode("cp850", errors="ignore")
     assert "Bistec frito (TIEMPOS)" in texto
     assert "Asado con puré (TIEMPOS)" not in texto
+
+
+def test_dos_comandas_salen_dos_veces_por_el_puente(client, fonda):
+    from app.models import Config
+
+    r = client.post("/api/orders", json={"menus": [_menu(fonda)], "copias": 2})
+    assert r.status_code == 201
+    orden = r.json()["orden"]
+    assert orden["copias"] == 2
+    # En modo puente la orden queda en cola; sus bytes van dos veces
+    import base64
+
+    from app.db import SessionLocal
+
+    db = SessionLocal()
+    db.merge(Config(clave="modo_impresion", valor="puente"))
+    db.commit()
+    db.close()
+    client.post(f"/api/orders/{orden['id']}/reprint")  # vuelve a la cola…
+    trabajo = next(t for t in client.get("/api/print/cola").json()["trabajos"] if t["tipo"] == "orden")
+    una = base64.b64decode(trabajo["datos_b64"])
+    assert una.count(b"ORDEN #") == 1  # …y la reimpresión sale UNA vez
+
+    r = client.post("/api/orders", json={"menus": [_menu(fonda)], "copias": 2})
+    trabajos = [t for t in client.get("/api/print/cola").json()["trabajos"] if t["tipo"] == "orden"]
+    nueva = next(t for t in trabajos if t["orden_id"] == r.json()["orden"]["id"])
+    assert base64.b64decode(nueva["datos_b64"]).count(b"ORDEN #") == 2
+
+
+def test_copias_fuera_de_rango_se_rechaza(client, fonda):
+    assert client.post("/api/orders", json={"menus": [_menu(fonda)], "copias": 5}).status_code == 422

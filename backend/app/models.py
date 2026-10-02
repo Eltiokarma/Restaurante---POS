@@ -173,6 +173,8 @@ class Orden(Base):
     # junto | separado — cómo sale el pedido: todo en una entrega, o por
     # tiempos (la sopa primero, el segundo cuando esté)
     entrega: Mapped[str] = mapped_column(String(10), default="junto", nullable=False)
+    # Cuántas comandas imprimir (1 normal; 2 = una para la guía/mozo)
+    copias: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Mesas asignadas al ticket (JSON de ids). Varias = mesas combinadas.
     mesa_ids: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     # True cuando la caja liberó las mesas de este ticket (clientes se fueron)
