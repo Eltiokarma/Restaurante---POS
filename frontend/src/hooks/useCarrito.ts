@@ -234,6 +234,40 @@ export function useCarrito() {
     }))
   }, [])
 
+  // "✓ Aplicar por defecto": pone los platos por defecto a TODAS las
+  // personas de ese menú, en su sitio (no borra nombre, nota ni agregados).
+  // Un default que hoy no está en el menú no toca ese tiempo.
+  const aplicarDefecto = useCallback((menuId: number, defecto: DefectoMenu) => {
+    setMenus((prev) => prev.map((m) => {
+      if (m.menu.id !== menuId) return m
+      const elecciones = { ...m.elecciones }
+      let omitidos = [...m.omitidos]
+      const empaques = { ...m.empaques }
+      for (const t of m.menu.tiempos) {
+        if (defecto.omitidos.includes(t.orden)) {
+          delete elecciones[t.orden]
+          if (!omitidos.includes(t.orden)) omitidos.push(t.orden)
+          continue
+        }
+        const preferido = defecto.elecciones[t.orden]
+        if (preferido !== undefined && t.alternativas.some((a) => a.plato_id === preferido)) {
+          elecciones[t.orden] = preferido
+          omitidos = omitidos.filter((o) => o !== t.orden)
+        }
+        const empaque = defecto.empaques[t.orden]
+        if (empaque) {
+          if (empaque === m.empaque) delete empaques[t.orden]
+          else empaques[t.orden] = empaque
+        }
+      }
+      return {
+        ...m, elecciones, omitidos, empaques,
+        extras: m.extras.filter((e) => !omitidos.includes(e.tiempo_orden)),
+        espera: (m.espera ?? []).filter((t) => elecciones[t] !== undefined),
+      }
+    }))
+  }, [])
+
   // Nombre opcional de la persona del ticket ("Juan")
   const cambiarNombreMenu = useCallback((idx: number, nombre: string) => {
     setMenus((prev) => prev.map((m, i) => (i === idx ? { ...m, nombre_persona: nombre } : m)))
@@ -502,6 +536,7 @@ export function useCarrito() {
     alternarEspera,
     quitarEleccion,
     cambiarNombreMenu,
+    aplicarDefecto,
     cambiarEleccion,
     alternarOmitido,
     cambiarAgregado,

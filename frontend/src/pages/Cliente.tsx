@@ -487,6 +487,7 @@ export function Cliente() {
                     : totalConCargos}
                   onMas={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m, false, defectos[m.id]) }}
                   onDefecto={() => setEditandoDefecto(m)}
+                  onAplicarDefecto={defectos[m.id] ? () => carrito.aplicarDefecto(m.id, defectos[m.id]) : undefined}
                   onMenos={() => carrito.quitarUltimoMenu(m.id)}
                 />
               </div>
@@ -688,12 +689,7 @@ export function Cliente() {
               const nuevos = { ...defectos, [editandoDefecto.id]: d }
               setDefectos(nuevos)
               guardarDefectos(nuevos)
-              if (aplicar) {
-                const menu = editandoDefecto
-                const n = menusEnPedido(carrito.menus, menu.id)
-                for (let i = 0; i < n; i++) carrito.quitarUltimoMenu(menu.id)
-                for (let i = 0; i < n; i++) carrito.agregarMenuCompleto(menu, false, d)
-              }
+              if (aplicar) carrito.aplicarDefecto(editandoDefecto.id, d)
               setEditandoDefecto(null)
             }}
           />
