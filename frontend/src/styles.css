@@ -1300,6 +1300,13 @@ select:focus-visible {
   font-size: 19px;
 }
 
+/* La mesa en grande, como el número de orden: el mozo la busca de un
+   vistazo al sacar el plato (pedido del dueño) */
+.ticket-mesa {
+  font-size: 26px;
+  line-height: 1.15;
+}
+
 /* Pedido especial dentro del ticket ("-> sin frijoles") */
 .ticket-item-nota {
   font-weight: 900;
