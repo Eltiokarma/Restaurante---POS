@@ -146,6 +146,13 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       bloquea**: el menú se vende igual, el tiempo queda en `orden_menus.pendientes_json`
       y sale "SEGUNDO SIN ELEGIR" en comanda, ticket y cocina (la terminal guía hacia el
       hueco pero ofrece "Seguir sin elegir").
+- [x] **Tickets verticales por persona** (dibujo 3 del dueño): en caja y terminal el
+      pedido se ve como rectángulos verticales, 3 o más por fila. Cada plato es un
+      botón (abre sus opciones: esta persona, "☐ Todas", "✕ Nadie", 50/50, repartir) y a
+      su lado la letra del empaque M/T/B/L (abre el empaque: esta persona o reparto con
+      contadores); en caja, además, el circulito "va a esperar". Agregados, porciones y
+      nota quedan en "＋ Más" (la tarjeta completa de antes). La guía "IR AHÍ" de la
+      terminal abre directo el plato que falta.
 - [x] **Solo caja**: "Platos por defecto" por menú (guardados en esa PC) con los que
       arranca cada persona nueva, y el **circulito "va a esperar"** por plato
       (`orden_items.espera`): sale "(ESPERA)" en la comanda, no entra a las tandas ni a

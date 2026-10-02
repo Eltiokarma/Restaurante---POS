@@ -9997,3 +9997,229 @@ select:focus-visible {
   font-size: 0.85em;
   font-weight: 800;
 }
+
+/* ---- Ticket por persona (dibujo 3): rectángulos verticales, 3 o más
+   por fila según el ancho. Plato a la izquierda (toca = opciones),
+   circulito "va a esperar" (caja) y la letra del empaque. ---- */
+.tickets-personas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 12px;
+  margin: 8px 0 14px;
+}
+
+.ticket-persona {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 300px;
+  padding: 10px;
+  border: 2px solid var(--linea-fuerte);
+  border-top: 6px solid var(--culantro);
+  border-radius: var(--r);
+  background: var(--papel-alto);
+  box-shadow: var(--sombra-papel);
+}
+
+.ticket-persona-falta {
+  border-top-color: var(--aji);
+}
+
+.ticket-persona-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--linea-fuerte);
+}
+
+.ticket-persona-cabecera strong {
+  flex: 1;
+  white-space: nowrap;
+  font-family: var(--fuente-display);
+  font-size: 1.15rem;
+}
+
+.ticket-persona-cabecera span {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.ticket-persona-quitar {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 0;
+  border-radius: var(--r-chico);
+  background: transparent;
+  color: var(--tinta-suave);
+  font: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.ticket-persona-linea {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ticket-persona-plato {
+  flex: 1;
+  min-width: 0;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--r-chico);
+  background: var(--papel);
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+  color: var(--tinta);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ticket-persona-plato small {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+}
+
+.ticket-persona-plato span {
+  /* Corta en espacios; solo parte una palabra si no entra sola */
+  overflow-wrap: break-word;
+  hyphens: auto;
+  line-height: 1.2;
+}
+
+.linea-sin-elegir {
+  color: var(--aji-hondo);
+  font-style: italic;
+}
+
+.linea-tachada .ticket-persona-plato span {
+  text-decoration: line-through;
+  color: var(--tinta-suave);
+}
+
+.ticket-persona-linea .boton-espera {
+  min-width: 40px;
+  margin-left: 0;
+  padding: 0;
+}
+
+.ticket-persona-linea .boton-espera:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.ticket-persona-empaque {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  border: 0;
+  border-radius: var(--r-chico);
+  background: var(--mayolica-tenue);
+  box-shadow: inset 0 0 0 2px var(--mayolica);
+  color: var(--mayolica);
+  font-family: var(--fuente-display);
+  font-size: 1.6rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ticket-persona-empaque:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.ticket-persona-pie {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.ticket-persona-entrega,
+.ticket-persona-mas {
+  flex: 1;
+  min-height: 64px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-chico);
+  background: var(--papel);
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+  color: var(--tinta-media);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ticket-persona-entrega.entrega-tiempos {
+  background: var(--mayolica-tenue);
+  box-shadow: inset 0 0 0 2px var(--mayolica);
+  color: var(--mayolica);
+}
+
+.ticket-persona-entrega:disabled {
+  cursor: default;
+}
+
+.rh-opcion-activa {
+  background: var(--culantro);
+  box-shadow: inset 0 0 0 2px var(--culantro-hondo);
+  color: #fff;
+}
+
+.rh-listo {
+  width: 100%;
+  margin-top: 12px;
+}
+
+/* En caja (pantalla de trabajo, piso táctil 56px) el ticket es más
+   compacto para que entren 3 en la columna del pedido */
+.pantalla-caja .tickets-personas {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 10px;
+}
+
+.pantalla-caja .ticket-persona {
+  padding: 8px;
+  min-height: 0;
+}
+
+.pantalla-caja .ticket-persona-plato {
+  min-height: 56px;
+  padding: 4px 8px;
+  font-size: 0.95rem;
+}
+
+.pantalla-caja .ticket-persona-empaque {
+  width: 48px;
+  height: 56px;
+  font-size: 1.35rem;
+}
+
+.pantalla-caja .ticket-persona-linea {
+  gap: 4px;
+}
+
+.pantalla-caja .ticket-persona-linea .boton-espera {
+  min-width: 34px;
+}
+
+.pantalla-caja .ticket-persona-linea .boton-espera span {
+  width: 22px;
+  height: 22px;
+}
+
+.pantalla-caja .ticket-persona-entrega,
+.pantalla-caja .ticket-persona-mas {
+  min-height: 56px;
+}
