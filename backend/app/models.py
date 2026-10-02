@@ -209,6 +209,12 @@ class OrdenMenu(Base):
     # [{"tiempo_orden", "rotulo", "descuento"}] — snapshot, con el
     # descuento POR UNIDAD de menú que se aplicó al cobrar
     omitidos_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    # Tiempos que la persona todavía no eligió (el ticket sale igual y lo
+    # dice: "SEGUNDO: SIN ELEGIR"). JSON de [{"tiempo_orden", "rotulo"}]
+    pendientes_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    # Entrega de ESTE menú (cada persona sale "junto" o "separado").
+    # None = hereda la de la orden (órdenes antiguas y la terminal vieja)
+    entrega: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     orden: Mapped[Orden] = relationship(back_populates="menus")
     items: Mapped[list["OrdenItem"]] = relationship(back_populates="orden_menu")
@@ -217,6 +223,11 @@ class OrdenMenu(Base):
         import json
 
         return json.loads(self.omitidos_json or "[]")
+
+    def pendientes(self) -> list[dict]:
+        import json
+
+        return json.loads(self.pendientes_json or "[]")
 
     @property
     def descuento_omitidos(self) -> float:
@@ -258,6 +269,9 @@ class OrdenItem(Base):
     # True = línea de cobro (ej. "Táper × 3"): entra al total y al ticket,
     # pero cocina no la prepara (nace en estado "entregado")
     es_cargo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # "Va a esperar": plato reservado para la persona; cocina no lo saca
+    # con el resto hasta que lo pidan (sale marcado ESPERA en la comanda)
+    espera: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Estado POR ÍTEM (§3): la cocina cocina por bulks (4 asados de un
     # toque), no ticket por ticket. ordenes.estado queda como caché
     # derivada = el estado MÍNIMO de sus ítems (ver services/cocina.py).

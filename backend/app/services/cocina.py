@@ -70,6 +70,7 @@ def _partir_item(orden: Orden, item: OrdenItem, cantidad: int, estado: str) -> N
         tiempo_orden=item.tiempo_orden,
         es_extra=item.es_extra,
         es_agregado=item.es_agregado,
+        espera=item.espera,
         estado=estado,
     ))
 
@@ -95,14 +96,16 @@ def despachar_bulk(db: Session, lineas: list[dict], estado_destino: str) -> list
         for linea in lineas:
             restante = int(linea["cantidad"])
             pedidas = restante
-            for orden in ordenes:
+            # Primero lo que no espera; los platos reservados ("va a
+            # esperar") solo se tachan si no alcanza con el resto
+            for orden, con_espera in [(o, e) for e in (False, True) for o in ordenes]:
                 if restante <= 0:
                     break
                 # Copia: partir un ítem agrega a orden.items en plena vuelta
                 for item in list(orden.items):
                     if restante <= 0:
                         break
-                    if not _coincide(item, linea):
+                    if item.espera != con_espera or not _coincide(item, linea):
                         continue
                     if RANGO_ESTADO[item.estado] >= rango_destino:
                         continue

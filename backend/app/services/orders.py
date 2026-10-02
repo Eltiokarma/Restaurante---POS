@@ -99,6 +99,13 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
     cantidad = int(pedido["cantidad"])
     if cantidad <= 0:
         raise EleccionInvalida("La cantidad del menú debe ser mayor a 0")
+    # Cada menú (persona) puede salir junto o por tiempos; sin valor propio
+    # hereda la entrega de la orden
+    entrega_menu = pedido.get("entrega") or None
+    if entrega_menu is not None:
+        entrega = entrega_menu
+    # Tiempos marcados "va a esperar" (reservados)
+    en_espera = {int(n) for n in pedido.get("espera") or []}
     empaque = pedido.get("empaque", "mesa")
     # Empaque POR TIEMPO ("la sopa en bolsa, el segundo en lonchera"): si un
     # tiempo no viene aquí, usa el empaque general del menú
@@ -136,7 +143,9 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
         cantidad=cantidad,
         nota=pedido.get("nota", "").strip(),
         omitidos_json=json.dumps(omitidos, ensure_ascii=False),
+        entrega=entrega_menu,
     )
+    pendientes: list[dict] = []
     orden.menus.append(orden_menu)
     if plantilla.precio - sum(o["descuento"] for o in omitidos) < 0:
         # Un descuento mal configurado no puede dejar el menú en negativo
@@ -165,9 +174,10 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
             if not alternativas:
                 # Tiempo obligatorio con todo agotado: el menú no se puede vender
                 raise PlatoNoDisponible(f"{plantilla.nombre} — {tiempo.rotulo}")
-            raise EleccionInvalida(
-                f"Falta elegir {tiempo.rotulo} del {plantilla.nombre}"
-            )
+            # La persona aún no decide: el ticket sale igual y lo dice
+            # ("SEGUNDO: SIN ELEGIR"); el precio del menú no cambia
+            pendientes.append({"tiempo_orden": tiempo.orden, "rotulo": tiempo.rotulo})
+            continue
         if eleccion not in alternativas:
             if eleccion in todas:
                 # Era una alternativa válida, pero el plato se agotó → 409
@@ -188,9 +198,11 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
             nota="",
             tiempo_orden=tiempo.orden,
             es_extra=False,
+            espera=tiempo.orden in en_espera,
         )
         item.orden_menu = orden_menu
         orden.items.append(item)
+    orden_menu.pendientes_json = json.dumps(pendientes, ensure_ascii=False)
 
     for extra in pedido.get("extras") or []:
         tiempo = tiempos_por_orden.get(int(extra["tiempo_orden"]))

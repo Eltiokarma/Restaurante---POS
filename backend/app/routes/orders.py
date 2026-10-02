@@ -66,6 +66,10 @@ class MenuIn(BaseModel):
     empaques: dict[int, str] = Field(default_factory=dict)
     empaque: str = "mesa"
     nota: str = Field(default="", max_length=150)
+    # Entrega de ESTE menú (cada persona): junto | separado. None = la de la orden
+    entrega: str | None = None
+    # Tiempos "va a esperar" (reservados): cocina no los saca aún
+    espera: list[int] = Field(default_factory=list, max_length=6)
 
 
 class OrdenIn(BaseModel):
@@ -223,9 +227,12 @@ def _orden_menu_a_dict(orden: Orden, om, categorias: dict[int, str] | None = Non
         "cantidad": om.cantidad,
         "nota": om.nota,
         "omitidos": [{"rotulo": o["rotulo"], "descuento": o["descuento"]} for o in omitidos],
+        # Lo que la persona aún no eligió (sale en el ticket) y su entrega
+        "pendientes": [p["rotulo"] for p in om.pendientes()],
+        "entrega": om.entrega or orden.entrega,
         "items": [
             {**_item_a_dict(i, categorias), "tiempo_orden": i.tiempo_orden,
-             "es_extra": i.es_extra, "es_agregado": i.es_agregado}
+             "es_extra": i.es_extra, "es_agregado": i.es_agregado, "espera": i.espera}
             for i in items_menu
         ],
         # Precio del menú × cantidad − descuentos por quitar tiempos
@@ -256,6 +263,8 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
         for e in menu.empaques.values():
             if e not in EMPAQUES:
                 raise HTTPException(status_code=422, detail=f"Empaque inválido: {e}")
+        if menu.entrega is not None and menu.entrega not in ENTREGAS:
+            raise HTTPException(status_code=422, detail=f"Entrega inválida: {menu.entrega}")
     if payload.origen not in ("tactil", "voz", "mixto"):
         raise HTTPException(status_code=422, detail=f"Origen inválido: {payload.origen}")
     _validar_mesas(db, payload.mesa_ids)
@@ -765,6 +774,9 @@ def corregir_entrega(orden_id: int, payload: EntregaIn, db: Session = Depends(ge
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     _validar_entrega(db, payload.entrega, [i.plato_id for i in orden.items if i.plato_id])
     orden.entrega = payload.entrega
+    # Corregir desde caja manda sobre todo el ticket: los menús vuelven a heredar
+    for om in orden.menus:
+        om.entrega = None
     db.commit()
     return {"id": orden.id, "entrega": orden.entrega}
 

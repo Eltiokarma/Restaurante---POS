@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { precioUnitarioMenu, soles, subtotalMenu, tiemposElegibles, tiemposPendientes, EMPAQUES, NOMBRE_EMPAQUE } from '../api'
-import type { AgregadoHoy, Empaque, MenuCarrito } from '../api'
+import { entregaDeMenu, menuConAlMomento, precioUnitarioMenu, soles, subtotalMenu, tiemposElegibles, tiemposPendientes, EMPAQUES, NOMBRE_EMPAQUE } from '../api'
+import type { AgregadoHoy, Empaque, Entrega, MenuCarrito } from '../api'
 import { describirMenu } from './describirMenu'
 
 interface Props {
@@ -21,6 +21,14 @@ interface Props {
   // Guía de progreso (4b): cuando cambia, la tarjeta se abre y late —
   // la barra de abajo la "persigue" hasta el hueco pendiente
   abrirTic?: number
+  // Pedido por personas: programar TODAS las tarjetas de este menú desde
+  // esta ("a todas", 50/50, repartir). Solo si hay más de una persona
+  onParaTodas?: (tiempoOrden: number) => void
+  onEmpaqueTodas?: (tiempoOrden: number) => void
+  // Circulito "va a esperar" (reservado) — herramienta de la caja
+  onAlternarEspera?: (tiempoOrden: number) => void
+  // Cada persona sale todo junto o por tiempos
+  onCambiarEntrega?: (entrega: Entrega) => void
 }
 
 /** Chip con stepper −/+: lo usan las porciones extra y los agregados */
@@ -64,7 +72,11 @@ export function TarjetaMenuCarrito({
   linea, numero, onCambiarEleccion, onAlternarOmitido, onCambiarAgregado, onCambiarExtra,
   onCambiarCantidad, onDuplicar, onCambiarEmpaque, onCambiarEmpaqueTiempo, onCambiarNota,
   empaquesOfrecidos = EMPAQUES, precioTaper = 0, abrirTic = 0,
+  onParaTodas, onEmpaqueTodas, onAlternarEspera, onCambiarEntrega,
 }: Props) {
+  const espera = linea.espera ?? []
+  const alMomento = menuConAlMomento(linea)
+  const entrega = entregaDeMenu(linea)
   const [abierta, setAbierta] = useState(false)
   const [cambiando, setCambiando] = useState<number | null>(null) // tiempo con las opciones abiertas
   const [empacando, setEmpacando] = useState<number | null>(null) // tiempo eligiendo su empaque
@@ -110,6 +122,9 @@ export function TarjetaMenuCarrito({
           <strong>Menú {numero}</strong>
           {linea.cantidad > 1 && <span className="tarjeta-menu-por"> × {linea.cantidad}</span>}
         </span>
+        {onCambiarEntrega && entrega === 'separado' && (
+          <span className="menu-entrega-pill">⏱ por tiempos</span>
+        )}
         <span className="tarjeta-menu-precio">{soles(subtotalMenu(linea))}</span>
         {elegibles > 0 && !abierta && (
           <span className={`menu-estado-pill ${completo ? 'pill-listo' : 'pill-falta'}`}>
@@ -154,10 +169,17 @@ export function TarjetaMenuCarrito({
                       </button>
                     ))}
                   </div>
-                  <button className="casillero-sin" onClick={() => onAlternarOmitido(t.orden)}>
-                    No quiero {t.rotulo.toLowerCase()}
-                    {t.descuento_si_se_quita > 0 && ` (−${soles(t.descuento_si_se_quita)})`}
-                  </button>
+                  <div className="casillero-acciones">
+                    <button className="casillero-sin" onClick={() => onAlternarOmitido(t.orden)}>
+                      No quiero {t.rotulo.toLowerCase()}
+                      {t.descuento_si_se_quita > 0 && ` (−${soles(t.descuento_si_se_quita)})`}
+                    </button>
+                    {onParaTodas && (
+                      <button className="boton-para-todas" onClick={() => onParaTodas(t.orden)}>
+                        ⇆ Para todas
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             }
@@ -176,6 +198,20 @@ export function TarjetaMenuCarrito({
                           : '—'}
                   </span>
                   {!quitado && t.alternativas.length === 1 && <span className="tag-incluido">incluido</span>}
+                  {onAlternarEspera && !quitado && elegida && (
+                    // Circulito del boceto: lleno = "va a esperar" (reservado),
+                    // sale como ESPERA en la comanda de cocina
+                    <button
+                      className={`boton-espera ${espera.includes(t.orden) ? 'boton-espera-activo' : ''}`}
+                      onClick={() => onAlternarEspera(t.orden)}
+                      aria-pressed={espera.includes(t.orden)}
+                      aria-label={`${t.rotulo}: va a esperar (reservado)`}
+                      title="Va a esperar (reservado)"
+                    >
+                      <span />
+                      {espera.includes(t.orden) && <small>espera</small>}
+                    </button>
+                  )}
                 </div>
                 <div className="menu-tiempo-acciones">
                   {!quitado && t.alternativas.length > 1 && (
@@ -214,6 +250,11 @@ export function TarjetaMenuCarrito({
                         {nombreEmpaque(e, precioTaper)}
                       </button>
                     ))}
+                    {onEmpaqueTodas && (
+                      <button className="boton-para-todas" onClick={() => { setEmpacando(null); onEmpaqueTodas(t.orden) }}>
+                        ⇆ Repartir entre todas
+                      </button>
+                    )}
                   </div>
                 )}
                 {cambiando === t.orden && !quitado && (
@@ -229,6 +270,11 @@ export function TarjetaMenuCarrito({
                         {a.recargo > 0 && <small> +{soles(a.recargo)}</small>}
                       </button>
                     ))}
+                    {onParaTodas && (
+                      <button className="boton-para-todas" onClick={() => { setCambiando(null); onParaTodas(t.orden) }}>
+                        ⇆ Para todas
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -303,6 +349,22 @@ export function TarjetaMenuCarrito({
               </button>
             ))}
           </div>
+          {onCambiarEntrega && (
+            <div className="menu-entrega">
+              <span className="etiqueta-todos">Sale:</span>
+              {(['junto', 'separado'] as Entrega[]).map((e) => (
+                <button
+                  key={e}
+                  disabled={e === 'junto' && alMomento}
+                  className={`boton-servicio boton-empaque ${entrega === e ? 'servicio-activo' : ''}`}
+                  onClick={() => onCambiarEntrega(e)}
+                >
+                  {e === 'junto' ? '🍽 Todo junto' : '⏱ Por tiempos'}
+                </button>
+              ))}
+              {alMomento && <small className="menu-entrega-aviso">lleva un plato al momento</small>}
+            </div>
+          )}
           <input
             className="input-nota-plato"
             placeholder="📝 Algún cambio: sin ají, poco arroz…"

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, soles, tiemposPendientes, unidadesEnTaper } from '../api'
-import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, TicketBebidaOut } from '../api'
+import { api, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, menuAPayload, soles, tiemposPendientes, unidadesEnTaper } from '../api'
+import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuCaja, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, TicketBebidaOut } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
 import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
-import { menusEnPedido, TarjetaOfertaMenu } from '../components/TarjetaOfertaMenu'
+import { menusEnPedido } from '../components/TarjetaOfertaMenu'
+import {
+  BarraPersonas, guardarDefectos, Hoja, HojaDefecto, leerDefectos, useRepartoMenus,
+} from '../components/RepartoMenu'
 import { AvisoImpresion } from '../components/AvisoImpresion'
 import { PorCobrar } from '../components/PorCobrar'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
@@ -114,6 +117,45 @@ export function Caja() {
   const cargoTaper = precioTaper * unidadesEnTaper(carrito.items, carrito.menus)
   const totalConCargos = carrito.totalSoles + cargoTaper
   const { sincronizarConMenu } = carrito
+  const reparto = useRepartoMenus(carrito, empaquesOfrecidos)
+
+  // Pedido por personas: "platos por defecto" por menú (guardados en esta
+  // caja) y, por defecto, el pedido arranca con UNA persona
+  const [defectos, setDefectos] = useState(leerDefectos)
+  const [editandoDefecto, setEditandoDefecto] = useState<MenuHoy | null>(null)
+  const empezarConUno = useRef(true)
+  const agregarPersona = useCallback(
+    (m: MenuHoy) => carrito.agregarMenuCompleto(m, true, defectos[m.id]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [carrito.agregarMenuCompleto, defectos],
+  )
+  useEffect(() => {
+    if (!empezarConUno.current || menusHoy.length === 0) return
+    if (carrito.menus.length === 0 && carrito.items.length === 0) agregarPersona(menusHoy[0])
+    empezarConUno.current = false
+  }, [menusHoy, carrito.menus.length, carrito.items.length, agregarPersona])
+
+  // Menú del día desde la caja (sin pasar por admin)
+  const [menuCaja, setMenuCaja] = useState<MenuCaja | null>(null)
+  const [editandoMenuDia, setEditandoMenuDia] = useState(false)
+  const abrirMenuDelDia = async () => {
+    setEditandoMenuDia(true)
+    try {
+      setMenuCaja(await api.menuCaja())
+    } catch {
+      setError('No se pudo cargar el menú del día')
+    }
+  }
+  const cambiarMenuDelDia = async (accion: () => Promise<MenuCaja>, aviso: string) => {
+    try {
+      setMenuCaja(await accion())
+      setMensaje(aviso)
+      setError('')
+      cargarMenu()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo cambiar el menú del día')
+    }
+  }
 
   const cargarCaja = useCallback(async () => {
     try {
@@ -400,31 +442,15 @@ export function Caja() {
 
   // Igual que en la terminal: un plato al momento (también dentro de un
   // menú) obliga a registrar con entrega separada; la caja puede corregirla
-  const hayAlMomento =
-    carrito.items.some((i) => i.plato.sale_al_momento) ||
-    carrito.menus.some((m) =>
-      m.menu.tiempos
-        .flatMap((t) => t.alternativas)
-        .some(
-          (a) =>
-            a.sale_al_momento &&
-            (Object.values(m.elecciones).includes(a.plato_id) ||
-              m.extras.some((e) => e.plato_id === a.plato_id)),
-        ),
-    )
+  // (cada menú ya decide la suya con entregaDeMenu)
+  const hayAlMomento = carrito.items.some((i) => i.plato.sale_al_momento)
 
   const registrandoRef = useRef(false)
+  // Lo que falta elegir NO bloquea (pedido del dueño): el ticket sale y
+  // lo dice ("SEGUNDO SIN ELEGIR")
+  const sinElegir = carrito.menus.reduce((n, m) => n + tiemposPendientes(m).length, 0)
   const registrar = async () => {
     if (registrandoRef.current || carrito.totalItems === 0) return
-    // Guard espejo del backend: un menú con casillero vacío no se registra
-    // (mismo lenguaje que el 422, pero antes de intentarlo)
-    for (const [idx, m] of carrito.menus.entries()) {
-      const pendiente = tiemposPendientes(m)[0]
-      if (pendiente) {
-        setError(`Falta elegir ${pendiente.rotulo.toLowerCase()} del Menú ${idx + 1}`)
-        return
-      }
-    }
     registrandoRef.current = true
     setRegistrando(true)
     setError('')
@@ -437,14 +463,11 @@ export function Caja() {
         undefined,
         'tactil',
         mesasNuevoPedido,
+        // La de la orden rige para lo suelto; cada menú lleva la suya
         hayAlMomento ? 'separado' : 'junto',
-        carrito.menus.map((m) => ({
-          menu_id: m.menu.id, cantidad: m.cantidad, elecciones: m.elecciones,
-          extras: m.extras, omitidos: m.omitidos, empaques: m.empaques,
-          agregados: m.agregados.map((a) => ({ agregado_id: a.agregado.id, cantidad: a.cantidad })),
-          empaque: m.empaque, nota: m.nota.trim(),
-        })),
+        carrito.menus.map(menuAPayload),
       )
+      empezarConUno.current = true
       carrito.vaciar()
       setMesasNuevoPedido([])
       setMostrarMesasNuevo(false)
@@ -672,8 +695,99 @@ export function Caja() {
     <div className="pantalla-caja">
       <header className="caja-cabecera">
         <h1><IconoBillete tam={30} /> Caja</h1>
+        <button className="boton boton--sm boton--papel" onClick={abrirMenuDelDia}>
+          📋 Menú del día
+        </button>
         <span className="caja-total-dia">Vendido hoy: <strong>{soles(totalVendido)}</strong></span>
       </header>
+      {reparto.hojas}
+      {editandoDefecto && (
+        <HojaDefecto
+          menu={editandoDefecto}
+          defecto={defectos[editandoDefecto.id] ?? { elecciones: {}, omitidos: [], empaques: {} }}
+          empaques={empaquesOfrecidos}
+          personas={menusEnPedido(carrito.menus, editandoDefecto.id)}
+          onCerrar={() => setEditandoDefecto(null)}
+          onGuardar={(d, aplicar) => {
+            const nuevos = { ...defectos, [editandoDefecto.id]: d }
+            setDefectos(nuevos)
+            guardarDefectos(nuevos)
+            if (aplicar) {
+              const menu = editandoDefecto
+              const n = menusEnPedido(carrito.menus, menu.id)
+              for (let i = 0; i < n; i++) carrito.quitarUltimoMenu(menu.id)
+              for (let i = 0; i < n; i++) carrito.agregarMenuCompleto(menu, true, d)
+            }
+            setEditandoDefecto(null)
+          }}
+        />
+      )}
+      {editandoMenuDia && (
+        <Hoja titulo="Menú del día" onCerrar={() => setEditandoMenuDia(false)}>
+          {!menuCaja && <p className="rh-ayuda">Cargando…</p>}
+          {menuCaja && menuCaja.guardados.length > 0 && (
+            <div className="defecto-bloque">
+              <h4>Cargar un menú guardado</h4>
+              <div className="defecto-chips">
+                {menuCaja.guardados.map((g) => (
+                  <button
+                    key={g.id}
+                    className="defecto-chip"
+                    title={g.resumen}
+                    onClick={() => {
+                      if (window.confirm(`¿Cargar "${g.nombre}" como el menú de hoy? Reemplaza los platos de hoy.`)) {
+                        cambiarMenuDelDia(() => api.cargarGuardadoCaja(g.id), `Menú "${g.nombre}" cargado`)
+                      }
+                    }}
+                  >
+                    {g.nombre}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {menuCaja?.plantillas.map((pl) => (
+            <div key={pl.id} className="defecto-bloque">
+              <h4>
+                {pl.nombre} · {soles(pl.precio)}{' '}
+                <button
+                  className={`defecto-chip ${pl.activo_hoy ? 'defecto-chip-activo' : ''}`}
+                  aria-pressed={pl.activo_hoy}
+                  onClick={() => cambiarMenuDelDia(
+                    () => api.menuParaHoy(pl.id, !pl.activo_hoy),
+                    `${pl.nombre} ${pl.activo_hoy ? 'apagado' : 'prendido'} para hoy`,
+                  )}
+                >
+                  {pl.activo_hoy ? '✔ Se vende hoy' : 'Apagado hoy'}
+                </button>
+              </h4>
+              {pl.tiempos.filter((t) => t.alternativas.length > 0).map((t) => (
+                <div key={t.orden} className="menu-dia-tiempo">
+                  <span className="menu-dia-rotulo">{t.rotulo}</span>
+                  <div className="defecto-chips">
+                    {t.alternativas.map((a) => (
+                      <button
+                        key={a.plato_id}
+                        className={`defecto-chip ${a.activo_hoy ? 'defecto-chip-activo' : ''}`}
+                        aria-pressed={a.activo_hoy}
+                        onClick={() => cambiarMenuDelDia(
+                          () => api.platoParaHoy(a.plato_id, !a.activo_hoy),
+                          `${a.nombre}: ${a.activo_hoy ? 'sale del menú de hoy' : 'entra al menú de hoy'}`,
+                        )}
+                      >
+                        {a.activo_hoy ? '✔ ' : ''}{a.nombre}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+          <p className="rh-ayuda">
+            Platos nuevos, precios y armar menús: Admin → Menú del día.
+          </p>
+        </Hoja>
+      )}
 
       {sinConexion && (
         <div className="cintillo-sin-conexion">Sin conexión con el sistema · reintentando…</div>
@@ -1051,19 +1165,19 @@ export function Caja() {
           {menusHoy.length > 0 && (
             <div>
               <h3 className="titulo-categoria">Menús</h3>
-              <div className="combo-lista">
-                {/* Igual que la terminal: un toque agrega el menú completo
-                    y abajo cada tarjeta se edita a su gusto */}
-                {menusHoy.map((m) => (
-                  <TarjetaOfertaMenu
-                    key={m.id}
-                    menu={m}
-                    etiqueta={`➕ UN MENÚ — ${soles(m.precio)}`}
-                    enPedido={menusEnPedido(carrito.menus, m.id)}
-                    onAgregar={() => carrito.agregarMenuCompleto(m)}
-                  />
-                ))}
-              </div>
+              {/* Una tarjeta = una persona: + y − grandes, el monto a la
+                  vista y los platos por defecto (boceto del dueño) */}
+              {menusHoy.map((m) => (
+                <BarraPersonas
+                  key={m.id}
+                  menu={m}
+                  personas={menusEnPedido(carrito.menus, m.id)}
+                  total={totalConCargos}
+                  onMas={() => agregarPersona(m)}
+                  onMenos={() => carrito.quitarUltimoMenu(m.id)}
+                  onDefecto={() => setEditandoDefecto(m)}
+                />
+              ))}
             </div>
           )}
           {categorias.map((cat) => (
@@ -1103,6 +1217,9 @@ export function Caja() {
                   onCambiarNota={(n) => carrito.cambiarNotaMenu(idx, n)}
                   empaquesOfrecidos={empaquesOfrecidos}
                   precioTaper={precioTaper}
+                  {...reparto.propsTarjeta(m)}
+                  onAlternarEspera={(t) => carrito.alternarEspera(idx, t)}
+                  onCambiarEntrega={(e) => carrito.cambiarEntregaMenu(idx, e)}
                 />
               ))}
               {carrito.items.map((i) => (
@@ -1167,7 +1284,7 @@ export function Caja() {
             <button
               className="boton-grande boton-secundario"
               disabled={carrito.totalItems === 0}
-              onClick={() => carrito.vaciar()}
+              onClick={() => { empezarConUno.current = true; carrito.vaciar() }}
             >
               Limpiar
             </button>
@@ -1180,7 +1297,7 @@ export function Caja() {
                 ? 'Registrando…'
                 : carrito.totalItems === 0
                   ? 'REGISTRAR PEDIDO'
-                  : `✅ REGISTRAR — ${soles(totalConCargos)}`}
+                  : `✅ REGISTRAR — ${soles(totalConCargos)}${sinElegir > 0 ? ` · ${sinElegir} sin elegir` : ''}`}
             </button>
           </div>
         </section>

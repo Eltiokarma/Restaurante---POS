@@ -134,6 +134,27 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       tarjeta, y "tanda" configurable: agrupa el pedido más antiguo con los que
       llegaron en los siguientes X minutos (Admin → Configuración, default 10, 0 =
       apagado) y sugiere esa cantidad al tachar.
+- [x] **Pedido por personas** (boceto del dueño, 2026-10-02): cada tarjeta de menú es una
+      persona, en caja Y en la terminal. Barra con − / + grandes, cuántas personas y el
+      monto; se arranca con UNA. Desde cualquier tarjeta "⇆ Para todas": la misma
+      opción a todas, 50/50 (partes iguales), repartir exacto con deslizador (2
+      opciones) o contadores, "nadie lleva sopa"; el empaque de un tiempo se reparte
+      igual (2 comer acá / 1 táper) entre quienes ya tienen ese plato. **Entrega POR
+      PERSONA** (`orden_menus.entrega`, NULL = la de la orden): un plato al momento
+      obliga "por tiempos" solo a esa persona; la línea ENTREGA dice "2 JUNTO / 1 POR
+      TIEMPOS" si difieren, y las tandas hacen el gating por persona. **Sin elegir NO
+      bloquea**: el menú se vende igual, el tiempo queda en `orden_menus.pendientes_json`
+      y sale "SEGUNDO SIN ELEGIR" en comanda, ticket y cocina (la terminal guía hacia el
+      hueco pero ofrece "Seguir sin elegir").
+- [x] **Solo caja**: "Platos por defecto" por menú (guardados en esa PC) con los que
+      arranca cada persona nueva, y el **circulito "va a esperar"** por plato
+      (`orden_items.espera`): sale "(ESPERA)" en la comanda, no entra a las tandas ni a
+      "Por salir", y el bulk lo tacha solo si no alcanza con el resto.
+- [x] **Menú del día desde la caja** sin token de admin (botón "📋 Menú del día"): cargar
+      un menú guardado, prender/apagar un menú y poner/sacar platos de sus alternativas
+      de hoy (`GET /api/menu/caja`, `PATCH /api/menu/platos/{id}/hoy`, `PATCH
+      /api/menu/plantillas/{id}/hoy`, `POST /api/menu/caja/guardados/{id}/cargar`).
+      Crear platos, precios y armar plantillas sigue en Admin.
 - [ ] Pantalla de cocina POR ESTACIÓN (plancha / entradas): filtrar la tira y las
       tarjetas por categoría o estación. Decidido dejarlo para más adelante.
 - [x] §4 Menores: cintillo "ANULADA — NO PREPARAR" 60 s en cocina (timestamp
@@ -607,3 +628,4 @@ Pagos integrados (Yape/tarjeta), control de stock y mermas, app nativa, multi-lo
 | 14 | El local NO debe depender de una PC: /ticketera en una tablet Android con la app RawBT también atiende la cola ESC/POS (rawbt:base64 vía iframe + enlace con gesto como respaldo) | Decisión del dueño: solo tablets. RawBT hace de driver de la impresora de red en la propia tablet; la misma cola sirve para tablet (RawBT) o PC (puente) — se usa una de las dos. El lanzamiento va por iframe oculto porque navegar la página a un esquema bloqueado la deja "colgada". |
 | 15 | Menú editable: quitar un tiempo descuenta lo configurado en `menu_tiempos.descuento_si_se_quita` (snapshot en `orden_menus.omitidos_json`); los agregados (+presa…) viven en `menu_agregados` y entran como `OrdenItem`s con `es_agregado=True` y `plato_id NULL` | Decisión del dueño (2026-09-04): "sin sopa" sí baja un poco el precio, y pedir una sopa aparte cuesta el precio de porción extra (S/ 3). El total sigue siendo del backend: base − descuentos + recargos + extras + agregados, nunca negativo por unidad. Al no ser platos, los agregados no descuentan kardex todavía. |
 | 16 | Los colores de las gráficas del Tablero son **azul mayólica `#0f6ea8` (entra) y achiote `#b03a22` (sale)**, no el verde/rojo del resto del sistema | El par verde/rojo que veníamos usando (`#2f6b3a`/`#b03a22`) se valida en ΔE 5.9 bajo protanopia: para una persona con daltonismo (≈8% de los hombres) son el mismo color, y en las barras el color es la ÚNICA pista. El par azul/achiote da ΔE 20.2 y pasa las cuatro pruebas. La escala ABC usa un solo tono en tres pasos (`#7d2515`/`#b03a22`/`#d98b75`), que es lo correcto para algo ordenado A>B>C. Queda pendiente migrar las barras de Finanzas al mismo par. |
+| 17 | El pedido se arma POR PERSONA (cada `OrdenMenu` = una persona) con entrega por persona, y un tiempo sin elegir NO bloquea la venta (queda en `pendientes_json`) | Boceto del dueño (2026-10-02): cada persona come distinto y desde la primera tarjeta se programa a todas; el ticket puede salir sin haber elegido el segundo y debe decirlo. Antes era 422 "Falta elegir…". La comanda impresa sigue agrupada por ENTRADAS/SEGUNDOS (decisión previa del dueño); la persona se ve en ticket HTML, caja y cocina. |
