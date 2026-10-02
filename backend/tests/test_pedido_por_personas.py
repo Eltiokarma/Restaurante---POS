@@ -234,3 +234,37 @@ def test_dos_comandas_salen_dos_veces_por_el_puente(client, fonda):
 
 def test_copias_fuera_de_rango_se_rechaza(client, fonda):
     assert client.post("/api/orders", json={"menus": [_menu(fonda)], "copias": 5}).status_code == 422
+
+
+def test_cola_con_espera_larga_responde_al_entrar_un_ticket(client, fonda):
+    """La app de la tablet pide la cola "esperando": sin trabajos espera
+    hasta el límite; con un ticket pendiente responde al toque."""
+    import threading
+    import time as reloj
+
+    from app.db import SessionLocal
+    from app.models import Config
+
+    db = SessionLocal()
+    db.merge(Config(clave="modo_impresion", valor="puente"))
+    db.commit()
+    db.close()
+
+    inicio = reloj.monotonic()
+    vacia = client.get("/api/print/cola?esperar=1").json()
+    assert vacia["trabajos"] == [] and reloj.monotonic() - inicio >= 0.9
+
+    # Un pedido entra mientras la app espera: la respuesta llega antes del límite
+    threading.Timer(0.5, lambda: client.post("/api/orders", json={"menus": [_menu(fonda)]})).start()
+    inicio = reloj.monotonic()
+    con_ticket = client.get("/api/print/cola?esperar=10").json()
+    assert [t["tipo"] for t in con_ticket["trabajos"]] == ["orden"]
+    assert reloj.monotonic() - inicio < 5
+
+
+def test_cola_sin_espera_responde_al_toque(client):
+    import time as reloj
+
+    inicio = reloj.monotonic()
+    assert client.get("/api/print/cola").status_code == 200
+    assert reloj.monotonic() - inicio < 1
