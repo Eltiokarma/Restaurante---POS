@@ -93,9 +93,9 @@ def render_orden(
         partes.append(_texto("SIN MESA"))
     partes += [NEGRITA_OFF, TAMANO_NORMAL]
     if len(orden.items) + len(orden.menus) >= 2 or orden.menus:
-        # La entrega en letra grande: es la instrucción que cocina y el
-        # mozo tienen que ver primero (pedido del dueño)
-        partes += [DOBLE_ALTO, NEGRITA_ON, _texto(_linea_entrega(orden, categorias)), NEGRITA_OFF, TAMANO_NORMAL]
+        # La entrega en negrita y tamaño normal (pedido del dueño: en
+        # grande competía con la mesa)
+        partes += [NEGRITA_ON, _texto(_linea_entrega(orden, categorias)), NEGRITA_OFF]
     partes.append(_texto(f"{orden.fecha.isoformat()} - {orden.hora}"))
 
     partes += [ALINEAR_IZQ, _texto("-" * columnas)]
