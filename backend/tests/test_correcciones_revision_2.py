@@ -96,8 +96,9 @@ def test_bulk_a_preparando_solo_toma_lo_pendiente(client, menu_ejemplo):
     assert r.status_code == 200
 
 
-def test_menu_incompleto_responde_422_con_mensaje_util(client, db, menu_ejemplo):
-    """La terminal muestra este texto tal cual: tiene que explicar qué falta."""
+def test_menu_incompleto_sale_con_lo_sin_elegir(client, db, menu_ejemplo):
+    """Un menú con un tiempo sin elegir se registra igual (pedido del
+    dueño) y el pendiente viaja con su rótulo para el ticket."""
     from app.models import MenuAlternativa, MenuPlantilla, MenuTiempo
 
     plantilla = MenuPlantilla(nombre="Menú del día", precio=11.0,
@@ -120,5 +121,7 @@ def test_menu_incompleto_responde_422_con_mensaje_util(client, db, menu_ejemplo)
         "menu_id": plantilla.id, "cantidad": 1,
         "elecciones": {"1": menu_ejemplo["Lomo saltado"]},  # falta el segundo
     }]})
-    assert r.status_code == 422
-    assert "Segundo" in r.json()["detail"] and "Menú del día" in r.json()["detail"]
+    assert r.status_code == 201
+    menu = r.json()["orden"]["menus"][0]
+    assert menu["pendientes"] == ["Segundo"]
+    assert menu["subtotal"] == 11.0

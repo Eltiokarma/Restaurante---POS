@@ -9549,3 +9549,451 @@ select:focus-visible {
 .tb-rank-barra i.cat-postre { background: var(--culantro); }
 .tb-rank-leyenda i.cat-otros,
 .tb-rank-barra i.cat-otros { background: var(--tinta-suave); }
+
+/* ============================================================
+   Pedido por personas (boceto del dueño): cada tarjeta de menú es
+   una persona. Barra − N + con el monto, hojas "para todas" (a
+   todas, 50/50, repartir), circulito "va a esperar" y entrega por
+   persona. Táctil: principales ≥80px, secundarios ≥64px.
+   ============================================================ */
+.barra-personas {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 8px 0 12px;
+}
+
+.barra-personas-defecto {
+  min-height: 64px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--papel-alto);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  color: var(--tinta-media);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.barra-personas-boton {
+  width: 80px;
+  height: 80px;
+  flex: none;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--achiote);
+  color: #fff;
+  font: inherit;
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.barra-personas-boton:disabled {
+  background: #d9cfc0;
+  color: #837868;
+  box-shadow: none;
+  cursor: default;
+}
+
+.barra-personas-cuenta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 96px;
+  color: var(--tinta-media);
+  font-size: 1.05rem;
+}
+
+.barra-personas-cuenta strong {
+  font-family: var(--fuente-display);
+  font-size: 2.4rem;
+  line-height: 1;
+  color: var(--tinta);
+}
+
+.barra-personas-cuenta small {
+  font-size: 0.8rem;
+}
+
+.barra-personas-monto {
+  margin-left: auto;
+  padding: 8px 16px;
+  border: 2px solid var(--tinta);
+  border-radius: var(--r);
+  background: var(--papel-alto);
+  font-family: var(--fuente-display);
+  font-size: 1.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Hojas (modales) de reparto */
+.rh-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(34, 26, 20, 0.45);
+}
+
+.rh {
+  width: min(640px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 18px;
+  border-radius: var(--r-grande);
+  background: var(--papel);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.rh-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rh-cabecera h3 {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-size: 1.35rem;
+}
+
+.rh-cerrar {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--papel-alto);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  color: var(--tinta);
+  font: inherit;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.rh-ayuda {
+  margin: 0 0 10px;
+  color: var(--tinta-media);
+}
+
+.rh-filas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rh-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rh-fila-nombre {
+  flex: 1;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.rh-opcion {
+  flex: 1;
+  min-height: 72px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--papel-alto);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  color: var(--tinta);
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rh-opcion-suave {
+  justify-content: center;
+  font-size: 1rem;
+  color: var(--tinta-media);
+}
+
+.rh-opcion-reparto {
+  justify-content: center;
+  background: var(--mayolica-tenue);
+  box-shadow: inset 0 0 0 2px var(--mayolica);
+  color: var(--mayolica);
+}
+
+.rh-todas {
+  min-height: 64px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--mayolica-tenue);
+  box-shadow: inset 0 0 0 2px var(--mayolica);
+  color: var(--mayolica);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.rh-reparto {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--linea-fuerte);
+}
+
+.rh-subtitulo {
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+}
+
+.rh-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rh-acciones > * {
+  flex: 1 1 220px;
+}
+
+.reparto-deslizador {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.05rem;
+}
+
+.reparto-deslizador input[type='range'] {
+  width: 100%;
+  height: 64px;
+  accent-color: var(--achiote);
+}
+
+.reparto-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.reparto-total {
+  margin: 0;
+  font-weight: 700;
+  color: var(--tinta-media);
+}
+
+.stepper-reparto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stepper-reparto button {
+  width: 64px;
+  height: 64px;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--papel-alto);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  color: var(--tinta);
+  font: inherit;
+  font-size: 1.6rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.stepper-reparto button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.stepper-reparto strong {
+  min-width: 28px;
+  text-align: center;
+  font-size: 1.4rem;
+}
+
+/* Platos por defecto y menú del día (caja) */
+.defecto-bloque {
+  margin-bottom: 14px;
+}
+
+.defecto-bloque h4 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 6px;
+  font-family: var(--fuente-display);
+  font-size: 1.15rem;
+}
+
+.defecto-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.defecto-chip {
+  min-height: 56px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--papel-alto);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+  color: var(--tinta-media);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.defecto-chip-activo {
+  background: var(--culantro);
+  box-shadow: inset 0 0 0 2px var(--culantro-hondo);
+  color: #fff;
+}
+
+.menu-dia-tiempo {
+  margin: 6px 0 4px;
+}
+
+.menu-dia-rotulo {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+}
+
+/* Dentro de la tarjeta del menú */
+.casillero-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.boton-para-todas {
+  min-height: 56px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--mayolica-tenue);
+  box-shadow: inset 0 0 0 2px var(--mayolica);
+  color: var(--mayolica);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Circulito "va a esperar": vacío = sale normal; lleno = reservado */
+.boton-espera {
+  min-width: 56px;
+  min-height: 56px;
+  margin-left: auto;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--tinta);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.boton-espera span {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid var(--tinta);
+}
+
+.boton-espera-activo span {
+  background: var(--tinta);
+}
+
+.menu-entrega {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.menu-entrega-aviso {
+  color: var(--aji-hondo);
+  font-weight: 700;
+}
+
+.menu-entrega-pill {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--mayolica-tenue);
+  color: var(--mayolica);
+  font-size: 0.85rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.boton-seguir-sin-elegir {
+  min-height: var(--toque-min);
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-chico);
+  background: transparent;
+  box-shadow: inset 0 0 0 2px currentColor;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Cocina: lo sin elegir y lo que espera */
+.item-sin-elegir {
+  font-style: italic;
+  font-weight: 800;
+  color: var(--aji);
+}
+
+.item-espera-tag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 800;
+}

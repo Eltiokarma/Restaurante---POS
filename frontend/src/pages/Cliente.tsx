@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, precioUnitarioMenu, soles, tiemposPendientes, unidadesEnTaper } from '../api'
+import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, menuAPayload, precioUnitarioMenu, soles, tiemposPendientes, unidadesEnTaper } from '../api'
 import type { ConfigOut, DatosLocal, Entrega, MenuHoy, MesaEstado, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { describirMenu } from '../components/describirMenu'
 import { TarjetaMenuCarrito } from '../components/TarjetaMenuCarrito'
 import { menusEnPedido, TarjetaOfertaMenu } from '../components/TarjetaOfertaMenu'
+import { BarraPersonas, useRepartoMenus } from '../components/RepartoMenu'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
@@ -197,6 +198,7 @@ export function Cliente() {
   const soloMenusConfig = config?.terminal_solo_menus ?? true
   // Regla del local: qué empaques se ofrecen hoy y cuánto cuesta el táper
   const empaquesOfrecidos = config?.empaques_ofrecidos ?? EMPAQUES
+  const reparto = useRepartoMenus(carrito, empaquesOfrecidos)
   const precioTaper = config?.precio_taper ?? 0
   const tapers = unidadesEnTaper(carrito.items, carrito.menus)
   const cargoTaper = precioTaper * tapers
@@ -214,13 +216,22 @@ export function Cliente() {
     if (items.length > 0) usoVoz.current = true
   }
 
+  // El botón vive dentro del área táctil de inicio: un toque dispara los
+  // dos onClick. Sin este candado entraban dos menús en vez de uno
+  const empezando = useRef(false)
   const empezarPedido = async () => {
+    if (empezando.current) return
+    empezando.current = true
     setMensajeInicio('')
     inicioPedidoTs.current = Date.now()
     // Se espera el menú fresco: así la primera pantalla se decide con datos
     // reales aunque la tablet recién cargue la página
     const menus = (await cargarMenu()) ?? menusHoy
-    setPantalla(soloMenusConfig && menus.length > 0 ? 'resumen' : 'menu')
+    const directoAlPedido = soloMenusConfig && menus.length > 0
+    // Pedido por personas: se arranca con UNA (el + suma más)
+    if (directoAlPedido) carrito.agregarMenuCompleto(menus[0], false)
+    setPantalla(directoAlPedido ? 'resumen' : 'menu')
+    empezando.current = false
   }
 
   const cancelarPedidoEnVentana = async () => {
@@ -246,20 +257,9 @@ export function Cliente() {
     }
   }
 
-  // Un plato "al momento" (bistec frito) obliga a entrega separada — también
-  // si es la alternativa elegida (o un extra) dentro de un menú
-  const platoAlMomentoDe = (m: (typeof carrito.menus)[number]) =>
-    m.menu.tiempos
-      .flatMap((t) => t.alternativas)
-      .find(
-        (a) =>
-          a.sale_al_momento &&
-          (Object.values(m.elecciones).includes(a.plato_id) ||
-            m.extras.some((e) => e.plato_id === a.plato_id)),
-      )
-  const alMomentoEnMenus = carrito.menus.map(platoAlMomentoDe).find(Boolean)
+  // Un plato "al momento" (bistec frito) obliga a entrega separada.
   const alMomentoEnItems = carrito.items.find((i) => i.plato.sale_al_momento)
-  const nombreAlMomento = alMomentoEnItems?.plato.nombre ?? alMomentoEnMenus?.nombre
+  const nombreAlMomento = alMomentoEnItems?.plato.nombre
   const hayAlMomento = nombreAlMomento !== undefined
   const entregaEfectiva: Entrega = hayAlMomento ? 'separado' : entrega
 
@@ -282,12 +282,7 @@ export function Cliente() {
         origen,
         mesasElegidas,
         entregaEfectiva,
-        carrito.menus.map((m) => ({
-          menu_id: m.menu.id, cantidad: m.cantidad, elecciones: m.elecciones,
-          extras: m.extras, omitidos: m.omitidos, empaques: m.empaques,
-          agregados: m.agregados.map((a) => ({ agregado_id: a.agregado.id, cantidad: a.cantidad })),
-          empaque: m.empaque, nota: m.nota.trim(),
-        })),
+        carrito.menus.map(menuAPayload),
       )
       setOrdenFinal(resultado)
       carrito.vaciar()
@@ -477,7 +472,8 @@ export function Cliente() {
           const pasos = [
             { rotulo: 'Cantidad', hecho: carrito.totalItems > 0 },
             { rotulo: 'Ármalo', hecho: carrito.totalItems > 0 && pendientesMenus.length === 0 },
-            { rotulo: 'Junto o Separado', hecho: tocaronEntrega || hayAlMomento },
+            // Con menús, cada persona trae su "todo junto" y se cambia en su tarjeta
+            { rotulo: 'Junto o Separado', hecho: tocaronEntrega || hayAlMomento || carrito.menus.length > 0 },
             { rotulo: 'Confirma', hecho: false },
           ]
           const actual = pasos.findIndex((p) => !p.hecho)
@@ -499,14 +495,26 @@ export function Cliente() {
         {errorConexion && <div className="banner-error">{errorConexion}</div>}
         {soloMenus && (
           <div className="oferta-menus">
+            {/* Una tarjeta = una persona: + y − grandes y el monto a la vista */}
             {menusHoy.map((m) => (
-              <TarjetaOfertaMenu
-                key={m.id}
-                menu={m}
-                etiqueta={`➕ UN MENÚ — ${soles(m.precio)}`}
-                enPedido={menusEnPedido(carrito.menus, m.id)}
-                onAgregar={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m, false) }}
-              />
+              <div key={m.id} className="combo">
+                <div className="combo-resumen-tiempos">
+                  {m.tiempos.map((t) => (
+                    <div key={t.orden}>
+                      {t.alternativas.length === 1
+                        ? `${t.alternativas[0].nombre} (incluido)`
+                        : t.alternativas.map((a) => a.nombre).join(' / ')}
+                    </div>
+                  ))}
+                </div>
+                <BarraPersonas
+                  menu={m}
+                  personas={menusEnPedido(carrito.menus, m.id)}
+                  total={totalConCargos}
+                  onMas={() => { usoTactil.current = true; carrito.agregarMenuCompleto(m, false) }}
+                  onMenos={() => carrito.quitarUltimoMenu(m.id)}
+                />
+              </div>
             ))}
             {carrito.totalItems === 0 && (
               <p className="nota-oferta">
@@ -553,6 +561,8 @@ export function Cliente() {
               empaquesOfrecidos={empaquesOfrecidos}
               precioTaper={precioTaper}
               abrirTic={abrirTics[idx] ?? 0}
+              {...reparto.propsTarjeta(m)}
+              onCambiarEntrega={(e) => carrito.cambiarEntregaMenu(idx, e)}
             />
             </div>
           ))}
@@ -628,9 +638,11 @@ export function Cliente() {
             )}
           </div>
         )}
-        {(carrito.items.length >= 2 || carrito.menus.length > 0 || hayAlMomento) && (
+        {(carrito.items.length >= 2 || hayAlMomento) && (
           <div className="selector-servicio">
-            <span className="selector-servicio-titulo">¿Cómo sale tu pedido?</span>
+            <span className="selector-servicio-titulo">
+              {carrito.menus.length > 0 ? '¿Cómo salen los platos sueltos?' : '¿Cómo sale tu pedido?'}
+            </span>
             <div className="selector-entrega">
               {(['junto', 'separado'] as Entrega[]).map((e) => (
                 <button
@@ -677,6 +689,11 @@ export function Cliente() {
                   <button className="boton-ir-ahi" onClick={irAlPendiente}>
                     IR AHÍ <span className={pendienteALaVista ? '' : 'flecha-rebota'} aria-hidden="true">↓</span>
                   </button>
+                  {/* Pedido del dueño: el ticket puede salir sin elegirlo;
+                      sale impreso "SIN ELEGIR" y se decide en caja */}
+                  <button className="boton-seguir-sin-elegir" onClick={() => setPantalla('countdown')}>
+                    Seguir sin elegir
+                  </button>
                 </>
               ) : (
                 <span className="barra-guia-texto">
@@ -720,6 +737,7 @@ export function Cliente() {
             onCerrar={() => setVozAbierta(false)}
           />
         )}
+        {reparto.hojas}
         <AvisoInactividad {...inactividad} />
       </div>
     )

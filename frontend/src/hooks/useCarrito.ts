@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { subtotalMenu } from '../api'
-import type { AgregadoHoy, Empaque, ItemCarrito, MenuCarrito, MenuHoy, Plato } from '../api'
+import type { AgregadoHoy, Empaque, Entrega, ItemCarrito, MenuCarrito, MenuHoy, Plato } from '../api'
 import type { SugerenciaMenu } from '../menuSugerido'
 
 // La opción con la que arranca un tiempo: la primera sin recargo (para
@@ -9,6 +9,23 @@ function eleccionPorDefecto(tiempo: MenuHoy['tiempos'][number]): number {
   const sinRecargo = tiempo.alternativas.find((a) => a.recargo === 0)
   if (sinRecargo) return sinRecargo.plato_id
   return [...tiempo.alternativas].sort((a, b) => a.recargo - b.recargo)[0].plato_id
+}
+
+// "Platos por defecto" de la caja: con qué arranca cada persona nueva de
+// ESE menú (tiempo_orden → plato_id; los tiempos en "omitidos" no van)
+export interface DefectoMenu {
+  elecciones: Record<number, number>
+  omitidos: number[]
+  empaques: Partial<Record<number, Empaque>>
+}
+
+/** Reparte en orden: las primeras N[0] posiciones reciben el valor 0,
+ *  las siguientes N[1] el valor 1… y el resto queda con `resto`. */
+function repartirEnOrden<T>(total: number, cuotas: [T, number][], resto: T): T[] {
+  const salida: T[] = []
+  for (const [valor, n] of cuotas) for (let i = 0; i < n && salida.length < total; i++) salida.push(valor)
+  while (salida.length < total) salida.push(resto)
+  return salida
 }
 
 // El carrito vive SOLO en el estado del frontend hasta que termina la
@@ -69,6 +86,7 @@ export function useCarrito() {
       omitidos: [...linea.omitidos],
       agregados: n === 0 ? linea.agregados.map((a) => ({ ...a })) : [],
       empaques: { ...linea.empaques },
+      espera: [...(linea.espera ?? [])],
     }))
     setMenus((prev) => [...prev, ...unidades])
   }, [])
@@ -80,16 +98,136 @@ export function useCarrito() {
   // varias alternativas quedan como casilleros vacíos y la guía de
   // progreso acompaña la elección — el cliente arma SU menú, no se lleva
   // el default en silencio. Un tiempo con una sola opción viene incluido.
-  const agregarMenuCompleto = useCallback((menu: MenuHoy, preElegir = true) => {
+  // `defecto` (caja): los "platos por defecto" configurados; un plato que
+  // hoy no está en las alternativas se ignora (cae a la regla de siempre)
+  const agregarMenuCompleto = useCallback((menu: MenuHoy, preElegir = true, defecto?: DefectoMenu) => {
     const elecciones: Record<number, number> = {}
+    const omitidos: number[] = []
+    const empaques: Partial<Record<number, Empaque>> = {}
     for (const t of menu.tiempos) {
       if (t.alternativas.length === 0) continue
-      if (preElegir || t.alternativas.length === 1) elecciones[t.orden] = eleccionPorDefecto(t)
+      if (defecto?.omitidos.includes(t.orden)) {
+        omitidos.push(t.orden)
+        continue
+      }
+      const preferido = defecto?.elecciones[t.orden]
+      if (preferido !== undefined && t.alternativas.some((a) => a.plato_id === preferido)) {
+        elecciones[t.orden] = preferido
+      } else if ((preElegir && !defecto) || t.alternativas.length === 1) {
+        elecciones[t.orden] = eleccionPorDefecto(t)
+      }
+      const empaque = defecto?.empaques[t.orden]
+      if (empaque && empaque !== 'mesa') empaques[t.orden] = empaque
     }
     setMenus((prev) => [...prev, {
-      menu, cantidad: 1, elecciones, extras: [], omitidos: [], agregados: [],
-      empaque: 'mesa' as Empaque, empaques: {}, nota: '',
+      menu, cantidad: 1, elecciones, extras: [], omitidos, agregados: [],
+      empaque: 'mesa' as Empaque, empaques, nota: '',
     }])
+  }, [])
+
+  // El "−" de la barra de personas: saca la última tarjeta de ese menú
+  const quitarUltimoMenu = useCallback((menuId: number) => {
+    setMenus((prev) => {
+      const ultimo = prev.map((m) => m.menu.id).lastIndexOf(menuId)
+      return ultimo === -1 ? prev : prev.filter((_, i) => i !== ultimo)
+    })
+  }, [])
+
+  // ---------- Para todas las personas de un menú ----------
+
+  // "A todas": el mismo plato en ese tiempo para todas las tarjetas del
+  // menú. platoId null = todas "sin elegir"
+  const eleccionATodos = useCallback((menuId: number, tiempoOrden: number, platoId: number | null) => {
+    setMenus((prev) => prev.map((m) => {
+      if (m.menu.id !== menuId) return m
+      const elecciones = { ...m.elecciones }
+      if (platoId === null) delete elecciones[tiempoOrden]
+      else elecciones[tiempoOrden] = platoId
+      return { ...m, elecciones, omitidos: m.omitidos.filter((o) => o !== tiempoOrden) }
+    }))
+  }, [])
+
+  // "Nadie lleva sopa": quita el tiempo en todas las tarjetas del menú
+  const omitirATodos = useCallback((menuId: number, tiempoOrden: number) => {
+    setMenus((prev) => prev.map((m) => {
+      if (m.menu.id !== menuId || m.omitidos.includes(tiempoOrden)) return m
+      const elecciones = { ...m.elecciones }
+      delete elecciones[tiempoOrden]
+      return {
+        ...m, elecciones,
+        omitidos: [...m.omitidos, tiempoOrden],
+        extras: m.extras.filter((e) => e.tiempo_orden !== tiempoOrden),
+        espera: (m.espera ?? []).filter((t) => t !== tiempoOrden),
+      }
+    }))
+  }, [])
+
+  // Repartir (50/50, 6 sopa / 4 entrada…): en orden de tarjetas, las
+  // primeras reciben la primera opción y así; las que sobran quedan sin elegir
+  const repartirEleccion = useCallback(
+    (menuId: number, tiempoOrden: number, cuotas: [number, number][]) => {
+      setMenus((prev) => {
+        const total = prev.filter((m) => m.menu.id === menuId).length
+        const plan = repartirEnOrden<number | null>(total, cuotas, null)
+        let k = 0
+        return prev.map((m) => {
+          if (m.menu.id !== menuId) return m
+          const platoId = plan[k++]
+          const elecciones = { ...m.elecciones }
+          if (platoId === null) delete elecciones[tiempoOrden]
+          else elecciones[tiempoOrden] = platoId
+          return { ...m, elecciones, omitidos: m.omitidos.filter((o) => o !== tiempoOrden) }
+        })
+      })
+    },
+    [],
+  )
+
+  // Repartir el empaque de un tiempo (3 en mesa, 2 en táper) entre las
+  // tarjetas que llevan ese plato elegido
+  const repartirEmpaque = useCallback(
+    (menuId: number, tiempoOrden: number, cuotas: [Empaque, number][]) => {
+      setMenus((prev) => {
+        // Solo cuentan las personas que tienen ese plato elegido: a una
+        // "sin elegir" el táper no le llegaría a ningún plato
+        const indices = prev
+          .map((m, i) => ({ m, i }))
+          .filter(({ m }) =>
+            m.menu.id === menuId && !m.omitidos.includes(tiempoOrden) &&
+            m.elecciones[tiempoOrden] !== undefined)
+          .map(({ i }) => i)
+        const plan = repartirEnOrden<Empaque>(indices.length, cuotas, 'mesa')
+        const asignado = new Map(indices.map((i, k) => [i, plan[k]]))
+        return prev.map((m, i) => {
+          const empaque = asignado.get(i)
+          if (empaque === undefined) return m
+          const empaques = { ...m.empaques }
+          if (empaque === m.empaque) delete empaques[tiempoOrden]
+          else empaques[tiempoOrden] = empaque
+          return { ...m, empaques }
+        })
+      })
+    },
+    [],
+  )
+
+  // Entrega POR PERSONA: todo junto o por tiempos
+  const cambiarEntregaMenu = useCallback((idx: number, entrega: Entrega) => {
+    setMenus((prev) => prev.map((m, i) => (i === idx ? { ...m, entrega } : m)))
+  }, [])
+
+  // Circulito "va a esperar" (reservado) de un tiempo de un menú
+  const alternarEspera = useCallback((idx: number, tiempoOrden: number) => {
+    setMenus((prev) => prev.map((m, i) => {
+      if (i !== idx) return m
+      const espera = m.espera ?? []
+      return {
+        ...m,
+        espera: espera.includes(tiempoOrden)
+          ? espera.filter((t) => t !== tiempoOrden)
+          : [...espera, tiempoOrden],
+      }
+    }))
   }, [])
 
   // Cambiar el plato de un tiempo del menú idx (y des-quitarlo si estaba quitado)
@@ -179,6 +317,7 @@ export function useCarrito() {
         agregados: original.agregados.map((a) => ({ ...a })),
         extras: original.extras.map((e) => ({ ...e })),
         empaques: { ...original.empaques },
+        espera: [...(original.espera ?? [])],
       }
       return [...prev.slice(0, idx + 1), copia, ...prev.slice(idx + 1)]
     })
@@ -315,6 +454,13 @@ export function useCarrito() {
     cantidadDe,
     agregarMenu,
     agregarMenuCompleto,
+    quitarUltimoMenu,
+    eleccionATodos,
+    omitirATodos,
+    repartirEleccion,
+    repartirEmpaque,
+    cambiarEntregaMenu,
+    alternarEspera,
     cambiarEleccion,
     alternarOmitido,
     cambiarAgregado,

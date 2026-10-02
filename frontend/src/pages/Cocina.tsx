@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, NOMBRE_EMPAQUE, NOMBRE_SERVICIO } from '../api'
+import { api, lineaEntrega, NOMBRE_EMPAQUE, NOMBRE_SERVICIO } from '../api'
 import type { EstadoItem, ImpresionPendiente, MetricasServido, OrdenOut, Tanda } from '../api'
 import { AvisoImpresion } from '../components/AvisoImpresion'
 import { IconoProhibido, IconoReloj, IconoSarten, IconoSilla } from '../components/Iconos'
@@ -190,6 +190,8 @@ export function Cocina() {
     const espera = esperaSegundos(o)
     for (const item of lineas) {
       if (RANGO_ESTADO[item.estado] >= RANGO_ESTADO.listo) continue
+      // "Va a esperar" (reservado): no se saca con el resto
+      if ('espera' in item && item.espera) continue
       const acumulado = porSalir.get(item.nombre) ??
         { total: 0, pendientes: 0, tanda: 0, empaques: new Map(), esperaMax: espera }
       acumulado.total += item.cantidad
@@ -402,7 +404,7 @@ export function Cocina() {
                 )}
                 {orden.items.length + orden.menus.length >= 2 || orden.menus.length > 0 ? (
                   <span className="badge-servicio badge-servicio-cocina">
-                    {orden.entrega === 'separado' ? '⏱ POR TIEMPOS' : '🍽 TODO JUNTO'}
+                    {lineaEntrega(orden).separado ? '⏱ ' : '🍽 '}{lineaEntrega(orden).texto}
                   </span>
                 ) : null}
                 <span className="tarjeta-orden-hora">pedido a las {orden.hora.slice(0, 5)}</span>
@@ -412,6 +414,9 @@ export function Cocina() {
                   <li key={`menu-${m}`} className="item-menu-bloque">
                     <span className="item-menu-titulo">
                       <strong>{menu.cantidad} ×</strong> {menu.nombre}
+                      {menu.entrega === 'separado' && lineaEntrega(orden).texto.includes('/') && (
+                        <span className="item-extra-tag">⏱ por tiempos</span>
+                      )}
                     </span>
                     <ul>
                       {menu.omitidos.map((o, i) => (
@@ -419,11 +424,17 @@ export function Cocina() {
                           ⛔ SIN {o.rotulo.toUpperCase()}
                         </li>
                       ))}
+                      {(menu.pendientes ?? []).map((rotulo, i) => (
+                        <li key={`pend-${i}`} className="item-sin-elegir">
+                          ❓ {rotulo.toUpperCase()} SIN ELEGIR
+                        </li>
+                      ))}
                       {menu.items.filter(vaACocina).map((item, i) => (
                         <li key={i} className={`${claseItem(item.estado)} ${item.es_agregado ? 'item-agregado' : ''}`}>
                           {item.es_agregado ? <strong>＋{item.cantidad} {item.nombre.toUpperCase()}</strong>
                             : <>{item.cantidad} × {item.nombre}</>}
                           {item.es_extra && <span className="item-extra-tag">extra</span>}
+                          {item.espera && <span className="item-espera-tag">⏸ ESPERA</span>}
                           {item.empaque !== 'mesa' && (
                             <span className="item-empaque">{NOMBRE_EMPAQUE[item.empaque]}</span>
                           )}

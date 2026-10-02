@@ -604,3 +604,72 @@ def guardar_agregados(payload: AgregadosUpdate, db: Session = Depends(get_db)):
 
     db.commit()
     return _listar_agregados(db)
+
+
+# ---------- Menú del día desde la CAJA (sin token de admin) ----------
+# Pedido del dueño: escoger el menú del día solo desde admin los hace
+# lentos. La caja puede (1) cargar un menú guardado, (2) prender o apagar
+# un menú y (3) poner o sacar platos de sus alternativas de hoy. Crear
+# platos, cambiar precios o armar plantillas sigue siendo del admin.
+# Mismo criterio de LAN que caja y cocina (y detrás de PIN_LOCAL en internet).
+
+
+class ActivoHoyIn(BaseModel):
+    activo_hoy: bool
+
+
+@router.get("/caja")
+def menu_del_dia_para_caja(db: Session = Depends(get_db)):
+    """Lo que la caja necesita para escoger el menú de hoy: los menús del
+    catálogo con TODAS sus alternativas (prendidas o no) y los guardados."""
+    lista = db.scalars(
+        select(MenuPlantilla)
+        .options(selectinload(MenuPlantilla.tiempos).selectinload(MenuTiempo.alternativas))
+        .where(MenuPlantilla.en_catalogo == True)  # noqa: E712
+        .order_by(MenuPlantilla.precio, MenuPlantilla.nombre)
+    ).all()
+    platos = {p.id: p for p in db.scalars(select(Plato)).all()}
+    plantillas_out = []
+    for plantilla in lista:
+        datos = _plantilla_a_dict(plantilla, platos)
+        for tiempo in datos["tiempos"]:
+            for alternativa in tiempo["alternativas"]:
+                plato = platos.get(alternativa["plato_id"])
+                alternativa["activo_hoy"] = bool(plato and plato.activo_hoy)
+        plantillas_out.append(datos)
+    guardados = db.scalars(select(MenuGuardado).order_by(MenuGuardado.nombre)).all()
+    return {
+        "plantillas": plantillas_out,
+        "guardados": [_guardado_a_dict(g, platos) for g in guardados],
+    }
+
+
+@router.patch("/platos/{plato_id}/hoy")
+def plato_para_hoy(plato_id: int, payload: ActivoHoyIn, db: Session = Depends(get_db)):
+    """La caja pone o saca un plato del menú de hoy (un toque)."""
+    plato = db.get(Plato, plato_id)
+    if plato is None or not plato.en_catalogo:
+        raise HTTPException(status_code=404, detail="Plato no encontrado")
+    plato.activo_hoy = payload.activo_hoy
+    if plato.activo_hoy:
+        plato.ultima_vez_activo = hoy_lima()
+    db.commit()
+    return menu_del_dia_para_caja(db)
+
+
+@router.patch("/plantillas/{plantilla_id}/hoy")
+def plantilla_para_hoy(plantilla_id: int, payload: ActivoHoyIn, db: Session = Depends(get_db)):
+    """La caja prende o apaga un menú para hoy."""
+    plantilla = db.get(MenuPlantilla, plantilla_id)
+    if plantilla is None or not plantilla.en_catalogo:
+        raise HTTPException(status_code=404, detail="Menú no encontrado")
+    plantilla.activo_hoy = payload.activo_hoy
+    db.commit()
+    return menu_del_dia_para_caja(db)
+
+
+@router.post("/caja/guardados/{guardado_id}/cargar")
+def cargar_guardado_desde_caja(guardado_id: int, db: Session = Depends(get_db)):
+    """Cargar un menú guardado como el de hoy, desde la caja."""
+    cargar_menu_guardado(guardado_id, db)
+    return menu_del_dia_para_caja(db)

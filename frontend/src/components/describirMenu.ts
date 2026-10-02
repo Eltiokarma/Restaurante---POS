@@ -11,7 +11,11 @@ export function describirMenu(linea: MenuCarrito): string {
       continue
     }
     const alternativa = t.alternativas.find((a) => a.plato_id === linea.elecciones[t.orden])
-    if (!alternativa) continue
+    if (!alternativa) {
+      // Lo que la persona aún no eligió también se nombra (sale así en el ticket)
+      if (t.obligatorio && t.alternativas.length > 1) partes.push(`${t.rotulo.toLowerCase()} sin elegir`)
+      continue
+    }
     // Solo se menciona el empaque cuando ESTE plato va distinto al resto
     const distinto = linea.empaques[t.orden]
     partes.push(

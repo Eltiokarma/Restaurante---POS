@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import type { CajaEstado, DatosLocal, EgresoOut, OrdenOut, TicketBebidaOut } from '../api'
-import { esperadoEnCaja, soles } from '../api'
+import { esperadoEnCaja, lineaEntrega, soles } from '../api'
 
 /**
  * Ticket chico de SOLO las gaseosas agregadas a una orden desde caja:
@@ -70,7 +70,7 @@ export function Ticket({ orden, local }: Props) {
       ) : null}
       {orden.items.length + orden.menus.length >= 2 || orden.menus.length > 0 ? (
         <div className="ticket-servicio ticket-entrega">
-          {orden.entrega === 'separado' ? 'ENTREGA: POR TIEMPOS' : 'ENTREGA: TODO JUNTO'}
+          ENTREGA: {lineaEntrega(orden).texto}
         </div>
       ) : null}
       <div className="ticket-fecha">
@@ -84,6 +84,7 @@ export function Ticket({ orden, local }: Props) {
               <tr>
                 <td>
                   {menu.cantidad} × {menu.nombre}
+                  {menu.entrega === 'separado' && lineaEntrega(orden).texto.includes('/') && ' · POR TIEMPOS'}
                   {menu.nota && <div className="ticket-item-nota">→ {menu.nota}</div>}
                 </td>
                 <td className="ticket-subtotal">
@@ -98,12 +99,19 @@ export function Ticket({ orden, local }: Props) {
                   </td>
                 </tr>
               ))}
+              {(menu.pendientes ?? []).map((rotulo, i) => (
+                <tr key={`menu-${m}-pend-${i}`} className="ticket-item-tiempo ticket-item-sin">
+                  <td>** {rotulo.toUpperCase()} SIN ELEGIR **</td>
+                  <td />
+                </tr>
+              ))}
               {menu.items.map((item, i) => (
                 <tr key={`menu-${m}-item-${i}`} className={`ticket-item-tiempo ${item.es_agregado ? 'ticket-item-agregado' : ''}`}>
                   <td>
                     {item.es_agregado ? `** +${item.cantidad} ${item.nombre.toUpperCase()} **`
                       : <>· {item.cantidad} × {item.nombre}</>}
                     {item.es_extra && ' (EXTRA)'}
+                    {item.espera && ' (ESPERA)'}
                     {item.empaque !== 'mesa' && (
                       <span className="ticket-item-empaque"> [{item.empaque.toUpperCase()}]</span>
                     )}

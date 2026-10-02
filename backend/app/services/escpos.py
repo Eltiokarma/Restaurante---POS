@@ -93,9 +93,7 @@ def render_orden(
     if len(orden.items) + len(orden.menus) >= 2 or orden.menus:
         # La entrega en letra grande: es la instrucción que cocina y el
         # mozo tienen que ver primero (pedido del dueño)
-        partes += [DOBLE_ALTO, NEGRITA_ON, _texto(
-            "ENTREGA: POR TIEMPOS" if orden.entrega == "separado" else "ENTREGA: TODO JUNTO"
-        ), NEGRITA_OFF, TAMANO_NORMAL]
+        partes += [DOBLE_ALTO, NEGRITA_ON, _texto(_linea_entrega(orden, categorias)), NEGRITA_OFF, TAMANO_NORMAL]
     partes.append(_texto(f"{orden.fecha.isoformat()} - {orden.hora}"))
 
     partes += [ALINEAR_IZQ, _texto("-" * columnas)]
@@ -139,7 +137,17 @@ def render_orden(
     for rotulo, veces in sin_por_rotulo.items():
         cuantos = f"{veces} " if veces > 1 else ""
         partes.append(_texto(f"** {cuantos}SIN {rotulo} **"))
-    if sin_por_rotulo:
+    # Lo que una persona aún no eligió también va arriba: el ticket sale
+    # igual y cocina sabe que falta ("2 SEGUNDO SIN ELEGIR")
+    pendientes_por_rotulo: dict[str, int] = {}
+    for om in orden.menus:
+        for pendiente in om.pendientes():
+            rotulo = pendiente["rotulo"].upper()
+            pendientes_por_rotulo[rotulo] = pendientes_por_rotulo.get(rotulo, 0) + om.cantidad
+    for rotulo, veces in pendientes_por_rotulo.items():
+        cuantos = f"{veces} " if veces > 1 else ""
+        partes.append(_texto(f"** {cuantos}{rotulo} SIN ELEGIR **"))
+    if sin_por_rotulo or pendientes_por_rotulo:
         partes.append(_texto(""))
 
     # Juntar iguales: mismo plato + mismo empaque + misma observación
@@ -151,7 +159,7 @@ def render_orden(
         clave = (
             bucket, item.nombre_snapshot, item.empaque,
             _nota_de(item) or nota_por_item.get(item.id, ""),
-            item.es_extra, item.es_agregado,
+            item.es_extra, item.es_agregado, item.espera,
         )
         grupo = grupos.setdefault(clave, {"cantidad": 0, "monto": 0.0})
         grupo["cantidad"] += item.cantidad
@@ -171,7 +179,7 @@ def render_orden(
         primera_seccion = False
         partes += [NEGRITA_ON, _texto(titulo), NEGRITA_OFF]
         for clave in del_grupo:
-            _, nombre_plato, empaque, nota, es_extra, es_agregado = clave
+            _, nombre_plato, empaque, nota, es_extra, es_agregado, espera = clave
             datos = grupos[clave]
             if es_agregado:
                 nombre = f"** +{datos['cantidad']} {nombre_plato.upper()} **"
@@ -179,6 +187,9 @@ def render_orden(
                 nombre = f"{datos['cantidad']} x {nombre_plato}"
                 if es_extra:
                     nombre += " (EXTRA)"
+                if espera:
+                    # "Va a esperar": reservado, cocina no lo saca todavía
+                    nombre += " (ESPERA)"
             # En OTROS (gaseosas y cargos sin plato) no van montos: la
             # comanda es para cocina, la plata se ve en caja
             monto = "" if bucket is None else (_soles(datos["monto"]) if datos["monto"] > 0 else "")
@@ -207,6 +218,23 @@ def render_orden(
     partes += [CENTRAR, _texto(""), _texto("Gracias!")]
     partes.append(CORTAR)
     return b"".join(partes)
+
+
+def _linea_entrega(orden, categorias: dict[int, str] | None = None) -> str:
+    """La entrega en grande. Cada persona (menú) puede tener la suya: si
+    todas coinciden se imprime como siempre; si no, cuántas de cada una.
+    Las bebidas sueltas no cuentan: no pasan por cocina."""
+    categorias = categorias or {}
+    entregas = [om.entrega or orden.entrega for om in orden.menus for _ in range(om.cantidad)]
+    if any(
+        i.orden_menu_id is None and not i.es_cargo and categorias.get(i.plato_id) != "bebida"
+        for i in orden.items
+    ) or not entregas:
+        entregas.append(orden.entrega)
+    if len(set(entregas)) == 1:
+        return "ENTREGA: POR TIEMPOS" if entregas[0] == "separado" else "ENTREGA: TODO JUNTO"
+    juntos = entregas.count("junto")
+    return f"ENTREGA: {juntos} JUNTO / {len(entregas) - juntos} POR TIEMPOS"
 
 
 def render_bebida(datos: dict, local: dict, columnas: int = 42) -> bytes:

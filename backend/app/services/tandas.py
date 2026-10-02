@@ -39,26 +39,42 @@ def _va_a_cocina(item: OrdenItem, categorias: dict[int, str]) -> bool:
     return categorias.get(item.plato_id) != "bebida"
 
 
-def _entrada_pendiente(orden: Orden, categorias: dict[int, str]) -> bool:
-    """¿Le falta salir alguna entrada a esta orden?"""
-    return any(
-        item.estado in _PENDIENTES
-        for item in orden.items
-        if _va_a_cocina(item, categorias) and categorias.get(item.plato_id) == "entrada"
-    )
+def _grupo_entrega(item: OrdenItem, orden: Orden) -> tuple[object, str]:
+    """Cada persona (menú) puede tener su propia entrega; lo que no tiene
+    una propia (venta suelta, menús antiguos) comparte la de la orden."""
+    om = item.orden_menu
+    if om is not None and om.entrega:
+        return om.id, om.entrega
+    return "orden", orden.entrega
 
 
 def _items_activos(orden: Orden, categorias: dict[int, str]) -> tuple[list[OrdenItem], list[OrdenItem]]:
     """Parte los ítems cocinables pendientes de una orden en (entran a la
-    tanda, esperan su entrada). El gating solo aplica a "separado"."""
+    tanda, esperan su entrada). El gating solo aplica a "separado", y por
+    grupo de entrega (cada persona con la suya). Los platos "va a
+    esperar" (reservados) no entran a ninguna tanda hasta que los pidan."""
     pendientes = [
         i for i in orden.items
-        if i.estado in _PENDIENTES and _va_a_cocina(i, categorias)
+        if i.estado in _PENDIENTES and _va_a_cocina(i, categorias) and not i.espera
     ]
-    if orden.entrega != "separado" or not _entrada_pendiente(orden, categorias):
-        return pendientes, []
-    entran = [i for i in pendientes if categorias.get(i.plato_id) == "entrada"]
-    esperan = [i for i in pendientes if categorias.get(i.plato_id) != "entrada"]
+    grupos: dict[object, str] = {}
+    entrada_pendiente: set[object] = set()
+    for i in pendientes:
+        clave, entrega = _grupo_entrega(i, orden)
+        grupos[clave] = entrega
+        if categorias.get(i.plato_id) == "entrada":
+            entrada_pendiente.add(clave)
+    entran, esperan = [], []
+    for i in pendientes:
+        clave, entrega = _grupo_entrega(i, orden)
+        if (
+            entrega == "separado"
+            and clave in entrada_pendiente
+            and categorias.get(i.plato_id) != "entrada"
+        ):
+            esperan.append(i)
+        else:
+            entran.append(i)
     return entran, esperan
 
 
@@ -130,7 +146,10 @@ def calcular_tandas(db: Session, config: dict, mapa_mesas: dict[int, str],
 
     ordenes = [
         o for o in _ordenes_activas(db)
-        if any(i.estado in _PENDIENTES and _va_a_cocina(i, categorias) for i in o.items)
+        if any(
+            i.estado in _PENDIENTES and _va_a_cocina(i, categorias) and not i.espera
+            for i in o.items
+        )
     ]
 
     ahora = ahora_lima()

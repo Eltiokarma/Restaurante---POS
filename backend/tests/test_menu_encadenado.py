@@ -152,12 +152,16 @@ def test_eleccion_fuera_de_alternativas_es_422(client, fonda):
     assert r.status_code == 422
 
 
-def test_tiempo_obligatorio_sin_eleccion_es_422(client, fonda):
+def test_tiempo_obligatorio_sin_eleccion_sale_como_pendiente(client, fonda):
+    """Pedido del dueño: el ticket se imprime aunque la persona no haya
+    elegido su segundo; queda "sin elegir" y el precio del menú no cambia."""
     r = pedir_menu(client, fonda, menu={
         "elecciones": {"1": fonda["platos"]["Sopa criolla"]},  # falta el segundo
     })
-    assert r.status_code == 422
-    assert "Segundo" in r.json()["detail"]
+    assert r.status_code == 201
+    menu = r.json()["orden"]["menus"][0]
+    assert menu["pendientes"] == ["Segundo"]
+    assert 2 not in [i["tiempo_orden"] for i in menu["items"]]
 
 
 def test_menu_desactivado_es_409(client, db, fonda):

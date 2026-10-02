@@ -100,6 +100,11 @@ export interface MenuCarrito {
   // un tiempo que no esté aquí usa el empaque general del menú
   empaques: Partial<Record<number, Empaque>>
   nota: string
+  // Cada persona (menú) sale "todo junto" o "por tiempos"; sin valor =
+  // automático (por tiempos si lleva un plato al momento)
+  entrega?: Entrega
+  // Tiempos "va a esperar" (reservados): cocina no los saca aún (caja)
+  espera?: number[]
 }
 
 // Estado POR ÍTEM (§3): la cocina tacha porciones, no tickets enteros
@@ -124,6 +129,8 @@ export interface OrdenMenuItemOut extends OrdenItemOut {
   tiempo_orden: number | null
   es_extra: boolean
   es_agregado: boolean
+  // "Va a esperar": reservado, cocina no lo saca todavía
+  espera?: boolean
 }
 
 export interface OrdenMenuOut {
@@ -134,6 +141,10 @@ export interface OrdenMenuOut {
   subtotal: number
   // Tiempos que el cliente quitó ("Sin sopa"), con el descuento aplicado
   omitidos: { rotulo: string; descuento: number }[]
+  // Tiempos que la persona aún no eligió (salen "SIN ELEGIR")
+  pendientes?: string[]
+  // Entrega de ESTE menú (cada persona la suya)
+  entrega?: Entrega
   items: OrdenMenuItemOut[]
 }
 
@@ -700,6 +711,78 @@ export interface MenuOrdenIn {
   empaque: Empaque
   empaques: Partial<Record<number, Empaque>>
   nota?: string
+  entrega?: Entrega
+  espera?: number[]
+}
+
+// Menú del día como lo ve la caja: plantillas con TODAS sus alternativas
+// (prendidas o no) y los menús guardados
+export interface MenuCajaPlantilla {
+  id: number
+  nombre: string
+  precio: number
+  activo_hoy: boolean
+  tiempos: {
+    orden: number
+    rotulo: string
+    alternativas: { plato_id: number; nombre: string; recargo: number; activo_hoy: boolean }[]
+  }[]
+}
+
+export interface MenuCaja {
+  plantillas: MenuCajaPlantilla[]
+  guardados: MenuGuardadoOut[]
+}
+
+/** ¿El menú lleva algún plato que se prepara al momento? Entonces esa
+ *  persona no puede salir "todo junto" (el backend también lo exige). */
+export function menuConAlMomento(m: MenuCarrito): boolean {
+  return m.menu.tiempos.some((t) =>
+    t.alternativas.some(
+      (a) =>
+        a.sale_al_momento &&
+        ((!m.omitidos.includes(t.orden) && m.elecciones[t.orden] === a.plato_id) ||
+          m.extras.some((e) => e.plato_id === a.plato_id)),
+    ),
+  )
+}
+
+export function entregaDeMenu(m: MenuCarrito): Entrega {
+  if (menuConAlMomento(m)) return 'separado'
+  return m.entrega ?? 'junto'
+}
+
+/** La entrega en grande (ticket y cocina). Cada persona (menú) puede
+ *  tener la suya: si todas coinciden se dice como siempre; si no, cuántas
+ *  de cada una. Mismo criterio que la comanda ESC/POS del backend. */
+export function lineaEntrega(orden: OrdenOut): { texto: string; separado: boolean } {
+  const entregas: Entrega[] = orden.menus.flatMap((m) =>
+    Array.from({ length: m.cantidad }, () => m.entrega ?? orden.entrega),
+  )
+  // Las bebidas sueltas no cuentan: no pasan por cocina
+  if (orden.items.some((i) => !i.es_cargo && i.categoria !== 'bebida') || entregas.length === 0) {
+    entregas.push(orden.entrega)
+  }
+  if (new Set(entregas).size === 1) {
+    return entregas[0] === 'separado'
+      ? { texto: 'POR TIEMPOS', separado: true }
+      : { texto: 'TODO JUNTO', separado: false }
+  }
+  const juntos = entregas.filter((e) => e === 'junto').length
+  return { texto: `${juntos} JUNTO / ${entregas.length - juntos} POR TIEMPOS`, separado: true }
+}
+
+/** Lo que viaja al backend por cada menú del carrito. */
+export function menuAPayload(m: MenuCarrito): MenuOrdenIn {
+  return {
+    menu_id: m.menu.id, cantidad: m.cantidad, elecciones: m.elecciones,
+    extras: m.extras, omitidos: m.omitidos, empaques: m.empaques,
+    agregados: m.agregados.map((a) => ({ agregado_id: a.agregado.id, cantidad: a.cantidad })),
+    empaque: m.empaque, nota: m.nota.trim(),
+    entrega: entregaDeMenu(m),
+    // Solo lo elegido puede esperar
+    espera: (m.espera ?? []).filter((t) => m.elecciones[t] !== undefined && !m.omitidos.includes(t)),
+  }
 }
 
 export const api = {
@@ -1150,6 +1233,19 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ platos }),
     }, true),
+
+  // --- Menú del día desde la caja (sin token de admin) ---
+  menuCaja: () => request<MenuCaja>('/api/menu/caja'),
+  platoParaHoy: (platoId: number, activoHoy: boolean) =>
+    request<MenuCaja>(`/api/menu/platos/${platoId}/hoy`, {
+      method: 'PATCH', body: JSON.stringify({ activo_hoy: activoHoy }),
+    }),
+  menuParaHoy: (plantillaId: number, activoHoy: boolean) =>
+    request<MenuCaja>(`/api/menu/plantillas/${plantillaId}/hoy`, {
+      method: 'PATCH', body: JSON.stringify({ activo_hoy: activoHoy }),
+    }),
+  cargarGuardadoCaja: (guardadoId: number) =>
+    request<MenuCaja>(`/api/menu/caja/guardados/${guardadoId}/cargar`, { method: 'POST' }),
 
   // --- Menús guardados ("el menú de los jueves") ---
   menusGuardados: () =>

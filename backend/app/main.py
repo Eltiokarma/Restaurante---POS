@@ -157,6 +157,19 @@ def _migrar(engine_) -> None:
                 "ALTER TABLE orden_menus ADD COLUMN omitidos_json TEXT NOT NULL DEFAULT '[]'"
             ))
             conn.commit()
+        if columnas_menus and "pendientes_json" not in columnas_menus:
+            conn.execute(text(
+                "ALTER TABLE orden_menus ADD COLUMN pendientes_json TEXT NOT NULL DEFAULT '[]'"
+            ))
+            conn.commit()
+        if columnas_menus and "entrega" not in columnas_menus:
+            conn.execute(text("ALTER TABLE orden_menus ADD COLUMN entrega TEXT"))
+            conn.commit()
+        if columnas_items and "espera" not in columnas_items:
+            conn.execute(text(
+                "ALTER TABLE orden_items ADD COLUMN espera BOOLEAN NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
         if columnas_items and "es_agregado" not in columnas_items:
             conn.execute(text(
                 "ALTER TABLE orden_items ADD COLUMN es_agregado BOOLEAN NOT NULL DEFAULT 0"
