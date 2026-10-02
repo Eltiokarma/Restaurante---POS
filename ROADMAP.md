@@ -164,6 +164,12 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       ya lo piden", `POST /api/orders/items/{id}/soltar`). La comanda marca "(TIEMPOS)"
       en los platos de quien va por tiempos cuando las personas difieren. Un cierre de
       caja de hace días ya no sale por el puente (solo hoy/ayer).
+- [x] **Paleta por plato y 2 comandas** (2026-10-02): cada opción de un tiempo tiene su
+      color según su lugar (6 tonos; igual en el ticket y en la hoja de opciones; la
+      franja izquierda sigue marcando entrada/segundo; lo "incluido" sin color). Botón
+      chico "✅ ×2 comandas" al confirmar (terminal y caja): `ordenes.copias` = 2 imprime
+      la comanda dos veces en los tres modos (HTML con salto de hoja; el puente manda los
+      bytes dos veces). La reimpresión siempre sale una vez.
 - [x] **Solo caja**: "Platos por defecto" por menú (guardados en esa PC) con los que
       arranca cada persona nueva, y el **circulito "va a esperar"** por plato
       (`orden_items.espera`): sale "(ESPERA)" en la comanda, no entra a las tandas ni a

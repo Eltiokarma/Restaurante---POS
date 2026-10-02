@@ -48,10 +48,24 @@ interface Props {
  * de la UI y deja solo este bloque; window.print() se dispara desde la
  * página Cliente al confirmarse la orden.
  */
+/** Ticket imprimible. Con `orden.copias` = 2 salen dos comandas iguales,
+ *  cada una en su hoja (la segunda es para la guía/mozo). */
 export function Ticket({ orden, local }: Props) {
+  const copias = Math.max(1, orden.copias ?? 1)
+  if (copias === 1) return <TicketCuerpo orden={orden} local={local} id="ticket-print" />
+  return (
+    <div id="ticket-print" className="ticket-copias">
+      {Array.from({ length: copias }, (_, i) => (
+        <TicketCuerpo key={i} orden={orden} local={local} />
+      ))}
+    </div>
+  )
+}
+
+function TicketCuerpo({ orden, local, id }: Props & { id?: string }) {
   const numero = String(orden.numero_orden_dia).padStart(3, '0')
   return (
-    <div id="ticket-print" className="ticket">
+    <div id={id} className="ticket">
       <div className="ticket-cabecera">
         <div className="ticket-local">{local.nombre}</div>
         {local.direccion && <div>{local.direccion}</div>}

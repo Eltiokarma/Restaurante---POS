@@ -170,6 +170,8 @@ export interface OrdenOut {
   // "Falta vuelto": pagó de más; monto que se le debe (null = nada)
   vuelto_pendiente?: number | null
   entrega: Entrega
+  // Comandas que se imprimen (2 = una extra para la guía)
+  copias?: number
   mesa_ids: number[]
   mesas: string[]
   mesa_liberada: boolean
@@ -808,11 +810,12 @@ export const api = {
     mesaIds: number[] = [],
     entrega: Entrega = 'junto',
     menus: MenuOrdenIn[] = [],
+    copias = 1,
   ) =>
     request<{ orden: OrdenOut; local: DatosLocal }>('/api/orders', {
       method: 'POST',
       body: JSON.stringify({
-        items, menus, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega,
+        items, menus, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega, copias,
       }),
     }),
 

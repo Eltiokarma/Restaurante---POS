@@ -10435,3 +10435,70 @@ select:focus-visible {
   font-weight: 800;
   font-size: 1.1rem;
 }
+
+/* ---- Paleta por plato: el color dice QUÉ plato es (la franja de la
+   izquierda sigue diciendo si es entrada o segundo) ---- */
+.plato-color-0 { --tono-plato: #dcebf6; --tono-plato-borde: #1b5f86; }
+.plato-color-1 { --tono-plato: #e2f1df; --tono-plato-borde: #2f6b3a; }
+.plato-color-2 { --tono-plato: #efe0f1; --tono-plato-borde: #7a3f80; }
+.plato-color-3 { --tono-plato: #fdecc8; --tono-plato-borde: #9a6a06; }
+.plato-color-4 { --tono-plato: #fadcd3; --tono-plato-borde: #a8381f; }
+.plato-color-5 { --tono-plato: #dff1f0; --tono-plato-borde: #1f6f6b; }
+
+.ticket-persona-plato[class*='plato-color-'] {
+  background: var(--tono-plato);
+}
+
+.rh-opcion[class*='plato-color-'] {
+  background: var(--tono-plato);
+  box-shadow: inset 0 0 0 2px var(--tono-plato-borde);
+  color: var(--tinta);
+}
+
+/* La elegida, con borde grueso en vez de verde (el color es del plato) */
+.rh-opcion[class*='plato-color-'].rh-opcion-activa {
+  box-shadow: inset 0 0 0 5px var(--tinta);
+  color: var(--tinta);
+}
+
+/* Botón chico "×2": confirma e imprime 2 comandas (una para la guía) */
+.boton-dos-comandas {
+  min-width: 96px;
+  min-height: 64px;
+  padding: 0 12px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--papel-alto);
+  box-shadow: inset 0 0 0 2px var(--culantro);
+  color: var(--culantro-hondo);
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.boton-dos-comandas small {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.boton-dos-comandas:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.aviso-dos-comandas {
+  font-weight: 800;
+  color: var(--culantro-hondo);
+}
+
+/* Dos comandas en el mismo trabajo: cada una en su hoja */
+.ticket-copias .ticket + .ticket {
+  margin-top: 16px;
+  break-before: page;
+  page-break-before: always;
+}

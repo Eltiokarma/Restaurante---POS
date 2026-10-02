@@ -172,6 +172,7 @@ export function Cliente() {
       setVozAbierta(false)
       setEntrega('junto')
       setMesasElegidas([])
+      setCopias(1)
       setMostrarMesas(false)
       usoVoz.current = false
       usoTactil.current = false
@@ -202,6 +203,8 @@ export function Cliente() {
   // "Platos por defecto" de ESTA terminal (pedido del dueño, por ahora):
   // cada persona nueva arranca con ellos
   const [defectos, setDefectos] = useState(leerDefectos)
+  // Comandas a imprimir: 1, o 2 con el botón chico "×2" (una para la guía)
+  const [copias, setCopias] = useState(1)
   const [editandoDefecto, setEditandoDefecto] = useState<MenuHoy | null>(null)
   const tickets = useTicketsPersonas(carrito, { empaques: empaquesOfrecidos, precioTaper, conEspera: false })
   const tapers = unidadesEnTaper(carrito.items, carrito.menus)
@@ -287,6 +290,7 @@ export function Cliente() {
         mesasElegidas,
         entregaEfectiva,
         carrito.menus.map(menuAPayload),
+        copias,
       )
       setOrdenFinal(resultado)
       carrito.vaciar()
@@ -417,6 +421,7 @@ export function Cliente() {
       <div className="pantalla pantalla-countdown">
         <h1>¿Estás seguro?</h1>
         <p className="texto-countdown">Tienes {config?.ventana_cancelacion_seg ?? 30} segundos para cancelar.</p>
+        {copias > 1 && <p className="aviso-dos-comandas">🖨 Saldrán {copias} comandas</p>}
         <CountdownCancel
           duracionSeg={config?.ventana_cancelacion_seg ?? 30}
           onTerminado={confirmarDefinitivo}
@@ -653,6 +658,7 @@ export function Cliente() {
               className="boton-grande boton-confirmar"
               disabled={carrito.totalItems === 0 || guardando}
               onClick={() => {
+                setCopias(1)
                 // Con huecos pendientes, confirmar LLEVA al hueco: el 422
                 // del final deja de existir
                 if (pendientesMenus.length > 0) irAlPendiente()
@@ -660,6 +666,19 @@ export function Cliente() {
               }}
             >
               ✅ CONFIRMAR PEDIDO
+            </button>
+            {/* Chiquito: confirma e imprime 2 comandas (una para la guía) */}
+            <button
+              className="boton-dos-comandas"
+              disabled={carrito.totalItems === 0 || guardando}
+              onClick={() => {
+                setCopias(2)
+                if (pendientesMenus.length > 0) irAlPendiente()
+                else setPantalla('countdown')
+              }}
+              title="Confirmar e imprimir 2 comandas"
+            >
+              ✅ ×2<small>comandas</small>
             </button>
           </div>
         </div>

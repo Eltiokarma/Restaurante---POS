@@ -464,7 +464,8 @@ export function Caja() {
   // Lo que falta elegir NO bloquea (pedido del dueño): el ticket sale y
   // lo dice ("SEGUNDO SIN ELEGIR")
   const sinElegir = carrito.menus.reduce((n, m) => n + tiemposPendientes(m).length, 0)
-  const registrar = async () => {
+  // copias = 2: sale una comanda extra para la guía/mozo
+  const registrar = async (copias = 1) => {
     if (registrandoRef.current || carrito.totalItems === 0) return
     registrandoRef.current = true
     setRegistrando(true)
@@ -481,6 +482,7 @@ export function Caja() {
         // La de la orden rige para lo suelto; cada menú lleva la suya
         hayAlMomento ? 'separado' : 'junto',
         carrito.menus.map(menuAPayload),
+        copias,
       )
       empezarConUno.current = true
       carrito.vaciar()
@@ -608,7 +610,8 @@ export function Caja() {
         setMensaje(`Ticket #${String(orden.numero_orden_dia).padStart(3, '0')} enviado a imprimir`)
       } else {
         setTicket({
-          orden,
+          orden: { ...orden, copias: 1 }, // la reimpresión sale una vez
+          
           local: { nombre: cfg.nombre_local, direccion: cfg.direccion, ruc: cfg.ruc },
         })
       }
@@ -1286,13 +1289,21 @@ export function Caja() {
             <button
               className="boton-grande boton-confirmar caja-registrar"
               disabled={carrito.totalItems === 0 || registrando}
-              onClick={registrar}
+              onClick={() => registrar()}
             >
               {registrando
                 ? 'Registrando…'
                 : carrito.totalItems === 0
                   ? 'REGISTRAR PEDIDO'
                   : `✅ REGISTRAR — ${soles(totalConCargos)}${sinElegir > 0 ? ` · ${sinElegir} sin elegir` : ''}`}
+            </button>
+            <button
+              className="boton-dos-comandas"
+              disabled={carrito.totalItems === 0 || registrando}
+              onClick={() => registrar(2)}
+              title="Registrar e imprimir 2 comandas (una para la guía)"
+            >
+              ✅ ×2<small>comandas</small>
             </button>
           </div>
         </section>

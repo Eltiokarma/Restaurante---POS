@@ -162,6 +162,9 @@ def _migrar(engine_) -> None:
                 "ALTER TABLE orden_menus ADD COLUMN pendientes_json TEXT NOT NULL DEFAULT '[]'"
             ))
             conn.commit()
+        if columnas and "copias" not in columnas:
+            conn.execute(text("ALTER TABLE ordenes ADD COLUMN copias INTEGER NOT NULL DEFAULT 1"))
+            conn.commit()
         if columnas_menus and "nombre_persona" not in columnas_menus:
             conn.execute(text(
                 "ALTER TABLE orden_menus ADD COLUMN nombre_persona TEXT NOT NULL DEFAULT ''"
