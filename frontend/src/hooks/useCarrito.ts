@@ -439,6 +439,20 @@ export function useCarrito() {
     setMenus((prev) => prev.map((m, i) => (i === idx ? { ...m, nota } : m)))
   }, [])
 
+  // Pedido por voz: los tickets que la terminal abrió solos y nadie tocó
+  // (sin plato elegido donde había opción, sin nombre, nota ni cambios)
+  // se van, para que lo dictado no quede junto a una "Persona 1" vacía
+  const quitarMenusVacios = useCallback(() => {
+    setMenus((prev) => prev.filter((m) => {
+      const eligioAlgo = m.menu.tiempos.some(
+        (t) => t.alternativas.length > 1 && m.elecciones[t.orden] !== undefined,
+      )
+      return eligioAlgo || m.omitidos.length > 0 || m.extras.length > 0 || m.agregados.length > 0
+        || (m.nombre_persona ?? '').trim() !== '' || m.nota.trim() !== ''
+        || m.empaque !== 'mesa' || Object.keys(m.empaques).length > 0
+    }))
+  }, [])
+
   const vaciar = useCallback(() => {
     setItems([])
     setMenus([])
@@ -549,6 +563,7 @@ export function useCarrito() {
     cambiarExtraMenu,
     cambiarNotaMenu,
     vaciar,
+    quitarMenusVacios,
     eliminarNoDisponibles,
     sincronizarConMenu,
     totalItems,
