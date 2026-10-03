@@ -309,6 +309,43 @@ def _encolar_resumen_de_cierre(db: Session, registro: CierreCaja) -> None:
     db.commit()
 
 
+def _venta_del_turno(db: Session, registro: CierreCaja) -> dict:
+    """Lo vendido en el tramo de esta caja: pedidos, menús y platos.
+
+    El tramo va desde donde empezó esta caja (desde_orden_id) hasta donde
+    empezó la siguiente del mismo día, igual que el cuadre de plata.
+    """
+    siguiente = db.scalar(
+        select(CierreCaja)
+        .where(CierreCaja.fecha == registro.fecha, CierreCaja.id > registro.id)
+        .order_by(CierreCaja.id)
+    )
+    hasta_id = siguiente.desde_orden_id if siguiente is not None else None
+    ordenes = [
+        o for o in db.scalars(select(Orden).where(Orden.fecha == registro.fecha)).all()
+        if (registro.desde_orden_id is None or o.id > registro.desde_orden_id)
+        and (hasta_id is None or o.id <= hasta_id)
+    ]
+    validas = [o for o in ordenes if o.estado != "anulada"]
+    platos: dict[str, int] = {}
+    for o in validas:
+        for i in o.items:
+            # El cargo por táper es cobro, no un plato vendido
+            if i.es_cargo:
+                continue
+            platos[i.nombre_snapshot] = platos.get(i.nombre_snapshot, 0) + i.cantidad
+    return {
+        "pedidos": len(validas),
+        "anulados": len(ordenes) - len(validas),
+        "menus": sum(m.cantidad for o in validas for m in o.menus),
+        # Lo más vendido arriba; a igual cantidad, por nombre
+        "platos": [
+            {"nombre": n, "cantidad": c}
+            for n, c in sorted(platos.items(), key=lambda x: (-x[1], x[0]))
+        ],
+    }
+
+
 def resumen_de_cierre(db: Session, registro: CierreCaja) -> dict:
     """Datos del ticket de resumen de un cierre (para la impresión)."""
     registros = _registros_de_hoy(db) if registro.fecha == hoy_lima() else []
@@ -335,6 +372,7 @@ def resumen_de_cierre(db: Session, registro: CierreCaja) -> dict:
         "vueltos_pendientes": registro.vueltos_pendientes or 0.0,
         "cobrado_de_otros_dias": _neto_movimientos(_movimientos_de(db, registro)),
         "monto_contado": registro.monto_contado or 0.0,
+        "venta": _venta_del_turno(db, registro),
         "diferencia": registro.diferencia or 0.0,
     }
 
@@ -404,6 +442,21 @@ def borrar_egreso(egreso_id: int, db: Session = Depends(get_db)):
 
 class FondoIn(BaseModel):
     monto_apertura: float = Field(ge=0, le=10_000)
+
+
+@router.post("/imprimir-cierre")
+def imprimir_cierre(db: Session = Depends(get_db)):
+    """Vuelve a mandar el resumen del último cierre a la ticketera (la app
+    de la impresora estaba apagada al cerrar, se acabó el papel…)."""
+    from .config import leer_config
+
+    registro, _ = _turno_actual(db)
+    if registro is None or registro.hora_cierre is None:
+        raise HTTPException(status_code=409, detail="La caja de hoy no está cerrada")
+    if leer_config(db)["modo_impresion"] != "puente":
+        raise HTTPException(status_code=409, detail="En este modo el resumen se imprime desde la caja")
+    _encolar_resumen_de_cierre(db, registro)
+    return {"ok": True}
 
 
 @router.post("/reabrir")

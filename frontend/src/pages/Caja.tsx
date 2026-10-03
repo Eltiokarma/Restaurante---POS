@@ -387,6 +387,26 @@ export function Caja() {
     }
   }
 
+  // La app de la impresora estaba apagada al cerrar, se acabó el papel…
+  const imprimirResumenCierre = async () => {
+    try {
+      const cfg = config ?? (await api.config())
+      if (cfg.modo_impresion === 'puente') {
+        await api.imprimirCierre()
+      } else if (estadoCaja) {
+        setTicketCierre({
+          estado: estadoCaja,
+          egresos,
+          local: { nombre: cfg.nombre_local, direccion: cfg.direccion, ruc: cfg.ruc },
+        })
+      }
+      setMensaje('Imprimiendo el resumen del cierre')
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo imprimir el resumen')
+    }
+  }
+
   const reabrirCaja = async () => {
     try {
       setEstadoCaja(await api.reabrirCaja())
@@ -1035,6 +1055,9 @@ export function Caja() {
               <>
                 <button className="boton boton--md boton--culantro" onClick={() => setCerrandoCaja(true)}>
                   <IconoLapiz tam={20} /> Corregir conteo
+                </button>
+                <button className="boton boton--md boton--papel" onClick={imprimirResumenCierre}>
+                  <IconoImpresora tam={20} /> Imprimir resumen
                 </button>
                 <button className="boton boton--md boton--papel" onClick={reabrirCaja}
                         title="Se cerró por error: deshace el cierre y el día sigue normal">

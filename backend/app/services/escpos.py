@@ -304,6 +304,21 @@ def render_cierre(datos: dict, local: dict, columnas: int = 42) -> bytes:
     ))
 
     partes += [ALINEAR_IZQ, _texto("-" * columnas)]
+
+    # Lo vendido en el turno (pedido del dueño): cuántos pedidos y menús,
+    # y cada plato con su cantidad, lo más vendido arriba
+    venta = datos.get("venta")
+    if venta:
+        partes += [NEGRITA_ON, _texto("LO VENDIDO EN EL TURNO"), NEGRITA_OFF]
+        pedidos = f"{venta['pedidos']}"
+        if venta["anulados"]:
+            pedidos += f" (+{venta['anulados']} anulados)"
+        partes.append(_texto(_fila("Pedidos", pedidos, columnas)))
+        partes.append(_texto(_fila("Menús", str(venta["menus"]), columnas)))
+        for p in venta["platos"]:
+            partes.append(_texto(_fila(f"{p['cantidad']:>3} x {p['nombre']}", "", columnas)))
+        partes.append(_texto("-" * columnas))
+
     partes.append(_texto(_fila("Fondo inicial", _soles(datos["monto_apertura"]), columnas)))
     partes.append(_texto(_fila("Ventas efectivo", _soles(datos["ventas_efectivo"]), columnas)))
     partes.append(_texto(_fila("Ventas tarjeta", _soles(datos["ventas_tarjeta"]), columnas)))
