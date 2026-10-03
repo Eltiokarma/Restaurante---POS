@@ -220,6 +220,47 @@ def test_cierre_imprime_resumen_en_modo_puente(client, db, menu_ejemplo):
     assert all(t["tipo"] != "cierre" for t in client.get("/api/print/cola").json()["trabajos"])
 
 
+def test_resumen_de_cierre_trae_lo_vendido_del_turno(client, db, menu_ejemplo):
+    """El papel del cierre dice cuántos pedidos y qué platos salieron en
+    ESE turno; lo anulado y lo de la caja siguiente no cuentan."""
+    import base64
+
+    from app.models import Config
+
+    db.add(Config(clave="modo_impresion", valor="puente"))
+    db.add(Config(clave="impresora_ip", valor="192.168.1.77"))
+    db.commit()
+
+    client.post("/api/caja/abrir", json={"monto_apertura": 0})
+    crear_orden(client, menu_ejemplo)
+    crear_orden(client, menu_ejemplo)
+    anulada = crear_orden(client, menu_ejemplo).json()["orden"]
+    client.patch(f"/api/orders/{anulada['id']}/status", json={"estado": "anulada"})
+    client.post("/api/caja/cerrar", json={"monto_contado": 30})
+
+    def cierre_en_cola():
+        cola = client.get("/api/print/cola").json()["trabajos"]
+        trabajo = next(t for t in cola if t["tipo"] == "cierre")
+        return base64.b64decode(trabajo["datos_b64"]).decode("cp850")
+
+    texto = cierre_en_cola()
+    assert "LO VENDIDO EN EL TURNO" in texto
+    assert "Pedidos" in texto and "2 (+1 anulados)" in texto
+    assert "2 x Lomo saltado" in texto
+
+    # Se acabó el papel: desde caja se vuelve a mandar
+    client.post("/api/print/cierre/impresa")
+    assert all(t["tipo"] != "cierre" for t in client.get("/api/print/cola").json()["trabajos"])
+    assert client.post("/api/caja/imprimir-cierre").status_code == 200
+    assert "2 x Lomo saltado" in cierre_en_cola()
+
+
+def test_reimprimir_cierre_exige_caja_cerrada(client):
+    assert client.post("/api/caja/imprimir-cierre").status_code == 409
+    client.post("/api/caja/abrir", json={"monto_apertura": 0})
+    assert client.post("/api/caja/imprimir-cierre").status_code == 409
+
+
 def test_falta_pagar_y_falta_vuelto_en_el_cuadre(client, menu_ejemplo):
     """El caso que descuadraba la caja: un ticket salió sin pagar y otro
     pagó con billete grande y se le debe vuelto."""

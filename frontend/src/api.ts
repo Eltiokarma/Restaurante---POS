@@ -1035,6 +1035,10 @@ export const api = {
       body: JSON.stringify({ monto_contado: montoContado, notas }),
     }),
 
+  // Vuelve a mandar el resumen del cierre a la ticketera (modo puente)
+  imprimirCierre: () =>
+    request<{ ok: boolean }>('/api/caja/imprimir-cierre', { method: 'POST' }),
+
   // Deshace el cierre del día (se cerró por error o en una demo)
   reabrirCaja: () =>
     request<CajaEstado>('/api/caja/reabrir', { method: 'POST' }),
