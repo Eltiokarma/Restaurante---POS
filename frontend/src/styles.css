@@ -2070,9 +2070,15 @@ select:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* Lo que la voz no alcanzó a decir: el cliente lo elige en su ticket */
+.voz-persona-falta {
+  color: var(--achiote);
+  font-weight: 700;
+}
+
 .voz-item .boton-cantidad {
-  width: 60px;
-  height: 60px;
+  width: 64px;
+  height: 64px;
   font-size: 1.8rem;
 }
 

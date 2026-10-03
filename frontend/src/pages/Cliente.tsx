@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, menuAPayload, precioUnitarioMenu, soles, subtotalMenu, tiemposPendientes, unidadesEnTaper } from '../api'
-import type { ConfigOut, DatosLocal, Entrega, MenuHoy, MesaEstado, OrdenOut, Plato, VozItemResuelto } from '../api'
+import type { ConfigOut, DatosLocal, Entrega, MenuCarrito, MenuHoy, MesaEstado, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { describirMenu } from '../components/describirMenu'
 import { menusEnPedido, TarjetaOfertaMenu } from '../components/TarjetaOfertaMenu'
 import {
@@ -214,13 +214,16 @@ export function Cliente() {
   // aunque el menú del día se agote a mitad de pedido
   const soloMenus = soloMenusConfig && (menusHoy.length > 0 || carrito.menus.length > 0)
 
-  // La voz solo SUMA items al carrito; todo lo demás es el flujo de siempre
-  const agregarItemsVoz = (items: VozItemResuelto[]) => {
+  // La voz solo SUMA al carrito (platos y tickets por persona); todo lo
+  // demás es el flujo de siempre
+  const agregarItemsVoz = (items: VozItemResuelto[], menus: MenuCarrito[]) => {
     for (const item of items) {
       const plato = platos.find((p) => p.id === item.plato_id)
       if (plato) carrito.cambiarCantidad(plato, item.cantidad)
     }
-    if (items.length > 0) usoVoz.current = true
+    if (menus.length > 0) carrito.quitarMenusVacios()
+    for (const menu of menus) carrito.agregarMenu(menu)
+    if (items.length > 0 || menus.length > 0) usoVoz.current = true
   }
 
   // El botón vive dentro del área táctil de inicio: un toque dispara los
@@ -691,8 +694,9 @@ export function Cliente() {
         {vozAbierta && (
           <PedidoPorVoz
             platos={platos}
-            onContinuar={(items) => { agregarItemsVoz(items); setVozAbierta(false) }}
-            onUsarBotones={(items) => { agregarItemsVoz(items); setVozAbierta(false) }}
+            menus={menusHoy}
+            onContinuar={(items, menus) => { agregarItemsVoz(items, menus); setVozAbierta(false) }}
+            onUsarBotones={(items, menus) => { agregarItemsVoz(items, menus); setVozAbierta(false) }}
             onCerrar={() => setVozAbierta(false)}
           />
         )}
@@ -804,13 +808,14 @@ export function Cliente() {
       {vozAbierta && (
         <PedidoPorVoz
           platos={platos}
-          onContinuar={(items) => {
-            agregarItemsVoz(items)
+          menus={menusHoy}
+          onContinuar={(items, menus) => {
+            agregarItemsVoz(items, menus)
             setVozAbierta(false)
             setPantalla('resumen')
           }}
-          onUsarBotones={(items) => {
-            agregarItemsVoz(items)
+          onUsarBotones={(items, menus) => {
+            agregarItemsVoz(items, menus)
             setVozAbierta(false)
           }}
           onCerrar={() => setVozAbierta(false)}

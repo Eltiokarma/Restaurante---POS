@@ -619,6 +619,18 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       sigue el flujo estándar. Campo `origen` (tactil/voz/mixto) en órdenes y CSV,
       sinónimos por plato editables en admin (chips), tabla `voz_logs`, y panel Admin →
       Voz con % aceptado/corregido/descartado, latencia y costo del día en S/.
+- [x] **La voz entiende menús por persona** (la terminal ya solo vende menús con tickets
+      por persona): el intérprete recibe los menús de hoy con sus tiempos, alternativas
+      y sinónimos, y devuelve `personas` (menú, plato por tiempo SOLO de lo que se dijo,
+      "sin sopa" si el tiempo se puede quitar, empaque, todo junto/por tiempos, nombre y
+      nota) además de los platos sueltos de la carta. `_depurar()` valida cada plato
+      contra su tiempo; lo no dicho queda "por elegir" en el ticket. En la pantalla de
+      verificación cada persona sale con lo que falta; al continuar, cada una entra como
+      su ticket y los tickets vacíos que la terminal abrió sola se quitan. Intérprete en
+      `claude-opus-5-5` con esfuerzo bajo (es una extracción corta) y respaldo
+      automático del servidor (`fallbacks: "default"`) para que un falso positivo de los
+      filtros de seguridad no tumbe la voz; herramienta estricta sin forzarla (este
+      modelo no acepta `tool_choice` forzado).
 - [ ] **Antes de encenderla**: correr el banco de pruebas (Fase 2) con audios reales del
       local y pegar el prompt refinado + sinónimos en los marcadores `TODO` de
       `backend/app/services/voice.py`. Umbral acordado: >85% integra; 70–85% con

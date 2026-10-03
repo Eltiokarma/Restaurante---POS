@@ -1,6 +1,8 @@
 """Pedido por voz: kill switch, endpoints, logs y sinónimos."""
 import json
 
+import pytest
+
 
 def activar_voz(client, admin_headers):
     r = client.put("/api/config", json={"voz_habilitada": True}, headers=admin_headers)
@@ -42,8 +44,9 @@ def test_pipeline_completo_simulado(client, admin_headers, menu_ejemplo, monkeyp
     monkeypatch.setattr(voice, "transcribir", lambda b, n="a": "dos lomitos y un ceviche porfa")
     monkeypatch.setattr(
         voice, "interpretar",
-        lambda texto, menu: (
+        lambda texto, contexto: (
             {
+                "personas": [],
                 "items": [{"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 2}],
                 "no_encontrados": ["ceviche"],
                 "notas": "",
@@ -116,7 +119,7 @@ def test_sinonimos_se_guardan_y_devuelven(client, admin_headers, menu_ejemplo):
 
 
 def test_menu_para_interprete_sale_de_la_bd(client, admin_headers, menu_ejemplo, db):
-    from app.services.voice import construir_system, menu_activo_con_sinonimos
+    from app.services.voice import construir_system, contexto_de_hoy
 
     client.put("/api/menu/today", json={"platos": [{
         "id": menu_ejemplo["Chicha morada"], "nombre": "Chicha morada",
@@ -124,12 +127,12 @@ def test_menu_para_interprete_sale_de_la_bd(client, admin_headers, menu_ejemplo,
         "sinonimos": ["chichita"],
     }]}, headers=admin_headers)
 
-    menu = menu_activo_con_sinonimos(db)
-    assert menu == [{
+    contexto = contexto_de_hoy(db)
+    assert contexto["platos"] == [{
         "id": menu_ejemplo["Chicha morada"], "nombre": "Chicha morada",
         "precio": 3.5, "sinonimos": ["chichita"],
     }]
-    system = construir_system(menu)
+    system = construir_system(contexto)
     assert "chichita" in system and f'id: {menu_ejemplo["Chicha morada"]}' in system
 
 
@@ -150,3 +153,164 @@ def test_origen_de_orden(client, menu_ejemplo):
         "origen": "telepatia",
     })
     assert r.status_code == 422
+
+
+# ---------- Menús por persona ----------
+
+@pytest.fixture()
+def menu_voz(db):
+    """Menú S/ 11: sopa (se puede quitar) o ensalada → lomo o pollo."""
+    from app.models import MenuAlternativa, MenuPlantilla, MenuTiempo, Plato
+
+    platos = {n: Plato(nombre=n, categoria=c, precio=10.0, activo_hoy=True, en_catalogo=True,
+                       sinonimos=json.dumps(s))
+              for n, c, s in [
+                  ("Caldo de gallina", "entrada", ["caldito"]),
+                  ("Ensalada", "entrada", []),
+                  ("Lomo saltado", "fondo", ["lomito"]),
+                  ("Pollo al horno", "fondo", []),
+                  ("Chicha morada", "bebida", []),
+              ]}
+    db.add_all(platos.values())
+    db.flush()
+    plantilla = MenuPlantilla(nombre="Menú del día", precio=11.0, activo_hoy=True, en_catalogo=True)
+    t1 = MenuTiempo(orden=1, rotulo="Entrada", obligatorio=False, descuento_si_se_quita=1.0)
+    t1.alternativas = [MenuAlternativa(plato_id=platos["Caldo de gallina"].id),
+                       MenuAlternativa(plato_id=platos["Ensalada"].id)]
+    t2 = MenuTiempo(orden=2, rotulo="Segundo", obligatorio=True)
+    t2.alternativas = [MenuAlternativa(plato_id=platos["Lomo saltado"].id),
+                       MenuAlternativa(plato_id=platos["Pollo al horno"].id)]
+    plantilla.tiempos = [t1, t2]
+    db.add(plantilla)
+    db.commit()
+    return {"menu_id": plantilla.id, **{n: p.id for n, p in platos.items()}}
+
+
+def test_prompt_lista_menus_con_tiempos_y_sinonimos(db, menu_voz):
+    from app.services.voice import construir_system, contexto_de_hoy
+
+    system = construir_system(contexto_de_hoy(db))
+    assert f"MENÚ id: {menu_voz['menu_id']}" in system
+    assert "Tiempo 1: Entrada — se puede quitar" in system
+    assert "Tiempo 2: Segundo\n" in system  # obligatorio: no se ofrece quitarlo
+    assert f"plato_id: {menu_voz['Lomo saltado']} | Lomo saltado" in system
+    assert '"lomito"' in system and '"caldito"' in system
+
+
+def test_depurar_valida_cada_persona_contra_su_menu(db, menu_voz):
+    from app.services.voice import _depurar, contexto_de_hoy
+
+    m = menu_voz
+    contexto = contexto_de_hoy(db)
+    crudo = {
+        "personas": [
+            # Bien: caldo + lomo para Juan, para llevar, todo junto
+            {"menu_id": m["menu_id"], "cantidad": 1,
+             "elecciones": [{"tiempo_orden": 1, "plato_id": m["Caldo de gallina"]},
+                            {"tiempo_orden": 2, "plato_id": m["Lomo saltado"]}],
+             "sin": [], "empaque": "taper", "entrega": "junto", "nombre": " Juan ", "nota": ""},
+            # Sin sopa (se puede) y "sin segundo" (obligatorio: se ignora);
+            # el lomo puesto en el tiempo 1 no es alternativa de ahí: fuera
+            {"menu_id": m["menu_id"], "cantidad": 2,
+             "elecciones": [{"tiempo_orden": 1, "plato_id": m["Lomo saltado"]},
+                            {"tiempo_orden": 2, "plato_id": m["Pollo al horno"]}],
+             "sin": [1, 2], "empaque": "maleta", "entrega": "auto", "nombre": "", "nota": "sin cebolla"},
+            # Menú que no existe
+            {"menu_id": 999, "cantidad": 1, "elecciones": [], "sin": [],
+             "empaque": "mesa", "entrega": "auto", "nombre": "", "nota": ""},
+        ],
+        "items": [{"plato_id": m["Chicha morada"], "cantidad": 1},
+                  {"plato_id": 999, "cantidad": 1}],
+        "no_encontrados": ["ceviche"],
+        "notas": "",
+    }
+    r = _depurar(crudo, contexto)
+    assert r["personas"] == [
+        {"menu_id": m["menu_id"], "cantidad": 1,
+         "elecciones": {1: m["Caldo de gallina"], 2: m["Lomo saltado"]}, "sin": [],
+         "empaque": "taper", "entrega": "junto", "nombre": "Juan", "nota": ""},
+        {"menu_id": m["menu_id"], "cantidad": 2,
+         "elecciones": {2: m["Pollo al horno"]}, "sin": [1],
+         "empaque": "mesa", "entrega": None, "nombre": "", "nota": "sin cebolla"},
+    ]
+    assert r["items"] == [{"plato_id": m["Chicha morada"], "cantidad": 1}]
+    assert r["no_encontrados"] == ["ceviche", "menú 999", "999"]
+
+
+def test_endpoint_devuelve_personas_con_nombres(client, admin_headers, menu_voz, monkeypatch):
+    from app.services import voice
+
+    m = menu_voz
+    activar_voz(client, admin_headers)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
+    monkeypatch.setattr(voice, "transcribir", lambda b, n="a": "un caldito con lomito y otro sin sopa con pollo")
+    monkeypatch.setattr(voice, "interpretar", lambda texto, contexto: (voice._depurar({
+        "personas": [
+            {"menu_id": m["menu_id"], "cantidad": 1,
+             "elecciones": [{"tiempo_orden": 1, "plato_id": m["Caldo de gallina"]},
+                            {"tiempo_orden": 2, "plato_id": m["Lomo saltado"]}],
+             "sin": [], "empaque": "mesa", "entrega": "auto", "nombre": "", "nota": ""},
+            {"menu_id": m["menu_id"], "cantidad": 1,
+             "elecciones": [{"tiempo_orden": 2, "plato_id": m["Pollo al horno"]}],
+             "sin": [1], "empaque": "mesa", "entrega": "auto", "nombre": "", "nota": ""},
+        ],
+        "items": [], "no_encontrados": [], "notas": "",
+    }, contexto), 0.001))
+
+    r = client.post("/api/voice/order", files={"audio": ("a.webm", b"x", "audio/webm")},
+                    data={"duracion_seg": "4"})
+    assert r.status_code == 200
+    personas = r.json()["personas"]
+    assert [p["menu_nombre"] for p in personas] == ["Menú del día", "Menú del día"]
+    assert [[e["nombre"] for e in p["elecciones"]] for p in personas] == [
+        ["Caldo de gallina", "Lomo saltado"], ["Pollo al horno"],
+    ]
+    assert personas[1]["sin_rotulos"] == ["Entrada"]
+    assert personas[0]["elecciones"][0] == {
+        "tiempo_orden": 1, "rotulo": "Entrada", "plato_id": m["Caldo de gallina"], "nombre": "Caldo de gallina",
+    }
+
+
+def test_interpretar_usa_respaldo_y_esfuerzo_bajo(db, menu_voz, monkeypatch):
+    """La llamada real: modelo actual, respaldo por si el modelo declina,
+    esfuerzo bajo, herramienta estricta y el menú en el system cacheado."""
+    import anthropic
+
+    from app.services import voice
+
+    llamadas = {}
+
+    class Bloque:
+        type = "tool_use"
+        name = "registrar_pedido"
+        input = {"personas": [], "items": [], "no_encontrados": [], "notas": "nada"}
+
+    class Uso:
+        input_tokens, output_tokens = 100, 20
+        cache_read_input_tokens, cache_creation_input_tokens = 0, 0
+
+    class Respuesta:
+        stop_reason = "tool_use"
+        content = [Bloque()]
+        usage = Uso()
+
+    class Mensajes:
+        def create(self, **kw):
+            llamadas.update(kw)
+            return Respuesta()
+
+    class Cliente:
+        def __init__(self, **kw):
+            self.beta = type("B", (), {"messages": Mensajes()})()
+
+    monkeypatch.setattr(anthropic, "Anthropic", Cliente)
+    resultado, costo = voice.interpretar("hola", voice.contexto_de_hoy(db))
+    assert resultado["notas"] == "nada" and costo > 0
+    assert llamadas["model"] == "claude-opus-5-5"
+    assert llamadas["fallbacks"] == "default"
+    assert llamadas["betas"] == ["server-side-fallback-2026-07-01"]
+    assert llamadas["output_config"] == {"effort": "low"}
+    assert "tool_choice" not in llamadas  # este modelo no acepta forzar la herramienta
+    assert llamadas["tools"][0]["strict"] is True
+    assert "MENÚ id:" in llamadas["system"][0]["text"]

@@ -627,10 +627,27 @@ export interface VozItemResuelto {
   cantidad: number
 }
 
+// Una persona (menú) entendida por voz: solo los tiempos que dijo; lo
+// demás lo completa con los dedos en su ticket
+export interface VozPersona {
+  menu_id: number
+  menu_nombre: string
+  precio: number
+  cantidad: number
+  elecciones: { tiempo_orden: number; rotulo: string; plato_id: number; nombre: string }[]
+  sin: number[]
+  sin_rotulos: string[]
+  empaque: Empaque
+  entrega: Entrega | null
+  nombre: string
+  nota: string
+}
+
 export interface VozRespuesta {
   log_id: number
   transcripcion: string
   items_resueltos: VozItemResuelto[]
+  personas: VozPersona[]
   no_encontrados: string[]
   notas: string
   latencia_ms: number
@@ -643,7 +660,12 @@ export interface VozPanel {
     id: number
     hora: string
     transcripcion: string
-    interpretacion: { items: { plato_id: number; cantidad: number }[]; no_encontrados: string[]; notas: string }
+    interpretacion: {
+      personas?: { menu_id: number; cantidad: number }[]
+      items: { plato_id: number; cantidad: number }[]
+      no_encontrados: string[]
+      notas: string
+    }
     resultado: string
     latencia_ms: number
   }[]
@@ -784,6 +806,28 @@ export function lineaEntrega(orden: OrdenOut): { texto: string; separado: boolea
 }
 
 /** Lo que viaja al backend por cada menú del carrito. */
+/** La persona dictada como línea del carrito. Un tiempo con una sola
+ *  opción entra incluido (igual que al tocar "+" en la terminal); los que
+ *  no nombró quedan sin elegir para que el cliente los complete. */
+export function personaVozAMenu(p: VozPersona, menu: MenuHoy): MenuCarrito {
+  const elecciones: Record<number, number> = {}
+  for (const t of menu.tiempos) {
+    if (p.sin.includes(t.orden)) continue
+    const dicho = p.elecciones.find((e) => e.tiempo_orden === t.orden)
+    if (dicho && t.alternativas.some((a) => a.plato_id === dicho.plato_id)) {
+      elecciones[t.orden] = dicho.plato_id
+    } else if (t.alternativas.length === 1) {
+      elecciones[t.orden] = t.alternativas[0].plato_id
+    }
+  }
+  return {
+    menu, cantidad: p.cantidad, elecciones, extras: [],
+    omitidos: p.sin.filter((o) => menu.tiempos.some((t) => t.orden === o && !t.obligatorio)),
+    agregados: [], empaque: p.empaque, empaques: {}, nota: p.nota,
+    entrega: p.entrega ?? undefined, nombre_persona: p.nombre,
+  }
+}
+
 export function menuAPayload(m: MenuCarrito): MenuOrdenIn {
   return {
     menu_id: m.menu.id, cantidad: m.cantidad, elecciones: m.elecciones,
