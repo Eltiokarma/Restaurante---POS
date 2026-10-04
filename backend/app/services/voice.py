@@ -21,9 +21,10 @@ from ..models import Plato
 
 MODELO_TRANSCRIPCION = os.getenv("MODELO_TRANSCRIPCION", "gpt-4o-mini-transcribe")
 MODELO_INTERPRETE = os.getenv("MODELO_INTERPRETE", "gpt-6-luna")
-# Razonamiento corto: el pedido es una extracción, no un problema difícil;
-# "none" responde más rápido, "medium" acierta más en frases enredadas
-ESFUERZO_INTERPRETE = os.getenv("ESFUERZO_INTERPRETE", "low")
+# Medido en producción con 8 frases reales del local: "low" acertó 7/8
+# (perdió un "en bolsa"), "medium" 8/8 por ~1 s más (≈3 s) y casi el
+# mismo costo (≈US$ 0.0001–0.0005 por pedido)
+ESFUERZO_INTERPRETE = os.getenv("ESFUERZO_INTERPRETE", "medium")
 TIMEOUT_TRANSCRIPCION_S = 10
 TIMEOUT_INTERPRETE_S = 15
 
