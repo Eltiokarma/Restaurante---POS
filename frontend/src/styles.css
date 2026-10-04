@@ -2092,6 +2092,15 @@ select:focus-visible {
   font-weight: 700;
 }
 
+.voz-total-menus {
+  margin-right: 16px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--tinta);
+  font-weight: 900;
+  font-size: 1.2rem;
+}
+
 /* "🛍 Bolsa" / "🥡 Táper" de la persona, como etiqueta: se tiene que ver */
 .voz-persona-empaque {
   align-self: flex-start;

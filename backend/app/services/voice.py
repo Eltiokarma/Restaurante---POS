@@ -340,6 +340,14 @@ almuerzos van a ser dos sopas, una causa y de segundos ahorita te digo" →
     {{cantidad 1, elecciones: ninguna, sin: [entrada], empaque taper}}  (el segundo solo)
   ]  → 4 personas en total: 3 almuerzos + 1 segundo solo.
 
+DESGLOSE O ADICIONAL (cuidado con el conector):
+- "Cuatro menús, uno para llevar" (coma o pausa, sin "y") = DESGLOSE: de esos cuatro, uno \
+para llevar y tres en mesa → 4 personas en total.
+- "Cuatro menús Y uno para llevar" ("y", "más", "aparte", "además") = ADICIONAL: cuatro \
+en mesa MÁS uno para llevar → 5 personas en total.
+- Lo mismo con platos: "tres almuerzos, dos con causa" = de los tres, dos con causa; \
+"tres almuerzos y dos causas solas" = aparte.
+
 REPARTIR SEGUNDOS: a veces dice las entradas por grupos y DESPUÉS los segundos con \
 cantidades ("cuatro locros y una trucha"). Cada segundo dicho va a UNA persona distinta y \
 la suma de segundos = personas con segundo. Empareja PRIMERO por empaque (un segundo "en \
