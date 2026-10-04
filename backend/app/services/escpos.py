@@ -46,6 +46,18 @@ def _fila(izquierda: str, derecha: str, columnas: int) -> str:
     return izquierda.ljust(espacio) + derecha
 
 
+def _recuadro(lineas: list[str], columnas: int) -> bytes:
+    """Rectángulo macizo (█) en negrita: lo que falta elegir no puede pasar
+    por un plato más aunque la vista falle en plena hora punta."""
+    borde = "\u2588" * columnas
+    ancho = columnas - 4
+    cuerpo = [
+        "\u2588 " + linea[:ancho].center(ancho) + " \u2588"
+        for linea in lineas if linea
+    ]
+    return NEGRITA_ON + b"".join(_texto(l) for l in [borde, *cuerpo, borde]) + NEGRITA_OFF
+
+
 def _soles(monto: float) -> str:
     return f"{monto:.2f}"
 
@@ -148,8 +160,8 @@ def render_orden(
             pendientes_por_rotulo[clave_p] = pendientes_por_rotulo.get(clave_p, 0) + om.cantidad
     for (rotulo, persona), veces in pendientes_por_rotulo.items():
         cuantos = f"{veces} " if veces > 1 else ""
-        de_quien = f" ({persona})" if persona else ""
-        partes.append(_texto(f"** {cuantos}{rotulo} SIN ELEGIR{de_quien} **"))
+        de_quien = f"({persona})" if persona else ""
+        partes.append(_recuadro([f"{cuantos}{rotulo}", "FALTA ELEGIR", de_quien, "NO PREPARAR"], columnas))
     if sin_por_rotulo or pendientes_por_rotulo:
         partes.append(_texto(""))
 

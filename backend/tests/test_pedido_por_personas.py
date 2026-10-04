@@ -63,7 +63,10 @@ def test_comanda_impresa_dice_espera_sin_elegir_y_entregas(client, db, fonda):
     orden = db.query(Orden).one()
     texto = render_orden(orden, {"nombre": "Fonda"}).decode("cp850", errors="ignore")
     assert "(ESPERA)" in texto
-    assert "SEGUNDO SIN ELEGIR" in texto
+    # Lo que falta elegir va en un recuadro macizo: no se confunde con un plato
+    assert "█ " + "SEGUNDO".center(38) + " █" in texto
+    assert "█ " + "FALTA ELEGIR".center(38) + " █" in texto
+    assert "NO PREPARAR" in texto
     assert "ENTREGA: 1 JUNTO / 1 POR TIEMPOS" in texto
 
 
@@ -111,7 +114,7 @@ def test_nombre_de_la_persona_sale_en_la_comanda(client, db, fonda):
     orden = db.query(Orden).one()
     texto = render_orden(orden, {"nombre": "Fonda"}).decode("cp850", errors="ignore")
     assert "Asado con puré (JUAN)" in texto
-    assert "SEGUNDO SIN ELEGIR (ANA)" in texto
+    assert "FALTA ELEGIR" in texto and "(ANA)".center(38) in texto
 
 
 def test_nombre_demasiado_largo_se_rechaza(client, fonda):

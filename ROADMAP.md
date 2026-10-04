@@ -676,6 +676,14 @@ Especificación completa entregada junto al rediseño. Orden acordado:
 - [x] **Mesa sin letra**: "para la 14" (o "mesa 14") con 14 A y 14 B → la primera libre
       según la ocupación del día (a veces dos grupos se sientan en la misma mesa); todas
       ocupadas → sin mesa, la asigna caja. "Para la 7" sin decir "mesa" también cuenta.
+- [x] **Diminutivos y "falta elegir"**: cada plato, sinónimo, gaseosa y palabra clave
+      del intérprete rápido vale también en diminutivo ("almuercito", "segundito solito",
+      "causita", "tapercito", "inquita"), generado por regla. "Falta elegir", "por
+      elegir", "ahorita te digo" dejan SIN ELEGIR lo no nombrado de esa persona (con la
+      sopa dicha, el segundo); con todo ya elegido es una espera → IA.
+- [x] **Falta elegir en recuadro**: en la comanda (ESC/POS y HTML) lo que falta elegir
+      sale en un rectángulo grueso con "FALTA ELEGIR / NO PREPARAR", para que en hora
+      punta no se lea como un plato más.
 - [ ] **Antes de encenderla**: correr el banco de pruebas (Fase 2) con audios reales del
       local y pegar el prompt refinado + sinónimos en los marcadores `TODO` de
       `backend/app/services/voice.py`. Umbral acordado: >85% integra; 70–85% con

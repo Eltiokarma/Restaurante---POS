@@ -373,6 +373,11 @@ persona con el agregado_id de su menú (no en la nota). Si no está en la lista,
 - Después: "la sopa ahora y el segundo después", "el segundo todavía no", "el segundo me \
 lo traes luego" → ese plato con espera true. Si dice el plato, va elegido; si solo dice \
 "el segundo después" sin nombrarlo, no lo elijas (queda por elegir).
+- Falta elegir: "falta elegir", "por elegir", "todavía no sabe", "ahorita te digo", "aún no \
+se sirve" sin nombrar plato → ese tiempo NO va en elecciones ni en "sin": queda por elegir \
+(sale "FALTA ELEGIR" en la comanda). Si ya dijo la entrada, lo que falta es el segundo. \
+"Un menú con sopa y un segundo solo, el segundo todavía no" = persona 1 con sopa y segundo \
+por elegir; persona 2 sin entrada y segundo por elegir.
 - Mesa: "para la mesa 2B", "estamos en la 3A", "para la 7" → "mesa" con el nombre EXACTO \
 de la lista (ignora mayúsculas y espacios: "dos be" = "2 B"). Si dice el número sin la \
 letra ("mesa 3" y en la lista hay 3 A y 3 B), pon solo el número ("3"): el sistema elige \

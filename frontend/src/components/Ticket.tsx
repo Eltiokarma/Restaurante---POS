@@ -128,10 +128,18 @@ function TicketCuerpo({ orden, local, id }: Props & { id?: string }) {
                   </td>
                 </tr>
               ))}
+              {/* Lo que falta elegir va en un recuadro grueso: en hora punta
+                  una línea más se lee como un plato y se prepara */}
               {(menu.pendientes ?? []).map((rotulo, i) => (
-                <tr key={`menu-${m}-pend-${i}`} className="ticket-item-tiempo ticket-item-sin">
-                  <td>** {rotulo.toUpperCase()} SIN ELEGIR **</td>
-                  <td />
+                <tr key={`menu-${m}-pend-${i}`}>
+                  <td colSpan={2}>
+                    <div className="ticket-falta-elegir">
+                      <strong>{menu.cantidad > 1 ? `${menu.cantidad} ` : ''}{rotulo.toUpperCase()}</strong>
+                      <span>FALTA ELEGIR</span>
+                      {menu.nombre_persona && <span>({menu.nombre_persona.toUpperCase()})</span>}
+                      <small>NO PREPARAR</small>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {menu.items.map((item, i) => (
