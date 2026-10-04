@@ -17,7 +17,6 @@ def test_voz_apagada_por_defecto(client):
 
 def test_toggle_pero_sin_claves_no_disponible(client, admin_headers, monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     activar_voz(client, admin_headers)
     data = client.get("/api/config").json()
     assert data["voz_habilitada"] is True
@@ -40,8 +39,7 @@ def test_pipeline_completo_simulado(client, admin_headers, menu_ejemplo, monkeyp
 
     activar_voz(client, admin_headers)
     monkeypatch.setenv("OPENAI_API_KEY", "fake")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
-    monkeypatch.setattr(voice, "transcribir", lambda b, n="a": "dos lomitos y un ceviche porfa")
+    monkeypatch.setattr(voice, "transcribir", lambda b, n="a", pista="": "dos lomitos y un ceviche porfa")
     monkeypatch.setattr(
         voice, "interpretar",
         lambda texto, contexto: (
@@ -94,9 +92,8 @@ def test_error_de_voz_da_mensaje_amable(client, admin_headers, menu_ejemplo, mon
 
     activar_voz(client, admin_headers)
     monkeypatch.setenv("OPENAI_API_KEY", "fake")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
 
-    def falla(b, n="a"):
+    def falla(b, n="a", pista=""):
         raise voice.VozError("No te escuché bien, intenta de nuevo o usa los botones")
 
     monkeypatch.setattr(voice, "transcribir", falla)
@@ -243,8 +240,7 @@ def test_endpoint_devuelve_personas_con_nombres(client, admin_headers, menu_voz,
     m = menu_voz
     activar_voz(client, admin_headers)
     monkeypatch.setenv("OPENAI_API_KEY", "fake")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
-    monkeypatch.setattr(voice, "transcribir", lambda b, n="a": "un caldito con lomito y otro sin sopa con pollo")
+    monkeypatch.setattr(voice, "transcribir", lambda b, n="a", pista="": "un caldito con lomito y otro sin sopa con pollo")
     monkeypatch.setattr(voice, "interpretar", lambda texto, contexto: (voice._depurar({
         "personas": [
             {"menu_id": m["menu_id"], "cantidad": 1,
@@ -272,45 +268,91 @@ def test_endpoint_devuelve_personas_con_nombres(client, admin_headers, menu_voz,
     }
 
 
-def test_interpretar_usa_respaldo_y_esfuerzo_bajo(db, menu_voz, monkeypatch):
-    """La llamada real: modelo actual, respaldo por si el modelo declina,
-    esfuerzo bajo, herramienta estricta y el menú en el system cacheado."""
-    import anthropic
+def test_interpretar_con_openai_json_estricto(db, menu_voz, monkeypatch):
+    """La llamada real: gpt-6-luna por la Responses API con el menú en las
+    instrucciones (prefijo fijo, cacheable) y salida JSON estricta."""
+    import openai
 
     from app.services import voice
 
     llamadas = {}
 
-    class Bloque:
-        type = "tool_use"
-        name = "registrar_pedido"
-        input = {"personas": [], "items": [], "no_encontrados": [], "notas": "nada"}
+    class Detalle:
+        cached_tokens = 1500
 
     class Uso:
-        input_tokens, output_tokens = 100, 20
-        cache_read_input_tokens, cache_creation_input_tokens = 0, 0
+        input_tokens, output_tokens = 2000, 200
+        input_tokens_details = Detalle()
 
     class Respuesta:
-        stop_reason = "tool_use"
-        content = [Bloque()]
+        status = "completed"
+        output_text = json.dumps({"personas": [], "items": [], "no_encontrados": [], "notas": "nada"})
         usage = Uso()
 
-    class Mensajes:
+    class Respuestas:
         def create(self, **kw):
             llamadas.update(kw)
             return Respuesta()
 
     class Cliente:
         def __init__(self, **kw):
-            self.beta = type("B", (), {"messages": Mensajes()})()
+            self.responses = Respuestas()
 
-    monkeypatch.setattr(anthropic, "Anthropic", Cliente)
+    monkeypatch.setattr(openai, "OpenAI", Cliente)
     resultado, costo = voice.interpretar("hola", voice.contexto_de_hoy(db))
-    assert resultado["notas"] == "nada" and costo > 0
-    assert llamadas["model"] == "claude-opus-5-5"
-    assert llamadas["fallbacks"] == "default"
-    assert llamadas["betas"] == ["server-side-fallback-2026-07-01"]
-    assert llamadas["output_config"] == {"effort": "low"}
-    assert "tool_choice" not in llamadas  # este modelo no acepta forzar la herramienta
-    assert llamadas["tools"][0]["strict"] is True
-    assert "MENÚ id:" in llamadas["system"][0]["text"]
+    assert resultado["notas"] == "nada"
+    # 500 sin caché × 0.10 + 1500 en caché × 0.01 + 200 × 0.50 (por millón)
+    assert costo == pytest.approx((500 * 0.10 + 1500 * 0.01 + 200 * 0.50) / 1_000_000)
+    assert llamadas["model"] == "gpt-6-luna"
+    assert llamadas["reasoning"] == {"effort": "low"}
+    formato = llamadas["text"]["format"]
+    assert formato["type"] == "json_schema" and formato["strict"] is True
+    assert "MENÚ id:" in llamadas["instructions"] and llamadas["input"] == "hola"
+    assert llamadas["store"] is False
+
+
+def test_respuesta_sin_json_da_mensaje_amable(db, menu_voz, monkeypatch):
+    import openai
+
+    from app.services import voice
+
+    class Respuesta:
+        status = "incomplete"
+        output_text = ""
+        usage = None
+
+    class Cliente:
+        def __init__(self, **kw):
+            self.responses = type("R", (), {"create": lambda self, **kw: Respuesta()})()
+
+    monkeypatch.setattr(openai, "OpenAI", Cliente)
+    with pytest.raises(voice.VozError) as e:
+        voice.interpretar("hola", voice.contexto_de_hoy(db))
+    assert "usa los botones" in e.value.mensaje_cliente
+
+
+def test_esquema_cumple_el_modo_estricto():
+    """Modo estricto: todo objeto cierra sus propiedades y las exige
+    todas; sin mínimos/máximos (no los admite)."""
+    from app.services.voice import FORMATO_PEDIDO
+
+    def revisar(nodo):
+        if isinstance(nodo, dict):
+            assert not {"minimum", "maximum", "minLength", "maxLength"} & nodo.keys()
+            if nodo.get("type") == "object":
+                assert nodo["additionalProperties"] is False
+                assert set(nodo["required"]) == set(nodo["properties"])
+            for v in nodo.values():
+                revisar(v)
+        elif isinstance(nodo, list):
+            for v in nodo:
+                revisar(v)
+
+    revisar(FORMATO_PEDIDO["schema"])
+
+
+def test_transcripcion_lleva_los_platos_de_hoy_como_pista(db, menu_voz):
+    from app.services.voice import contexto_de_hoy, pista_de_vocabulario
+
+    pista = pista_de_vocabulario(contexto_de_hoy(db))
+    assert "Caldo de gallina" in pista and "caldito" in pista and "Menú del día" in pista

@@ -1,14 +1,14 @@
-"""Pedido por voz (Fase 3): Whisper transcribe, Claude interpreta.
+"""Pedido por voz (Fase 3): OpenAI transcribe y OpenAI interpreta.
 
 La voz es SOLO otra manera de llenar el carrito. El resultado de este
 módulo se muestra en la pantalla de verificación táctil del frontend y
 recién ahí (con confirmación de dedos, nunca de voz) entra al carrito.
 Todo lo posterior (resumen, ventana, ticket, cocina) no cambia.
 
-El diseño del intérprete es el validado en el banco de pruebas de la
-Fase 2 (voz-lab/services/interpreter.py). Los marcadores TODO indican
-dónde pegar el prompt refinado y los sinónimos aprendidos cuando
-existan los números de la Fase 2.
+Proveedor elegido por costo (decisión del dueño): todo en OpenAI, una
+sola cuenta y una sola clave. Transcripción con gpt-4o-mini-transcribe
+(con los platos del día como pista de vocabulario) e interpretación con
+gpt-6-luna en salida JSON estricta. ~US$ 0.001 por pedido.
 """
 import json
 import os
@@ -19,20 +19,25 @@ from sqlalchemy.orm import Session
 
 from ..models import Plato
 
-MODELO_INTERPRETE = os.getenv("MODELO_INTERPRETE", "claude-opus-5-5")
-# Si el modelo declina (clasificadores de seguridad), el servidor reintenta
-# solo en el modelo de respaldo recomendado: un falso positivo no tumba la voz
-BETA_RESPALDO = "server-side-fallback-2026-07-01"
-TIMEOUT_WHISPER_S = 10
-TIMEOUT_CLAUDE_S = 15
+MODELO_TRANSCRIPCION = os.getenv("MODELO_TRANSCRIPCION", "gpt-4o-mini-transcribe")
+MODELO_INTERPRETE = os.getenv("MODELO_INTERPRETE", "gpt-6-luna")
+# Razonamiento corto: el pedido es una extracción, no un problema difícil;
+# "none" responde más rápido, "medium" acierta más en frases enredadas
+ESFUERZO_INTERPRETE = os.getenv("ESFUERZO_INTERPRETE", "low")
+TIMEOUT_TRANSCRIPCION_S = 10
+TIMEOUT_INTERPRETE_S = 15
 
-# Costos aproximados para el panel del admin (USD)
-PRECIO_WHISPER_POR_MIN_USD = 0.006
-PRECIOS_CLAUDE_POR_MTOK_USD = {
-    "claude-opus-5-5": (4.00, 0.20, 5.00, 20.00),  # entrada, cache lect., cache escr., salida
-    "claude-opus-5": (5.00, 0.50, 6.25, 25.00),
-    "claude-sonnet-5": (2.00, 0.20, 2.50, 10.00),
-    "claude-haiku-4-5": (1.00, 0.10, 1.25, 5.00),
+# Costos aproximados para el panel del admin (USD, precios de OpenAI)
+PRECIOS_TRANSCRIPCION_POR_MIN_USD = {
+    "gpt-4o-mini-transcribe": 0.003,
+    "gpt-4o-transcribe": 0.006,
+    "whisper-1": 0.006,
+}
+PRECIOS_INTERPRETE_POR_MTOK_USD = {
+    # entrada, entrada en caché, salida
+    "gpt-6-luna": (0.10, 0.01, 0.50),
+    "gpt-5.6-luna": (0.20, 0.02, 1.20),
+    "gpt-5-nano": (0.05, 0.005, 0.40),
 }
 
 
@@ -45,24 +50,25 @@ class VozError(Exception):
 
 
 def claves_configuradas() -> bool:
-    return bool(os.getenv("OPENAI_API_KEY")) and bool(os.getenv("ANTHROPIC_API_KEY"))
+    return bool(os.getenv("OPENAI_API_KEY"))
 
 
-def transcribir(audio_bytes: bytes, nombre_archivo: str = "audio.webm") -> str:
-    """Transcribe el audio con Whisper (whisper-1, español). Timeout 10s."""
+def transcribir(audio_bytes: bytes, nombre_archivo: str = "audio.webm",
+                pista: str = "") -> str:
+    """Pasa el audio a texto (español). `pista`: los platos de hoy, para
+    que "chairito" o "cau cau" salgan bien escritos. Timeout 10s."""
     import openai
     from openai import OpenAI
 
     try:
-        client = OpenAI(timeout=TIMEOUT_WHISPER_S)
+        client = OpenAI(timeout=TIMEOUT_TRANSCRIPCION_S)
         respuesta = client.audio.transcriptions.create(
-            model="whisper-1",
+            model=MODELO_TRANSCRIPCION,
             file=(nombre_archivo, audio_bytes),
             language="es",
+            prompt=pista,
         )
         return respuesta.text.strip()
-    except openai.APITimeoutError as e:
-        raise VozError("No te escuché bien, intenta de nuevo o usa los botones", str(e))
     except openai.OpenAIError as e:
         raise VozError("No te escuché bien, intenta de nuevo o usa los botones", str(e))
 
@@ -75,15 +81,12 @@ def transcribir(audio_bytes: bytes, nombre_archivo: str = "audio.webm") -> str:
 EMPAQUES = ["mesa", "taper", "bolsa", "lonchera"]
 ENTREGAS = ["auto", "junto", "separado"]
 
-TOOL_REGISTRAR_PEDIDO = {
-    "name": "registrar_pedido",
-    "description": (
-        "Registra la interpretación del pedido hablado del cliente. "
-        "Llámala SIEMPRE, exactamente una vez, incluso si no se entendió nada "
-        "(en ese caso con listas vacías y una nota)."
-    ),
+FORMATO_PEDIDO = {
+    "type": "json_schema",
+    "name": "pedido",
+    "description": "La interpretación del pedido hablado del cliente",
     "strict": True,
-    "input_schema": {
+    "schema": {
         "type": "object",
         "properties": {
             "personas": {
@@ -217,8 +220,7 @@ def construir_system(contexto: dict) -> str:
 
     return f"""Eres el intérprete de pedidos de un restaurante de menú peruano. Recibes la \
 transcripción (imperfecta, viene de audio) de lo que un cliente dijo y la conviertes en un \
-pedido estructurado. Responde SIEMPRE llamando a la herramienta registrar_pedido, \
-exactamente una vez, sin texto aparte.
+pedido estructurado: responde SOLO con el JSON del pedido.
 
 MENÚS DE HOY (lo principal: cada persona pide un menú y elige un plato por tiempo):
 {menus_texto}
@@ -264,38 +266,32 @@ Usa siempre los id numéricos exactos de arriba."""
 
 def interpretar(texto: str, contexto: dict) -> tuple[dict, float | None]:
     """Interpreta la transcripción. Devuelve (resultado, costo_usd_estimado)."""
-    import anthropic
+    import openai
+    from openai import OpenAI
 
     try:
-        client = anthropic.Anthropic(timeout=TIMEOUT_CLAUDE_S)
-        response = client.beta.messages.create(
+        client = OpenAI(timeout=TIMEOUT_INTERPRETE_S)
+        response = client.responses.create(
             model=MODELO_INTERPRETE,
-            max_tokens=8000,
-            # Extraer un pedido es tarea corta: esfuerzo bajo = respuesta rápida
-            output_config={"effort": "low"},
-            betas=[BETA_RESPALDO],
-            fallbacks="default",
-            system=[{
-                "type": "text",
-                "text": construir_system(contexto),
-                # El menú es estable durante el servicio: se cachea
-                "cache_control": {"type": "ephemeral"},
-            }],
-            tools=[TOOL_REGISTRAR_PEDIDO],
-            messages=[{"role": "user", "content": texto}],
+            # El menú va primero y fijo: OpenAI cachea ese prefijo solo
+            instructions=construir_system(contexto),
+            input=texto,
+            text={"format": FORMATO_PEDIDO},
+            reasoning={"effort": ESFUERZO_INTERPRETE},
+            max_output_tokens=4000,
+            prompt_cache_key="voz-pedido",
+            store=False,
         )
-    except anthropic.APIError as e:
+    except openai.OpenAIError as e:
         raise VozError("No te escuché bien, intenta de nuevo o usa los botones", str(e))
 
-    if response.stop_reason == "refusal":
-        raise VozError("No pude entender el pedido, usa los botones por favor")
-
-    for block in response.content:
-        if block.type == "tool_use" and block.name == "registrar_pedido":
-            return _depurar(dict(block.input), contexto), _costo_claude(response.usage)
-
-    raise VozError("No pude entender el pedido, usa los botones por favor",
-                   "la respuesta no llamó a registrar_pedido")
+    try:
+        crudo = json.loads(response.output_text)
+    except (TypeError, ValueError) as e:
+        # Respuesta cortada, rechazada o vacía: que el cliente use los botones
+        raise VozError("No pude entender el pedido, usa los botones por favor",
+                       f"respuesta sin JSON ({response.status}): {e}")
+    return _depurar(crudo, contexto), _costo_interprete(response.usage)
 
 
 def _entero(valor) -> int | None:
@@ -387,21 +383,33 @@ def resolver_personas(personas: list[dict], contexto: dict) -> list[dict]:
     return salida
 
 
-def _costo_claude(usage) -> float | None:
-    precios = PRECIOS_CLAUDE_POR_MTOK_USD.get(MODELO_INTERPRETE)
-    if precios is None:
+def _costo_interprete(usage) -> float | None:
+    precios = PRECIOS_INTERPRETE_POR_MTOK_USD.get(MODELO_INTERPRETE)
+    if precios is None or usage is None:
         return None
-    entrada, cache_lect, cache_escr, salida = precios
+    entrada, en_cache, salida = precios
+    cacheados = getattr(usage.input_tokens_details, "cached_tokens", 0) or 0
     return (
-        usage.input_tokens * entrada
-        + (usage.cache_read_input_tokens or 0) * cache_lect
-        + (usage.cache_creation_input_tokens or 0) * cache_escr
+        (usage.input_tokens - cacheados) * entrada
+        + cacheados * en_cache
         + usage.output_tokens * salida
     ) / 1_000_000
 
 
-def costo_whisper(duracion_s: float | None) -> float:
-    return ((duracion_s or 0) / 60) * PRECIO_WHISPER_POR_MIN_USD
+def costo_transcripcion(duracion_s: float | None) -> float:
+    por_minuto = PRECIOS_TRANSCRIPCION_POR_MIN_USD.get(MODELO_TRANSCRIPCION, 0.006)
+    return ((duracion_s or 0) / 60) * por_minuto
+
+
+def pista_de_vocabulario(contexto: dict) -> str:
+    """Los nombres de hoy (y cómo les dicen) para la transcripción."""
+    nombres: list[str] = []
+    for p in contexto["platos"]:
+        nombres += [p["nombre"], *p["sinonimos"]]
+    for m in contexto["menus"]:
+        nombres.append(m["nombre"])
+    vistos = list(dict.fromkeys(n for n in nombres if n))
+    return "Pedido en un restaurante peruano. Platos de hoy: " + ", ".join(vistos)[:800]
 
 
 def procesar_audio(db: Session, audio_bytes: bytes, nombre: str, duracion_s: float | None):
@@ -411,13 +419,12 @@ def procesar_audio(db: Session, audio_bytes: bytes, nombre: str, duracion_s: flo
     latencia_ms, costo_usd).
     """
     inicio = time.perf_counter()
-    transcripcion = transcribir(audio_bytes, nombre)
-
     contexto = contexto_de_hoy(db)
     if not contexto["platos"] and not contexto["menus"]:
         raise VozError("Todavía no hay menú cargado, pregunta en caja por favor")
 
-    resultado, costo_claude = interpretar(transcripcion, contexto)
+    transcripcion = transcribir(audio_bytes, nombre, pista_de_vocabulario(contexto))
+    resultado, costo_interprete = interpretar(transcripcion, contexto)
     latencia_ms = round((time.perf_counter() - inicio) * 1000)
 
     por_id = {p["id"]: p for p in contexto["platos"]}
@@ -431,6 +438,6 @@ def procesar_audio(db: Session, audio_bytes: bytes, nombre: str, duracion_s: flo
         for i in resultado["items"]
     ]
     personas = resolver_personas(resultado["personas"], contexto)
-    costo_total = costo_whisper(duracion_s) + (costo_claude or 0)
+    costo_total = costo_transcripcion(duracion_s) + (costo_interprete or 0)
     return (transcripcion, resultado, items_resueltos, personas,
             latencia_ms, round(costo_total, 6))

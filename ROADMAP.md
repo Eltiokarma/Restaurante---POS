@@ -626,11 +626,17 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       nota) además de los platos sueltos de la carta. `_depurar()` valida cada plato
       contra su tiempo; lo no dicho queda "por elegir" en el ticket. En la pantalla de
       verificación cada persona sale con lo que falta; al continuar, cada una entra como
-      su ticket y los tickets vacíos que la terminal abrió sola se quitan. Intérprete en
-      `claude-opus-5-5` con esfuerzo bajo (es una extracción corta) y respaldo
-      automático del servidor (`fallbacks: "default"`) para que un falso positivo de los
-      filtros de seguridad no tumbe la voz; herramienta estricta sin forzarla (este
-      modelo no acepta `tool_choice` forzado).
+      su ticket y los tickets vacíos que la terminal abrió sola se quitan.
+- [x] **Decisión de costo: toda la voz va por OpenAI** (una cuenta, una clave
+      `OPENAI_API_KEY`). Transcripción `gpt-4o-mini-transcribe` (US$ 0.003/min) con los
+      platos y sinónimos del día como pista de vocabulario; intérprete `gpt-6-luna`
+      (US$ 0.10 / 0.50 por millón de tokens) por la Responses API con salida JSON
+      estricta y razonamiento `low`. Prompt real ≈2,000 tokens de entrada y ≈250 de
+      salida: ≈US$ 0.001 por pedido (100 pedidos/día ≈ US$ 2.30/mes). Se comparó contra
+      Claude Opus 5.5 (≈US$ 0.022), Haiku 4.5 (≈0.004), Gemini Flash-Lite, DeepSeek Flash,
+      Qwen Flash y Llama 4 Scout; los chinos salían ~US$ 1–4/mes más baratos pero con dos
+      proveedores. Modelo, transcripción y esfuerzo se cambian por variables de entorno
+      (`MODELO_INTERPRETE`, `MODELO_TRANSCRIPCION`, `ESFUERZO_INTERPRETE`).
 - [ ] **Antes de encenderla**: correr el banco de pruebas (Fase 2) con audios reales del
       local y pegar el prompt refinado + sinónimos en los marcadores `TODO` de
       `backend/app/services/voice.py`. Umbral acordado: >85% integra; 70–85% con
