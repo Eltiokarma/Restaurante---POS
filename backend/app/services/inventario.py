@@ -76,6 +76,30 @@ def consumir_item(db: Session, orden: Orden, item) -> None:
                            referencia, orden_id=orden.id)
 
 
+def devolver_item(db: Session, orden: Orden, item, cantidad: int | None = None) -> None:
+    """Devuelve al stock lo que consumió un ítem que se QUITA de una orden
+    ya registrada (el cliente se arrepintió de un plato o una gaseosa)."""
+    porciones = item.cantidad if cantidad is None else cantidad
+    referencia = f"cambio orden #{orden.numero_orden_dia:03d}"
+    with _lock_inventario:
+        if item.plato_id is not None:
+            receta = db.scalars(select(RecetaItem).where(RecetaItem.plato_id == item.plato_id)).all()
+            for ri in receta:
+                insumo = db.get(Insumo, ri.insumo_id)
+                if insumo is not None:
+                    _registrar(db, insumo, "ajuste", ri.cantidad * porciones,
+                               referencia, orden_id=orden.id)
+            return
+        if item.es_cargo:
+            # Gaseosa de la lista fija: su insumo se ubica por el nombre
+            from ..models import Bebida
+
+            bebida = db.scalar(select(Bebida).where(Bebida.nombre == item.nombre_snapshot))
+            insumo = db.get(Insumo, bebida.insumo_id) if bebida and bebida.insumo_id else None
+            if insumo is not None:
+                _registrar(db, insumo, "ajuste", float(porciones), referencia, orden_id=orden.id)
+
+
 def consumir_directo(db: Session, insumo: Insumo, cantidad: float,
                      referencia: str, orden_id: int | None = None) -> None:
     """Consumo sin receta (bebidas embotelladas: 1 venta = N botellas).

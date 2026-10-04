@@ -15,7 +15,7 @@ export function TicketBebidaImpreso({ ticket, local }: {
       <div className="ticket-cabecera">
         <div className="ticket-local">{local.nombre}</div>
       </div>
-      <div className="ticket-orden">GASEOSAS</div>
+      <div className="ticket-orden">{ticket.titulo ?? 'GASEOSAS'}</div>
       <div className="ticket-servicio">
         Orden #{ticket.numero}
         {ticket.mesas.length > 0 && ` — Mesa ${ticket.mesas.join(' + ')}`}
@@ -25,15 +25,29 @@ export function TicketBebidaImpreso({ ticket, local }: {
         {ticket.items.map((item, i) => (
           <div className="ticket-item" key={i}>
             <span>{item.cantidad} × {item.nombre}</span>
-            <span>{soles(item.precio * item.cantidad)}</span>
+            <span>{item.precio ? soles(item.precio * item.cantidad) : ''}</span>
           </div>
         ))}
       </div>
-      <div className="ticket-total">
-        <span>TOTAL GASEOSAS</span>
-        <span>{soles(ticket.total)}</span>
-      </div>
-      <div className="ticket-pie">Se suma al ticket de la orden</div>
+      {(ticket.titulo ?? 'GASEOSAS') === 'GASEOSAS' ? (
+        <>
+          <div className="ticket-total">
+            <span>TOTAL GASEOSAS</span>
+            <span>{soles(ticket.total)}</span>
+          </div>
+          <div className="ticket-pie">Se suma al ticket de la orden</div>
+        </>
+      ) : (
+        <>
+          <div className="ticket-total">
+            <span>La cuenta cambia</span>
+            <span>{ticket.total >= 0 ? '+' : '−'}{soles(Math.abs(ticket.total))}</span>
+          </div>
+          {ticket.total_orden !== undefined && (
+            <div className="ticket-pie">Nuevo total: {soles(ticket.total_orden)}</div>
+          )}
+        </>
+      )}
     </div>
   )
 }

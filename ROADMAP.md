@@ -647,6 +647,17 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       (`obligatorio` significa "si no se nombra queda SIN ELEGIR", no "no se puede
       quitar"; marcar la entrada como no obligatoria hacía que una entrada olvidada se
       cobrara entera sin salir).
+- [x] **Modificar un pedido ya confirmado** (pedido del dueño, que atiende desde la
+      terminal): botón "✏️ Modificar un pedido" en el inicio de la terminal → pedidos de
+      hoy → por persona se puede devolver un tiempo quitado ("ahora sí la sopa"), elegir
+      lo pendiente, cambiar el empaque de cada plato (el táper se cobra o se descuenta
+      solo), quitar agregados/extras o a la persona, y sumar otra persona o gaseosas.
+      Backend en `routes/modificar.py`: el total se recalcula desde cero (menús −
+      descuentos + ítems), el kardex consume/devuelve, lo quitado va al log de
+      cancelaciones y cocina recibe un ticket chico "CAMBIO" con SOLO lo que cambió y el
+      nuevo total (en modo terminal lo imprime la propia pantalla). Solo pedidos de hoy,
+      no anulados ni anotados a mano. Decisión: por ahora en la terminal; más adelante se
+      evaluará dejarlo solo en caja.
 - [ ] **Antes de encenderla**: correr el banco de pruebas (Fase 2) con audios reales del
       local y pegar el prompt refinado + sinónimos en los marcadores `TODO` de
       `backend/app/services/voice.py`. Umbral acordado: >85% integra; 70–85% con

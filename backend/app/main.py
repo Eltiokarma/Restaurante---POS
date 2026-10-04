@@ -12,7 +12,7 @@ from sqlalchemy import text
 from .db import BACKEND_DIR, Base, engine
 from .routes import (
     admin, bebidas, caja, cancellations, config, finanzas, impresion, insumos,
-    mantenimiento, menu, mesas, orders, stats, voice,
+    mantenimiento, menu, mesas, modificar, orders, stats, voice,
 )
 from .services.backup import ciclo_backup_automatico
 
@@ -209,6 +209,18 @@ def _migrar(engine_) -> None:
             conn.execute(text("DROP TABLE cierres_caja_unica"))
             conn.commit()
 
+        # El ticket chico sirve también para los CAMBIOS a una orden ya
+        # registrada (se devolvió la sopa, pasó a táper): su título lo dice
+        columnas_tb = [fila[1] for fila in conn.execute(text("PRAGMA table_info(tickets_bebida)"))]
+        if columnas_tb and "titulo" not in columnas_tb:
+            conn.execute(text(
+                "ALTER TABLE tickets_bebida ADD COLUMN titulo VARCHAR(30) NOT NULL DEFAULT 'GASEOSAS'"
+            ))
+            conn.commit()
+        if columnas_tb and "total_orden" not in columnas_tb:
+            conn.execute(text("ALTER TABLE tickets_bebida ADD COLUMN total_orden FLOAT"))
+            conn.commit()
+
 
 def _sembrar_agregados(engine_) -> None:
     """Los agregados de arranque (+presa, +refresco…) se crean UNA vez.
@@ -305,6 +317,7 @@ async def _candado_pin(request: Request, call_next):
 
 app.include_router(menu.router)
 app.include_router(orders.router)
+app.include_router(modificar.router)
 app.include_router(cancellations.router)
 app.include_router(config.router)
 app.include_router(admin.router)

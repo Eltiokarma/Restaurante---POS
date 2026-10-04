@@ -263,7 +263,8 @@ def render_bebida(datos: dict, local: dict, columnas: int = 42) -> bytes:
     cantidad}], "total", "hora" opcional}."""
     partes: list[bytes] = [INICIALIZAR, CODEPAGE_CP850, CENTRAR]
     partes += [NEGRITA_ON, _texto(local.get("nombre") or "Restaurante"), NEGRITA_OFF]
-    partes += [DOBLE_TAMANO, _texto("GASEOSAS"), TAMANO_NORMAL]
+    titulo = datos.get("titulo") or "GASEOSAS"
+    partes += [DOBLE_TAMANO, _texto(titulo), TAMANO_NORMAL]
     linea = f"Orden #{datos['numero']}"
     if datos.get("mesas"):
         linea += f" - Mesa {', '.join(datos['mesas'])}"
@@ -273,16 +274,25 @@ def render_bebida(datos: dict, local: dict, columnas: int = 42) -> bytes:
 
     partes += [ALINEAR_IZQ, _texto("-" * columnas), DOBLE_ALTO]
     for item in datos["items"]:
+        monto = item["precio"] * item["cantidad"]
         partes.append(_texto(_fila(
             f"{item['cantidad']} x {item['nombre']}",
-            _soles(item["precio"] * item["cantidad"]),
+            _soles(monto) if monto else "",
             columnas,
         )))
     partes += [TAMANO_NORMAL, _texto("-" * columnas)]
-    partes += [NEGRITA_ON, DOBLE_ALTO,
-               _texto(_fila("TOTAL GASEOSAS", f"S/ {_soles(datos['total'])}", columnas)),
-               TAMANO_NORMAL, NEGRITA_OFF]
-    partes.append(_texto("Se suma al ticket de la orden"))
+    if titulo == "GASEOSAS":
+        partes += [NEGRITA_ON, DOBLE_ALTO,
+                   _texto(_fila("TOTAL GASEOSAS", f"S/ {_soles(datos['total'])}", columnas)),
+                   TAMANO_NORMAL, NEGRITA_OFF]
+        partes.append(_texto("Se suma al ticket de la orden"))
+    else:
+        # Cambio de una orden ya registrada: cuánto subió o bajó la cuenta
+        signo = "+" if datos["total"] >= 0 else "-"
+        partes += [NEGRITA_ON, _texto(_fila(
+            "La cuenta cambia", f"{signo}S/ {_soles(abs(datos['total']))}", columnas,
+        )), NEGRITA_OFF]
+        partes.append(_texto(f"Nuevo total: S/ {_soles(datos['total_orden'])}"))
     partes.append(CORTAR)
     return b"".join(partes)
 

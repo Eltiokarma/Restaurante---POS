@@ -10,6 +10,7 @@ import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
 import { GaseosasTerminal } from '../components/GaseosasTerminal'
+import { ModificarPedido } from '../components/ModificarPedido'
 import { PedidoPorVoz } from '../components/PedidoPorVoz'
 import type { ExtrasVoz } from '../components/PedidoPorVoz'
 import { TarjetaPlato } from '../components/TarjetaPlato'
@@ -35,7 +36,7 @@ function ModalCancelarTodo({ onSeguir, onCancelar }: { onSeguir: () => void; onC
   )
 }
 
-type Pantalla = 'inicio' | 'menu' | 'resumen' | 'countdown' | 'final'
+type Pantalla = 'inicio' | 'menu' | 'resumen' | 'countdown' | 'final' | 'modificar'
 
 export function Cliente() {
   const [pantalla, setPantalla] = useState<Pantalla>('inicio')
@@ -410,7 +411,27 @@ export function Cliente() {
           🍽️ HACER MI PEDIDO
         </button>
         <p className="texto-toca">Toca la pantalla para empezar</p>
+        {/* Cambios a un pedido ya confirmado (pedido del dueño, que hoy
+            atiende desde la terminal): no debe disparar un pedido nuevo */}
+        <button
+          className="boton-modificar-pedido"
+          onClick={(e) => { e.stopPropagation(); setPantalla('modificar') }}
+        >
+          ✏️ Modificar un pedido
+        </button>
       </div>
+    )
+  }
+
+  if (pantalla === 'modificar') {
+    return (
+      <ModificarPedido
+        menusHoy={menusHoy}
+        gaseosas={gaseosas}
+        empaques={empaquesOfrecidos}
+        local={{ nombre: config?.nombre_local ?? '', direccion: config?.direccion ?? '', ruc: config?.ruc ?? '' }}
+        onCerrar={() => setPantalla('inicio')}
+      />
     )
   }
 
