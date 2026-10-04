@@ -356,3 +356,18 @@ def test_transcripcion_lleva_los_platos_de_hoy_como_pista(db, menu_voz):
 
     pista = pista_de_vocabulario(contexto_de_hoy(db))
     assert "Caldo de gallina" in pista and "caldito" in pista and "Menú del día" in pista
+
+
+def test_diagnostico_muestra_el_error_real(client, admin_headers, menu_voz, monkeypatch):
+    from app.services import voice
+
+    assert client.post("/api/voice/diagnostico").status_code == 401
+
+    def falla(texto, contexto):
+        raise voice.VozError("No te escuché bien", "Error code: 401 - Incorrect API key")
+
+    monkeypatch.setattr(voice, "interpretar", falla)
+    r = client.post("/api/voice/diagnostico", data={"texto": "un caldo"}, headers=admin_headers)
+    assert r.status_code == 200
+    paso = r.json()["interpretacion"]
+    assert paso["ok"] is False and "Incorrect API key" in paso["error"]

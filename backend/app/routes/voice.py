@@ -79,6 +79,41 @@ async def pedido_por_voz(
     }
 
 
+@router.post("/diagnostico", dependencies=[Depends(requiere_admin)])
+async def diagnostico_de_voz(
+    texto: str = Form("una sopa con lomo"),
+    audio: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+):
+    """Prueba cada paso por separado y devuelve el error REAL de OpenAI
+    (clave inválida, sin saldo, modelo inexistente…): al cliente solo le
+    llega "no te escuché bien" y así no se sabría qué arreglar."""
+    contexto = voice.contexto_de_hoy(db)
+    pasos: dict = {
+        "clave_configurada": voice.claves_configuradas(),
+        "modelo_transcripcion": voice.MODELO_TRANSCRIPCION,
+        "modelo_interprete": voice.MODELO_INTERPRETE,
+    }
+    if audio is not None:
+        try:
+            pasos["transcripcion"] = {
+                "ok": True,
+                "texto": voice.transcribir(
+                    await audio.read(), audio.filename or "audio.webm",
+                    voice.pista_de_vocabulario(contexto),
+                ),
+            }
+            texto = pasos["transcripcion"]["texto"]
+        except voice.VozError as e:
+            pasos["transcripcion"] = {"ok": False, "error": str(e)}
+    try:
+        resultado, costo = voice.interpretar(texto, contexto)
+        pasos["interpretacion"] = {"ok": True, "texto": texto, "resultado": resultado, "costo_usd": costo}
+    except voice.VozError as e:
+        pasos["interpretacion"] = {"ok": False, "texto": texto, "error": str(e)}
+    return json.loads(json.dumps(pasos, default=str))
+
+
 class ResultadoIn(BaseModel):
     resultado: str
 
