@@ -142,3 +142,43 @@ def test_para_la_numero_es_mesa(contexto):
     r = interpretar_rapido("un almuerzo con causa y locro para la 2 be", contexto)
     assert r["mesa"] == "2 B"
     assert personas(r) == [(1, {1: CAUSA, 2: LOCRO}, [], "mesa", {})]
+
+
+@pytest.mark.parametrize("palabra,esperado", [
+    ("sopa", "sopita"), ("almuerzo", "almuercito"), ("inca", "inquita"), ("taper", "tapercito"),
+    ("menu", "menucito"), ("segundo", "segundito"), ("solo", "solito"), ("bistec", "bistequito"),
+    ("trucha", "truchita"), ("chairito", None), ("de", None),
+])
+def test_diminutivos(palabra, esperado):
+    from app.services.voz_rapida import diminutivo
+    assert diminutivo(palabra) == esperado
+
+
+def test_todo_en_diminutivo(contexto):
+    r = interpretar_rapido("Dos almuercitos con causita y truchita en bolsita, y una inquita", contexto)
+    assert personas(r) == [(2, {1: CAUSA, 2: TRUCHA}, [], "bolsa", {})]
+    assert r["gaseosas"] == [{"bebida_id": INCA, "cantidad": 1}]
+    r = interpretar_rapido("un segundito solito de pollito para llevar", contexto)
+    assert personas(r) == [(1, {2: POLLO}, [1], "taper", {})]
+
+
+@pytest.mark.parametrize("frase", [
+    "un menú con sopa, falta elegir, la mesa 3 be",
+    "una sopa, el segundo falta elegir, para la mesa 3 be",
+    "un almuerzo con caldito, el segundo por elegir, mesa tres be",
+    "una sopita, ahorita te digo el segundo, para la 3 b",
+])
+def test_falta_elegir_deja_el_segundo_pendiente(contexto, frase):
+    r = interpretar_rapido(frase, contexto)
+    assert personas(r) == [(1, {1: CHAIRITO}, [], "mesa", {})]  # segundo SIN ELEGIR
+    assert r["mesa"] == "3 B"
+
+
+def test_menu_y_segundo_solo_por_elegir(contexto):
+    r = interpretar_rapido("un menú con sopa y un segundo solo, falta elegir", contexto)
+    assert personas(r) == [(1, {1: CHAIRITO}, [], "mesa", {}), (1, {}, [1], "mesa", {})]
+
+
+def test_falta_elegir_con_todo_elegido_va_a_la_ia(contexto):
+    """"Una sopa y un locro, el segundo después": es una espera, no un hueco."""
+    assert interpretar_rapido("un menú con sopa y locro, falta elegir", contexto) is None

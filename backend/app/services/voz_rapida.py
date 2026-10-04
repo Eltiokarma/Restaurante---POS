@@ -14,6 +14,7 @@ verificación.
 """
 import re
 import unicodedata
+from itertools import product
 
 # Palabras que no cambian el pedido
 RELLENO = {
@@ -66,8 +67,61 @@ def normalizar(texto: str) -> str:
     return re.sub(rf"\bmesa (\d+|{numeros})(?: ({letras})\b)?", _mesa, sin_tildes)
 
 
+# Palabras de unión: no se les busca diminutivo
+SIN_DIMINUTIVO = {"de", "del", "con", "la", "las", "el", "los", "a", "al", "y", "en", "para", "por", "un", "una"}
+
+
+def diminutivo(palabra: str) -> str | None:
+    """"sopa" → "sopita", "almuerzo" → "almuercito", "inca" → "inquita",
+    "taper" → "tapercito", "menu" → "menucito". Así habla el cliente."""
+    if len(palabra) < 3 or palabra in SIN_DIMINUTIVO or not palabra.isalpha():
+        return None
+    if palabra.endswith(("ito", "ita", "itos", "itas")):
+        return None  # ya es diminutivo ("chairito")
+    final = palabra[-1]
+    if final in "oa":
+        raiz, previa = palabra[:-1], palabra[-2]
+        if previa == "c":
+            return raiz[:-1] + "qu" + "it" + final  # inca → inquita, poco → poquito
+        if previa == "g":
+            return raiz[:-1] + "gu" + "it" + final  # lechuga → lechuguita
+        if previa == "z":
+            return raiz[:-1] + "c" + "it" + final  # almuerzo → almuercito
+        return raiz + "it" + final  # sopa → sopita, lomo → lomito
+    if final == "c":
+        return palabra[:-1] + "quito"  # bistec → bistequito
+    if final == "z":
+        return palabra[:-1] + "cito"  # arroz → arrocito
+    if final in "enru":
+        return palabra + "cito"  # postre → postrecito, taper → tapercito, menu → menucito
+    if final == "l":
+        return palabra + "ito"  # papel → papelito
+    return None
+
+
+def _con_diminutivos(palabras: tuple[str, ...]) -> set[tuple[str, ...]]:
+    """La frase con sus palabras en diminutivo, solas o juntas ("segundito
+    solito"), y en plural ("sopitas")."""
+    opciones = []
+    for palabra in palabras[:5]:
+        dim = diminutivo(palabra)
+        if dim is None and palabra.endswith("s") and len(palabra) > 3:
+            # "sopas" → "sopitas", "almuerzos" → "almuercitos"
+            base = diminutivo(palabra[:-1]) or (diminutivo(palabra[:-2]) if palabra.endswith("es") else None)
+            dim = base + "s" if base else None
+        formas = [palabra]
+        if dim:
+            formas.append(dim)
+            if not dim.endswith("s"):
+                formas.append(dim + "s")
+        opciones.append(formas)
+    if len(palabras) > 5:
+        opciones += [[p] for p in palabras[5:]]
+    return set(product(*opciones)) - {palabras}
+
+
 def _variantes(frase: str) -> set[tuple[str, ...]]:
-    """La frase y su plural en la última palabra ("sopa" → "sopas")."""
+    """La frase, su plural ("sopa" → "sopas") y sus diminutivos ("sopita")."""
     palabras = tuple(normalizar(frase).replace(",", " ").split())
     if not palabras:
         return set()
@@ -76,7 +130,7 @@ def _variantes(frase: str) -> set[tuple[str, ...]]:
     for sufijo in ("s", "es"):
         variantes.add(palabras[:-1] + (palabras[-1] + sufijo,))
         variantes.add((palabras[0] + sufijo,) + palabras[1:])
-    return variantes
+    return variantes | _con_diminutivos(palabras)
 
 
 class _Lexico:
@@ -125,7 +179,25 @@ class _Lexico:
             # "de entrada causa y de segundo locro": el rótulo no cambia nada
             ("de", "entrada"): ("NADA",), ("entrada",): ("NADA",),
             ("de", "segundo"): ("NADA",), ("segundo",): ("NADA",),
+            # "Falta elegir": lo que no nombró queda SIN ELEGIR (sale así en
+            # la comanda y se decide luego); "un menú con sopa, falta elegir"
+            ("falta", "elegir"): ("POR_ELEGIR",), ("falta", "escoger"): ("POR_ELEGIR",),
+            ("faltan", "elegir"): ("POR_ELEGIR",), ("falta", "decidir"): ("POR_ELEGIR",),
+            ("por", "elegir"): ("POR_ELEGIR",), ("por", "escoger"): ("POR_ELEGIR",),
+            ("sin", "elegir"): ("POR_ELEGIR",), ("falta",): ("POR_ELEGIR",),
+            ("todavia", "no", "elige"): ("POR_ELEGIR",), ("aun", "no", "elige"): ("POR_ELEGIR",),
+            ("todavia", "no", "eligen"): ("POR_ELEGIR",), ("aun", "no", "eligen"): ("POR_ELEGIR",),
+            ("todavia", "no", "sabe"): ("POR_ELEGIR",), ("aun", "no", "sabe"): ("POR_ELEGIR",),
+            ("elige", "despues"): ("POR_ELEGIR",), ("elige", "luego"): ("POR_ELEGIR",),
+            ("ahorita", "elige"): ("POR_ELEGIR",), ("ahorita", "te", "digo"): ("POR_ELEGIR",),
+            ("luego", "te", "digo"): ("POR_ELEGIR",), ("despues", "te", "digo"): ("POR_ELEGIR",),
+            ("ahorita", "le", "digo"): ("POR_ELEGIR",), ("luego", "le", "digo"): ("POR_ELEGIR",),
         }
+        # Cada palabra clave también en diminutivo: "almuercito", "segundito
+        # solito", "para llevarcito" no, pero sí "tapercito", "bolsita", "mesita"
+        for frase in list(claves):
+            for variante in _con_diminutivos(frase):
+                claves.setdefault(variante, claves[frase])
         for frase, token in claves.items():
             # Un plato llamado igual que una palabra clave gana la clave
             self.frases.setdefault(frase, token)
@@ -292,6 +364,18 @@ def interpretar_rapido(texto: str, contexto: dict) -> dict | None:
             return None  # "de litro" suelto, sin marca
         elif tipo == "ENTREGA":
             entrega = token[1]
+        elif tipo == "POR_ELEGIR":
+            # Aplica a la persona que se venía dictando: es almuerzo y lo no
+            # nombrado queda por elegir. Si ya tenía todo, el "después" es
+            # una espera de un plato elegido: criterio → IA
+            if actual is None:
+                return None
+            if actual["clase"] == "almuerzo":
+                if len(actual["platos"]) >= len(lexico.menu["tiempos"]):
+                    return None
+                actual["menu"] = True
+            elif actual["platos"]:
+                return None  # "segundo solo de locro, ahorita te digo": ¿qué falta?
         elif tipo in ("Y", "SEP", "NADA"):
             corte = tipo != "NADA" or corte
         i += 1

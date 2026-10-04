@@ -436,7 +436,7 @@ export function Cocina() {
                       ))}
                       {(menu.pendientes ?? []).map((rotulo, i) => (
                         <li key={`pend-${i}`} className="item-sin-elegir">
-                          ❓ {rotulo.toUpperCase()} SIN ELEGIR
+                          ❓ {rotulo.toUpperCase()}: FALTA ELEGIR
                         </li>
                       ))}
                       {menu.items.filter(vaACocina).map((item, i) => (

@@ -1301,6 +1301,22 @@ select:focus-visible {
   line-height: 1.15;
 }
 
+/* Tiempo que falta elegir: recuadro grueso en la comanda, imposible de
+   leer como un plato más (pedido del dueño: la vista falla en hora punta) */
+.ticket-falta-elegir {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 4px 0;
+  padding: 4px 2px;
+  border: 5px solid #000;
+  font-weight: 900;
+  text-align: center;
+  line-height: 1.2;
+}
+.ticket-falta-elegir strong { font-size: 1.35em; }
+.ticket-falta-elegir span { font-size: 1.15em; }
+
 /* Pedido especial dentro del ticket ("-> sin frijoles") */
 .ticket-item-nota {
   font-weight: 900;
