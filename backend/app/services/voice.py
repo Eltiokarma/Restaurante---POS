@@ -68,9 +68,15 @@ def transcribir(audio_bytes: bytes, nombre_archivo: str = "audio.webm",
             language="es",
             prompt=pista,
         )
-        return respuesta.text.strip()
+        texto = respuesta.text.strip()
     except openai.OpenAIError as e:
         raise VozError("No te escuché bien, intenta de nuevo o usa los botones", str(e))
+    # Con audio casi mudo (se cortó, nadie habló) el modelo a veces "repite"
+    # la pista en vez de transcribir: eso no es un pedido
+    if not texto or (pista and texto[:40].lower() in pista.lower()):
+        raise VozError("Casi no te escuché. Habla fuerte y claro, o usa los botones.",
+                       f"transcripción vacía o eco de la pista: {texto[:60]!r}")
+    return texto
 
 
 # Estructura de salida. Desde los tickets por persona la terminal vende
@@ -106,8 +112,13 @@ FORMATO_PEDIDO = {
                                 "properties": {
                                     "tiempo_orden": {"type": "integer"},
                                     "plato_id": {"type": "integer"},
+                                    "empaque": {
+                                        "type": "string", "enum": [*EMPAQUES, "igual"],
+                                        "description": "Si ESTE plato va distinto (\"la sopa en bolsa\"); "
+                                                       "si no, igual",
+                                    },
                                 },
-                                "required": ["tiempo_orden", "plato_id"],
+                                "required": ["tiempo_orden", "plato_id", "empaque"],
                                 "additionalProperties": False,
                             },
                         },
@@ -233,16 +244,23 @@ CÓMO ARMAR EL PEDIDO:
 lomo y otro con ensalada y ají de gallina" son DOS personas. Personas idénticas pueden ir \
 juntas con cantidad ("tres menús con sopa y pollo" = una persona con cantidad 3).
 - Si nombra platos de entrada o segundo, eso es un menú aunque no diga la palabra \
-"menú": "un caldo y un lomo" = 1 persona con esa entrada y ese segundo. Si hay dudas de \
-cómo se agrupan, una entrada y un segundo forman una persona, en el orden en que los dijo.
+"menú": "un caldo y un lomo" = 1 persona con esa entrada y ese segundo. Una entrada y un \
+segundo forman UNA persona, en el orden en que los dijo: NUNCA hagas una persona solo con \
+entradas y otra solo con segundos.
+- Mismas cantidades se emparejan: "tres sopas en bolsa y tres lomos en táper" = 3 personas \
+(una con cantidad 3), cada una con sopa y lomo; la sopa con empaque bolsa y el lomo con \
+empaque taper. "Dos sopas y un lomo" = 2 personas: una con sopa y lomo, otra solo con sopa.
+- Si un plato que nombró no está hoy, la persona igual va (con lo que sí hay) y el plato \
+va en no_encontrados.
 - En "elecciones" pon SOLO los tiempos que el cliente nombró, con el plato_id de ESE \
 tiempo. Lo que no dijo se deja fuera: el cliente lo elige después en la pantalla.
 - "Sin sopa", "sin entrada", "solo segundo", "solo la sopa" → el tiempo que no quiere va \
 en "sin" (solo si dice que se puede quitar).
 - Si hay un solo menú hoy, usa ese. Si hay varios y no queda claro cuál, elige el que \
 tenga los platos que nombró y anota la duda en notas.
-- Empaque: "para llevar", "en táper" → taper; "en bolsa" → bolsa; "en lonchera" → \
-lonchera; si no dice nada o "para comer acá" → mesa.
+- Empaque de la persona: "para llevar", "en táper" → taper; "en bolsa" → bolsa; "en lonchera" → \
+lonchera; si no dice nada o "para comer acá" → mesa. Si un plato va distinto que el \
+resto de esa persona, ponlo en el empaque de esa elección; si no, "igual".
 - Entrega: "todo junto", "junto" → junto; "por tiempos", "primero la sopa", "separado" \
 → separado; si no lo dice → auto.
 - Nombre: "uno para Juan", "el de María" → nombre de esa persona; si no, vacío.
@@ -324,7 +342,10 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
             o for o in (_entero(x) for x in persona.get("sin", []))
             if o in tiempos and not tiempos[o]["obligatorio"]
         })
+        empaque = persona.get("empaque")
+        empaque = empaque if empaque in EMPAQUES else "mesa"
         elecciones: dict[int, int] = {}
+        empaques: dict[int, str] = {}
         for e in persona.get("elecciones", []):
             orden, plato_id = _entero(e.get("tiempo_orden")), _entero(e.get("plato_id"))
             tiempo = tiempos.get(orden)
@@ -332,14 +353,18 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
                 continue
             if any(a["plato_id"] == plato_id for a in tiempo["alternativas"]):
                 elecciones[orden] = plato_id
-        empaque = persona.get("empaque")
+                # Empaque propio del plato ("la sopa en bolsa") si difiere
+                propio = e.get("empaque")
+                if propio in EMPAQUES and propio != empaque:
+                    empaques[orden] = propio
         entrega = persona.get("entrega")
         personas.append({
             "menu_id": menu["id"],
             "cantidad": cantidad,
             "elecciones": elecciones,
             "sin": sin,
-            "empaque": empaque if empaque in EMPAQUES else "mesa",
+            "empaque": empaque,
+            "empaques": empaques,
             "entrega": entrega if entrega in ("junto", "separado") else None,
             "nombre": str(persona.get("nombre") or "").strip()[:40],
             "nota": str(persona.get("nota") or "").strip()[:200],
@@ -371,7 +396,8 @@ def resolver_personas(personas: list[dict], contexto: dict) -> list[dict]:
         for orden, plato_id in sorted(p["elecciones"].items()):
             alt = next(a for a in tiempos[orden]["alternativas"] if a["plato_id"] == plato_id)
             platos.append({"tiempo_orden": orden, "rotulo": tiempos[orden]["rotulo"],
-                           "plato_id": plato_id, "nombre": alt["nombre"]})
+                           "plato_id": plato_id, "nombre": alt["nombre"],
+                           "empaque": p["empaques"].get(orden)})
         salida.append({
             **p,
             # JSON no tiene claves enteras: el frontend recibe la lista

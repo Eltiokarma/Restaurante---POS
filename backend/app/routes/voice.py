@@ -21,7 +21,7 @@ RESULTADOS_VALIDOS = ["aceptado", "corregido", "descartado"]
 # Para mostrar el costo en soles en el panel del admin (ajustable)
 TIPO_CAMBIO_SOLES = 3.6
 
-MAX_AUDIO_BYTES = 5 * 1024 * 1024  # ~20s de webm caben de sobra
+MAX_AUDIO_BYTES = 5 * 1024 * 1024  # 40s de webm (~200 KB) caben de sobra
 
 
 def _voz_operativa(db: Session) -> None:

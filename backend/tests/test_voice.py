@@ -225,10 +225,10 @@ def test_depurar_valida_cada_persona_contra_su_menu(db, menu_voz):
     assert r["personas"] == [
         {"menu_id": m["menu_id"], "cantidad": 1,
          "elecciones": {1: m["Caldo de gallina"], 2: m["Lomo saltado"]}, "sin": [],
-         "empaque": "taper", "entrega": "junto", "nombre": "Juan", "nota": ""},
+         "empaque": "taper", "empaques": {}, "entrega": "junto", "nombre": "Juan", "nota": ""},
         {"menu_id": m["menu_id"], "cantidad": 2,
          "elecciones": {2: m["Pollo al horno"]}, "sin": [1],
-         "empaque": "mesa", "entrega": None, "nombre": "", "nota": "sin cebolla"},
+         "empaque": "mesa", "empaques": {}, "entrega": None, "nombre": "", "nota": "sin cebolla"},
     ]
     assert r["items"] == [{"plato_id": m["Chicha morada"], "cantidad": 1}]
     assert r["no_encontrados"] == ["ceviche", "menú 999", "999"]
@@ -264,7 +264,8 @@ def test_endpoint_devuelve_personas_con_nombres(client, admin_headers, menu_voz,
     ]
     assert personas[1]["sin_rotulos"] == ["Entrada"]
     assert personas[0]["elecciones"][0] == {
-        "tiempo_orden": 1, "rotulo": "Entrada", "plato_id": m["Caldo de gallina"], "nombre": "Caldo de gallina",
+        "tiempo_orden": 1, "rotulo": "Entrada", "plato_id": m["Caldo de gallina"],
+        "nombre": "Caldo de gallina", "empaque": None,
     }
 
 
@@ -371,3 +372,47 @@ def test_diagnostico_muestra_el_error_real(client, admin_headers, menu_voz, monk
     assert r.status_code == 200
     paso = r.json()["interpretacion"]
     assert paso["ok"] is False and "Incorrect API key" in paso["error"]
+
+
+def test_empaque_propio_de_un_plato(db, menu_voz):
+    """"Tres sopas en bolsa y tres lomos en táper": UNA persona ×3 con la
+    sopa en bolsa y el lomo en táper; "igual" no crea excepción."""
+    from app.services.voice import _depurar, contexto_de_hoy
+
+    m = menu_voz
+    r = _depurar({
+        "personas": [{
+            "menu_id": m["menu_id"], "cantidad": 3,
+            "elecciones": [
+                {"tiempo_orden": 1, "plato_id": m["Caldo de gallina"], "empaque": "bolsa"},
+                {"tiempo_orden": 2, "plato_id": m["Lomo saltado"], "empaque": "igual"},
+            ],
+            "sin": [], "empaque": "taper", "entrega": "auto", "nombre": "", "nota": "",
+        }],
+        "items": [], "no_encontrados": [], "notas": "",
+    }, contexto_de_hoy(db))
+    assert r["personas"][0]["empaques"] == {1: "bolsa"}
+    assert r["personas"][0]["empaque"] == "taper"
+
+
+def test_transcripcion_que_repite_la_pista_no_es_un_pedido(monkeypatch):
+    """Con audio casi mudo el modelo devolvía la pista ("Pedido en un
+    restaurante peruano. Platos de hoy: …") como si fuera lo dicho."""
+    import openai
+
+    from app.services import voice
+
+    pista = "Pedido en un restaurante peruano. Platos de hoy: Chairito, Locro"
+
+    class Transcripciones:
+        def create(self, **kw):
+            return type("T", (), {"text": pista + ", Menú del día"})()
+
+    class Cliente:
+        def __init__(self, **kw):
+            self.audio = type("A", (), {"transcriptions": Transcripciones()})()
+
+    monkeypatch.setattr(openai, "OpenAI", Cliente)
+    with pytest.raises(voice.VozError) as e:
+        voice.transcribir(b"x", "a.webm", pista)
+    assert "Casi no te escuché" in e.value.mensaje_cliente

@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, NOMBRE_EMPAQUE, personaVozAMenu, soles, subtotalMenu } from '../api'
 import type { MenuCarrito, MenuHoy, Plato, VozItemResuelto, VozResultado } from '../api'
 
-const SILENCIO_MS = 2500
-const MAX_GRABACION_MS = 20_000
+// Pausa larga para pensar ("eh… y el otro…") sin que se corte; el botón
+// "Ya pedí" corta al toque (pedido del dueño tras las primeras pruebas)
+const SILENCIO_MS = 4500
+const MAX_GRABACION_MS = 40_000
 const UMBRAL_VOZ = 0.02 // RMS mínimo para considerar que está hablando
 
 interface Props {
@@ -265,7 +267,11 @@ export function PedidoPorVoz({ platos, menus, onContinuar, onUsarBotones, onCerr
               {personas.map((p, n) => {
                 const elegidos = p.menu.tiempos
                   .filter((t) => p.elecciones[t.orden] !== undefined && t.alternativas.length > 1)
-                  .map((t) => t.alternativas.find((a) => a.plato_id === p.elecciones[t.orden])?.nombre)
+                  .map((t) => {
+                    const nombre = t.alternativas.find((a) => a.plato_id === p.elecciones[t.orden])?.nombre
+                    const propio = p.empaques[t.orden]
+                    return propio ? `${nombre} (${NOMBRE_EMPAQUE[propio]})` : nombre
+                  })
                 const faltan = p.menu.tiempos
                   .filter((t) => p.elecciones[t.orden] === undefined && !p.omitidos.includes(t.orden))
                   .map((t) => t.rotulo)
