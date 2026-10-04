@@ -73,7 +73,8 @@ def transcribir(audio_bytes: bytes, nombre_archivo: str = "audio.webm",
         raise VozError("No te escuché bien, intenta de nuevo o usa los botones", str(e))
     # Con audio casi mudo (se cortó, nadie habló) el modelo a veces "repite"
     # la pista en vez de transcribir: eso no es un pedido
-    if not texto or (pista and texto[:40].lower() in pista.lower()):
+    eco = "platos de hoy" in texto.lower() or texto.lower().startswith("pedido en un restaurante")
+    if not texto or eco:
         raise VozError("Casi no te escuché. Habla fuerte y claro, o usa los botones.",
                        f"transcripción vacía o eco de la pista: {texto[:60]!r}")
     return texto
