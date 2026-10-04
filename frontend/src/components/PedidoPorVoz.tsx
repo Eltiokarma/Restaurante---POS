@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, NOMBRE_EMPAQUE, personaVozAMenu, soles, subtotalMenu } from '../api'
 import type { Bebida, MenuCarrito, MenuHoy, Plato, VozItemResuelto, VozResultado } from '../api'
 
-// Pausa larga para pensar ("eh… y el otro…") sin que se corte; el botón
-// "Ya pedí" corta al toque (pedido del dueño tras las primeras pruebas)
-const SILENCIO_MS = 5000
+// Lo normal es tocar "Ya pedí" al terminar (envía al toque, sin esperar
+// silencio); el corte por silencio es solo respaldo y largo, para que una
+// pausa pensando ("para la mesa 3… eh…") no corte el pedido
+const SILENCIO_MS = 8000
 const MAX_GRABACION_MS = 40_000
 const UMBRAL_VOZ = 0.02 // RMS mínimo para considerar que está hablando
 
@@ -268,7 +269,7 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
           <>
             <h2>🎤 Te escucho… di tu pedido</h2>
             <p className="texto-countdown">
-              Di tu pedido, por ejemplo:{' '}
+              Cuando termines, toca <strong>YA PEDÍ</strong>. Por ejemplo:{' '}
               {menus.length > 0
                 ? '“un menú con caldo y lomo, y otro sin sopa con pollo para llevar”.'
                 : '“dos lomos saltados y una chicha”.'}
@@ -276,8 +277,8 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
             <div className="voz-medidor">
               <div className="voz-medidor-nivel" style={{ width: `${Math.round(nivel * 100)}%` }} />
             </div>
-            <button className="boton-grande boton-confirmar" onClick={detener}>
-              ✔ Ya pedí
+            <button className="boton-grande boton-confirmar voz-ya-pedi" onClick={detener}>
+              ✔ YA PEDÍ
             </button>
           </>
         )}

@@ -307,7 +307,7 @@ def test_interpretar_con_openai_json_estricto(db, menu_voz, monkeypatch):
     # 500 sin caché × 0.10 + 1500 en caché × 0.01 + 200 × 0.50 (por millón)
     assert costo == pytest.approx((500 * 0.10 + 1500 * 0.01 + 200 * 0.50) / 1_000_000)
     assert llamadas["model"] == "gpt-6-luna"
-    assert llamadas["reasoning"] == {"effort": "medium"}
+    assert llamadas["reasoning"] == {"effort": "none"}
     formato = llamadas["text"]["format"]
     assert formato["type"] == "json_schema" and formato["strict"] is True
     assert "MENÚ id:" in llamadas["instructions"] and llamadas["input"] == "hola"

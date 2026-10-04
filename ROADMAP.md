@@ -631,7 +631,7 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       `OPENAI_API_KEY`). Transcripción `gpt-4o-mini-transcribe` (US$ 0.003/min) con los
       platos y sinónimos del día como pista de vocabulario; intérprete `gpt-6-luna`
       (US$ 0.10 / 0.50 por millón de tokens) por la Responses API con salida JSON
-      estricta y razonamiento `medium` (medido: low 7/8, medium 8/8 en frases reales, ~1 s más). Prompt real ≈2,000 tokens de entrada y ≈250 de
+      estricta y razonamiento `none` (medido con 9 frases reales y el vocabulario del local: 9/9 en 2–4 s; `medium` tardaba 8–10 s en pedidos largos). Prompt real ≈2,000 tokens de entrada y ≈250 de
       salida: ≈US$ 0.001 por pedido (100 pedidos/día ≈ US$ 2.30/mes). Se comparó contra
       Claude Opus 5.5 (≈US$ 0.022), Haiku 4.5 (≈0.004), Gemini Flash-Lite, DeepSeek Flash,
       Qwen Flash y Llama 4 Scout; los chinos salían ~US$ 1–4/mes más baratos pero con dos
