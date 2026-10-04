@@ -618,7 +618,11 @@ def interpretar_con_atajo(texto: str, contexto: dict, esfuerzo: str | None = Non
             # Las reglas no adivinan: si resolvieron, es seguro
             return {**resultado, "via": "reglas", "seguro": _hay_pedido(resultado)}, 0.0
     resultado, costo = interpretar(texto, contexto, esfuerzo)
-    return {**resultado, "via": "ia", "seguro": resultado.get("seguro", False) and _hay_pedido(resultado)}, costo
+    # La IA se dice "segura" aun repartiendo mal entre varias personas
+    # (medido: "4 menús… el pollo en tupper" sale con el pollo en bolsa y
+    # seguro=true). Con más de un grupo de personas siempre se verifica
+    seguro = resultado.get("seguro", False) and _hay_pedido(resultado) and len(resultado["personas"]) <= 1
+    return {**resultado, "via": "ia", "seguro": seguro}, costo
 
 
 def _hay_pedido(resultado: dict) -> bool:

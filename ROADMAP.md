@@ -673,6 +673,8 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       va directo a la ventana de cancelación (que sigue: se ve, se cancela o se vuelve a
       corregir). Solo con un pedido recién empezado; si ya había algo armado a mano, se
       verifica como siempre. Reemplaza la regla anterior "la voz nunca confirma sola".
+      La IA solo va directo con UN grupo de personas: repartiendo entre varias se dice
+      "segura" aun equivocándose (medido en producción), así que eso siempre se verifica.
 - [x] **Mesa sin letra**: "para la 14" (o "mesa 14") con 14 A y 14 B → la primera libre
       según la ocupación del día (a veces dos grupos se sientan en la misma mesa); todas
       ocupadas → sin mesa, la asigna caja. "Para la 7" sin decir "mesa" también cuenta.
