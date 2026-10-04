@@ -344,7 +344,8 @@ DESGLOSE O ADICIONAL (cuidado con el conector):
 - "Cuatro menús, uno para llevar" (coma o pausa, sin "y") = DESGLOSE: de esos cuatro, uno \
 para llevar y tres en mesa → 4 personas en total.
 - "Cuatro menús Y uno para llevar" ("y", "más", "aparte", "además") = ADICIONAL: cuatro \
-en mesa MÁS uno para llevar → 5 personas en total.
+en mesa MÁS uno para llevar → 5 personas en total. "Cuatro menús y dos para llevar" → 4 \
+en mesa + 2 para llevar = 6. La "y" SIEMPRE suma: nunca la leas como desglose.
 - Lo mismo con platos: "tres almuerzos, dos con causa" = de los tres, dos con causa; \
 "tres almuerzos y dos causas solas" = aparte.
 
