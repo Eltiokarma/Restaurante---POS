@@ -257,8 +257,8 @@ def _avisar_si_voz_mal_configurada() -> None:
         cfg = leer_config(db)
         if cfg["voz_habilitada"] and not claves_configuradas():
             logging.getLogger("uvicorn.error").warning(
-                "voz_habilitada está encendida pero faltan OPENAI_API_KEY / "
-                "ANTHROPIC_API_KEY en el .env: el botón de voz no aparecerá."
+                "voz_habilitada está encendida pero falta OPENAI_API_KEY "
+                "en el .env: el botón de voz no aparecerá."
             )
     finally:
         db.close()

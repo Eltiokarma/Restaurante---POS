@@ -3634,8 +3634,8 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
       </label>
       {config.voz_habilitada && !config.voz_disponible && (
         <p className="nota-admin nota-advertencia">
-          ⚠ La voz está encendida pero faltan las API keys (OPENAI_API_KEY y ANTHROPIC_API_KEY)
-          en el .env del servidor: el botón NO aparecerá en la terminal hasta configurarlas y
+          ⚠ La voz está encendida pero falta la API key (OPENAI_API_KEY)
+          en las variables del servidor: el botón NO aparecerá en la terminal hasta configurarla y
           reiniciar.
         </p>
       )}

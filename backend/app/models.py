@@ -572,7 +572,7 @@ CONFIG_DEFAULTS: dict[str, str] = {
     "impresora_puerto": "9100",
     "impresora_columnas": "42",
     # Kill switch del pedido por voz: apagado por defecto hasta validar la
-    # Fase 2 (además requiere OPENAI_API_KEY y ANTHROPIC_API_KEY en .env)
+    # Fase 2 (además requiere OPENAI_API_KEY en .env)
     "voz_habilitada": "0",
     # Si está en 1, no se pueden registrar ventas hasta abrir la caja del
     # día con su fondo inicial

@@ -7,6 +7,5 @@ pydantic>=2.6
 # sistema y sin esto ZoneInfo("America/Lima") falla
 tzdata>=2024.1
 # Pedido por voz (Fase 3): solo se usan si voz_habilitada está encendida
-anthropic>=1.11
-openai>=1.40
+openai>=3.20
 python-multipart>=0.0.9
