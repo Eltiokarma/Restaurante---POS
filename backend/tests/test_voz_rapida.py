@@ -182,3 +182,12 @@ def test_menu_y_segundo_solo_por_elegir(contexto):
 def test_falta_elegir_con_todo_elegido_va_a_la_ia(contexto):
     """"Una sopa y un locro, el segundo después": es una espera, no un hueco."""
     assert interpretar_rapido("un menú con sopa y locro, falta elegir", contexto) is None
+
+
+def test_el_segundo_es_de_las_mismas_personas(contexto):
+    """"Dos sopas para la mesa y el segundo para llevar": 2 almuerzos con la
+    sopa en mesa y el segundo (por elegir) en táper, no un segundo solo."""
+    r = interpretar_rapido("Dos sopas para la mesa y el segundo para llevar en tupper", contexto)
+    assert personas(r) == [(2, {1: CHAIRITO}, [], "taper", {1: "mesa"})]
+    r = interpretar_rapido("dos sopas para la mesa y los segundos de locro en tupper", contexto)
+    assert personas(r) == [(2, {1: CHAIRITO, 2: LOCRO}, [], "taper", {1: "mesa"})]

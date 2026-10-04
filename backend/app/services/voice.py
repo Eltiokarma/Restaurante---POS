@@ -322,6 +322,10 @@ NUNCA en "sin".
 menú, con la entrada en "sin". Si no dice cuál segundo, queda por elegir. Un segundo solo \
 NUNCA se junta con los almuerzos.
 - "Solo la sopa", "una sopa sola", "solo entrada" = una persona con el segundo en "sin".
+- "EL segundo" / "LOS segundos" (con artículo y sin "solo") es el segundo de las MISMAS \
+personas que ya dijo, NO un segundo solo aparte: "dos sopas para la mesa y el segundo para \
+llevar" = 2 personas (una con cantidad 2) con sopa en mesa y el segundo en taper (empaque \
+de esa elección), segundo por elegir si no lo nombró o no está hoy.
 - Para comer en el local es lo normal: si NO dice "para llevar", "llevar", "táper", \
 "tupper", "bolsa" ni "lonchera", el empaque es mesa. Cuando lo dice, aplica SOLO a la \
 persona (o al plato) de la que lo dijo, nunca a todo el pedido: "tres almuerzos y un \

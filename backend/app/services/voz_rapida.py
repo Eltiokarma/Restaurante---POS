@@ -178,7 +178,10 @@ class _Lexico:
             ("y",): ("Y",), (",",): ("SEP",),
             # "de entrada causa y de segundo locro": el rótulo no cambia nada
             ("de", "entrada"): ("NADA",), ("entrada",): ("NADA",),
-            ("de", "segundo"): ("NADA",), ("segundo",): ("NADA",),
+            ("de", "segundo"): ("NADA",),
+            # "dos sopas para la mesa y EL segundo para llevar": el segundo de
+            # esas mismas personas (no un segundo solo aparte)
+            ("segundo",): ("SEGUNDO_REF",), ("segundos",): ("SEGUNDO_REF",),
             # "Falta elegir": lo que no nombró queda SIN ELEGIR (sale así en
             # la comanda y se decide luego); "un menú con sopa, falta elegir"
             ("falta", "elegir"): ("POR_ELEGIR",), ("falta", "escoger"): ("POR_ELEGIR",),
@@ -364,6 +367,11 @@ def interpretar_rapido(texto: str, contexto: dict) -> dict | None:
             return None  # "de litro" suelto, sin marca
         elif tipo == "ENTREGA":
             entrega = token[1]
+        elif tipo == "SEGUNDO_REF":
+            if (actual is not None and actual["clase"] == "almuerzo"
+                    and set(actual["platos"]) == {lexico.entrada}):
+                actual["menu"] = True
+                actual["ultimo"] = lexico.segundo  # el empaque que sigue es del segundo
         elif tipo == "POR_ELEGIR":
             # Aplica a la persona que se venía dictando: es almuerzo y lo no
             # nombrado queda por elegir. Si ya tenía todo, el "después" es
