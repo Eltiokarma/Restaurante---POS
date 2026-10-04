@@ -334,11 +334,14 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
                       <span className="voz-item-nombre">
                         {p.nombre_persona ? `${p.nombre_persona} · ` : ''}{elegidos.join(' + ') || p.menu.nombre}
                       </span>
+                      {/* Para llevar a la vista: en gris chiquito se perdía */}
+                      {p.empaque !== 'mesa' && (
+                        <span className="voz-persona-empaque">{NOMBRE_EMPAQUE[p.empaque]}</span>
+                      )}
                       <span className="voz-item-precio">
                         {[
                           p.menu.nombre,
                           ...sin.map((r) => `sin ${r.toLowerCase()}`),
-                          p.empaque !== 'mesa' ? NOMBRE_EMPAQUE[p.empaque] : '',
                           ...p.agregados.map((a) => `+${a.cantidad > 1 ? `${a.cantidad} ` : ''}${a.agregado.nombre}`),
                           p.nota,
                         ].filter(Boolean).join(' · ')}

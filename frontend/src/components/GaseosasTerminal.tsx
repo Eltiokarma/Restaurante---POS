@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { soles } from '../api'
 import type { Bebida } from '../api'
 
@@ -10,10 +11,25 @@ interface Props {
 /** Gaseosas en la terminal (pedido del dueño): la lista fija de caja,
  *  con − / + por botella. No pasan por cocina; salen en la comanda. */
 export function GaseosasTerminal({ lista, enCarrito, onCambiar }: Props) {
+  // Plegada como la mesa (pedido del dueño): nueve tarjetas comían la
+  // pantalla del pedido; lo elegido se ve en la cabecera sin abrirla
+  const [abierto, setAbierto] = useState(false)
   if (lista.length === 0) return null
+  const elegidas = enCarrito.filter((x) => x.cantidad > 0)
   return (
-    <section className="gaseosas-terminal" aria-label="Gaseosas">
-      <h2 className="gaseosas-titulo">🥤 Gaseosas</h2>
+    <section className="selector-servicio pliegue-extras gaseosas-terminal" aria-label="Gaseosas">
+      <button className="pliegue-cabecera" onClick={() => setAbierto((v) => !v)} aria-expanded={abierto}>
+        <span className="pliegue-titulo">
+          🥤 Gaseosas <small className="titulo-opcional">(opcional)</small>
+        </span>
+        {elegidas.length > 0 && (
+          <span className="pliegue-resumen">
+            {elegidas.map((x) => `${x.cantidad} ${x.bebida.nombre}`).join(' + ')}
+          </span>
+        )}
+        <span className="tarjeta-menu-flecha">{abierto ? '▲' : '▼'}</span>
+      </button>
+      {abierto && (
       <div className="gaseosas-grilla">
         {lista.map((b) => {
           const cantidad = enCarrito.find((x) => x.bebida.id === b.id)?.cantidad ?? 0
@@ -45,6 +61,7 @@ export function GaseosasTerminal({ lista, enCarrito, onCambiar }: Props) {
           )
         })}
       </div>
+      )}
     </section>
   )
 }
