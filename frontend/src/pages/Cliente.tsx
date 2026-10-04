@@ -60,7 +60,7 @@ export function Cliente() {
   const [guardando, setGuardando] = useState(false)
   const [ordenFinal, setOrdenFinal] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
   const [vozAbierta, setVozAbierta] = useState(false)
-  const [entrega, setEntrega] = useState<Entrega>('junto')
+  const [entrega, setEntrega] = useState<Entrega>('separado')
   // Mesa elegida al tomar el pedido (opcional): si no eligen, el ticket
   // sale "SIN MESA" y en caja la asignan después
   const [mesas, setMesas] = useState<MesaEstado[]>([])
@@ -176,7 +176,7 @@ export function Cliente() {
       setErrorConexion('')
       setMensajeInicio(mensaje)
       setVozAbierta(false)
-      setEntrega('junto')
+      setEntrega('separado')
       setMesasElegidas([])
       setCopias(1)
       setMostrarMesas(false)
