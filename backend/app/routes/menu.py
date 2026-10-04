@@ -136,7 +136,42 @@ def menu_de_hoy(db: Session = Depends(get_db)):
         "categorias": CATEGORIAS,
         "platos": [PlatoOut.model_validate(p).model_dump() for p in platos],
         "menus": _menus_activos(db),
+        # Cuántos quedan de las entradas y segundos con porciones contadas
+        "stock": stock_de_hoy(db),
     }
+
+
+def stock_de_hoy(db: Session) -> list[dict]:
+    """Entradas y segundos de hoy con porciones puestas por la caja:
+    cuántas había, cuántas se vendieron (órdenes de hoy no anuladas) y
+    cuántas quedan. Puede quedar en negativo: es aviso, no candado."""
+    from sqlalchemy import func
+
+    from ..models import Orden, OrdenItem
+
+    hoy = hoy_lima()
+    platos = db.scalars(
+        select(Plato).where(
+            Plato.activo_hoy == True,  # noqa: E712
+            Plato.categoria.in_(["entrada", "fondo"]),
+        ).order_by(Plato.categoria, Plato.nombre)
+    ).all()
+    vendidos = dict(db.execute(
+        select(OrdenItem.plato_id, func.sum(OrdenItem.cantidad))
+        .join(Orden, OrdenItem.orden_id == Orden.id)
+        .where(Orden.fecha == hoy, Orden.estado != "anulada", OrdenItem.es_cargo == False)  # noqa: E712
+        .group_by(OrdenItem.plato_id)
+    ).all())
+    salida = []
+    for p in platos:
+        stock = p.stock_hoy if p.stock_fecha == hoy else None
+        vendido = int(vendidos.get(p.id) or 0)
+        salida.append({
+            "plato_id": p.id, "nombre": p.nombre, "categoria": p.categoria,
+            "stock": stock, "vendidos": vendido,
+            "quedan": None if stock is None else stock - vendido,
+        })
+    return salida
 
 
 @router.put("/today", dependencies=[Depends(requiere_admin)])
@@ -641,6 +676,7 @@ def menu_del_dia_para_caja(db: Session = Depends(get_db)):
     return {
         "plantillas": plantillas_out,
         "guardados": [_guardado_a_dict(g, platos) for g in guardados],
+        "stock": stock_de_hoy(db),
     }
 
 
@@ -653,6 +689,23 @@ def plato_para_hoy(plato_id: int, payload: ActivoHoyIn, db: Session = Depends(ge
     plato.activo_hoy = payload.activo_hoy
     if plato.activo_hoy:
         plato.ultima_vez_activo = hoy_lima()
+    db.commit()
+    return menu_del_dia_para_caja(db)
+
+
+class StockIn(BaseModel):
+    # None = dejar de contar ese plato hoy
+    stock: int | None = Field(default=None, ge=0, le=999)
+
+
+@router.patch("/platos/{plato_id}/stock")
+def stock_del_plato(plato_id: int, payload: StockIn, db: Session = Depends(get_db)):
+    """La caja pone cuántas porciones hay hoy de un plato (sin admin)."""
+    plato = db.get(Plato, plato_id)
+    if plato is None:
+        raise HTTPException(status_code=404, detail="Plato no encontrado")
+    plato.stock_hoy = payload.stock
+    plato.stock_fecha = hoy_lima() if payload.stock is not None else None
     db.commit()
     return menu_del_dia_para_caja(db)
 

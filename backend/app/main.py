@@ -224,6 +224,11 @@ def _migrar(engine_) -> None:
         if columnas_ord and "pago_al_pedir" not in columnas_ord:
             conn.execute(text("ALTER TABLE ordenes ADD COLUMN pago_al_pedir VARCHAR(10)"))
             conn.commit()
+        columnas_pl = [fila[1] for fila in conn.execute(text("PRAGMA table_info(platos)"))]
+        if columnas_pl and "stock_hoy" not in columnas_pl:
+            conn.execute(text("ALTER TABLE platos ADD COLUMN stock_hoy INTEGER"))
+            conn.execute(text("ALTER TABLE platos ADD COLUMN stock_fecha DATE"))
+            conn.commit()
 
 
 def _sembrar_agregados(engine_) -> None:

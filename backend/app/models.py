@@ -41,6 +41,11 @@ class Plato(Base):
     # Cuántas porciones entran por tanda (sartén/olla): una tanda de 9
     # chuletas con capacidad 6 se muestra "6 + 3". 0 = sin límite.
     capacidad_tanda: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Porciones preparadas HOY (las pone la caja). Solo vale si stock_fecha
+    # es hoy: al día siguiente vuelve a "sin contar". Quedan = esto − lo
+    # vendido hoy; es aviso, nunca bloquea la venta (el conteo puede fallar)
+    stock_hoy: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stock_fecha: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
 
