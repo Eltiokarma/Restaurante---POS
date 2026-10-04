@@ -666,6 +666,16 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       entiende o algo que pide criterio ("uno con… y el otro…", "después", "sin cebolla",
       correcciones, mesa ambigua, varios menús) → la IA como siempre. Mismo formato y
       misma validación que la IA; el log guarda `via: reglas|ia`.
+- [x] **Sin dudas, directo a cocina** (decisión del dueño): lo que importa es avisar a
+      cocina al toque con la info más certera posible; corregir después es barato
+      ("✏️ Modificar un pedido", o lapicero). Si el pedido salió por reglas, o la IA marca
+      `seguro` (no adivinó nada y todo existe hoy), la terminal salta "¿Eso pediste?" y
+      va directo a la ventana de cancelación (que sigue: se ve, se cancela o se vuelve a
+      corregir). Solo con un pedido recién empezado; si ya había algo armado a mano, se
+      verifica como siempre. Reemplaza la regla anterior "la voz nunca confirma sola".
+- [x] **Mesa sin letra**: "para la 14" (o "mesa 14") con 14 A y 14 B → la primera libre
+      según la ocupación del día (a veces dos grupos se sientan en la misma mesa); todas
+      ocupadas → sin mesa, la asigna caja. "Para la 7" sin decir "mesa" también cuenta.
 - [ ] **Antes de encenderla**: correr el banco de pruebas (Fase 2) con audios reales del
       local y pegar el prompt refinado + sinónimos en los marcadores `TODO` de
       `backend/app/services/voice.py`. Umbral acordado: >85% integra; 70–85% con

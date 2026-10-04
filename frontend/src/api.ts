@@ -678,6 +678,8 @@ export interface VozRespuesta {
   mesa: { id: number; nombre: string } | null
   no_encontrados: string[]
   notas: string
+  // Sin dudas (reglas, o la IA no adivinó nada): va directo a la ventana
+  seguro?: boolean
   latencia_ms: number
 }
 

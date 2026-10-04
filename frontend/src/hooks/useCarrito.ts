@@ -32,6 +32,16 @@ function repartirEnOrden<T>(total: number, cuotas: [T, number][], resto: T): T[]
 // ventana de cancelación; recién ahí se persiste en el backend.
 // Tiene dos tipos de línea: platos a la carta (items) y menús encadenados
 // ya armados (menus), cada uno con sus elecciones y porciones extra.
+/** La persona recién puesta, sin nada tocado (la que arranca el pedido). */
+export function menuVacio(m: MenuCarrito): boolean {
+  const eligioAlgo = m.menu.tiempos.some(
+    (t) => t.alternativas.length > 1 && m.elecciones[t.orden] !== undefined,
+  )
+  return !(eligioAlgo || m.omitidos.length > 0 || m.extras.length > 0 || m.agregados.length > 0
+    || (m.nombre_persona ?? '').trim() !== '' || m.nota.trim() !== ''
+    || m.empaque !== 'mesa' || Object.keys(m.empaques).length > 0)
+}
+
 export function useCarrito() {
   const [items, setItems] = useState<ItemCarrito[]>([])
   const [menus, setMenus] = useState<MenuCarrito[]>([])
@@ -455,14 +465,7 @@ export function useCarrito() {
   // (sin plato elegido donde había opción, sin nombre, nota ni cambios)
   // se van, para que lo dictado no quede junto a una "Persona 1" vacía
   const quitarMenusVacios = useCallback(() => {
-    setMenus((prev) => prev.filter((m) => {
-      const eligioAlgo = m.menu.tiempos.some(
-        (t) => t.alternativas.length > 1 && m.elecciones[t.orden] !== undefined,
-      )
-      return eligioAlgo || m.omitidos.length > 0 || m.extras.length > 0 || m.agregados.length > 0
-        || (m.nombre_persona ?? '').trim() !== '' || m.nota.trim() !== ''
-        || m.empaque !== 'mesa' || Object.keys(m.empaques).length > 0
-    }))
+    setMenus((prev) => prev.filter((m) => !menuVacio(m)))
   }, [])
 
   const vaciar = useCallback(() => {

@@ -24,17 +24,22 @@ interface Props {
   onContinuar: (items: VozItemResuelto[], menus: MenuCarrito[], extras: ExtrasVoz) => void
   // "Usar los botones mejor": suma lo resuelto y vuelve al menú táctil
   onUsarBotones: (items: VozItemResuelto[], menus: MenuCarrito[], extras: ExtrasVoz) => void
+  // Pedido entendido sin dudas: se salta "¿Eso pediste?" y va directo a la
+  // ventana de cancelación. Sin esta prop, siempre se verifica.
+  onDirecto?: (items: VozItemResuelto[], menus: MenuCarrito[], extras: ExtrasVoz) => void
   onCerrar: () => void
 }
 
 type Fase = 'grabando' | 'procesando' | 'verificar' | 'error'
 
 /**
- * Flujo de voz. Regla de oro: la voz NUNCA confirma sola — llena esta
- * pantalla de verificación y los dedos deciden. Todo lo posterior
- * (resumen, ventana de 30s, ticket, cocina) es el flujo táctil de siempre.
+ * Flujo de voz. Con dudas, llena esta pantalla de verificación y los dedos
+ * deciden. Sin dudas (pedido simple por reglas, o la IA no adivinó nada) va
+ * directo a la ventana de cancelación: lo urgente es que cocina se entere,
+ * y lo que salga mal se corrige después ("✏️ Modificar un pedido"). Todo lo
+ * posterior (ventana, ticket, cocina) es el flujo táctil de siempre.
  */
-export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsarBotones, onCerrar }: Props) {
+export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsarBotones, onDirecto, onCerrar }: Props) {
   const [fase, setFase] = useState<Fase>('grabando')
   const [nivel, setNivel] = useState(0)
   const [errorMsg, setErrorMsg] = useState('')
@@ -56,8 +61,10 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
   // sola" cortada y la nueva pedía "habla más fuerte")
   const menusRef = useRef(menus)
   const gaseosasRef = useRef(gaseosasLista)
+  const onDirectoRef = useRef(onDirecto)
   menusRef.current = menus
   gaseosasRef.current = gaseosasLista
+  onDirectoRef.current = onDirecto
 
   const detener = useCallback(() => {
     const media = mediaRef.current
@@ -102,6 +109,14 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
         const bebida = gaseosasRef.current.find((b) => b.id === g.bebida_id)
         if (bebida) dictadas.push({ bebida, cantidad: g.cantidad })
         else perdidas.push(g.nombre)
+      }
+      const directo = onDirectoRef.current
+      const todoEntendido = r.no_encontrados.length === 0 && perdidas.length === 0
+      if (r.seguro && directo && todoEntendido && (armadas.length > 0 || r.items_resueltos.length > 0)) {
+        resultadoEnviado.current = true
+        api.vozResultado(r.log_id, 'aceptado').catch(() => {})
+        directo(r.items_resueltos, armadas, { gaseosas: dictadas, mesa: r.mesa ?? null })
+        return
       }
       setGaseosas(dictadas)
       setMesa(r.mesa ?? null)

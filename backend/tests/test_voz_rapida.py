@@ -109,7 +109,7 @@ def test_de_entrada_y_de_segundo(contexto):
     "un almuerzo con causa y locro sin cebolla",
     "un lomo... no, mejor un pollo",
     "dos sopas y un locro",  # ¿cómo se emparejan? criterio
-    "para la mesa 3, dos almuerzos",  # 3A o 3B
+    "para la mesa 9, dos almuerzos con causa y bistec",  # no existe
     "un almuerzo con ceviche y pollo",  # "ceviche" no está hoy
     "dos almuerzos con chairito y causa",  # ¿uno de cada uno?
     "un almuerzo para Juan con causa y bistec",
@@ -127,3 +127,18 @@ def test_mismo_plato_nombrado_dos_veces_seguidas(contexto):
     """"Dos locros de pecho": "locros" y "pecho" son el mismo plato."""
     r = interpretar_rapido("Dame dos sopas, dos locros de pecho para la mesa.", contexto)
     assert personas(r) == [(2, {1: CHAIRITO, 2: LOCRO}, [], "mesa", {})]
+
+
+def test_mesa_sin_letra_pasa_el_numero(contexto):
+    """"Mesa 3" con 3A y 3B: va solo el número y el depurado elige la libre."""
+    r = interpretar_rapido("un menú para la 3 con sopa", contexto)
+    assert r["mesa"] == "3"
+    assert personas(r) == [(1, {1: CHAIRITO}, [], "mesa", {})]  # segundo por elegir
+    r = interpretar_rapido("para la mesa 3, dos almuerzos con causa y bistec", contexto)
+    assert r["mesa"] == "3"
+
+
+def test_para_la_numero_es_mesa(contexto):
+    r = interpretar_rapido("un almuerzo con causa y locro para la 2 be", contexto)
+    assert r["mesa"] == "2 B"
+    assert personas(r) == [(1, {1: CAUSA, 2: LOCRO}, [], "mesa", {})]
