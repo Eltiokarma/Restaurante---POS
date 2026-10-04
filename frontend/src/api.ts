@@ -560,8 +560,8 @@ export interface FlujoFila {
   compras: number
 }
 
-// Bebida embotellada de la lista fija (Inca Kola 500 ml…): no es un
-// plato, se agrega desde caja a una orden ya creada
+// Bebida embotellada de la lista fija (Inca Kola personal…): no es un
+// plato; se pide con el pedido (terminal, voz) o se suma después (caja)
 export interface Bebida {
   id: number
   nombre: string
@@ -635,13 +635,25 @@ export interface VozPersona {
   precio: number
   cantidad: number
   // empaque: solo si ESE plato va distinto que la persona ("sopa en bolsa")
-  elecciones: { tiempo_orden: number; rotulo: string; plato_id: number; nombre: string; empaque: Empaque | null }[]
+  // espera: ese plato sale después ("el segundo más tarde")
+  elecciones: {
+    tiempo_orden: number; rotulo: string; plato_id: number; nombre: string
+    empaque: Empaque | null; espera: boolean
+  }[]
   sin: number[]
   sin_rotulos: string[]
   empaque: Empaque
   entrega: Entrega | null
   nombre: string
   nota: string
+  agregados: { agregado_id: number; cantidad: number; nombre: string }[]
+}
+
+export interface VozGaseosa {
+  bebida_id: number
+  cantidad: number
+  nombre: string
+  precio: number
 }
 
 export interface VozRespuesta {
@@ -649,6 +661,8 @@ export interface VozRespuesta {
   transcripcion: string
   items_resueltos: VozItemResuelto[]
   personas: VozPersona[]
+  gaseosas: VozGaseosa[]
+  mesa: { id: number; nombre: string } | null
   no_encontrados: string[]
   notas: string
   latencia_ms: number
@@ -806,31 +820,37 @@ export function lineaEntrega(orden: OrdenOut): { texto: string; separado: boolea
   return { texto: `${juntos} JUNTO / ${entregas.length - juntos} POR TIEMPOS`, separado: true }
 }
 
-/** Lo que viaja al backend por cada menú del carrito. */
 /** La persona dictada como línea del carrito. Un tiempo con una sola
  *  opción entra incluido (igual que al tocar "+" en la terminal); los que
  *  no nombró quedan sin elegir para que el cliente los complete. */
 export function personaVozAMenu(p: VozPersona, menu: MenuHoy): MenuCarrito {
   const elecciones: Record<number, number> = {}
   const empaques: Partial<Record<number, Empaque>> = {}
+  const espera: number[] = []
   for (const t of menu.tiempos) {
     if (p.sin.includes(t.orden)) continue
     const dicho = p.elecciones.find((e) => e.tiempo_orden === t.orden)
     if (dicho && t.alternativas.some((a) => a.plato_id === dicho.plato_id)) {
       elecciones[t.orden] = dicho.plato_id
       if (dicho.empaque && dicho.empaque !== p.empaque) empaques[t.orden] = dicho.empaque
+      if (dicho.espera) espera.push(t.orden)
     } else if (t.alternativas.length === 1) {
       elecciones[t.orden] = t.alternativas[0].plato_id
     }
   }
   return {
     menu, cantidad: p.cantidad, elecciones, extras: [],
-    omitidos: p.sin.filter((o) => menu.tiempos.some((t) => t.orden === o && !t.obligatorio)),
-    agregados: [], empaque: p.empaque, empaques, nota: p.nota,
-    entrega: p.entrega ?? undefined, nombre_persona: p.nombre,
+    omitidos: p.sin.filter((o) => menu.tiempos.some((t) => t.orden === o)),
+    agregados: (p.agregados ?? []).flatMap((a) => {
+      const agregado = menu.agregados.find((x) => x.id === a.agregado_id)
+      return agregado ? [{ agregado, cantidad: a.cantidad }] : []
+    }),
+    empaque: p.empaque, empaques, nota: p.nota,
+    entrega: p.entrega ?? undefined, nombre_persona: p.nombre, espera,
   }
 }
 
+/** Lo que viaja al backend por cada menú del carrito. */
 export function menuAPayload(m: MenuCarrito): MenuOrdenIn {
   return {
     menu_id: m.menu.id, cantidad: m.cantidad, elecciones: m.elecciones,
@@ -858,11 +878,12 @@ export const api = {
     entrega: Entrega = 'junto',
     menus: MenuOrdenIn[] = [],
     copias = 1,
+    bebidas: { bebida_id: number; cantidad: number }[] = [],
   ) =>
     request<{ orden: OrdenOut; local: DatosLocal }>('/api/orders', {
       method: 'POST',
       body: JSON.stringify({
-        items, menus, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega, copias,
+        items, menus, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega, copias, bebidas,
       }),
     }),
 
