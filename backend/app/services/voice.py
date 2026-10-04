@@ -304,6 +304,31 @@ GASEOSAS (van en "gaseosas", nunca en items):
 MESAS del local (para "mesa"):
 {mesas_texto}
 
+CÓMO HABLAN LOS CLIENTES (vocabulario del local):
+- "Almuerzo", "menú", "un completo" = UNA persona con entrada (o sopa) Y segundo. Si no \
+dice cuál entrada o cuál segundo, ese tiempo queda por elegir (fuera de "elecciones"), \
+NUNCA en "sin".
+- "Segundo solo", "solo segundo", "un segundo nomás" = UNA persona APARTE, del mismo \
+menú, con la entrada en "sin". Si no dice cuál segundo, queda por elegir. Un segundo solo \
+NUNCA se junta con los almuerzos.
+- "Solo la sopa", "una sopa sola", "solo entrada" = una persona con el segundo en "sin".
+- Para comer en el local es lo normal: si NO dice "para llevar", "llevar", "táper", \
+"tupper", "bolsa" ni "lonchera", el empaque es mesa. Cuando lo dice, aplica SOLO a la \
+persona (o al plato) de la que lo dijo, nunca a todo el pedido: "tres almuerzos y un \
+segundo solo para llevar" = los tres almuerzos en mesa y SOLO el segundo solo en taper.
+  "Para llevar" o "en táper"/"tupper" → taper; "en bolsa" → bolsa; "en lonchera" → lonchera.
+
+EJEMPLO: "Dame tres almuerzos, un segundo solo. El segundo solo para llevar. Los tres \
+almuerzos van a ser dos sopas, una causa y de segundos ahorita te digo" →
+  personas = [
+    {{cantidad 2, elecciones: entrada=sopa, empaque mesa}}   (segundo por elegir)
+    {{cantidad 1, elecciones: entrada=causa, empaque mesa}}  (segundo por elegir)
+    {{cantidad 1, elecciones: ninguna, sin: [entrada], empaque taper}}  (el segundo solo)
+  ]  → 4 personas en total: 3 almuerzos + 1 segundo solo.
+
+ANTES DE RESPONDER, CUENTA: la suma de las cantidades de "personas" debe ser igual a los \
+almuerzos/menús que pidió MÁS los segundos solos y sopas solas. Si no cuadra, revisa.
+
 CÓMO ARMAR EL PEDIDO:
 - Cada persona es un elemento de "personas" con el menu_id. "Dos menús, uno con caldo y \
 lomo y otro con ensalada y ají de gallina" son DOS personas. Personas idénticas pueden ir \
@@ -311,7 +336,7 @@ juntas con cantidad ("tres menús con sopa y pollo" = una persona con cantidad 3
 - Si nombra platos de entrada o segundo, eso es un menú aunque no diga la palabra \
 "menú": "un caldo y un lomo" = 1 persona con esa entrada y ese segundo. Una entrada y un \
 segundo forman UNA persona, en el orden en que los dijo: NUNCA hagas una persona solo con \
-entradas y otra solo con segundos.
+entradas y otra solo con segundos (salvo que diga "segundo solo" o "sopa sola").
 - Mismas cantidades se emparejan: "tres sopas en bolsa y tres lomos en táper" = 3 personas \
 (una con cantidad 3), cada una con sopa y lomo; la sopa con empaque bolsa y el lomo con \
 empaque taper. "Dos sopas y un lomo" = 2 personas: una con sopa y lomo, otra solo con sopa.
@@ -319,14 +344,12 @@ empaque taper. "Dos sopas y un lomo" = 2 personas: una con sopa y lomo, otra sol
 va en no_encontrados.
 - En "elecciones" pon SOLO los tiempos que el cliente nombró, con el plato_id de ESE \
 tiempo. Lo que no dijo se deja fuera: el cliente lo elige después en la pantalla.
-- "Sin sopa", "sin entrada", "solo segundo", "solo la sopa" → el tiempo que no quiere va \
-en "sin" ("solo segundo" = sin la entrada; "solo la sopa" = sin el segundo). Que no lo \
-nombre NO es quitarlo: eso queda por elegir.
+- "Sin sopa", "sin entrada" → el tiempo que no quiere va en "sin". Que no lo nombre NO es \
+quitarlo: eso queda por elegir.
 - Si hay un solo menú hoy, usa ese. Si hay varios y no queda claro cuál, elige el que \
 tenga los platos que nombró y anota la duda en notas.
-- Empaque de la persona: "para llevar", "en táper" → taper; "en bolsa" → bolsa; "en lonchera" → \
-lonchera; si no dice nada o "para comer acá" → mesa. Si un plato va distinto que el \
-resto de esa persona, ponlo en el empaque de esa elección; si no, "igual".
+- Empaque (ver arriba): por persona, mesa salvo que lo diga para ESA persona. Si un plato \
+va distinto que el resto de esa persona, ponlo en el empaque de esa elección; si no, "igual".
 - Entrega: "todo junto", "junto" → junto; "por tiempos", "primero la sopa", "separado" \
 → separado; si no lo dice → auto.
 - Nombre: "uno para Juan", "el de María" → nombre de esa persona; si no, vacío.
@@ -358,7 +381,7 @@ otro plato.
 Usa siempre los id numéricos exactos de arriba."""
 
 
-def interpretar(texto: str, contexto: dict) -> tuple[dict, float | None]:
+def interpretar(texto: str, contexto: dict, esfuerzo: str | None = None) -> tuple[dict, float | None]:
     """Interpreta la transcripción. Devuelve (resultado, costo_usd_estimado)."""
     import openai
     from openai import OpenAI
@@ -371,7 +394,7 @@ def interpretar(texto: str, contexto: dict) -> tuple[dict, float | None]:
             instructions=construir_system(contexto),
             input=texto,
             text={"format": FORMATO_PEDIDO},
-            reasoning={"effort": ESFUERZO_INTERPRETE},
+            reasoning={"effort": esfuerzo or ESFUERZO_INTERPRETE},
             max_output_tokens=4000,
             prompt_cache_key="voz-pedido",
             store=False,

@@ -3,6 +3,7 @@
 Las API keys viven en el .env del backend; el frontend nunca las ve.
 """
 import json
+import time
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -85,6 +86,8 @@ async def pedido_por_voz(
 async def diagnostico_de_voz(
     texto: str = Form("una sopa con lomo"),
     audio: UploadFile | None = File(None),
+    # Para comparar sin redesplegar: none | low | medium | high
+    esfuerzo: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     """Prueba cada paso por separado y devuelve el error REAL de OpenAI
@@ -109,7 +112,9 @@ async def diagnostico_de_voz(
         except voice.VozError as e:
             pasos["transcripcion"] = {"ok": False, "error": str(e)}
     try:
-        resultado, costo = voice.interpretar(texto, contexto)
+        inicio = time.perf_counter()
+        resultado, costo = voice.interpretar(texto, contexto, esfuerzo)
+        pasos["latencia_interprete_ms"] = round((time.perf_counter() - inicio) * 1000)
         pasos["interpretacion"] = {"ok": True, "texto": texto, "resultado": resultado, "costo_usd": costo}
     except voice.VozError as e:
         pasos["interpretacion"] = {"ok": False, "texto": texto, "error": str(e)}
