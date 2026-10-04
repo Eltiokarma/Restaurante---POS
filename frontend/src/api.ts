@@ -810,9 +810,16 @@ export function menuConAlMomento(m: MenuCarrito): boolean {
   )
 }
 
+/** Por defecto la comanda sale POR TIEMPOS; "todo junto" es lo especial
+ *  y lo de siempre para llevar (pedido del dueño): sin elegir a mano, junto
+ *  solo si todo lo de la persona va en táper, bolsa o lonchera. */
 export function entregaDeMenu(m: MenuCarrito): Entrega {
   if (menuConAlMomento(m)) return 'separado'
-  return m.entrega ?? 'junto'
+  if (m.entrega) return m.entrega
+  // Los tiempos de una sola opción (el refresco) no deciden
+  const decisivos = m.menu.tiempos.filter((t) => t.alternativas.length > 1 && !m.omitidos.includes(t.orden))
+  const empaques = (decisivos.length > 0 ? decisivos : m.menu.tiempos).map((t) => m.empaques[t.orden] ?? m.empaque)
+  return empaques.every((e) => e !== 'mesa') ? 'junto' : 'separado'
 }
 
 /** La entrega en grande (ticket y cocina). Cada persona (menú) puede

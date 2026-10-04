@@ -499,8 +499,10 @@ export function Caja() {
         undefined,
         'tactil',
         mesasNuevoPedido,
-        // La de la orden rige para lo suelto; cada menú lleva la suya
-        hayAlMomento ? 'separado' : 'junto',
+        // La de la orden rige para lo suelto; cada menú lleva la suya.
+        // Por tiempos salvo que todo lo suelto sea para llevar
+        !hayAlMomento && carrito.items.length > 0 && carrito.items.every((i) => i.empaque !== 'mesa')
+          ? 'junto' : 'separado',
         carrito.menus.map(menuAPayload),
         copias,
       )

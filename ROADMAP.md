@@ -682,8 +682,12 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       elegir", "ahorita te digo" dejan SIN ELEGIR lo no nombrado de esa persona (con la
       sopa dicha, el segundo); con todo ya elegido es una espera → IA.
 - [x] **Falta elegir en recuadro**: en la comanda (ESC/POS y HTML) lo que falta elegir
-      sale en un rectángulo grueso con "FALTA ELEGIR / NO PREPARAR", para que en hora
-      punta no se lea como un plato más.
+      sale en un rectángulo grueso con "SEGUNDO / FALTA ELEGIR" (sin "no preparar":
+      confundía), para que en hora punta no se lea como un plato más. El refresco del
+      menú tampoco sale en la comanda HTML (la térmica ya lo omitía).
+- [x] **Entrega por defecto: POR TIEMPOS** (decisión del dueño). "Todo junto" es lo
+      especial y lo de siempre para llevar: sin elegirlo a mano, una persona sale junto
+      solo si todo lo suyo va en táper/bolsa/lonchera (el refresco no decide).
 - [ ] **Antes de encenderla**: correr el banco de pruebas (Fase 2) con audios reales del
       local y pegar el prompt refinado + sinónimos en los marcadores `TODO` de
       `backend/app/services/voice.py`. Umbral acordado: >85% integra; 70–85% con

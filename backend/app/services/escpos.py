@@ -161,7 +161,7 @@ def render_orden(
     for (rotulo, persona), veces in pendientes_por_rotulo.items():
         cuantos = f"{veces} " if veces > 1 else ""
         de_quien = f"({persona})" if persona else ""
-        partes.append(_recuadro([f"{cuantos}{rotulo}", "FALTA ELEGIR", de_quien, "NO PREPARAR"], columnas))
+        partes.append(_recuadro([f"{cuantos}{rotulo}", "FALTA ELEGIR", de_quien], columnas))
     if sin_por_rotulo or pendientes_por_rotulo:
         partes.append(_texto(""))
 

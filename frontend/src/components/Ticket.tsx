@@ -137,12 +137,12 @@ function TicketCuerpo({ orden, local, id }: Props & { id?: string }) {
                       <strong>{menu.cantidad > 1 ? `${menu.cantidad} ` : ''}{rotulo.toUpperCase()}</strong>
                       <span>FALTA ELEGIR</span>
                       {menu.nombre_persona && <span>({menu.nombre_persona.toUpperCase()})</span>}
-                      <small>NO PREPARAR</small>
                     </div>
                   </td>
                 </tr>
               ))}
-              {menu.items.map((item, i) => (
+              {/* El refresco del menú no pasa por cocina: no va en la comanda */}
+              {menu.items.filter((item) => item.categoria !== 'bebida').map((item, i) => (
                 <tr key={`menu-${m}-item-${i}`} className={`ticket-item-tiempo ${item.es_agregado ? 'ticket-item-agregado' : ''}`}>
                   <td>
                     {item.es_agregado ? `** +${item.cantidad} ${item.nombre.toUpperCase()} **`

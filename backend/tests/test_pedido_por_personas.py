@@ -66,7 +66,7 @@ def test_comanda_impresa_dice_espera_sin_elegir_y_entregas(client, db, fonda):
     # Lo que falta elegir va en un recuadro macizo: no se confunde con un plato
     assert "█ " + "SEGUNDO".center(38) + " █" in texto
     assert "█ " + "FALTA ELEGIR".center(38) + " █" in texto
-    assert "NO PREPARAR" in texto
+    assert "NO PREPARAR" not in texto  # confundía: solo "FALTA ELEGIR"
     assert "ENTREGA: 1 JUNTO / 1 POR TIEMPOS" in texto
 
 
