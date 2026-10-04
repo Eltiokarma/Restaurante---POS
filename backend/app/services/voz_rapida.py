@@ -60,6 +60,9 @@ def normalizar(texto: str) -> str:
 
     numeros = "|".join(NUMEROS)
     letras = "|".join(LETRAS_MESA)
+    # "para la 7" / "en la siete" = la mesa ("la una" no: suena a hora)
+    numeros_mesa = "|".join(n for n in NUMEROS if n not in ("un", "una"))
+    sin_tildes = re.sub(rf"\b(para|en) la (\d+|{numeros_mesa})\b", r"\1 la mesa \2", sin_tildes)
     return re.sub(rf"\bmesa (\d+|{numeros})(?: ({letras})\b)?", _mesa, sin_tildes)
 
 
@@ -263,9 +266,11 @@ def interpretar_rapido(texto: str, contexto: dict) -> dict | None:
             elif siguiente is not None and siguiente[0] == "RARO" and re.fullmatch(r"\d+[a-d]", siguiente[1]):
                 nombre, usados = siguiente[1], 1
             if usados:
-                encontrada = lexico.mesas.get(nombre)
-                if encontrada is None:
-                    return None  # "mesa 3" con 3A/3B/3C: que decida la IA o el cliente
+                # "mesa 3" con 3A/3B/3C vale: el depurado elige la libre
+                if nombre not in lexico.mesas and not any(
+                    re.fullmatch(rf"{re.escape(nombre)}[a-z]", m) for m in lexico.mesas
+                ):
+                    return None  # una mesa que no existe: que lo vea la IA
                 mesa = nombre
                 i += usados
             elif actual is None:
@@ -360,8 +365,9 @@ def interpretar_rapido(texto: str, contexto: dict) -> dict | None:
         "personas": personas,
         "items": [],
         "gaseosas": [{"bebida_id": b, "cantidad": n} for b, n in gaseosas.items()],
+        # El nombre exacto, o solo el número ("3") si no dijo la letra
         "mesa": next((m for m in contexto.get("mesas", [])
-                      if re.sub(r"\s+", "", normalizar(m["nombre"])) == mesa), {}).get("nombre", ""),
+                      if re.sub(r"\s+", "", normalizar(m["nombre"])) == mesa), {}).get("nombre", mesa),
         "no_encontrados": [],
         "notas": "",
     }

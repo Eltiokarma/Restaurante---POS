@@ -12,6 +12,7 @@ gpt-6-luna en salida JSON estricta. ~US$ 0.001 por pedido.
 """
 import json
 import os
+import re
 import time
 
 from sqlalchemy import select
@@ -191,7 +192,8 @@ FORMATO_PEDIDO = {
             },
             "mesa": {
                 "type": "string",
-                "description": "Nombre EXACTO de la mesa de la lista MESAS si la dijo; si no, vacío",
+                "description": "Nombre EXACTO de la mesa de la lista MESAS si la dijo; solo el número "
+                               "si no dijo la letra; si no dijo mesa, vacío",
             },
             "no_encontrados": {
                 "type": "array",
@@ -202,8 +204,12 @@ FORMATO_PEDIDO = {
                 "type": "string",
                 "description": "Ambigüedades o dudas; cadena vacía si no hay",
             },
+            "seguro": {
+                "type": "boolean",
+                "description": "true SOLO si entendiste todo sin adivinar nada; si dudaste de algo, false",
+            },
         },
-        "required": ["personas", "items", "gaseosas", "mesa", "no_encontrados", "notas"],
+        "required": ["personas", "items", "gaseosas", "mesa", "no_encontrados", "notas", "seguro"],
         "additionalProperties": False,
     },
 }
@@ -244,8 +250,11 @@ def contexto_de_hoy(db: Session) -> dict:
         {"id": b.id, "nombre": b.nombre, "precio": b.precio}
         for b in db.scalars(select(Bebida).where(Bebida.activa == True).order_by(Bebida.nombre))  # noqa: E712
     ]
+    from ..routes.mesas import ocupacion_de_hoy
+
+    ocupacion = ocupacion_de_hoy(db)
     mesas = [
-        {"id": m.id, "nombre": m.nombre}
+        {"id": m.id, "nombre": m.nombre, "ocupada": bool(ocupacion.get(m.id))}
         for m in db.scalars(select(Mesa).where(Mesa.activa == True).order_by(Mesa.nombre))  # noqa: E712
     ]
     return {"platos": platos, "menus": menus, "gaseosas": gaseosas, "mesas": mesas}
@@ -364,8 +373,12 @@ persona con el agregado_id de su menú (no en la nota). Si no está en la lista,
 - Después: "la sopa ahora y el segundo después", "el segundo todavía no", "el segundo me \
 lo traes luego" → ese plato con espera true. Si dice el plato, va elegido; si solo dice \
 "el segundo después" sin nombrarlo, no lo elijas (queda por elegir).
-- Mesa: "para la mesa 2B", "estamos en la 3A" → "mesa" con el nombre EXACTO de la lista \
-(ignora mayúsculas y espacios: "dos be" = "2 B"). Si no dice mesa, vacío.
+- Mesa: "para la mesa 2B", "estamos en la 3A", "para la 7" → "mesa" con el nombre EXACTO \
+de la lista (ignora mayúsculas y espacios: "dos be" = "2 B"). Si dice el número sin la \
+letra ("mesa 3" y en la lista hay 3 A y 3 B), pon solo el número ("3"): el sistema elige \
+la libre. Si no dice mesa, vacío.
+- Seguro: true solo si todo lo que dijo quedó claro (platos, cantidades, empaques). Si \
+adivinaste algo, se corrigió a medias, algo no se entendió o hay notas, false.
 
 REGLAS DE INTERPRETACIÓN:
 - Español peruano coloquial: diminutivos y apócopes son normales ("caldito", "lomito", \
@@ -498,6 +511,8 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
         "mesa_id": _mesa_por_nombre(str(resultado.get("mesa") or ""), contexto.get("mesas", [])),
         "no_encontrados": list(resultado.get("no_encontrados", [])) + extranos,
         "notas": resultado.get("notas", ""),
+        # La IA dice si dudó; si algo no pasó la validación, ya no es seguro
+        "seguro": resultado.get("seguro") is True and not resultado.get("no_encontrados") and not extranos,
     }
 
 
@@ -506,11 +521,24 @@ def _normalizar_mesa(nombre: str) -> str:
 
 
 def _mesa_por_nombre(dicha: str, mesas: list[dict]) -> int | None:
-    """La mesa dicha ("2b", "2 B") contra los nombres reales; sin match, None."""
+    """La mesa dicha ("2b", "2 B") contra los nombres reales; sin match, None.
+
+    Solo el número ("14") con 14 A y 14 B: la primera libre. A veces dos
+    grupos se sientan en la misma mesa; si todas están ocupadas, ninguna
+    (la mesa es opcional y caja la asigna)."""
     buscada = _normalizar_mesa(dicha)
     if not buscada:
         return None
-    return next((m["id"] for m in mesas if _normalizar_mesa(m["nombre"]) == buscada), None)
+    exacta = next((m["id"] for m in mesas if _normalizar_mesa(m["nombre"]) == buscada), None)
+    if exacta is not None or not buscada.isdigit():
+        return exacta
+    con_letra = sorted(
+        (m for m in mesas if re.fullmatch(rf"{buscada}[a-z]", _normalizar_mesa(m["nombre"]))),
+        key=lambda m: _normalizar_mesa(m["nombre"]),
+    )
+    if len(con_letra) == 1:
+        return con_letra[0]["id"]
+    return next((m["id"] for m in con_letra if not m.get("ocupada")), None)
 
 
 def _agregados_validos(crudos: list, menu: dict) -> list[dict]:
@@ -563,9 +591,15 @@ def interpretar_con_atajo(texto: str, contexto: dict, esfuerzo: str | None = Non
         resultado = _depurar(rapido, contexto)
         # Si la validación descartó algo, mejor que lo vea la IA
         if not resultado["no_encontrados"]:
-            return {**resultado, "via": "reglas"}, 0.0
+            # Las reglas no adivinan: si resolvieron, es seguro
+            return {**resultado, "via": "reglas", "seguro": _hay_pedido(resultado)}, 0.0
     resultado, costo = interpretar(texto, contexto, esfuerzo)
-    return {**resultado, "via": "ia"}, costo
+    return {**resultado, "via": "ia", "seguro": resultado.get("seguro", False) and _hay_pedido(resultado)}, costo
+
+
+def _hay_pedido(resultado: dict) -> bool:
+    """Gaseosas solas no van directo: se venden con un pedido."""
+    return bool(resultado["personas"] or resultado["items"])
 
 
 def _costo_interprete(usage) -> float | None:

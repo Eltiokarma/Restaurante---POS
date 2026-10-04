@@ -78,6 +78,9 @@ async def pedido_por_voz(
         "mesa": extras["mesa"],
         "no_encontrados": resultado["no_encontrados"],
         "notas": resultado["notas"],
+        # Seguro = sin dudas: la terminal salta "¿Eso pediste?" y va directo
+        # a la ventana de cancelación (igual se puede cancelar o corregir)
+        "seguro": resultado.get("seguro", False),
         "latencia_ms": latencia_ms,
     }
 

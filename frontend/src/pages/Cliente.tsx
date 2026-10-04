@@ -15,7 +15,7 @@ import { PedidoPorVoz } from '../components/PedidoPorVoz'
 import type { ExtrasVoz } from '../components/PedidoPorVoz'
 import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket } from '../components/Ticket'
-import { useCarrito } from '../hooks/useCarrito'
+import { menuVacio, useCarrito } from '../hooks/useCarrito'
 import { useInactividad } from '../hooks/useInactividad'
 
 function ModalCancelarTodo({ onSeguir, onCancelar }: { onSeguir: () => void; onCancelar: () => void }) {
@@ -238,6 +238,18 @@ export function Cliente() {
       setMesasElegidas((prev) => (prev.includes(id) ? prev : [...prev, id]))
     }
     if (items.length > 0 || menus.length > 0 || extras.gaseosas.length > 0) usoVoz.current = true
+  }
+
+  // Dictado sin dudas sobre un pedido recién empezado: directo a la ventana
+  // de cancelación (ahí se ve, se cancela o se vuelve a corregir). Si ya
+  // había algo armado a mano, se verifica como siempre
+  const carritoVirgen = carrito.items.length === 0 && carrito.bebidas.length === 0
+    && carrito.menus.every(menuVacio)
+  const vozDirecta = (items: VozItemResuelto[], menus: MenuCarrito[], extras: ExtrasVoz) => {
+    agregarItemsVoz(items, menus, extras)
+    setVozAbierta(false)
+    setCopias(1)
+    setPantalla('countdown')
   }
 
   // El botón vive dentro del área táctil de inicio: un toque dispara los
@@ -751,6 +763,7 @@ export function Cliente() {
             gaseosasLista={gaseosas}
             onContinuar={(items, menus, extras) => { agregarItemsVoz(items, menus, extras); setVozAbierta(false) }}
             onUsarBotones={(items, menus, extras) => { agregarItemsVoz(items, menus, extras); setVozAbierta(false) }}
+            onDirecto={carritoVirgen ? vozDirecta : undefined}
             onCerrar={() => setVozAbierta(false)}
           />
         )}
@@ -873,6 +886,7 @@ export function Cliente() {
             agregarItemsVoz(items, menus, extras)
             setVozAbierta(false)
           }}
+          onDirecto={carritoVirgen ? vozDirecta : undefined}
           onCerrar={() => setVozAbierta(false)}
         />
       )}

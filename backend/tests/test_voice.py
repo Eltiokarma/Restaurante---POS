@@ -549,3 +549,57 @@ def test_pedido_simple_no_llama_a_la_ia(client, admin_headers, menu_voz, monkeyp
     (persona,) = r.json()["personas"]
     assert persona["cantidad"] == 2
     assert [e["nombre"] for e in persona["elecciones"]] == ["Caldo de gallina", "Lomo saltado"]
+    assert r.json()["seguro"] is True  # sin dudas: va directo a la ventana
+
+
+def test_ia_sin_seguro_pasa_por_verificar(client, admin_headers, extras_voz, monkeypatch):
+    """La IA que no dice "seguro" (o dudó) deja la pantalla "¿Eso pediste?"."""
+    from app.services import voice
+
+    m = extras_voz
+    activar_voz(client, admin_headers)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    monkeypatch.setattr(voice, "transcribir", lambda b, n="a", pista="": "un lomito y algo más que no sé")
+    crudo = {
+        "personas": [{
+            "menu_id": m["menu_id"], "cantidad": 1,
+            "elecciones": [{"tiempo_orden": 2, "plato_id": m["Lomo saltado"], "empaque": "igual", "espera": False}],
+            "sin": [], "empaque": "mesa", "entrega": "auto", "nombre": "", "nota": "", "agregados": [],
+        }],
+        "items": [], "gaseosas": [], "mesa": "", "no_encontrados": [], "notas": "",
+    }
+    for dijo, esperado in [(False, False), (True, True)]:
+        monkeypatch.setattr(voice, "interpretar", lambda texto, contexto, esfuerzo=None, d=dijo: (
+            voice._depurar({**crudo, "seguro": d}, contexto), 0.0))
+        r = client.post("/api/voice/order", files={"audio": ("a.webm", b"x", "audio/webm")})
+        assert r.json()["seguro"] is esperado
+    # Seguro pero con algo que no está hoy: ya no es seguro
+    monkeypatch.setattr(voice, "interpretar", lambda texto, contexto, esfuerzo=None: (
+        voice._depurar({**crudo, "seguro": True, "no_encontrados": ["ceviche"]}, contexto), 0.0))
+    r = client.post("/api/voice/order", files={"audio": ("a.webm", b"x", "audio/webm")})
+    assert r.json()["seguro"] is False
+
+
+def test_mesa_sin_letra_va_a_la_libre(client, db, menu_voz):
+    """"Para la 14" con 14 A y 14 B: la primera libre. Dos grupos a veces
+    comparten número; si están todas ocupadas, sin mesa (caja la asigna)."""
+    from app.models import Mesa
+    from app.services.voice import _mesa_por_nombre, contexto_de_hoy
+
+    a, b, sola = Mesa(nombre="14 A"), Mesa(nombre="14 B"), Mesa(nombre="7 A")
+    db.add_all([a, b, sola])
+    db.commit()
+    assert _mesa_por_nombre("14", contexto_de_hoy(db)["mesas"]) == a.id
+    assert _mesa_por_nombre("7", contexto_de_hoy(db)["mesas"]) == sola.id
+
+    def ocupar(mesa_id):
+        r = client.post("/api/orders", json={"menus": [{
+            "menu_id": menu_voz["menu_id"], "cantidad": 1, "elecciones": {"2": menu_voz["Lomo saltado"]},
+            "omitidos": [1]}], "mesa_ids": [mesa_id]})
+        assert r.status_code == 201, r.text
+
+    ocupar(a.id)
+    assert _mesa_por_nombre("14", contexto_de_hoy(db)["mesas"]) == b.id
+    ocupar(b.id)
+    assert _mesa_por_nombre("14", contexto_de_hoy(db)["mesas"]) is None
+    assert _mesa_por_nombre("14b", contexto_de_hoy(db)["mesas"]) == b.id  # con letra, la dicha
