@@ -4,7 +4,7 @@ import type { Bebida, MenuCarrito, MenuHoy, Plato, VozItemResuelto, VozResultado
 
 // Pausa larga para pensar ("eh… y el otro…") sin que se corte; el botón
 // "Ya pedí" corta al toque (pedido del dueño tras las primeras pruebas)
-const SILENCIO_MS = 4500
+const SILENCIO_MS = 5000
 const MAX_GRABACION_MS = 40_000
 const UMBRAL_VOZ = 0.02 // RMS mínimo para considerar que está hablando
 
@@ -50,6 +50,13 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
   const chunksRef = useRef<Blob[]>([])
   const inicioRef = useRef(0)
   const resultadoEnviado = useRef(false)
+  // Menús y gaseosas por ref: la terminal los refresca cada 30 s y, como
+  // dependencias, reiniciaban la grabación a mitad de pedido (se "mandaba
+  // sola" cortada y la nueva pedía "habla más fuerte")
+  const menusRef = useRef(menus)
+  const gaseosasRef = useRef(gaseosasLista)
+  menusRef.current = menus
+  gaseosasRef.current = gaseosasLista
 
   const detener = useCallback(() => {
     const media = mediaRef.current
@@ -84,14 +91,14 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
       const armadas: MenuCarrito[] = []
       const perdidas: string[] = []
       for (const p of r.personas ?? []) {
-        const menu = menus.find((m) => m.id === p.menu_id)
+        const menu = menusRef.current.find((m) => m.id === p.menu_id)
         if (menu) armadas.push(personaVozAMenu(p, menu))
         else perdidas.push(p.menu_nombre)
       }
       setPersonas(armadas)
       const dictadas: ExtrasVoz['gaseosas'] = []
       for (const g of r.gaseosas ?? []) {
-        const bebida = gaseosasLista.find((b) => b.id === g.bebida_id)
+        const bebida = gaseosasRef.current.find((b) => b.id === g.bebida_id)
         if (bebida) dictadas.push({ bebida, cantidad: g.cantidad })
         else perdidas.push(g.nombre)
       }
@@ -106,7 +113,7 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
       setErrorMsg(e instanceof Error ? e.message : 'No te escuché bien, intenta de nuevo o usa los botones')
       setFase('error')
     }
-  }, [menus, gaseosasLista])
+  }, [])
 
   const empezarGrabacion = useCallback(async () => {
     setFase('grabando')
@@ -168,10 +175,11 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
     }
   }, [limpiarMedia, procesar])
 
+  // Graba UNA vez al abrir; "Repetir" e "Intentar de nuevo" son explícitos
   useEffect(() => {
     empezarGrabacion()
     return limpiarMedia
-  }, [empezarGrabacion, limpiarMedia])
+  }, [])
 
   // ---- Correcciones táctiles sobre lo interpretado ----
   const cambiar = (platoId: number, delta: number) => {
@@ -258,7 +266,7 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
 
         {fase === 'grabando' && (
           <>
-            <h2>🎤 Habla fuerte y claro</h2>
+            <h2>🎤 Te escucho… di tu pedido</h2>
             <p className="texto-countdown">
               Di tu pedido, por ejemplo:{' '}
               {menus.length > 0

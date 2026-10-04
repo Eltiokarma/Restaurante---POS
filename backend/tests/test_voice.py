@@ -510,3 +510,22 @@ def test_voz_puede_quitar_un_tiempo_obligatorio(db, menu_voz):
         "items": [], "gaseosas": [], "mesa": "", "no_encontrados": [], "notas": "",
     }, contexto_de_hoy(db))
     assert r["personas"][0]["sin"] == [1]
+
+
+def test_pedido_corto_con_nombre_de_plato_no_es_eco(monkeypatch):
+    """"Bistec frito" está en la pista, pero es un pedido de verdad."""
+    import openai
+
+    from app.services import voice
+
+    class Transcripciones:
+        def create(self, **kw):
+            return type("T", (), {"text": "Bistec frito"})()
+
+    class Cliente:
+        def __init__(self, **kw):
+            self.audio = type("A", (), {"transcriptions": Transcripciones()})()
+
+    monkeypatch.setattr(openai, "OpenAI", Cliente)
+    pista = "Pedido en un restaurante peruano. Platos de hoy: Bistec frito, Chairito"
+    assert voice.transcribir(b"x", "a.webm", pista) == "Bistec frito"
