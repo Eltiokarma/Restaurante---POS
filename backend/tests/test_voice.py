@@ -366,7 +366,7 @@ def test_diagnostico_muestra_el_error_real(client, admin_headers, menu_voz, monk
 
     assert client.post("/api/voice/diagnostico").status_code == 401
 
-    def falla(texto, contexto):
+    def falla(texto, contexto, esfuerzo=None):
         raise voice.VozError("No te escuché bien", "Error code: 401 - Incorrect API key")
 
     monkeypatch.setattr(voice, "interpretar", falla)
