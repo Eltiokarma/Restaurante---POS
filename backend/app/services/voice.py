@@ -354,6 +354,19 @@ el otro causa en tupper, y cuatro locros y una trucha frita. La trucha en bolsa"
     {{cantidad 1, elecciones: entrada=causa, segundo=locro, empaque taper}}
   ]  → 5 personas; locros 3+1 = 4 ✓; truchas 1 ✓; la trucha en bolsa con la causa en bolsa.
 
+EMPAQUE DICHO = PLATO PEDIDO: si dice dónde va un plato ("la sopa en bolsa", "el bistec en \
+tupper"), ese plato ESTÁ pedido para esa persona: va en sus elecciones con ese empaque y \
+NUNCA en "sin". EJEMPLO: "Tres menús, dos para la mesa, uno para llevar todo en tupper, \
+la sopa en bolsa. Para la mesa una causa y una sopa. De segundos un locro y una trucha para \
+la mesa, y para llevar el bistec" →
+  personas = [
+    {{cantidad 1, elecciones: entrada=causa, segundo=locro, empaque mesa}}
+    {{cantidad 1, elecciones: entrada=sopa, segundo=trucha, empaque mesa}}
+    {{cantidad 1, elecciones: entrada=sopa (empaque bolsa), segundo=bistec, empaque taper}}
+  ]
+CORRECCIONES: "un lomo, no, mejor un locro", "un locro, no el lomo" → solo vale lo último; \
+lo descartado no va en ningún lado (tampoco en no_encontrados).
+
 ANTES DE RESPONDER, CUENTA: (1) la suma de las cantidades de "personas" debe ser igual a \
 los almuerzos/menús que pidió MÁS los segundos solos y sopas solas; (2) cada plato que dijo \
 con cantidad ("cuatro locros") aparece esa cantidad de veces en total. Si no cuadra, revisa.
