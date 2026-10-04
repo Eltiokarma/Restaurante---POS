@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, menuAPayload, precioUnitarioMenu, soles, subtotalMenu, tiemposPendientes, unidadesEnTaper } from '../api'
-import type { ConfigOut, DatosLocal, Entrega, MenuCarrito, MenuHoy, MesaEstado, OrdenOut, Plato, VozItemResuelto } from '../api'
+import type { Bebida, ConfigOut, DatosLocal, Entrega, MenuCarrito, MenuHoy, MesaEstado, OrdenOut, Plato, VozItemResuelto } from '../api'
 import { describirMenu } from '../components/describirMenu'
 import { menusEnPedido, TarjetaOfertaMenu } from '../components/TarjetaOfertaMenu'
 import {
@@ -9,7 +9,9 @@ import {
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
+import { GaseosasTerminal } from '../components/GaseosasTerminal'
 import { PedidoPorVoz } from '../components/PedidoPorVoz'
+import type { ExtrasVoz } from '../components/PedidoPorVoz'
 import { TarjetaPlato } from '../components/TarjetaPlato'
 import { Ticket } from '../components/Ticket'
 import { useCarrito } from '../hooks/useCarrito'
@@ -39,6 +41,7 @@ export function Cliente() {
   const [pantalla, setPantalla] = useState<Pantalla>('inicio')
   const [platos, setPlatos] = useState<Plato[]>([])
   const [menusHoy, setMenusHoy] = useState<MenuHoy[]>([])
+  const [gaseosas, setGaseosas] = useState<Bebida[]>([])
   // Menú encadenado que se está armando (abre el modal de tiempos)
   // Menú recién agregado con "Un menú": el botón confirma un momento
   const [menuRecien, setMenuRecien] = useState<number | null>(null)
@@ -131,6 +134,8 @@ export function Cliente() {
       const data = await api.menuHoy()
       setPlatos(data.platos)
       setMenusHoy(data.menus)
+      // Gaseosas de la lista fija; si falla, la terminal sigue sin ellas
+      api.bebidas().then((d) => setGaseosas(d.bebidas.filter((b) => b.activa))).catch(() => {})
       // Si el admin cambió un precio a mitad de pedido, el carrito se
       // actualiza para que el total mostrado coincida con lo que se cobra.
       sincronizarConMenu(data.platos, data.menus)
@@ -206,7 +211,9 @@ export function Cliente() {
   // Comandas a imprimir: 1, o 2 con el botón chico "×2" (una para la guía)
   const [copias, setCopias] = useState(1)
   const [editandoDefecto, setEditandoDefecto] = useState<MenuHoy | null>(null)
-  const tickets = useTicketsPersonas(carrito, { empaques: empaquesOfrecidos, precioTaper, conEspera: false })
+  // "Va a esperar" también en la terminal (pedido del dueño): la entrada
+  // ahora y el segundo después
+  const tickets = useTicketsPersonas(carrito, { empaques: empaquesOfrecidos, precioTaper, conEspera: true })
   const tapers = unidadesEnTaper(carrito.items, carrito.menus)
   const cargoTaper = precioTaper * tapers
   const totalConCargos = carrito.totalSoles + cargoTaper
@@ -216,14 +223,20 @@ export function Cliente() {
 
   // La voz solo SUMA al carrito (platos y tickets por persona); todo lo
   // demás es el flujo de siempre
-  const agregarItemsVoz = (items: VozItemResuelto[], menus: MenuCarrito[]) => {
+  const agregarItemsVoz = (items: VozItemResuelto[], menus: MenuCarrito[], extras: ExtrasVoz) => {
     for (const item of items) {
       const plato = platos.find((p) => p.id === item.plato_id)
       if (plato) carrito.cambiarCantidad(plato, item.cantidad)
     }
     if (menus.length > 0) carrito.quitarMenusVacios()
     for (const menu of menus) carrito.agregarMenu(menu)
-    if (items.length > 0 || menus.length > 0) usoVoz.current = true
+    for (const g of extras.gaseosas) carrito.cambiarBebida(g.bebida, g.cantidad)
+    // "Para la mesa 2B": la mesa se suma a las ya elegidas
+    if (extras.mesa) {
+      const id = extras.mesa.id
+      setMesasElegidas((prev) => (prev.includes(id) ? prev : [...prev, id]))
+    }
+    if (items.length > 0 || menus.length > 0 || extras.gaseosas.length > 0) usoVoz.current = true
   }
 
   // El botón vive dentro del área táctil de inicio: un toque dispara los
@@ -256,6 +269,11 @@ export function Cliente() {
         precio: i.plato.precio,
         cantidad: i.cantidad,
       })),
+      ...carrito.bebidas.map((b) => ({
+        nombre: b.bebida.nombre,
+        precio: b.bebida.precio,
+        cantidad: b.cantidad,
+      })),
     ]
     const total = totalConCargos
     volverAlInicio('Pedido cancelado')
@@ -272,6 +290,9 @@ export function Cliente() {
   const nombreAlMomento = alMomentoEnItems?.plato.nombre
   const hayAlMomento = nombreAlMomento !== undefined
   const entregaEfectiva: Entrega = hayAlMomento ? 'separado' : entrega
+
+  // Las gaseosas van CON un pedido: solas se venden desde caja
+  const sinPlatos = carrito.menus.length === 0 && carrito.items.length === 0
 
   const guardandoRef = useRef(false)
   const confirmarDefinitivo = async () => {
@@ -294,6 +315,7 @@ export function Cliente() {
         entregaEfectiva,
         carrito.menus.map(menuAPayload),
         copias,
+        carrito.bebidas.map((b) => ({ bebida_id: b.bebida.id, cantidad: b.cantidad })),
       )
       setOrdenFinal(resultado)
       carrito.vaciar()
@@ -440,6 +462,11 @@ export function Cliente() {
               {i.cantidad} × {i.plato.nombre}
             </div>
           ))}
+          {carrito.bebidas.map((b) => (
+            <div key={`gaseosa-${b.bebida.id}`}>
+              {b.cantidad} × {b.bebida.nombre}
+            </div>
+          ))}
           {mesasElegidas.length > 0 && (
             <div>
               🪑 Mesa:{' '}
@@ -546,6 +573,11 @@ export function Cliente() {
             </div>
           ))}
         </div>
+        <GaseosasTerminal
+          lista={gaseosas}
+          enCarrito={carrito.bebidas}
+          onCambiar={(b, delta) => { usoTactil.current = true; carrito.cambiarBebida(b, delta) }}
+        />
         {carrito.totalItems > 0 && mesas.some((m) => m.activa) && (
           <div className="selector-servicio pliegue-extras">
             <button className="pliegue-cabecera" onClick={() => setMostrarMesas((v) => !v)}>
@@ -659,7 +691,7 @@ export function Cliente() {
             )}
             <button
               className="boton-grande boton-confirmar"
-              disabled={carrito.totalItems === 0 || guardando}
+              disabled={sinPlatos || guardando}
               onClick={() => {
                 setCopias(1)
                 // Con huecos pendientes, confirmar LLEVA al hueco: el 422
@@ -673,7 +705,7 @@ export function Cliente() {
             {/* Chiquito: confirma e imprime 2 comandas (una para la guía) */}
             <button
               className="boton-dos-comandas"
-              disabled={carrito.totalItems === 0 || guardando}
+              disabled={sinPlatos || guardando}
               onClick={() => {
                 setCopias(2)
                 if (pendientesMenus.length > 0) irAlPendiente()
@@ -695,8 +727,9 @@ export function Cliente() {
           <PedidoPorVoz
             platos={platos}
             menus={menusHoy}
-            onContinuar={(items, menus) => { agregarItemsVoz(items, menus); setVozAbierta(false) }}
-            onUsarBotones={(items, menus) => { agregarItemsVoz(items, menus); setVozAbierta(false) }}
+            gaseosasLista={gaseosas}
+            onContinuar={(items, menus, extras) => { agregarItemsVoz(items, menus, extras); setVozAbierta(false) }}
+            onUsarBotones={(items, menus, extras) => { agregarItemsVoz(items, menus, extras); setVozAbierta(false) }}
             onCerrar={() => setVozAbierta(false)}
           />
         )}
@@ -809,13 +842,14 @@ export function Cliente() {
         <PedidoPorVoz
           platos={platos}
           menus={menusHoy}
-          onContinuar={(items, menus) => {
-            agregarItemsVoz(items, menus)
+          gaseosasLista={gaseosas}
+          onContinuar={(items, menus, extras) => {
+            agregarItemsVoz(items, menus, extras)
             setVozAbierta(false)
             setPantalla('resumen')
           }}
-          onUsarBotones={(items, menus) => {
-            agregarItemsVoz(items, menus)
+          onUsarBotones={(items, menus, extras) => {
+            agregarItemsVoz(items, menus, extras)
             setVozAbierta(false)
           }}
           onCerrar={() => setVozAbierta(false)}

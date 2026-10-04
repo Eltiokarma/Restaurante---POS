@@ -637,6 +637,13 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       Qwen Flash y Llama 4 Scout; los chinos salían ~US$ 1–4/mes más baratos pero con dos
       proveedores. Modelo, transcripción y esfuerzo se cambian por variables de entorno
       (`MODELO_INTERPRETE`, `MODELO_TRANSCRIPCION`, `ESFUERZO_INTERPRETE`).
+- [x] **Voz y terminal tras la primera ronda de pruebas del dueño**: gaseosas de la lista
+      fija en la terminal (sección con − / +, viajan en el pedido como `bebidas` y salen en
+      la comanda en OTROS, sin ticket chico aparte; solas se venden desde caja), y la voz
+      entiende gaseosas ("dos Inca Kola de litro"), la mesa ("para la 2B", se compara sin
+      espacios ni mayúsculas), los agregados del menú ("con un huevo frito") y "el segundo
+      después" (espera). "Va a esperar" se activa también en la terminal. Solo segundo:
+      la entrada pasa a no obligatoria en las plantillas (descuento S/ 1 ya configurado).
 - [ ] **Antes de encenderla**: correr el banco de pruebas (Fase 2) con audios reales del
       local y pegar el prompt refinado + sinónimos en los marcadores `TODO` de
       `backend/app/services/voice.py`. Umbral acordado: >85% integra; 70–85% con

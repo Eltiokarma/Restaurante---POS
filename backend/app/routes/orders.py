@@ -74,6 +74,11 @@ class MenuIn(BaseModel):
     nombre_persona: str = Field(default="", max_length=40)
 
 
+class BebidaPedida(BaseModel):
+    bebida_id: int
+    cantidad: int = Field(gt=0, le=20)
+
+
 class OrdenIn(BaseModel):
     items: list[ItemIn] = Field(default_factory=list)
     menus: list[MenuIn] = Field(default_factory=list, max_length=20)
@@ -89,6 +94,8 @@ class OrdenIn(BaseModel):
     entrega: str = "junto"
     # Comandas a imprimir: 1 normal, 2 = una extra para la guía
     copias: int = Field(default=1, ge=1, le=3)
+    # Gaseosas de la lista fija pedidas junto con el pedido (terminal/voz)
+    bebidas: list[BebidaPedida] = Field(default_factory=list, max_length=10)
 
 
 class EstadoIn(BaseModel):
@@ -279,6 +286,7 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     if payload.origen not in ("tactil", "voz", "mixto"):
         raise HTTPException(status_code=422, detail=f"Origen inválido: {payload.origen}")
     _validar_mesas(db, payload.mesa_ids)
+    _validar_bebidas(db, payload.bebidas)
     # Los platos elegidos del menú los valida crear_orden (ahí recién se
     # resuelven las elecciones); aquí solo la venta a la carta
     _validar_entrega(db, payload.entrega, [i.plato_id for i in payload.items])
@@ -315,6 +323,10 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=422, detail=str(e))
 
     orden.copias = payload.copias
+    # Gaseosas pedidas con el pedido: van en la misma comanda (en OTROS),
+    # sin ticket chico aparte (ese es para las que se suman después)
+    if payload.bebidas:
+        _sumar_bebidas(db, orden, payload.bebidas)
     # Mesas asignadas al crear (la caja las manda al sentar al grupo)
     if payload.mesa_ids:
         orden.mesa_ids = json.dumps(payload.mesa_ids)
@@ -647,40 +659,31 @@ def asignar_mesas(orden_id: int, payload: MesasIn, db: Session = Depends(get_db)
     }
 
 
-class BebidaPedida(BaseModel):
-    bebida_id: int
-    cantidad: int = Field(gt=0, le=20)
-
-
 class BebidasIn(BaseModel):
     items: list[BebidaPedida] = Field(min_length=1, max_length=10)
 
 
-@router.post("/{orden_id}/bebidas")
-def agregar_bebidas(orden_id: int, payload: BebidasIn, db: Session = Depends(get_db)):
-    """La caja añade gaseosas de la lista fija a una orden YA creada.
+def _validar_bebidas(db: Session, pedidos: list[BebidaPedida]) -> None:
+    from ..models import Bebida
 
-    El item nace "entregado" y es_cargo=True (cocina no lo ve ni frena la
-    orden), entra al total y descuenta botellas del kardex. NO se reimprime
-    la comanda: sale solo un ticket chico con las gaseosas (en modo
-    puente/estación espera en la cola; en modo terminal lo imprime la
-    propia caja con los datos que devuelve este endpoint)."""
-    from ..models import Bebida, Insumo, OrdenItem, TicketBebida
+    for pedido in pedidos:
+        bebida = db.get(Bebida, pedido.bebida_id)
+        if bebida is None or not bebida.activa:
+            raise HTTPException(status_code=422, detail="Bebida no disponible")
+
+
+def _sumar_bebidas(db: Session, orden: Orden, pedidos: list[BebidaPedida]) -> tuple[list[dict], float]:
+    """Gaseosas como items de la orden: nacen "entregado" y es_cargo=True
+    (cocina no las prepara ni frenan la orden), entran al total y
+    descuentan botellas del kardex. Devuelve (detalle, total agregado)."""
+    from ..models import Bebida, Insumo, OrdenItem
     from ..services.inventario import consumir_directo
-
-    orden = db.get(Orden, orden_id)
-    if orden is None:
-        raise HTTPException(status_code=404, detail="Orden no encontrada")
-    if orden.estado == "anulada":
-        raise HTTPException(status_code=409, detail="La orden está anulada")
 
     detalle: list[dict] = []
     total_bebidas = 0.0
     referencia = f"orden #{orden.numero_orden_dia:03d} gaseosa"
-    for pedido in payload.items:
+    for pedido in pedidos:
         bebida = db.get(Bebida, pedido.bebida_id)
-        if bebida is None or not bebida.activa:
-            raise HTTPException(status_code=422, detail="Bebida no disponible")
         orden.items.append(OrdenItem(
             plato_id=None,
             nombre_snapshot=bebida.nombre,
@@ -698,9 +701,29 @@ def agregar_bebidas(orden_id: int, payload: BebidasIn, db: Session = Depends(get
             insumo = db.get(Insumo, bebida.insumo_id)
             if insumo is not None:
                 consumir_directo(db, insumo, pedido.cantidad, referencia, orden.id)
-
     total_bebidas = round(total_bebidas, 2)
     orden.total = round(orden.total + total_bebidas, 2)
+    return detalle, total_bebidas
+
+
+@router.post("/{orden_id}/bebidas")
+def agregar_bebidas(orden_id: int, payload: BebidasIn, db: Session = Depends(get_db)):
+    """La caja añade gaseosas de la lista fija a una orden YA creada.
+
+    El item nace "entregado" y es_cargo=True (cocina no lo ve ni frena la
+    orden), entra al total y descuenta botellas del kardex. NO se reimprime
+    la comanda: sale solo un ticket chico con las gaseosas (en modo
+    puente/estación espera en la cola; en modo terminal lo imprime la
+    propia caja con los datos que devuelve este endpoint)."""
+    from ..models import TicketBebida
+
+    orden = db.get(Orden, orden_id)
+    if orden is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if orden.estado == "anulada":
+        raise HTTPException(status_code=409, detail="La orden está anulada")
+    _validar_bebidas(db, payload.items)
+    detalle, total_bebidas = _sumar_bebidas(db, orden, payload.items)
 
     modo = leer_config(db)["modo_impresion"]
     if modo in ("puente", "estacion"):

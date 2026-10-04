@@ -225,10 +225,12 @@ def test_depurar_valida_cada_persona_contra_su_menu(db, menu_voz):
     assert r["personas"] == [
         {"menu_id": m["menu_id"], "cantidad": 1,
          "elecciones": {1: m["Caldo de gallina"], 2: m["Lomo saltado"]}, "sin": [],
-         "empaque": "taper", "empaques": {}, "entrega": "junto", "nombre": "Juan", "nota": ""},
+         "empaque": "taper", "empaques": {}, "espera": [], "agregados": [],
+         "entrega": "junto", "nombre": "Juan", "nota": ""},
         {"menu_id": m["menu_id"], "cantidad": 2,
          "elecciones": {2: m["Pollo al horno"]}, "sin": [1],
-         "empaque": "mesa", "empaques": {}, "entrega": None, "nombre": "", "nota": "sin cebolla"},
+         "empaque": "mesa", "empaques": {}, "espera": [], "agregados": [],
+         "entrega": None, "nombre": "", "nota": "sin cebolla"},
     ]
     assert r["items"] == [{"plato_id": m["Chicha morada"], "cantidad": 1}]
     assert r["no_encontrados"] == ["ceviche", "menú 999", "999"]
@@ -265,7 +267,7 @@ def test_endpoint_devuelve_personas_con_nombres(client, admin_headers, menu_voz,
     assert personas[1]["sin_rotulos"] == ["Entrada"]
     assert personas[0]["elecciones"][0] == {
         "tiempo_orden": 1, "rotulo": "Entrada", "plato_id": m["Caldo de gallina"],
-        "nombre": "Caldo de gallina", "empaque": None,
+        "nombre": "Caldo de gallina", "empaque": None, "espera": False,
     }
 
 
@@ -416,3 +418,73 @@ def test_transcripcion_que_repite_la_pista_no_es_un_pedido(monkeypatch):
     with pytest.raises(voice.VozError) as e:
         voice.transcribir(b"x", "a.webm", pista)
     assert "Casi no te escuché" in e.value.mensaje_cliente
+
+
+@pytest.fixture()
+def extras_voz(db, menu_voz):
+    """Gaseosas, mesas y un agregado ("Huevo frito") para el menú de voz."""
+    from app.models import Bebida, MenuAgregado, Mesa
+
+    inca = Bebida(nombre="Inca Kola personal", precio=2.5)
+    litro = Bebida(nombre="Inca Kola 1 L", precio=5.0)
+    mesa = Mesa(nombre="2 B")
+    huevo = MenuAgregado(nombre="Huevo frito", precio=3.0, orden=1)
+    db.add_all([inca, litro, mesa, huevo])
+    db.commit()
+    return {**menu_voz, "inca": inca.id, "litro": litro.id, "mesa": mesa.id, "huevo": huevo.id}
+
+
+def test_prompt_trae_gaseosas_mesas_y_agregados(db, extras_voz):
+    from app.services.voice import construir_system, contexto_de_hoy, pista_de_vocabulario
+
+    contexto = contexto_de_hoy(db)
+    system = construir_system(contexto)
+    assert f"bebida_id: {extras_voz['inca']} | Inca Kola personal" in system
+    assert '"2 B"' in system
+    assert f"agregado_id: {extras_voz['huevo']} | Huevo frito" in system
+    assert "Inca Kola personal" in pista_de_vocabulario(contexto)
+
+
+def test_depurar_gaseosas_mesa_agregados_y_espera(db, extras_voz):
+    from app.services.voice import _depurar, contexto_de_hoy
+
+    m = extras_voz
+    r = _depurar({
+        "personas": [{
+            "menu_id": m["menu_id"], "cantidad": 1,
+            "elecciones": [
+                {"tiempo_orden": 1, "plato_id": m["Caldo de gallina"], "empaque": "igual", "espera": False},
+                {"tiempo_orden": 2, "plato_id": m["Lomo saltado"], "empaque": "igual", "espera": True},
+            ],
+            "sin": [], "empaque": "mesa", "entrega": "auto", "nombre": "", "nota": "",
+            "agregados": [{"agregado_id": m["huevo"], "cantidad": 1}, {"agregado_id": 999, "cantidad": 1}],
+        }],
+        "items": [],
+        "gaseosas": [{"bebida_id": m["inca"], "cantidad": 2}, {"bebida_id": 999, "cantidad": 1}],
+        "mesa": "2b",
+        "no_encontrados": [], "notas": "",
+    }, contexto_de_hoy(db))
+    persona = r["personas"][0]
+    assert persona["espera"] == [2]
+    assert persona["agregados"] == [{"agregado_id": m["huevo"], "cantidad": 1}]
+    assert r["gaseosas"] == [{"bebida_id": m["inca"], "cantidad": 2}]
+    assert r["mesa_id"] == m["mesa"]  # "2b" = "2 B"
+    assert "gaseosa 999" in r["no_encontrados"]
+
+
+def test_endpoint_devuelve_gaseosas_y_mesa(client, admin_headers, extras_voz, monkeypatch):
+    from app.services import voice
+
+    m = extras_voz
+    activar_voz(client, admin_headers)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    monkeypatch.setattr(voice, "transcribir", lambda b, n="a", pista="": "un lomo y una inca para la 2B")
+    monkeypatch.setattr(voice, "interpretar", lambda texto, contexto: (voice._depurar({
+        "personas": [], "items": [],
+        "gaseosas": [{"bebida_id": m["inca"], "cantidad": 1}],
+        "mesa": "2 B", "no_encontrados": [], "notas": "",
+    }, contexto), 0.0))
+    r = client.post("/api/voice/order", files={"audio": ("a.webm", b"x", "audio/webm")})
+    data = r.json()
+    assert data["gaseosas"] == [{"bebida_id": m["inca"], "cantidad": 1, "nombre": "Inca Kola personal", "precio": 2.5}]
+    assert data["mesa"] == {"id": m["mesa"], "nombre": "2 B"}

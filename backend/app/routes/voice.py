@@ -48,7 +48,7 @@ async def pedido_por_voz(
         raise HTTPException(status_code=422, detail="No llegó ningún audio")
 
     try:
-        transcripcion, resultado, items_resueltos, personas, latencia_ms, costo_usd = (
+        transcripcion, resultado, items_resueltos, personas, extras, latencia_ms, costo_usd = (
             voice.procesar_audio(db, audio_bytes, audio.filename or "audio.webm", duracion_seg or None)
         )
     except voice.VozError as e:
@@ -73,6 +73,8 @@ async def pedido_por_voz(
         "items_resueltos": items_resueltos,
         # Menús por persona (lo principal desde los tickets por persona)
         "personas": personas,
+        "gaseosas": extras["gaseosas"],
+        "mesa": extras["mesa"],
         "no_encontrados": resultado["no_encontrados"],
         "notas": resultado["notas"],
         "latencia_ms": latencia_ms,

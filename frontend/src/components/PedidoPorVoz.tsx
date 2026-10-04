@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, NOMBRE_EMPAQUE, personaVozAMenu, soles, subtotalMenu } from '../api'
-import type { MenuCarrito, MenuHoy, Plato, VozItemResuelto, VozResultado } from '../api'
+import type { Bebida, MenuCarrito, MenuHoy, Plato, VozItemResuelto, VozResultado } from '../api'
 
 // Pausa larga para pensar ("eh… y el otro…") sin que se corte; el botón
 // "Ya pedí" corta al toque (pedido del dueño tras las primeras pruebas)
@@ -8,14 +8,21 @@ const SILENCIO_MS = 4500
 const MAX_GRABACION_MS = 40_000
 const UMBRAL_VOZ = 0.02 // RMS mínimo para considerar que está hablando
 
+export interface ExtrasVoz {
+  gaseosas: { bebida: Bebida; cantidad: number }[]
+  mesa: { id: number; nombre: string } | null
+}
+
 interface Props {
   platos: Plato[]
+  // La lista de gaseosas de la terminal (para mapear lo dictado)
+  gaseosasLista: Bebida[]
   // Los menús de hoy: cada persona dictada entra como su ticket
   menus: MenuHoy[]
   // "✅ Así es, continuar": suma al carrito y sigue al resumen estándar
-  onContinuar: (items: VozItemResuelto[], menus: MenuCarrito[]) => void
+  onContinuar: (items: VozItemResuelto[], menus: MenuCarrito[], extras: ExtrasVoz) => void
   // "Usar los botones mejor": suma lo resuelto y vuelve al menú táctil
-  onUsarBotones: (items: VozItemResuelto[], menus: MenuCarrito[]) => void
+  onUsarBotones: (items: VozItemResuelto[], menus: MenuCarrito[], extras: ExtrasVoz) => void
   onCerrar: () => void
 }
 
@@ -26,13 +33,15 @@ type Fase = 'grabando' | 'procesando' | 'verificar' | 'error'
  * pantalla de verificación y los dedos deciden. Todo lo posterior
  * (resumen, ventana de 30s, ticket, cocina) es el flujo táctil de siempre.
  */
-export function PedidoPorVoz({ platos, menus, onContinuar, onUsarBotones, onCerrar }: Props) {
+export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsarBotones, onCerrar }: Props) {
   const [fase, setFase] = useState<Fase>('grabando')
   const [nivel, setNivel] = useState(0)
   const [errorMsg, setErrorMsg] = useState('')
   const [transcripcion, setTranscripcion] = useState('')
   const [items, setItems] = useState<VozItemResuelto[]>([])
   const [personas, setPersonas] = useState<MenuCarrito[]>([])
+  const [gaseosas, setGaseosas] = useState<ExtrasVoz['gaseosas']>([])
+  const [mesa, setMesa] = useState<ExtrasVoz['mesa']>(null)
   const [noEncontrados, setNoEncontrados] = useState<string[]>([])
   const [logId, setLogId] = useState<number | null>(null)
   const [editado, setEditado] = useState(false)
@@ -80,6 +89,14 @@ export function PedidoPorVoz({ platos, menus, onContinuar, onUsarBotones, onCerr
         else perdidas.push(p.menu_nombre)
       }
       setPersonas(armadas)
+      const dictadas: ExtrasVoz['gaseosas'] = []
+      for (const g of r.gaseosas ?? []) {
+        const bebida = gaseosasLista.find((b) => b.id === g.bebida_id)
+        if (bebida) dictadas.push({ bebida, cantidad: g.cantidad })
+        else perdidas.push(g.nombre)
+      }
+      setGaseosas(dictadas)
+      setMesa(r.mesa ?? null)
       setNoEncontrados([...r.no_encontrados, ...perdidas])
       setLogId(r.log_id)
       resultadoEnviado.current = false
@@ -89,7 +106,7 @@ export function PedidoPorVoz({ platos, menus, onContinuar, onUsarBotones, onCerr
       setErrorMsg(e instanceof Error ? e.message : 'No te escuché bien, intenta de nuevo o usa los botones')
       setFase('error')
     }
-  }, [menus])
+  }, [menus, gaseosasLista])
 
   const empezarGrabacion = useCallback(async () => {
     setFase('grabando')
@@ -197,18 +214,28 @@ export function PedidoPorVoz({ platos, menus, onContinuar, onUsarBotones, onCerr
     setPersonas((prev) => prev.filter((_, i) => i !== indice))
   }
 
+  const cambiarGaseosa = (bebidaId: number, delta: number) => {
+    setEditado(true)
+    setGaseosas((prev) =>
+      prev
+        .map((g) => (g.bebida.id === bebidaId ? { ...g, cantidad: g.cantidad + delta } : g))
+        .filter((g) => g.cantidad > 0),
+    )
+  }
+
   const total = items.reduce((s, i) => s + i.precio * i.cantidad, 0)
     + personas.reduce((s, p) => s + subtotalMenu(p), 0)
-  const hayAlgo = items.length > 0 || personas.length > 0
+    + gaseosas.reduce((s, g) => s + g.bebida.precio * g.cantidad, 0)
+  const hayAlgo = items.length > 0 || personas.length > 0 || gaseosas.length > 0
 
   const continuar = () => {
     marcarResultado(editado ? 'corregido' : 'aceptado')
-    onContinuar(items, personas)
+    onContinuar(items, personas, { gaseosas, mesa })
   }
 
   const usarBotones = () => {
     marcarResultado(hayAlgo ? (editado ? 'corregido' : 'aceptado') : 'descartado')
-    onUsarBotones(items, personas)
+    onUsarBotones(items, personas, { gaseosas, mesa })
   }
 
   const repetir = () => {
@@ -270,7 +297,8 @@ export function PedidoPorVoz({ platos, menus, onContinuar, onUsarBotones, onCerr
                   .map((t) => {
                     const nombre = t.alternativas.find((a) => a.plato_id === p.elecciones[t.orden])?.nombre
                     const propio = p.empaques[t.orden]
-                    return propio ? `${nombre} (${NOMBRE_EMPAQUE[propio]})` : nombre
+                    const despues = p.espera?.includes(t.orden) ? ' (después)' : ''
+                    return (propio ? `${nombre} (${NOMBRE_EMPAQUE[propio]})` : nombre) + despues
                   })
                 const faltan = p.menu.tiempos
                   .filter((t) => p.elecciones[t.orden] === undefined && !p.omitidos.includes(t.orden))
@@ -287,6 +315,7 @@ export function PedidoPorVoz({ platos, menus, onContinuar, onUsarBotones, onCerr
                           p.menu.nombre,
                           ...sin.map((r) => `sin ${r.toLowerCase()}`),
                           p.empaque !== 'mesa' ? NOMBRE_EMPAQUE[p.empaque] : '',
+                          ...p.agregados.map((a) => `+${a.cantidad > 1 ? `${a.cantidad} ` : ''}${a.agregado.nombre}`),
                           p.nota,
                         ].filter(Boolean).join(' · ')}
                       </span>
@@ -303,6 +332,36 @@ export function PedidoPorVoz({ platos, menus, onContinuar, onUsarBotones, onCerr
                   </div>
                 )
               })}
+              {gaseosas.map((g) => (
+                <div className="voz-item" key={`gaseosa-${g.bebida.id}`}>
+                  <div className="voz-item-info">
+                    <span className="voz-item-nombre">🥤 {g.bebida.nombre}</span>
+                    <span className="voz-item-precio">{soles(g.bebida.precio)} c/u</span>
+                  </div>
+                  <div className="tarjeta-plato-controles">
+                    <button className="boton-cantidad" onClick={() => cambiarGaseosa(g.bebida.id, -1)}>−</button>
+                    <span className="tarjeta-plato-cantidad">{g.cantidad}</span>
+                    <button className="boton-cantidad boton-mas" onClick={() => cambiarGaseosa(g.bebida.id, 1)}>+</button>
+                    <button className="boton-cantidad voz-quitar" onClick={() => cambiarGaseosa(g.bebida.id, -g.cantidad)}>✕</button>
+                  </div>
+                </div>
+              ))}
+              {mesa && (
+                <div className="voz-item">
+                  <div className="voz-item-info">
+                    <span className="voz-item-nombre">🪑 Mesa {mesa.nombre}</span>
+                  </div>
+                  <div className="tarjeta-plato-controles">
+                    <button
+                      className="boton-cantidad voz-quitar"
+                      onClick={() => { setEditado(true); setMesa(null) }}
+                      aria-label="Quitar la mesa"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
               {items.map((i) => (
                 <div className="voz-item" key={i.plato_id}>
                   <div className="voz-item-info">

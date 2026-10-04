@@ -179,3 +179,34 @@ def test_trasladar_mesa_valida_y_reimprime_si_se_pide(client, menu_ejemplo, db):
                 json={"de_mesa_id": mesas["A"], "a_mesa_id": mesas["B"], "reimprimir": True})
     pendientes = client.get("/api/orders/pending-print").json()["ordenes"]
     assert [o["id"] for o in pendientes] == [orden["id"]]
+
+
+def test_gaseosas_pedidas_con_el_pedido(client, admin_headers, menu_ejemplo, db):
+    """La terminal manda las gaseosas junto con el pedido: entran al total,
+    salen en la comanda (en OTROS) y NO generan el ticket chico aparte."""
+    import base64
+
+    from app.models import Config, TicketBebida
+
+    db.add(Config(clave="modo_impresion", valor="puente"))
+    db.add(Config(clave="impresora_ip", valor="192.168.1.77"))
+    db.commit()
+    bebida = _crear_bebida(client, admin_headers, "Inca Kola personal", 2.5)
+    orden = _crear_orden(client, menu_ejemplo,
+                         bebidas=[{"bebida_id": bebida["id"], "cantidad": 2}])
+    assert orden["total"] == 15.0 + 5.0
+    gaseosa = next(i for i in orden["items"] if i["nombre"] == "Inca Kola personal")
+    assert gaseosa["cantidad"] == 2 and gaseosa["es_cargo"] is True
+    assert db.query(TicketBebida).count() == 0
+
+    trabajo = next(t for t in client.get("/api/print/cola").json()["trabajos"] if t["tipo"] == "orden")
+    assert b"2 x Inca Kola personal" in base64.b64decode(trabajo["datos_b64"])
+
+
+def test_gaseosa_inexistente_no_crea_el_pedido(client, menu_ejemplo):
+    r = client.post("/api/orders", json={
+        "items": [{"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 1}],
+        "bebidas": [{"bebida_id": 999, "cantidad": 1}],
+    })
+    assert r.status_code == 422
+    assert client.get("/api/orders/today").json()["ordenes"] == []

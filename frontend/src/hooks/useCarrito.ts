@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { subtotalMenu } from '../api'
-import type { AgregadoHoy, Empaque, Entrega, ItemCarrito, MenuCarrito, MenuHoy, Plato } from '../api'
+import type { AgregadoHoy, Bebida, Empaque, Entrega, ItemCarrito, MenuCarrito, MenuHoy, Plato } from '../api'
 import type { SugerenciaMenu } from '../menuSugerido'
 
 // La opción con la que arranca un tiempo: la primera sin recargo (para
@@ -35,6 +35,18 @@ function repartirEnOrden<T>(total: number, cuotas: [T, number][], resto: T): T[]
 export function useCarrito() {
   const [items, setItems] = useState<ItemCarrito[]>([])
   const [menus, setMenus] = useState<MenuCarrito[]>([])
+  // Gaseosas de la lista fija (no son platos: no pasan por cocina)
+  const [bebidas, setBebidas] = useState<{ bebida: Bebida; cantidad: number }[]>([])
+
+  const cambiarBebida = useCallback((bebida: Bebida, delta: number) => {
+    setBebidas((prev) => {
+      const existente = prev.find((b) => b.bebida.id === bebida.id)
+      if (!existente) return delta > 0 ? [...prev, { bebida, cantidad: delta }] : prev
+      const nueva = existente.cantidad + delta
+      if (nueva <= 0) return prev.filter((b) => b.bebida.id !== bebida.id)
+      return prev.map((b) => (b.bebida.id === bebida.id ? { ...b, cantidad: nueva } : b))
+    })
+  }, [])
 
   const cambiarCantidad = useCallback((plato: Plato, delta: number) => {
     setItems((prev) => {
@@ -456,6 +468,7 @@ export function useCarrito() {
   const vaciar = useCallback(() => {
     setItems([])
     setMenus([])
+    setBebidas([])
   }, [])
 
   // Quita del carrito lo que ya no está disponible (agotados)
@@ -521,19 +534,23 @@ export function useCarrito() {
   }, [])
 
   const totalItems = useMemo(
-    () => items.reduce((s, i) => s + i.cantidad, 0) + menus.reduce((s, m) => s + m.cantidad, 0),
-    [items, menus],
+    () => items.reduce((s, i) => s + i.cantidad, 0) + menus.reduce((s, m) => s + m.cantidad, 0)
+      + bebidas.reduce((s, b) => s + b.cantidad, 0),
+    [items, menus, bebidas],
   )
   const totalSoles = useMemo(
     () =>
       items.reduce((s, i) => s + i.plato.precio * i.cantidad, 0) +
-      menus.reduce((s, m) => s + subtotalMenu(m), 0),
-    [items, menus],
+      menus.reduce((s, m) => s + subtotalMenu(m), 0) +
+      bebidas.reduce((s, b) => s + b.bebida.precio * b.cantidad, 0),
+    [items, menus, bebidas],
   )
 
   return {
     items,
     menus,
+    bebidas,
+    cambiarBebida,
     cambiarCantidad,
     cambiarEmpaque,
     empaqueParaTodos,

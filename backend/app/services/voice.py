@@ -117,8 +117,13 @@ FORMATO_PEDIDO = {
                                         "description": "Si ESTE plato va distinto (\"la sopa en bolsa\"); "
                                                        "si no, igual",
                                     },
+                                    "espera": {
+                                        "type": "boolean",
+                                        "description": "true si este plato sale DESPUÉS (\"el segundo "
+                                                       "más tarde\", \"todavía no\")",
+                                    },
                                 },
-                                "required": ["tiempo_orden", "plato_id", "empaque"],
+                                "required": ["tiempo_orden", "plato_id", "empaque", "espera"],
                                 "additionalProperties": False,
                             },
                         },
@@ -137,8 +142,22 @@ FORMATO_PEDIDO = {
                         },
                         "nombre": {"type": "string", "description": "Nombre de la persona si lo dijo; si no, vacío"},
                         "nota": {"type": "string", "description": "Pedido especial (\"sin cebolla\"); si no, vacío"},
+                        "agregados": {
+                            "type": "array",
+                            "description": "Extras de la lista AGREGADOS (\"con un huevo frito\", \"una carne más\")",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "agregado_id": {"type": "integer"},
+                                    "cantidad": {"type": "integer"},
+                                },
+                                "required": ["agregado_id", "cantidad"],
+                                "additionalProperties": False,
+                            },
+                        },
                     },
-                    "required": ["menu_id", "cantidad", "elecciones", "sin", "empaque", "entrega", "nombre", "nota"],
+                    "required": ["menu_id", "cantidad", "elecciones", "sin", "empaque", "entrega",
+                                 "nombre", "nota", "agregados"],
                     "additionalProperties": False,
                 },
             },
@@ -155,6 +174,23 @@ FORMATO_PEDIDO = {
                     "additionalProperties": False,
                 },
             },
+            "gaseosas": {
+                "type": "array",
+                "description": "Gaseosas de la lista GASEOSAS",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "bebida_id": {"type": "integer"},
+                        "cantidad": {"type": "integer"},
+                    },
+                    "required": ["bebida_id", "cantidad"],
+                    "additionalProperties": False,
+                },
+            },
+            "mesa": {
+                "type": "string",
+                "description": "Nombre EXACTO de la mesa de la lista MESAS si la dijo; si no, vacío",
+            },
             "no_encontrados": {
                 "type": "array",
                 "description": "Cosas que el cliente pidió pero NO están hoy, tal como las dijo",
@@ -165,7 +201,7 @@ FORMATO_PEDIDO = {
                 "description": "Ambigüedades o dudas; cadena vacía si no hay",
             },
         },
-        "required": ["personas", "items", "no_encontrados", "notas"],
+        "required": ["personas", "items", "gaseosas", "mesa", "no_encontrados", "notas"],
         "additionalProperties": False,
     },
 }
@@ -195,12 +231,22 @@ def contexto_de_hoy(db: Session) -> dict:
 
     platos = menu_activo_con_sinonimos(db)
     sinonimos = {p["id"]: p["sinonimos"] for p in platos}
+    from ..models import Bebida, Mesa
+
     menus = _menus_activos(db)
     for menu in menus:
         for tiempo in menu["tiempos"]:
             for alt in tiempo["alternativas"]:
                 alt["sinonimos"] = sinonimos.get(alt["plato_id"], [])
-    return {"platos": platos, "menus": menus}
+    gaseosas = [
+        {"id": b.id, "nombre": b.nombre, "precio": b.precio}
+        for b in db.scalars(select(Bebida).where(Bebida.activa == True).order_by(Bebida.nombre))  # noqa: E712
+    ]
+    mesas = [
+        {"id": m.id, "nombre": m.nombre}
+        for m in db.scalars(select(Mesa).where(Mesa.activa == True).order_by(Mesa.nombre))  # noqa: E712
+    ]
+    return {"platos": platos, "menus": menus, "gaseosas": gaseosas, "mesas": mesas}
 
 
 def _comillas(sinonimos: list[str]) -> str:
@@ -221,6 +267,10 @@ def construir_system(contexto: dict) -> str:
                     f'    - plato_id: {a["plato_id"]} | {a["nombre"]}'
                     f' | también le dicen: {_comillas(a["sinonimos"])}'
                 )
+        if menu["agregados"]:
+            lineas.append("  AGREGADOS de este menú (extras que se suman a la persona):")
+            for ag in menu["agregados"]:
+                lineas.append(f'    - agregado_id: {ag["id"]} | {ag["nombre"]} (+S/ {ag["precio"]:.2f})')
         bloques_menu.append("\n".join(lineas))
     menus_texto = "\n\n".join(bloques_menu) or "(hoy no hay menús)"
 
@@ -228,6 +278,11 @@ def construir_system(contexto: dict) -> str:
         f'- id: {p["id"]} | {p["nombre"]} (S/ {p["precio"]:.2f}) | también le dicen: {_comillas(p["sinonimos"])}'
         for p in contexto["platos"]
     ) or "(vacía)"
+    gaseosas_texto = "\n".join(
+        f'- bebida_id: {g["id"]} | {g["nombre"]} (S/ {g["precio"]:.2f})'
+        for g in contexto.get("gaseosas", [])
+    ) or "(no hay)"
+    mesas_texto = ", ".join(f'"{m["nombre"]}"' for m in contexto.get("mesas", [])) or "(no hay)"
 
     return f"""Eres el intérprete de pedidos de un restaurante de menú peruano. Recibes la \
 transcripción (imperfecta, viene de audio) de lo que un cliente dijo y la conviertes en un \
@@ -238,6 +293,12 @@ MENÚS DE HOY (lo principal: cada persona pide un menú y elige un plato por tie
 
 CARTA DE HOY (platos sueltos; usa su id solo para lo que NO va dentro de un menú):
 {carta_texto}
+
+GASEOSAS (van en "gaseosas", nunca en items):
+{gaseosas_texto}
+
+MESAS del local (para "mesa"):
+{mesas_texto}
 
 CÓMO ARMAR EL PEDIDO:
 - Cada persona es un elemento de "personas" con el menu_id. "Dos menús, uno con caldo y \
@@ -265,7 +326,17 @@ resto de esa persona, ponlo en el empaque de esa elección; si no, "igual".
 → separado; si no lo dice → auto.
 - Nombre: "uno para Juan", "el de María" → nombre de esa persona; si no, vacío.
 - Pedidos especiales de esa persona ("sin cebolla", "bien cocido") van en su nota.
-- Bebidas y lo que solo existe en la carta van en "items".
+- Lo que solo existe en la carta va en "items".
+- Gaseosas: "una Inca Kola", "dos Coca Colas de litro" → "gaseosas" con el bebida_id de \
+la lista. Sin tamaño dicho ("una Inca"), la personal. Una gaseosa que no está en la lista va \
+en no_encontrados.
+- Extras: "con un huevo frito", "una carne más", "con su refresco" → "agregados" de ESA \
+persona con el agregado_id de su menú (no en la nota). Si no está en la lista, a la nota.
+- Después: "la sopa ahora y el segundo después", "el segundo todavía no", "el segundo me \
+lo traes luego" → ese plato con espera true. Si dice el plato, va elegido; si solo dice \
+"el segundo después" sin nombrarlo, no lo elijas (queda por elegir).
+- Mesa: "para la mesa 2B", "estamos en la 3A" → "mesa" con el nombre EXACTO de la lista \
+(ignora mayúsculas y espacios: "dos be" = "2 B"). Si no dice mesa, vacío.
 
 REGLAS DE INTERPRETACIÓN:
 - Español peruano coloquial: diminutivos y apócopes son normales ("caldito", "lomito", \
@@ -346,6 +417,7 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
         empaque = empaque if empaque in EMPAQUES else "mesa"
         elecciones: dict[int, int] = {}
         empaques: dict[int, str] = {}
+        espera: list[int] = []
         for e in persona.get("elecciones", []):
             orden, plato_id = _entero(e.get("tiempo_orden")), _entero(e.get("plato_id"))
             tiempo = tiempos.get(orden)
@@ -357,6 +429,8 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
                 propio = e.get("empaque")
                 if propio in EMPAQUES and propio != empaque:
                     empaques[orden] = propio
+                if e.get("espera") is True:
+                    espera.append(orden)
         entrega = persona.get("entrega")
         personas.append({
             "menu_id": menu["id"],
@@ -365,6 +439,8 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
             "sin": sin,
             "empaque": empaque,
             "empaques": empaques,
+            "espera": sorted(espera),
+            "agregados": _agregados_validos(persona.get("agregados", []), menu),
             "entrega": entrega if entrega in ("junto", "separado") else None,
             "nombre": str(persona.get("nombre") or "").strip()[:40],
             "nota": str(persona.get("nota") or "").strip()[:200],
@@ -377,12 +453,45 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
             items.append({"plato_id": plato_id, "cantidad": cantidad})
         else:
             extranos.append(str(item.get("plato_id", "?")))
+    gaseosas_ids = {g["id"] for g in contexto.get("gaseosas", [])}
+    gaseosas = []
+    for g in resultado.get("gaseosas", []):
+        bebida_id, cantidad = _entero(g.get("bebida_id")), _entero(g.get("cantidad"))
+        if bebida_id in gaseosas_ids and cantidad is not None and 0 < cantidad <= 20:
+            gaseosas.append({"bebida_id": bebida_id, "cantidad": cantidad})
+        else:
+            extranos.append(f"gaseosa {g.get('bebida_id', '?')}")
+
     return {
         "personas": personas,
         "items": items,
+        "gaseosas": gaseosas,
+        "mesa_id": _mesa_por_nombre(str(resultado.get("mesa") or ""), contexto.get("mesas", [])),
         "no_encontrados": list(resultado.get("no_encontrados", [])) + extranos,
         "notas": resultado.get("notas", ""),
     }
+
+
+def _normalizar_mesa(nombre: str) -> str:
+    return "".join(nombre.lower().split())
+
+
+def _mesa_por_nombre(dicha: str, mesas: list[dict]) -> int | None:
+    """La mesa dicha ("2b", "2 B") contra los nombres reales; sin match, None."""
+    buscada = _normalizar_mesa(dicha)
+    if not buscada:
+        return None
+    return next((m["id"] for m in mesas if _normalizar_mesa(m["nombre"]) == buscada), None)
+
+
+def _agregados_validos(crudos: list, menu: dict) -> list[dict]:
+    ids = {a["id"] for a in menu.get("agregados", [])}
+    salida = []
+    for a in crudos:
+        agregado_id, cantidad = _entero(a.get("agregado_id")), _entero(a.get("cantidad"))
+        if agregado_id in ids and cantidad is not None and 0 < cantidad <= 10:
+            salida.append({"agregado_id": agregado_id, "cantidad": cantidad})
+    return salida
 
 
 def resolver_personas(personas: list[dict], contexto: dict) -> list[dict]:
@@ -397,7 +506,8 @@ def resolver_personas(personas: list[dict], contexto: dict) -> list[dict]:
             alt = next(a for a in tiempos[orden]["alternativas"] if a["plato_id"] == plato_id)
             platos.append({"tiempo_orden": orden, "rotulo": tiempos[orden]["rotulo"],
                            "plato_id": plato_id, "nombre": alt["nombre"],
-                           "empaque": p["empaques"].get(orden)})
+                           "empaque": p["empaques"].get(orden),
+                           "espera": orden in p["espera"]})
         salida.append({
             **p,
             # JSON no tiene claves enteras: el frontend recibe la lista
@@ -405,6 +515,10 @@ def resolver_personas(personas: list[dict], contexto: dict) -> list[dict]:
             "menu_nombre": menu["nombre"],
             "precio": menu["precio"],
             "sin_rotulos": [tiempos[o]["rotulo"] for o in p["sin"]],
+            "agregados": [
+                {**a, "nombre": next(x["nombre"] for x in menu["agregados"] if x["id"] == a["agregado_id"])}
+                for a in p["agregados"]
+            ],
         })
     return salida
 
@@ -434,6 +548,7 @@ def pista_de_vocabulario(contexto: dict) -> str:
         nombres += [p["nombre"], *p["sinonimos"]]
     for m in contexto["menus"]:
         nombres.append(m["nombre"])
+    nombres += [g["nombre"] for g in contexto.get("gaseosas", [])]
     vistos = list(dict.fromkeys(n for n in nombres if n))
     return "Pedido en un restaurante peruano. Platos de hoy: " + ", ".join(vistos)[:800]
 
@@ -442,7 +557,7 @@ def procesar_audio(db: Session, audio_bytes: bytes, nombre: str, duracion_s: flo
     """Pipeline completo: transcribir + interpretar + resolver contra lo de hoy.
 
     Devuelve (transcripcion, resultado, items_resueltos, personas_resueltas,
-    latencia_ms, costo_usd).
+    extras {gaseosas, mesa}, latencia_ms, costo_usd).
     """
     inicio = time.perf_counter()
     contexto = contexto_de_hoy(db)
@@ -464,6 +579,18 @@ def procesar_audio(db: Session, audio_bytes: bytes, nombre: str, duracion_s: flo
         for i in resultado["items"]
     ]
     personas = resolver_personas(resultado["personas"], contexto)
+    gaseosas_por_id = {g["id"]: g for g in contexto["gaseosas"]}
+    extras = {
+        "gaseosas": [
+            {**g, "nombre": gaseosas_por_id[g["bebida_id"]]["nombre"],
+             "precio": gaseosas_por_id[g["bebida_id"]]["precio"]}
+            for g in resultado.get("gaseosas", [])
+        ],
+        "mesa": next(
+            ({"id": m["id"], "nombre": m["nombre"]} for m in contexto["mesas"] if m["id"] == resultado.get("mesa_id")),
+            None,
+        ),
+    }
     costo_total = costo_transcripcion(duracion_s) + (costo_interprete or 0)
-    return (transcripcion, resultado, items_resueltos, personas,
+    return (transcripcion, resultado, items_resueltos, personas, extras,
             latencia_ms, round(costo_total, 6))
