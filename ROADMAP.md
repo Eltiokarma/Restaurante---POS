@@ -687,6 +687,16 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       sale en un rectángulo grueso con "SEGUNDO / FALTA ELEGIR" (sin "no preparar":
       confundía), para que en hora punta no se lea como un plato más. El refresco del
       menú tampoco sale en la comanda HTML (la térmica ya lo omitía).
+- [x] **Comanda rediseñada** (pedido del dueño con las comandas en la mano): sin nombre del
+      local ni "Gracias!"; ORDEN a la izquierda y MESA a la derecha en la misma línea; la
+      fecha y hora al pie; "SEPARADO" en vez de "por tiempos"; recuadro de lo que falta
+      elegir a la mitad ("3 SEGUNDOS / FALTA ELEGIR", borde doble fino). Letras de los
+      platos separadas 2 puntos (ESC SP 2: 12 → 14 puntos, +16.7 % de ancho de línea; la
+      letra de la impresora no escala fino, solo x2). Ningún renglón pasa del ancho:
+      producción tenía 64 columnas en una impresora de 48 y las líneas se partían.
+- [x] **"OK y pagó" / "OK y no pagó"** en la ventana de cancelación de la terminal: la
+      comanda dice PAGADO / NO PAGO; "no pagó" queda en "falta pagar" de caja; "pagó"
+      imprime detrás una precuenta en letra chica (Font B) como comprobante del cliente.
 - [x] **Entrega por defecto: POR TIEMPOS** (decisión del dueño). "Todo junto" es lo
       especial y lo de siempre para llevar: sin elegirlo a mano, una persona sale junto
       solo si todo lo suyo va en táper/bolsa/lonchera (el refresco no decide).

@@ -1357,7 +1357,7 @@ export function Caja() {
                     <span className="badge-servicio">
                       {/* Cada persona puede salir distinto: la línea real, no solo la de la orden */}
                       {lineaEntrega(o).texto === 'TODO JUNTO' ? 'Sale junto'
-                        : lineaEntrega(o).texto === 'POR TIEMPOS' ? 'Por tiempos'
+                        : lineaEntrega(o).texto === 'SEPARADO' ? 'Separado'
                           : lineaEntrega(o).texto.toLowerCase()}
                     </span>
                   )}

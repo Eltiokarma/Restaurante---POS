@@ -207,9 +207,11 @@ def test_comanda_agrupada_por_tiempos(client, db, fonda):
     assert "2 x Asado con puré -> sin frijoles".encode("cp850") in datos
     # Sin mesa elegida, el ticket lo dice; y la entrega va en el impreso
     assert b"SIN MESA" in datos
-    # La mesa sale en letra doble (ancho y alto), como el número de orden
-    assert b"\x1d!\x11\x1bE\x01SIN MESA" in datos
-    assert b"ENTREGA: POR TIEMPOS" in datos
+    # Orden a la izquierda y mesa a la derecha, en la misma línea en letra
+    # doble (ancho y alto); sin nombre del local ni "Gracias!"
+    assert b"\x1d!\x11\x1bE\x01ORDEN #001   SIN MESA\n" in datos
+    assert b"ENTREGA: SEPARADO" in datos
+    assert b"Gracias" not in datos and b"Mi Restaurante" not in datos
 
 
 def test_csv_marca_lo_quitado_y_los_agregados(client, admin_headers, fonda):

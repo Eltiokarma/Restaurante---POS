@@ -308,7 +308,8 @@ export function Cliente() {
   const sinPlatos = carrito.menus.length === 0 && carrito.items.length === 0
 
   const guardandoRef = useRef(false)
-  const confirmarDefinitivo = async () => {
+  // pago: "OK y pagó" / "OK y no pagó"; si la ventana vence sola, no se dice
+  const confirmarDefinitivo = async (pago?: 'pagado' | 'pendiente') => {
     if (guardandoRef.current) return
     guardandoRef.current = true
     setGuardando(true)
@@ -329,6 +330,7 @@ export function Cliente() {
         carrito.menus.map(menuAPayload),
         copias,
         carrito.bebidas.map((b) => ({ bebida_id: b.bebida.id, cantidad: b.cantidad })),
+        pago,
       )
       setOrdenFinal(resultado)
       carrito.vaciar()
@@ -482,7 +484,7 @@ export function Cliente() {
         {copias > 1 && <p className="aviso-dos-comandas">🖨 Saldrán {copias} comandas</p>}
         <CountdownCancel
           duracionSeg={config?.ventana_cancelacion_seg ?? 30}
-          onTerminado={confirmarDefinitivo}
+          onTerminado={() => confirmarDefinitivo()}
         />
         <div className="resumen-breve">
           {carrito.menus.map((m, idx) => (
@@ -515,9 +517,16 @@ export function Cliente() {
         <button className="boton-grande boton-secundario" onClick={() => setPantalla('resumen')} disabled={guardando}>
           ↩ VOLVER A CORREGIR
         </button>
-        <button className="boton-grande boton-secundario" onClick={confirmarDefinitivo} disabled={guardando}>
-          {guardando ? 'Guardando…' : 'Confirmar ahora (saltar espera)'}
-        </button>
+        {/* Confirman ya y dicen si pagó: sale en la comanda; si pagó, además
+            la precuenta para el cliente (pedido del dueño) */}
+        <div className="botones-pago">
+          <button className="boton-grande boton-confirmar" onClick={() => confirmarDefinitivo('pagado')} disabled={guardando}>
+            {guardando ? 'Guardando…' : '✅ OK y pagó'}
+          </button>
+          <button className="boton-grande boton-secundario" onClick={() => confirmarDefinitivo('pendiente')} disabled={guardando}>
+            OK y no pagó
+          </button>
+        </div>
       </div>
     )
   }

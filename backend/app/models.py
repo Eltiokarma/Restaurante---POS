@@ -175,6 +175,10 @@ class Orden(Base):
     entrega: Mapped[str] = mapped_column(String(10), default="junto", nullable=False)
     # Cuántas comandas imprimir (1 normal; 2 = una para la guía/mozo)
     copias: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Lo que se marcó al crear el pedido en la terminal: "pagado" (sale la
+    # precuenta para el cliente) | "pendiente" (no pagó aún) | None (no se
+    # dijo). Va escrito en la comanda.
+    pago_al_pedir: Mapped[str | None] = mapped_column(String(10), nullable=True)
     # Mesas asignadas al ticket (JSON de ids). Varias = mesas combinadas.
     mesa_ids: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     # True cuando la caja liberó las mesas de este ticket (clientes se fueron)

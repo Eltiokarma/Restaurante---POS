@@ -76,34 +76,30 @@ export function Ticket({ orden, local }: Props) {
   )
 }
 
-function TicketCuerpo({ orden, local, id }: Props & { id?: string }) {
+function TicketCuerpo({ orden, id }: Props & { id?: string }) {
   const numero = String(orden.numero_orden_dia).padStart(3, '0')
   return (
     <div id={id} className="ticket">
-      <div className="ticket-cabecera">
-        <div className="ticket-local">{local.nombre}</div>
-        {local.direccion && <div>{local.direccion}</div>}
-        {local.ruc && <div>RUC: {local.ruc}</div>}
+      {/* Comanda: sin nombre del local; la orden a la izquierda y la mesa
+          a la derecha, en grande (pedido del dueño) */}
+      <div className="ticket-orden-mesa">
+        <span>ORDEN #{numero}</span>
+        <span>
+          {orden.mesas.length > 0 ? `MESA ${orden.mesas.join(' + ')}`
+            : orden.tipo_servicio === 'llevar' ? 'LLEVAR' : 'SIN MESA'}
+        </span>
       </div>
-      <div className="ticket-orden">ORDEN #{numero}</div>
-      {orden.tipo_servicio !== 'sala' && (
-        <div className="ticket-servicio">
-          {orden.tipo_servicio === 'llevar' ? '🛍 PARA LLEVAR' : '🥡 MIXTO — parte para llevar'}
-        </div>
+      {orden.pago_al_pedir && (
+        <div className="ticket-pago">{orden.pago_al_pedir === 'pagado' ? 'PAGADO' : '** NO PAGÓ **'}</div>
       )}
-      {orden.mesas.length > 0 ? (
-        <div className="ticket-servicio ticket-mesa">🪑 MESA: {orden.mesas.join(' + ')}</div>
-      ) : orden.tipo_servicio !== 'llevar' ? (
-        <div className="ticket-servicio ticket-mesa">🪑 SIN MESA</div>
-      ) : null}
+      {orden.tipo_servicio === 'mixto' && (
+        <div className="ticket-servicio">🥡 MIXTO — parte para llevar</div>
+      )}
       {orden.items.length + orden.menus.length >= 2 || orden.menus.length > 0 ? (
         <div className="ticket-servicio">
           ENTREGA: {lineaEntrega(orden).texto}
         </div>
       ) : null}
-      <div className="ticket-fecha">
-        {orden.fecha} — {orden.hora}
-      </div>
       <hr />
       <table className="ticket-items">
         <tbody>
@@ -113,7 +109,7 @@ function TicketCuerpo({ orden, local, id }: Props & { id?: string }) {
                 <td>
                   {menu.cantidad} × {menu.nombre}
                   {menu.nombre_persona && <strong> — {menu.nombre_persona.toUpperCase()}</strong>}
-                  {menu.entrega === 'separado' && lineaEntrega(orden).texto.includes('/') && ' · POR TIEMPOS'}
+                  {menu.entrega === 'separado' && lineaEntrega(orden).texto.includes('/') && ' · SEPARADO'}
                   {menu.nota && <div className="ticket-item-nota">→ {menu.nota}</div>}
                 </td>
                 <td className="ticket-subtotal">
@@ -177,8 +173,10 @@ function TicketCuerpo({ orden, local, id }: Props & { id?: string }) {
         <span>TOTAL</span>
         <span>{soles(orden.total)}</span>
       </div>
-      {/* "Paga en caja con este ticket" quitado por ahora (pedido del dueño) */}
-      <div className="ticket-pie">¡Gracias!</div>
+      {/* Sin "¡Gracias!" (es comanda): abajo la fecha y la hora */}
+      <div className="ticket-fecha">
+        {orden.fecha} — {orden.hora}
+      </div>
     </div>
   )
 }

@@ -169,6 +169,8 @@ export interface OrdenOut {
   metodo_pago: MetodoPago | null
   // "Falta pagar": salió el ticket, la plata no entró todavía
   pago_pendiente?: boolean
+  // "OK y pagó" / "OK y no pagó" al crear el pedido en la terminal
+  pago_al_pedir?: 'pagado' | 'pendiente' | null
   // "Falta vuelto": pagó de más; monto que se le debe (null = nada)
   vuelto_pendiente?: number | null
   entrega: Entrega
@@ -835,11 +837,11 @@ export function lineaEntrega(orden: OrdenOut): { texto: string; separado: boolea
   }
   if (new Set(entregas).size === 1) {
     return entregas[0] === 'separado'
-      ? { texto: 'POR TIEMPOS', separado: true }
+      ? { texto: 'SEPARADO', separado: true }
       : { texto: 'TODO JUNTO', separado: false }
   }
   const juntos = entregas.filter((e) => e === 'junto').length
-  return { texto: `${juntos} JUNTO / ${entregas.length - juntos} POR TIEMPOS`, separado: true }
+  return { texto: `${juntos} JUNTO / ${entregas.length - juntos} SEPARADO`, separado: true }
 }
 
 /** La persona dictada como línea del carrito. Un tiempo con una sola
@@ -901,11 +903,12 @@ export const api = {
     menus: MenuOrdenIn[] = [],
     copias = 1,
     bebidas: { bebida_id: number; cantidad: number }[] = [],
+    pago?: 'pagado' | 'pendiente',
   ) =>
     request<{ orden: OrdenOut; local: DatosLocal }>('/api/orders', {
       method: 'POST',
       body: JSON.stringify({
-        items, menus, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega, copias, bebidas,
+        items, menus, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega, copias, bebidas, pago,
       }),
     }),
 

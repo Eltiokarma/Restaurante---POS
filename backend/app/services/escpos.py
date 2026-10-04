@@ -24,6 +24,23 @@ NEGRITA_OFF = b"\x1bE\x00"
 DOBLE_TAMANO = b"\x1d!\x11"
 DOBLE_ALTO = b"\x1d!\x01"
 TAMANO_NORMAL = b"\x1d!\x00"
+# Espacio extra a la derecha de cada letra, en puntos (ESC SP n). La letra
+# de la impresora es fija (Font A: 12 puntos de ancho, 1.5 mm a 203 ppp) y
+# solo escala x2; para leerla más ancha se separan las letras.
+ESPACIADO_PLATOS = 2  # 12 → 14 puntos por letra: +16.7 % de ancho de línea
+ESPACIADO_NORMAL = b"\x1b\x20\x00"
+FUENTE_A = b"\x1bM\x00"
+FUENTE_B = b"\x1bM\x01"  # 9 puntos de ancho: letra chica (precuenta)
+
+
+def _espaciado(puntos: int) -> bytes:
+    return b"\x1b\x20" + bytes([puntos])
+
+
+def columnas_con_espaciado(columnas: int, puntos: int) -> int:
+    """Cuántas letras entran por línea si cada una lleva `puntos` extra.
+    `columnas` es la configuración en Font A (12 puntos por letra)."""
+    return (columnas * 12) // (12 + puntos)
 # Alimenta papel y corta (corte parcial con avance: no arranca a mitad)
 CORTAR = b"\n\n\n\n" + b"\x1dV\x42\x03"
 
@@ -47,15 +64,28 @@ def _fila(izquierda: str, derecha: str, columnas: int) -> str:
 
 
 def _recuadro(lineas: list[str], columnas: int) -> bytes:
-    """Rectángulo macizo (█) en negrita: lo que falta elegir no puede pasar
-    por un plato más aunque la vista falle en plena hora punta."""
-    borde = "\u2588" * columnas
+    """Recuadro de lo que falta elegir, compacto (pedido del dueño: la mitad
+    del anterior): borde doble fino en letra normal y el texto en negrita
+    doble alto. Ningún renglón pasa de `columnas` (si pasa, la impresora lo
+    parte en dos y el marco sale roto)."""
     ancho = columnas - 4
-    cuerpo = [
-        "\u2588 " + linea[:ancho].center(ancho) + " \u2588"
-        for linea in lineas if linea
-    ]
-    return NEGRITA_ON + b"".join(_texto(l) for l in [borde, *cuerpo, borde]) + NEGRITA_OFF
+    borde_sup = "\u2554" + "\u2550" * (columnas - 2) + "\u2557"
+    borde_inf = "\u255a" + "\u2550" * (columnas - 2) + "\u255d"
+    cuerpo = b"".join(
+        _texto("\u2551 " + linea[:ancho].center(ancho) + " \u2551") for linea in lineas if linea
+    )
+    return (TAMANO_NORMAL + _texto(borde_sup) + DOBLE_ALTO + NEGRITA_ON + cuerpo + NEGRITA_OFF
+            + TAMANO_NORMAL + _texto(borde_inf) + DOBLE_ALTO)
+
+
+def _plural(rotulo: str, veces: int) -> str:
+    """"SEGUNDO" → "SEGUNDOS" cuando son varios ("3 SEGUNDOS")."""
+    if veces <= 1:
+        return rotulo
+    palabras = rotulo.split()
+    ultima = palabras[0]
+    palabras[0] = ultima + ("S" if ultima[-1] in "AEIOU" else "ES")
+    return " ".join(palabras)
 
 
 def _soles(monto: float) -> str:
@@ -79,43 +109,50 @@ def render_orden(
     def es_bebida(item) -> bool:
         return categorias.get(item.plato_id) == "bebida"
     numero = f"{orden.numero_orden_dia:03d}"
-    partes: list[bytes] = [INICIALIZAR, CODEPAGE_CP850, CENTRAR]
+    partes: list[bytes] = [INICIALIZAR, CODEPAGE_CP850, FUENTE_A, ESPACIADO_NORMAL, ALINEAR_IZQ]
 
-    partes += [NEGRITA_ON, _texto(local.get("nombre") or "Restaurante"), NEGRITA_OFF]
-    if local.get("direccion"):
-        partes.append(_texto(local["direccion"]))
-    if local.get("ruc"):
-        partes.append(_texto(f"RUC: {local['ruc']}"))
-    partes.append(_texto(""))
-    partes += [DOBLE_TAMANO, _texto(f"ORDEN #{numero}"), TAMANO_NORMAL]
-
-    if orden.tipo_servicio == "llevar":
-        partes.append(_texto("* PARA LLEVAR *"))
-    elif orden.tipo_servicio == "mixto":
-        partes.append(_texto("* MIXTO - parte para llevar *"))
+    # Comanda de cocina: sin nombre del local (pedido del dueño). Arriba,
+    # en grande, la orden pegada a la izquierda y la mesa a la derecha
     mesas = json.loads(orden.mesa_ids or "[]")
-    # La mesa en letra doble, como el número de orden: el mozo la busca
-    # de un vistazo al sacar el plato (pedido del dueño)
-    partes += [DOBLE_TAMANO, NEGRITA_ON]
     if mesas and not orden.mesa_liberada:
         nombres = local.get("mesas") or {}
-        partes.append(_texto("MESA: " + " + ".join(nombres.get(m, f"#{m}") for m in mesas)))
-    elif orden.tipo_servicio != "llevar":
+        mesa = "MESA " + " + ".join(nombres.get(m, f"#{m}") for m in mesas)
+    elif orden.tipo_servicio == "llevar":
+        mesa = "LLEVAR"
+    else:
         # Pedido del dueño: si nadie eligió mesa, que el ticket lo diga
-        partes.append(_texto("SIN MESA"))
+        mesa = "SIN MESA"
+    izquierda = f"ORDEN #{numero}"
+    media = columnas // 2  # en letra doble entra la mitad
+    partes += [DOBLE_TAMANO, NEGRITA_ON]
+    if len(izquierda) + 1 + len(mesa) <= media:
+        partes.append(_texto(izquierda + mesa.rjust(media - len(izquierda))))
+    else:
+        partes += [_texto(izquierda), _texto(mesa[:media].rjust(media))]
     partes += [NEGRITA_OFF, TAMANO_NORMAL]
+
+    # "OK y pagó" / "OK y no pagó" de la terminal
+    if orden.pago_al_pedir == "pagado":
+        partes += [CENTRAR, DOBLE_ALTO, NEGRITA_ON, _texto("PAGADO"), NEGRITA_OFF, TAMANO_NORMAL]
+    elif orden.pago_al_pedir == "pendiente":
+        partes += [CENTRAR, DOBLE_ALTO, NEGRITA_ON, _texto("** NO PAGO **"), NEGRITA_OFF, TAMANO_NORMAL]
+    partes.append(CENTRAR)
+    if orden.tipo_servicio == "mixto":
+        partes.append(_texto("* MIXTO - parte para llevar *"))
     if len(orden.items) + len(orden.menus) >= 2 or orden.menus:
         # La entrega en negrita y tamaño normal (pedido del dueño: en
         # grande competía con la mesa)
         partes += [NEGRITA_ON, _texto(_linea_entrega(orden, categorias)), NEGRITA_OFF]
-    partes.append(_texto(f"{orden.fecha.isoformat()} - {orden.hora}"))
 
     partes += [ALINEAR_IZQ, _texto("-" * columnas)]
 
     # Los platos van en DOBLE ALTO: mismas columnas, letra al doble —
     # pedido del dueño tras el primer servicio (el ticket es la comanda
-    # que viaja a cocina, se lee de un vistazo)
-    partes.append(DOBLE_ALTO)
+    # que viaja a cocina, se lee de un vistazo). Además letras separadas
+    # (ESPACIADO_PLATOS): la línea es más ancha, así que entran menos.
+    columnas_comanda = columnas
+    columnas = columnas_con_espaciado(columnas_comanda, ESPACIADO_PLATOS)
+    partes += [DOBLE_ALTO, _espaciado(ESPACIADO_PLATOS)]
 
     # La comanda va POR GRUPOS (pedido del dueño tras el servicio real):
     # las entradas arriba, los segundos abajo, cada plato con su
@@ -160,8 +197,8 @@ def render_orden(
             pendientes_por_rotulo[clave_p] = pendientes_por_rotulo.get(clave_p, 0) + om.cantidad
     for (rotulo, persona), veces in pendientes_por_rotulo.items():
         cuantos = f"{veces} " if veces > 1 else ""
-        de_quien = f"({persona})" if persona else ""
-        partes.append(_recuadro([f"{cuantos}{rotulo}", "FALTA ELEGIR", de_quien], columnas))
+        de_quien = f" ({persona})" if persona else ""
+        partes.append(_recuadro([f"{cuantos}{_plural(rotulo, veces)}{de_quien}", "FALTA ELEGIR"], columnas))
     if sin_por_rotulo or pendientes_por_rotulo:
         partes.append(_texto(""))
 
@@ -219,7 +256,7 @@ def render_orden(
             if persona:
                 nombre += f" ({persona})"
             if por_tiempos:
-                nombre += " (TIEMPOS)"
+                nombre += " (SEPARADO)"
             # En OTROS (gaseosas y cargos sin plato) no van montos: la
             # comanda es para cocina, la plata se ve en caja
             monto = "" if bucket is None else (_soles(datos["monto"]) if datos["monto"] > 0 else "")
@@ -243,9 +280,10 @@ def render_orden(
             else:
                 partes.append(_texto(_fila(nombre, monto, columnas)))
 
-    partes += [TAMANO_NORMAL, _texto("-" * columnas)]
-    # "Paga en caja con este ticket" quitado por ahora (pedido del dueño)
-    partes += [CENTRAR, _texto(""), _texto("Gracias!")]
+    columnas = columnas_comanda
+    partes += [TAMANO_NORMAL, ESPACIADO_NORMAL, _texto("-" * columnas)]
+    # Sin "Gracias!" (es comanda de cocina): abajo va la fecha y la hora
+    partes += [CENTRAR, _texto(f"{orden.fecha.isoformat()} - {orden.hora}")]
     partes.append(CORTAR)
     return b"".join(partes)
 
@@ -262,9 +300,9 @@ def _linea_entrega(orden, categorias: dict[int, str] | None = None) -> str:
     ) or not entregas:
         entregas.append(orden.entrega)
     if len(set(entregas)) == 1:
-        return "ENTREGA: POR TIEMPOS" if entregas[0] == "separado" else "ENTREGA: TODO JUNTO"
+        return "ENTREGA: SEPARADO" if entregas[0] == "separado" else "ENTREGA: TODO JUNTO"
     juntos = entregas.count("junto")
-    return f"ENTREGA: {juntos} JUNTO / {len(entregas) - juntos} POR TIEMPOS"
+    return f"ENTREGA: {juntos} JUNTO / {len(entregas) - juntos} SEPARADO"
 
 
 def render_bebida(datos: dict, local: dict, columnas: int = 42) -> bytes:
@@ -381,6 +419,40 @@ def render_cierre(datos: dict, local: dict, columnas: int = 42) -> bytes:
     partes += [CENTRAR, DOBLE_TAMANO, NEGRITA_ON, _texto(veredicto),
                NEGRITA_OFF, TAMANO_NORMAL]
     partes.append(CORTAR)
+    return b"".join(partes)
+
+
+def render_precuenta(orden: Orden, local: dict, columnas: int = 42) -> bytes:
+    """Precuenta para el cliente que pagó al pedir ("OK y pagó"): corta y
+    en letra chica (Font B, 9 puntos: entran 4/3 de las columnas). Le sirve
+    de comprobante si su pedido se pierde."""
+    ancho = (columnas * 12) // 9
+    numero = f"{orden.numero_orden_dia:03d}"
+    mesas = json.loads(orden.mesa_ids or "[]")
+    nombres = local.get("mesas") or {}
+    cabecera = f"Orden #{numero}"
+    if mesas:
+        cabecera += " - Mesa " + " + ".join(nombres.get(m, f"#{m}") for m in mesas)
+    partes: list[bytes] = [INICIALIZAR, CODEPAGE_CP850, FUENTE_B, CENTRAR,
+                           NEGRITA_ON, _texto(local.get("nombre") or "Restaurante"),
+                           _texto("PRECUENTA"), NEGRITA_OFF, _texto(cabecera),
+                           _texto(f"{orden.fecha.isoformat()} - {orden.hora}"),
+                           ALINEAR_IZQ, _texto("-" * ancho)]
+    for om in orden.menus:
+        propios = [i for i in orden.items if i.orden_menu_id == om.id]
+        platos = " + ".join(i.nombre_snapshot for i in propios if not i.es_agregado and i.precio_snapshot == 0)
+        monto = om.precio_cobrado * om.cantidad + sum(i.precio_snapshot * i.cantidad for i in propios)
+        partes.append(_texto(_fila(f"{om.cantidad} x {om.nombre_snapshot}", _soles(monto), ancho)))
+        if platos:
+            partes.append(_texto(f"  {platos}"[:ancho]))
+    for item in orden.items:
+        if item.orden_menu_id is None:
+            partes.append(_texto(_fila(f"{item.cantidad} x {item.nombre_snapshot}",
+                                       _soles(item.precio_snapshot * item.cantidad), ancho)))
+    partes += [_texto("-" * ancho), NEGRITA_ON,
+               _texto(_fila("TOTAL PAGADO", f"S/ {_soles(orden.total)}", ancho)), NEGRITA_OFF,
+               CENTRAR, _texto("Guarde este papel: es el comprobante de su pedido"),
+               FUENTE_A, CORTAR]
     return b"".join(partes)
 
 

@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 import json
+from typing import Literal
 from datetime import date, datetime, time
 
 from sqlalchemy import update
@@ -96,6 +97,9 @@ class OrdenIn(BaseModel):
     copias: int = Field(default=1, ge=1, le=3)
     # Gaseosas de la lista fija pedidas junto con el pedido (terminal/voz)
     bebidas: list[BebidaPedida] = Field(default_factory=list, max_length=10)
+    # "OK y pagó" (pagado: sale la precuenta) | "OK y no pagó" (pendiente:
+    # queda en "falta pagar" de caja) | sin decir (None, como siempre)
+    pago: Literal["pagado", "pendiente"] | None = None
 
 
 class EstadoIn(BaseModel):
@@ -194,6 +198,7 @@ def _orden_a_dict(
         "origen": orden.origen,
         "metodo_pago": orden.metodo_pago,
         "pago_pendiente": orden.pago_pendiente,
+        "pago_al_pedir": orden.pago_al_pedir,
         "vuelto_pendiente": orden.vuelto_pendiente,
         "entrega": orden.entrega,
         "copias": orden.copias,
@@ -326,6 +331,9 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=422, detail=str(e))
 
     orden.copias = payload.copias
+    orden.pago_al_pedir = payload.pago
+    if payload.pago == "pendiente":
+        orden.pago_pendiente = True
     # Gaseosas pedidas con el pedido: van en la misma comanda (en OTROS),
     # sin ticket chico aparte (ese es para las que se suman después)
     if payload.bebidas:
