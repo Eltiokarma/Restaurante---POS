@@ -634,7 +634,8 @@ export interface VozPersona {
   menu_nombre: string
   precio: number
   cantidad: number
-  elecciones: { tiempo_orden: number; rotulo: string; plato_id: number; nombre: string }[]
+  // empaque: solo si ESE plato va distinto que la persona ("sopa en bolsa")
+  elecciones: { tiempo_orden: number; rotulo: string; plato_id: number; nombre: string; empaque: Empaque | null }[]
   sin: number[]
   sin_rotulos: string[]
   empaque: Empaque
@@ -811,11 +812,13 @@ export function lineaEntrega(orden: OrdenOut): { texto: string; separado: boolea
  *  no nombró quedan sin elegir para que el cliente los complete. */
 export function personaVozAMenu(p: VozPersona, menu: MenuHoy): MenuCarrito {
   const elecciones: Record<number, number> = {}
+  const empaques: Partial<Record<number, Empaque>> = {}
   for (const t of menu.tiempos) {
     if (p.sin.includes(t.orden)) continue
     const dicho = p.elecciones.find((e) => e.tiempo_orden === t.orden)
     if (dicho && t.alternativas.some((a) => a.plato_id === dicho.plato_id)) {
       elecciones[t.orden] = dicho.plato_id
+      if (dicho.empaque && dicho.empaque !== p.empaque) empaques[t.orden] = dicho.empaque
     } else if (t.alternativas.length === 1) {
       elecciones[t.orden] = t.alternativas[0].plato_id
     }
@@ -823,7 +826,7 @@ export function personaVozAMenu(p: VozPersona, menu: MenuHoy): MenuCarrito {
   return {
     menu, cantidad: p.cantidad, elecciones, extras: [],
     omitidos: p.sin.filter((o) => menu.tiempos.some((t) => t.orden === o && !t.obligatorio)),
-    agregados: [], empaque: p.empaque, empaques: {}, nota: p.nota,
+    agregados: [], empaque: p.empaque, empaques, nota: p.nota,
     entrega: p.entrega ?? undefined, nombre_persona: p.nombre,
   }
 }
