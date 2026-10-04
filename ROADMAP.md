@@ -658,6 +658,14 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       nuevo total (en modo terminal lo imprime la propia pantalla). Solo pedidos de hoy,
       no anulados ni anotados a mano. Decisión: por ahora en la terminal; más adelante se
       evaluará dejarlo solo en caja.
+- [x] **Intérprete rápido sin IA** (`services/voz_rapida.py`), para que el cliente se
+      autopida mientras el dueño atiende otras mesas: los pedidos simples ("dos almuerzos
+      con chairito y pollo a la olla en bolsa", "un segundo solo de locro para llevar",
+      "mesa tres be", "dos Inca de litro") se resuelven con palabras clave y los sinónimos
+      de cada plato, al instante y gratis. Regla: nunca adivina; una palabra que no
+      entiende o algo que pide criterio ("uno con… y el otro…", "después", "sin cebolla",
+      correcciones, mesa ambigua, varios menús) → la IA como siempre. Mismo formato y
+      misma validación que la IA; el log guarda `via: reglas|ia`.
 - [ ] **Antes de encenderla**: correr el banco de pruebas (Fase 2) con audios reales del
       local y pegar el prompt refinado + sinónimos en los marcadores `TODO` de
       `backend/app/services/voice.py`. Umbral acordado: >85% integra; 70–85% con

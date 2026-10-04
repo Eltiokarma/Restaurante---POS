@@ -42,7 +42,7 @@ def test_pipeline_completo_simulado(client, admin_headers, menu_ejemplo, monkeyp
     monkeypatch.setattr(voice, "transcribir", lambda b, n="a", pista="": "dos lomitos y un ceviche porfa")
     monkeypatch.setattr(
         voice, "interpretar",
-        lambda texto, contexto: (
+        lambda texto, contexto, esfuerzo=None: (
             {
                 "personas": [],
                 "items": [{"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 2}],
@@ -243,7 +243,7 @@ def test_endpoint_devuelve_personas_con_nombres(client, admin_headers, menu_voz,
     activar_voz(client, admin_headers)
     monkeypatch.setenv("OPENAI_API_KEY", "fake")
     monkeypatch.setattr(voice, "transcribir", lambda b, n="a", pista="": "un caldito con lomito y otro sin sopa con pollo")
-    monkeypatch.setattr(voice, "interpretar", lambda texto, contexto: (voice._depurar({
+    monkeypatch.setattr(voice, "interpretar", lambda texto, contexto, esfuerzo=None: (voice._depurar({
         "personas": [
             {"menu_id": m["menu_id"], "cantidad": 1,
              "elecciones": [{"tiempo_orden": 1, "plato_id": m["Caldo de gallina"]},
@@ -479,7 +479,7 @@ def test_endpoint_devuelve_gaseosas_y_mesa(client, admin_headers, extras_voz, mo
     activar_voz(client, admin_headers)
     monkeypatch.setenv("OPENAI_API_KEY", "fake")
     monkeypatch.setattr(voice, "transcribir", lambda b, n="a", pista="": "un lomo y una inca para la 2B")
-    monkeypatch.setattr(voice, "interpretar", lambda texto, contexto: (voice._depurar({
+    monkeypatch.setattr(voice, "interpretar", lambda texto, contexto, esfuerzo=None: (voice._depurar({
         "personas": [], "items": [],
         "gaseosas": [{"bebida_id": m["inca"], "cantidad": 1}],
         "mesa": "2 B", "no_encontrados": [], "notas": "",
@@ -529,3 +529,23 @@ def test_pedido_corto_con_nombre_de_plato_no_es_eco(monkeypatch):
     monkeypatch.setattr(openai, "OpenAI", Cliente)
     pista = "Pedido en un restaurante peruano. Platos de hoy: Bistec frito, Chairito"
     assert voice.transcribir(b"x", "a.webm", pista) == "Bistec frito"
+
+
+def test_pedido_simple_no_llama_a_la_ia(client, admin_headers, menu_voz, monkeypatch):
+    """"Dos almuerzos con caldito y lomito": lo resuelven las reglas, al
+    instante y gratis; la IA ni se llama."""
+    from app.services import voice
+
+    activar_voz(client, admin_headers)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    monkeypatch.setattr(voice, "transcribir", lambda b, n="a", pista="": "Dos almuerzos con caldito y lomito")
+
+    def no_llamar(*a, **k):
+        raise AssertionError("la IA no debía llamarse")
+
+    monkeypatch.setattr(voice, "interpretar", no_llamar)
+    r = client.post("/api/voice/order", files={"audio": ("a.webm", b"x", "audio/webm")})
+    assert r.status_code == 200, r.text
+    (persona,) = r.json()["personas"]
+    assert persona["cantidad"] == 2
+    assert [e["nombre"] for e in persona["elecciones"]] == ["Caldo de gallina", "Lomo saltado"]
