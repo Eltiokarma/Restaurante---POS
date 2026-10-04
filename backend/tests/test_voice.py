@@ -603,3 +603,25 @@ def test_mesa_sin_letra_va_a_la_libre(client, db, menu_voz):
     ocupar(b.id)
     assert _mesa_por_nombre("14", contexto_de_hoy(db)["mesas"]) is None
     assert _mesa_por_nombre("14b", contexto_de_hoy(db)["mesas"]) == b.id  # con letra, la dicha
+
+
+def test_ia_con_varios_grupos_nunca_va_directo(client, admin_headers, extras_voz, monkeypatch):
+    """Repartir entre varias personas es donde la IA se equivoca aunque diga
+    "seguro": eso siempre pasa por "¿Eso pediste?"."""
+    from app.services import voice
+
+    m = extras_voz
+    activar_voz(client, admin_headers)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake")
+    monkeypatch.setattr(voice, "transcribir", lambda b, n="a", pista="": "uno con caldo y otro con lomo")
+    persona = {
+        "menu_id": m["menu_id"], "cantidad": 1,
+        "elecciones": [{"tiempo_orden": 2, "plato_id": m["Lomo saltado"], "empaque": "igual", "espera": False}],
+        "sin": [], "empaque": "mesa", "entrega": "auto", "nombre": "", "nota": "", "agregados": [],
+    }
+    monkeypatch.setattr(voice, "interpretar", lambda texto, contexto, esfuerzo=None: (voice._depurar({
+        "personas": [persona, {**persona, "empaque": "taper"}], "items": [], "gaseosas": [], "mesa": "",
+        "no_encontrados": [], "notas": "", "seguro": True,
+    }, contexto), 0.0))
+    r = client.post("/api/voice/order", files={"audio": ("a.webm", b"x", "audio/webm")})
+    assert r.json()["seguro"] is False
