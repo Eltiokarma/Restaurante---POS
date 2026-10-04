@@ -643,7 +643,10 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       entiende gaseosas ("dos Inca Kola de litro"), la mesa ("para la 2B", se compara sin
       espacios ni mayúsculas), los agregados del menú ("con un huevo frito") y "el segundo
       después" (espera). "Va a esperar" se activa también en la terminal. Solo segundo:
-      la entrada pasa a no obligatoria en las plantillas (descuento S/ 1 ya configurado).
+      la voz ahora puede quitar CUALQUIER tiempo, como la terminal y la caja
+      (`obligatorio` significa "si no se nombra queda SIN ELEGIR", no "no se puede
+      quitar"; marcar la entrada como no obligatoria hacía que una entrada olvidada se
+      cobrara entera sin salir).
 - [ ] **Antes de encenderla**: correr el banco de pruebas (Fase 2) con audios reales del
       local y pegar el prompt refinado + sinónimos en los marcadores `TODO` de
       `backend/app/services/voice.py`. Umbral acordado: >85% integra; 70–85% con

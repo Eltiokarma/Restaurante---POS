@@ -260,8 +260,11 @@ def construir_system(contexto: dict) -> str:
     for menu in contexto["menus"]:
         lineas = [f'MENÚ id: {menu["id"]} | {menu["nombre"]} (S/ {menu["precio"]:.2f})']
         for t in menu["tiempos"]:
-            quitable = "" if t["obligatorio"] else " — se puede quitar"
-            lineas.append(f'  Tiempo {t["orden"]}: {t["rotulo"]}{quitable}')
+            # Cualquier tiempo se puede quitar (como en la terminal); si
+            # quitarlo descuenta, se dice para que "solo segundo" se entienda
+            descuento = t.get("descuento_si_se_quita") or 0
+            sin_el = f" — sin él: -S/ {descuento:.2f}" if descuento > 0 else ""
+            lineas.append(f'  Tiempo {t["orden"]}: {t["rotulo"]}{sin_el}')
             for a in t["alternativas"]:
                 lineas.append(
                     f'    - plato_id: {a["plato_id"]} | {a["nombre"]}'
@@ -316,7 +319,8 @@ va en no_encontrados.
 - En "elecciones" pon SOLO los tiempos que el cliente nombró, con el plato_id de ESE \
 tiempo. Lo que no dijo se deja fuera: el cliente lo elige después en la pantalla.
 - "Sin sopa", "sin entrada", "solo segundo", "solo la sopa" → el tiempo que no quiere va \
-en "sin" (solo si dice que se puede quitar).
+en "sin" ("solo segundo" = sin la entrada; "solo la sopa" = sin el segundo). Que no lo \
+nombre NO es quitarlo: eso queda por elegir.
 - Si hay un solo menú hoy, usa ese. Si hay varios y no queda claro cuál, elige el que \
 tenga los platos que nombró y anota la duda en notas.
 - Empaque de la persona: "para llevar", "en táper" → taper; "en bolsa" → bolsa; "en lonchera" → \
@@ -394,7 +398,7 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
     """Defensa final: ids inexistentes o cantidades inválidas no pasan.
 
     Un plato elegido tiene que ser alternativa de ESE tiempo de ESE menú;
-    solo se quita un tiempo que se puede quitar; lo dudoso se descarta
+    no se quitan TODOS los tiempos de una persona; lo dudoso se descarta
     (el cliente lo completa con los dedos) en vez de inventarlo.
     """
     menus = {m["id"]: m for m in contexto["menus"]}
@@ -409,10 +413,10 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
             extranos.append(f"menú {persona.get('menu_id', '?')}")
             continue
         tiempos = {t["orden"]: t for t in menu["tiempos"]}
-        sin = sorted({
-            o for o in (_entero(x) for x in persona.get("sin", []))
-            if o in tiempos and not tiempos[o]["obligatorio"]
-        })
+        sin = sorted({o for o in (_entero(x) for x in persona.get("sin", [])) if o in tiempos})
+        if len(sin) == len(tiempos):
+            # Sin nada no es un menú: mejor que el cliente lo vea entero
+            sin = []
         empaque = persona.get("empaque")
         empaque = empaque if empaque in EMPAQUES else "mesa"
         elecciones: dict[int, int] = {}

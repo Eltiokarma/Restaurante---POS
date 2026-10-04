@@ -188,8 +188,8 @@ def test_prompt_lista_menus_con_tiempos_y_sinonimos(db, menu_voz):
 
     system = construir_system(contexto_de_hoy(db))
     assert f"MENÚ id: {menu_voz['menu_id']}" in system
-    assert "Tiempo 1: Entrada — se puede quitar" in system
-    assert "Tiempo 2: Segundo\n" in system  # obligatorio: no se ofrece quitarlo
+    assert "Tiempo 1: Entrada — sin él: -S/ 1.00" in system
+    assert "Tiempo 2: Segundo\n" in system  # quitarlo no descuenta: no se anuncia
     assert f"plato_id: {menu_voz['Lomo saltado']} | Lomo saltado" in system
     assert '"lomito"' in system and '"caldito"' in system
 
@@ -206,7 +206,7 @@ def test_depurar_valida_cada_persona_contra_su_menu(db, menu_voz):
              "elecciones": [{"tiempo_orden": 1, "plato_id": m["Caldo de gallina"]},
                             {"tiempo_orden": 2, "plato_id": m["Lomo saltado"]}],
              "sin": [], "empaque": "taper", "entrega": "junto", "nombre": " Juan ", "nota": ""},
-            # Sin sopa (se puede) y "sin segundo" (obligatorio: se ignora);
+            # Sin entrada y sin segundo a la vez = sin nada: se ignora;
             # el lomo puesto en el tiempo 1 no es alternativa de ahí: fuera
             {"menu_id": m["menu_id"], "cantidad": 2,
              "elecciones": [{"tiempo_orden": 1, "plato_id": m["Lomo saltado"]},
@@ -228,7 +228,7 @@ def test_depurar_valida_cada_persona_contra_su_menu(db, menu_voz):
          "empaque": "taper", "empaques": {}, "espera": [], "agregados": [],
          "entrega": "junto", "nombre": "Juan", "nota": ""},
         {"menu_id": m["menu_id"], "cantidad": 2,
-         "elecciones": {2: m["Pollo al horno"]}, "sin": [1],
+         "elecciones": {2: m["Pollo al horno"]}, "sin": [],
          "empaque": "mesa", "empaques": {}, "espera": [], "agregados": [],
          "entrega": None, "nombre": "", "nota": "sin cebolla"},
     ]
@@ -488,3 +488,25 @@ def test_endpoint_devuelve_gaseosas_y_mesa(client, admin_headers, extras_voz, mo
     data = r.json()
     assert data["gaseosas"] == [{"bebida_id": m["inca"], "cantidad": 1, "nombre": "Inca Kola personal", "precio": 2.5}]
     assert data["mesa"] == {"id": m["mesa"], "nombre": "2 B"}
+
+
+def test_voz_puede_quitar_un_tiempo_obligatorio(db, menu_voz):
+    """"Solo segundo" con la entrada obligatoria: obligatorio significa que
+    si no se nombra queda "SIN ELEGIR", no que no se pueda quitar."""
+    from app.models import MenuTiempo
+    from app.services.voice import _depurar, contexto_de_hoy
+
+    for t in db.query(MenuTiempo).all():
+        t.obligatorio = True
+    db.commit()
+    r = _depurar({
+        "personas": [{
+            "menu_id": menu_voz["menu_id"], "cantidad": 1,
+            "elecciones": [{"tiempo_orden": 2, "plato_id": menu_voz["Lomo saltado"],
+                            "empaque": "igual", "espera": False}],
+            "sin": [1], "empaque": "mesa", "entrada": "auto", "entrega": "auto",
+            "nombre": "", "nota": "", "agregados": [],
+        }],
+        "items": [], "gaseosas": [], "mesa": "", "no_encontrados": [], "notas": "",
+    }, contexto_de_hoy(db))
+    assert r["personas"][0]["sin"] == [1]

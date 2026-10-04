@@ -840,7 +840,7 @@ export function personaVozAMenu(p: VozPersona, menu: MenuHoy): MenuCarrito {
   }
   return {
     menu, cantidad: p.cantidad, elecciones, extras: [],
-    omitidos: p.sin.filter((o) => menu.tiempos.some((t) => t.orden === o && !t.obligatorio)),
+    omitidos: p.sin.filter((o) => menu.tiempos.some((t) => t.orden === o)),
     agregados: (p.agregados ?? []).flatMap((a) => {
       const agregado = menu.agregados.find((x) => x.id === a.agregado_id)
       return agregado ? [{ agregado, cantidad: a.cantidad }] : []
