@@ -250,6 +250,7 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
   const total = items.reduce((s, i) => s + i.precio * i.cantidad, 0)
     + personas.reduce((s, p) => s + subtotalMenu(p), 0)
     + gaseosas.reduce((s, g) => s + g.bebida.precio * g.cantidad, 0)
+  const totalMenus = personas.reduce((s, p) => s + p.cantidad, 0)
   const hayAlgo = items.length > 0 || personas.length > 0 || gaseosas.length > 0
 
   const continuar = () => {
@@ -425,7 +426,14 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
             ))}
 
             {hayAlgo && (
-              <div className="voz-total">Total por ahora: <strong>{soles(total)}</strong></div>
+              <div className="voz-total">
+                {/* Cuántos menús, grande: "4 menús, uno para llevar" (4) vs "4 menús y uno
+                    para llevar" (5) cambia la cuenta; aquí se nota al toque */}
+                {totalMenus > 0 && (
+                  <span className="voz-total-menus">{totalMenus} {totalMenus === 1 ? 'menú' : 'menús'}</span>
+                )}
+                Total por ahora: <strong>{soles(total)}</strong>
+              </div>
             )}
 
             <div className="voz-botones">
