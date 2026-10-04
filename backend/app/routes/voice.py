@@ -113,7 +113,7 @@ async def diagnostico_de_voz(
             pasos["transcripcion"] = {"ok": False, "error": str(e)}
     try:
         inicio = time.perf_counter()
-        resultado, costo = voice.interpretar(texto, contexto, esfuerzo)
+        resultado, costo = voice.interpretar_con_atajo(texto, contexto, esfuerzo)
         pasos["latencia_interprete_ms"] = round((time.perf_counter() - inicio) * 1000)
         pasos["interpretacion"] = {"ok": True, "texto": texto, "resultado": resultado, "costo_usd": costo}
     except voice.VozError as e:

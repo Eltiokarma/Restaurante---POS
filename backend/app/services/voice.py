@@ -552,6 +552,22 @@ def resolver_personas(personas: list[dict], contexto: dict) -> list[dict]:
     return salida
 
 
+def interpretar_con_atajo(texto: str, contexto: dict, esfuerzo: str | None = None
+                          ) -> tuple[dict, float | None]:
+    """Primero el intérprete rápido por palabras clave (al instante, sin
+    costo); si el pedido necesita criterio, la IA. `via` dice cuál fue."""
+    from .voz_rapida import interpretar_rapido
+
+    rapido = interpretar_rapido(texto, contexto)
+    if rapido is not None:
+        resultado = _depurar(rapido, contexto)
+        # Si la validación descartó algo, mejor que lo vea la IA
+        if not resultado["no_encontrados"]:
+            return {**resultado, "via": "reglas"}, 0.0
+    resultado, costo = interpretar(texto, contexto, esfuerzo)
+    return {**resultado, "via": "ia"}, costo
+
+
 def _costo_interprete(usage) -> float | None:
     precios = PRECIOS_INTERPRETE_POR_MTOK_USD.get(MODELO_INTERPRETE)
     if precios is None or usage is None:
@@ -594,7 +610,7 @@ def procesar_audio(db: Session, audio_bytes: bytes, nombre: str, duracion_s: flo
         raise VozError("Todavía no hay menú cargado, pregunta en caja por favor")
 
     transcripcion = transcribir(audio_bytes, nombre, pista_de_vocabulario(contexto))
-    resultado, costo_interprete = interpretar(transcripcion, contexto)
+    resultado, costo_interprete = interpretar_con_atajo(transcripcion, contexto)
     latencia_ms = round((time.perf_counter() - inicio) * 1000)
 
     por_id = {p["id"]: p for p in contexto["platos"]}
