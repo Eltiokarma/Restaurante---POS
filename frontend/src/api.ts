@@ -797,6 +797,18 @@ export interface MenuCajaPlantilla {
 export interface MenuCaja {
   plantillas: MenuCajaPlantilla[]
   guardados: MenuGuardadoOut[]
+  stock?: StockPlato[]
+}
+
+/** Porciones de hoy de una entrada o segundo. stock/quedan null = no se
+ *  cuenta. quedan puede ser negativo: es aviso, no bloquea la venta. */
+export interface StockPlato {
+  plato_id: number
+  nombre: string
+  categoria: string
+  stock: number | null
+  vendidos: number
+  quedan: number | null
 }
 
 /** ¿El menú lleva algún plato que se prepara al momento? Entonces esa
@@ -890,7 +902,7 @@ export function menuAPayload(m: MenuCarrito): MenuOrdenIn {
 
 export const api = {
   menuHoy: () =>
-    request<{ categorias: string[]; platos: Plato[]; menus: MenuHoy[] }>('/api/menu/today'),
+    request<{ categorias: string[]; platos: Plato[]; menus: MenuHoy[]; stock?: StockPlato[] }>('/api/menu/today'),
 
   config: () => request<ConfigOut>('/api/config'),
 
@@ -1384,6 +1396,10 @@ export const api = {
   platoParaHoy: (platoId: number, activoHoy: boolean) =>
     request<MenuCaja>(`/api/menu/platos/${platoId}/hoy`, {
       method: 'PATCH', body: JSON.stringify({ activo_hoy: activoHoy }),
+    }),
+  stockPlato: (platoId: number, stock: number | null) =>
+    request<MenuCaja>(`/api/menu/platos/${platoId}/stock`, {
+      method: 'PATCH', body: JSON.stringify({ stock }),
     }),
   menuParaHoy: (plantillaId: number, activoHoy: boolean) =>
     request<MenuCaja>(`/api/menu/plantillas/${plantillaId}/hoy`, {

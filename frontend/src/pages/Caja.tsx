@@ -818,6 +818,57 @@ export function Caja() {
               ))}
             </div>
           ))}
+          {menuCaja?.stock && menuCaja.stock.length > 0 && (
+            <div className="defecto-bloque">
+              <h4>¿Cuántos hay hoy?</h4>
+              <p className="rh-ayuda">
+                Se ve en la terminal cuántos quedan. Es solo aviso: si se acaba, igual se puede vender.
+              </p>
+              {menuCaja.stock.map((s) => (
+                <div key={s.plato_id} className="stock-fila">
+                  <span className="stock-fila-nombre">
+                    {s.nombre}
+                    {s.stock !== null && (
+                      <small> · vendidos {s.vendidos} · quedan <strong className={(s.quedan ?? 0) <= 0 ? 'stock-fila-agotado' : ''}>{s.quedan}</strong></small>
+                    )}
+                  </span>
+                  <div className="stock-fila-controles">
+                    <button
+                      className="boton-cantidad"
+                      aria-label={`Una porción menos de ${s.nombre}`}
+                      disabled={s.stock === null || s.stock === 0}
+                      onClick={() => cambiarMenuDelDia(() => api.stockPlato(s.plato_id, Math.max(0, (s.stock ?? 0) - 1)), `${s.nombre}: ${Math.max(0, (s.stock ?? 0) - 1)} porciones`)}
+                    >
+                      −
+                    </button>
+                    <span className="stock-fila-numero">{s.stock ?? '—'}</span>
+                    <button
+                      className="boton-cantidad boton-mas"
+                      aria-label={`Una porción más de ${s.nombre}`}
+                      onClick={() => cambiarMenuDelDia(() => api.stockPlato(s.plato_id, (s.stock ?? 0) + 1), `${s.nombre}: ${(s.stock ?? 0) + 1} porciones`)}
+                    >
+                      +
+                    </button>
+                    <button
+                      className="boton-cantidad boton-mas"
+                      aria-label={`Cinco porciones más de ${s.nombre}`}
+                      onClick={() => cambiarMenuDelDia(() => api.stockPlato(s.plato_id, (s.stock ?? 0) + 5), `${s.nombre}: ${(s.stock ?? 0) + 5} porciones`)}
+                    >
+                      +5
+                    </button>
+                    {s.stock !== null && (
+                      <button
+                        className="defecto-chip"
+                        onClick={() => cambiarMenuDelDia(() => api.stockPlato(s.plato_id, null), `${s.nombre}: sin contar`)}
+                      >
+                        No contar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <p className="rh-ayuda">
             Platos nuevos, precios y armar menús: Admin → Menú del día.
           </p>

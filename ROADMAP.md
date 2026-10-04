@@ -694,6 +694,14 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       platos separadas 2 puntos (ESC SP 2: 12 → 14 puntos, +16.7 % de ancho de línea; la
       letra de la impresora no escala fino, solo x2). Ningún renglón pasa del ancho:
       producción tenía 64 columnas en una impresora de 48 y las líneas se partían.
+- [x] **Cuántos quedan** de cada entrada y segundo: la caja pone las porciones del día
+      (Menú del día → "¿Cuántos hay hoy?", −/+/+5/no contar); la terminal muestra
+      "Quedan" chico en el inicio y en el pedido, ámbar con pocos y rojo ⚠ en 0 o menos.
+      Solo AVISA: nunca bloquea la venta (el conteo puede fallar). Vale solo el día que
+      se puso (`Plato.stock_fecha`); vendido = ítems de órdenes de hoy no anuladas.
+- [x] **"Así nomás: Pagó / No pagó"** en la barra de "Falta elegir" de la terminal: sigue
+      sin elegir y ya dice si pagó (la ventana de cancelación sigue; al vencer confirma
+      con eso).
 - [x] **"OK y pagó" / "OK y no pagó"** en la ventana de cancelación de la terminal: la
       comanda dice PAGADO / NO PAGO; "no pagó" queda en "falta pagar" de caja; "pagó"
       imprime detrás una precuenta en letra chica (Font B) como comprobante del cliente.

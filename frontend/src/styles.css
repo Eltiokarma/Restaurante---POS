@@ -10841,3 +10841,139 @@ select:focus-visible {
   font-size: 2rem;
   width: 100%;
 }
+
+/* ---- Cuántos quedan hoy (terminal): chico, con la paleta de la casa ---- */
+.stock-hoy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 10px auto;
+  max-width: 100%;
+}
+
+.stock-hoy-titulo {
+  font-family: var(--fuente-display);
+  font-size: 0.95rem;
+  color: var(--tinta-media);
+  margin-right: 2px;
+}
+
+.stock-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 999px;
+  background: var(--papel-alto);
+  color: var(--tinta);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.stock-chip strong {
+  font-variant-numeric: tabular-nums;
+  color: var(--culantro);
+}
+
+.stock-poco {
+  background: var(--aji-tenue);
+  border-color: var(--aji);
+}
+
+.stock-poco strong {
+  color: var(--aji-hondo);
+}
+
+/* Sin stock pero se sigue vendiendo: aviso rojo, nunca bloqueo */
+.stock-agotado {
+  background: var(--achiote-tenue);
+  border-color: var(--achiote);
+}
+
+.stock-agotado strong {
+  color: var(--achiote);
+}
+
+/* Porciones de hoy en la hoja "Menú del día" de caja */
+.stock-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--linea);
+}
+
+.stock-fila-nombre {
+  font-weight: 700;
+  min-width: 0;
+}
+
+.stock-fila-nombre small {
+  font-weight: 600;
+  color: var(--tinta-media);
+}
+
+.stock-fila-agotado {
+  color: var(--achiote);
+}
+
+.stock-fila-controles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stock-fila-numero {
+  min-width: 2.5ch;
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "Así nomás: Pagó / No pagó" — seguir sin elegir y decir si pagó, en
+   dos botones cortos con el color de cada caso (no un botonazo largo) */
+.sin-elegir-pago {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sin-elegir-rotulo {
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--aji-hondo);
+}
+
+.boton-sin-elegir-pago {
+  min-height: 64px;
+  min-width: 96px;
+  padding: 0 18px;
+  border-radius: var(--r);
+  font-size: 1.1rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.boton-sin-elegir-pago.pagado {
+  background: var(--culantro);
+  border: 2px solid var(--culantro-hondo);
+  color: #fff;
+}
+
+.boton-sin-elegir-pago.pendiente {
+  background: var(--aji-tenue);
+  border: 2px solid var(--aji);
+  color: var(--aji-hondo);
+}
+
+/* En la ventana, el pago que ya se dijo resalta */
+.pago-elegido {
+  outline: 4px solid var(--aji);
+  outline-offset: 3px;
+}

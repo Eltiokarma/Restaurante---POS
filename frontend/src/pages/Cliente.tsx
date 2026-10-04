@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, menuAPayload, precioUnitarioMenu, soles, subtotalMenu, tiemposPendientes, unidadesEnTaper } from '../api'
-import type { Bebida, ConfigOut, DatosLocal, Entrega, MenuCarrito, MenuHoy, MesaEstado, OrdenOut, Plato, VozItemResuelto } from '../api'
+import type { Bebida, ConfigOut, DatosLocal, Entrega, MenuCarrito, MenuHoy, MesaEstado, OrdenOut, Plato, StockPlato, VozItemResuelto } from '../api'
 import { describirMenu } from '../components/describirMenu'
 import { menusEnPedido, TarjetaOfertaMenu } from '../components/TarjetaOfertaMenu'
 import {
@@ -10,6 +10,7 @@ import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { BarraCarrito } from '../components/BarraCarrito'
 import { CountdownCancel } from '../components/CountdownCancel'
 import { GaseosasTerminal } from '../components/GaseosasTerminal'
+import { StockHoy } from '../components/StockHoy'
 import { ModificarPedido } from '../components/ModificarPedido'
 import { PedidoPorVoz } from '../components/PedidoPorVoz'
 import type { ExtrasVoz } from '../components/PedidoPorVoz'
@@ -43,6 +44,7 @@ export function Cliente() {
   const [platos, setPlatos] = useState<Plato[]>([])
   const [menusHoy, setMenusHoy] = useState<MenuHoy[]>([])
   const [gaseosas, setGaseosas] = useState<Bebida[]>([])
+  const [stock, setStock] = useState<StockPlato[]>([])
   // Menú encadenado que se está armando (abre el modal de tiempos)
   // Menú recién agregado con "Un menú": el botón confirma un momento
   const [menuRecien, setMenuRecien] = useState<number | null>(null)
@@ -135,6 +137,7 @@ export function Cliente() {
       const data = await api.menuHoy()
       setPlatos(data.platos)
       setMenusHoy(data.menus)
+      setStock(data.stock ?? [])
       // Gaseosas de la lista fija; si falla, la terminal sigue sin ellas
       api.bebidas().then((d) => setGaseosas(d.bebidas.filter((b) => b.activa))).catch(() => {})
       // Si el admin cambió un precio a mitad de pedido, el carrito se
@@ -164,7 +167,8 @@ export function Cliente() {
   // Si un plato se agota, el admin lo desactiva y desaparece de la terminal
   // en el siguiente refresco: polling cada 30s mientras se arma el pedido.
   useEffect(() => {
-    if (pantalla !== 'menu' && pantalla !== 'resumen') return
+    // También en el inicio: ahí se ve cuántos quedan de cada plato
+    if (pantalla !== 'menu' && pantalla !== 'resumen' && pantalla !== 'inicio') return
     const intervalo = window.setInterval(cargarMenu, 30_000)
     return () => window.clearInterval(intervalo)
   }, [pantalla, cargarMenu])
@@ -179,6 +183,7 @@ export function Cliente() {
       setEntrega('separado')
       setMesasElegidas([])
       setCopias(1)
+      setPagoElegido(undefined)
       setMostrarMesas(false)
       usoVoz.current = false
       usoTactil.current = false
@@ -249,6 +254,7 @@ export function Cliente() {
     agregarItemsVoz(items, menus, extras)
     setVozAbierta(false)
     setCopias(1)
+    setPagoElegido(undefined)
     setPantalla('countdown')
   }
 
@@ -308,6 +314,15 @@ export function Cliente() {
   const sinPlatos = carrito.menus.length === 0 && carrito.items.length === 0
 
   const guardandoRef = useRef(false)
+  // "Pagó" / "No pagó" dicho antes de la ventana (seguir sin elegir): al
+  // vencer la ventana se confirma con eso
+  const [pagoElegido, setPagoElegido] = useState<'pagado' | 'pendiente' | undefined>(undefined)
+  const irAVentana = (pago?: 'pagado' | 'pendiente') => {
+    setCopias(1)
+    setPagoElegido(pago)
+    setPantalla('countdown')
+  }
+
   // pago: "OK y pagó" / "OK y no pagó"; si la ventana vence sola, no se dice
   const confirmarDefinitivo = async (pago?: 'pagado' | 'pendiente') => {
     if (guardandoRef.current) return
@@ -425,6 +440,7 @@ export function Cliente() {
           🍽️ HACER MI PEDIDO
         </button>
         <p className="texto-toca">Toca la pantalla para empezar</p>
+        <StockHoy stock={stock} />
         {/* Cambios a un pedido ya confirmado (pedido del dueño, que hoy
             atiende desde la terminal): no debe disparar un pedido nuevo */}
         <button
@@ -484,7 +500,7 @@ export function Cliente() {
         {copias > 1 && <p className="aviso-dos-comandas">🖨 Saldrán {copias} comandas</p>}
         <CountdownCancel
           duracionSeg={config?.ventana_cancelacion_seg ?? 30}
-          onTerminado={() => confirmarDefinitivo()}
+          onTerminado={() => confirmarDefinitivo(pagoElegido)}
         />
         <div className="resumen-breve">
           {carrito.menus.map((m, idx) => (
@@ -520,10 +536,18 @@ export function Cliente() {
         {/* Confirman ya y dicen si pagó: sale en la comanda; si pagó, además
             la precuenta para el cliente (pedido del dueño) */}
         <div className="botones-pago">
-          <button className="boton-grande boton-confirmar" onClick={() => confirmarDefinitivo('pagado')} disabled={guardando}>
+          <button
+            className={`boton-grande boton-confirmar ${pagoElegido === 'pagado' ? 'pago-elegido' : ''}`}
+            onClick={() => confirmarDefinitivo('pagado')}
+            disabled={guardando}
+          >
             {guardando ? 'Guardando…' : '✅ OK y pagó'}
           </button>
-          <button className="boton-grande boton-secundario" onClick={() => confirmarDefinitivo('pendiente')} disabled={guardando}>
+          <button
+            className={`boton-grande boton-secundario ${pagoElegido === 'pendiente' ? 'pago-elegido' : ''}`}
+            onClick={() => confirmarDefinitivo('pendiente')}
+            disabled={guardando}
+          >
             OK y no pagó
           </button>
         </div>
@@ -551,6 +575,7 @@ export function Cliente() {
         )}
         {/* Sin riel de pasos (pedido del dueño): el espacio es para los tickets */}
         {errorConexion && <div className="banner-error">{errorConexion}</div>}
+        <StockHoy stock={stock} />
         {soloMenus && (
           <div className="oferta-menus">
             {/* Una tarjeta = una persona: + y − grandes y el monto a la vista */}
@@ -711,11 +736,17 @@ export function Cliente() {
                   <button className="boton-ir-ahi" onClick={irAlPendiente}>
                     IR AHÍ <span className={pendienteALaVista ? '' : 'flecha-rebota'} aria-hidden="true">↓</span>
                   </button>
-                  {/* Pedido del dueño: el ticket puede salir sin elegirlo;
-                      sale impreso "SIN ELEGIR" y se decide en caja */}
-                  <button className="boton-seguir-sin-elegir" onClick={() => setPantalla('countdown')}>
-                    Seguir sin elegir
-                  </button>
+                  {/* Pedido del dueño: el ticket puede salir sin elegirlo
+                      (sale "FALTA ELEGIR") y de una se dice si pagó */}
+                  <div className="sin-elegir-pago" role="group" aria-label="Seguir sin elegir">
+                    <span className="sin-elegir-rotulo">Así nomás:</span>
+                    <button className="boton-sin-elegir-pago pagado" onClick={() => irAVentana('pagado')}>
+                      Pagó
+                    </button>
+                    <button className="boton-sin-elegir-pago pendiente" onClick={() => irAVentana('pendiente')}>
+                      No pagó
+                    </button>
+                  </div>
                 </>
               ) : (
                 <span className="barra-guia-texto">
@@ -739,7 +770,7 @@ export function Cliente() {
                 // Con huecos pendientes, confirmar LLEVA al hueco: el 422
                 // del final deja de existir
                 if (pendientesMenus.length > 0) irAlPendiente()
-                else setPantalla('countdown')
+                else { setPagoElegido(undefined); setPantalla('countdown') }
               }}
             >
               ✅ CONFIRMAR PEDIDO
@@ -751,7 +782,7 @@ export function Cliente() {
               onClick={() => {
                 setCopias(2)
                 if (pendientesMenus.length > 0) irAlPendiente()
-                else setPantalla('countdown')
+                else { setPagoElegido(undefined); setPantalla('countdown') }
               }}
               title="Confirmar e imprimir 2 comandas"
             >
