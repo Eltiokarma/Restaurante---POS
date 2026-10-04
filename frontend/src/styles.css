@@ -10775,3 +10775,10 @@ select:focus-visible {
 .mod-nueva {
   margin-top: 14px;
 }
+
+/* Terminar de dictar es UN toque grande: no se espera el silencio */
+.voz-ya-pedi {
+  min-height: 120px;
+  font-size: 2rem;
+  width: 100%;
+}
