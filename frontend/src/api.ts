@@ -143,7 +143,7 @@ export interface OrdenMenuOut {
   nota: string
   subtotal: number
   // Tiempos que el cliente quitó ("Sin sopa"), con el descuento aplicado
-  omitidos: { rotulo: string; descuento: number }[]
+  omitidos: { rotulo: string; descuento: number; tiempo_orden?: number }[]
   id?: number
   menu_id?: number | null
   // Tiempos que la persona aún no eligió (salen "SIN ELEGIR")
@@ -164,6 +164,8 @@ export interface OrdenOut {
   total: number
   estado: string
   tipo_servicio: TipoServicio
+  // tactil | voz | mixto, o "manual" (venta anotada a mano en finanzas)
+  origen?: OrigenPedido | 'manual'
   metodo_pago: MetodoPago | null
   // "Falta pagar": salió el ticket, la plata no entró todavía
   pago_pendiente?: boolean
@@ -578,6 +580,17 @@ export interface TicketBebidaOut {
   items: { nombre: string; precio: number; cantidad: number }[]
   total: number
   hora?: string
+  // GASEOSAS (default) | CAMBIO: la orden ya registrada se modificó
+  titulo?: string
+  total_orden?: number
+}
+
+// Respuesta de un cambio a una orden ya registrada
+export interface RespuestaCambio {
+  orden: OrdenOut
+  modo_impresion: string
+  // Ticket chico "CAMBIO" para cocina (en modo terminal lo imprime la pantalla)
+  ticket_cambio: TicketBebidaOut | null
 }
 
 // Tanda de cocina (pre-orquestador): grupo de órdenes completas que
@@ -886,6 +899,30 @@ export const api = {
         items, menus, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega, copias, bebidas,
       }),
     }),
+
+  // ---- Cambios a una orden ya registrada (el cliente se arrepintió) ----
+  agregarAOrden: (
+    id: number,
+    cambio: { menus?: MenuOrdenIn[]; bebidas?: { bebida_id: number; cantidad: number }[] },
+  ) =>
+    request<RespuestaCambio>(`/api/orders/${id}/agregar`, {
+      method: 'POST',
+      body: JSON.stringify({ menus: cambio.menus ?? [], items: [], bebidas: cambio.bebidas ?? [] }),
+    }),
+  devolverTiempo: (id: number, ordenMenuId: number, tiempoOrden: number, platoId: number | null) =>
+    request<RespuestaCambio>(`/api/orders/${id}/menus/${ordenMenuId}/devolver`, {
+      method: 'POST',
+      body: JSON.stringify({ tiempo_orden: tiempoOrden, plato_id: platoId }),
+    }),
+  cambiarEmpaqueItem: (id: number, itemId: number, empaque: Empaque) =>
+    request<RespuestaCambio>(`/api/orders/${id}/items/${itemId}/empaque`, {
+      method: 'PATCH',
+      body: JSON.stringify({ empaque }),
+    }),
+  quitarPersona: (id: number, ordenMenuId: number) =>
+    request<RespuestaCambio>(`/api/orders/${id}/menus/${ordenMenuId}`, { method: 'DELETE' }),
+  quitarItemDeOrden: (id: number, itemId: number) =>
+    request<RespuestaCambio>(`/api/orders/${id}/items/${itemId}`, { method: 'DELETE' }),
 
   // La persona eligió después lo que quedó "sin elegir" (desde caja)
   elegirPendiente: (ordenId: number, ordenMenuId: number, tiempoOrden: number, platoId: number) =>

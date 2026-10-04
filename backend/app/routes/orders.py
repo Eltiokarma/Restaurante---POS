@@ -241,7 +241,10 @@ def _orden_menu_a_dict(orden: Orden, om, categorias: dict[int, str] | None = Non
         "precio": om.precio_snapshot,
         "cantidad": om.cantidad,
         "nota": om.nota,
-        "omitidos": [{"rotulo": o["rotulo"], "descuento": o["descuento"]} for o in omitidos],
+        "omitidos": [
+            {"rotulo": o["rotulo"], "descuento": o["descuento"], "tiempo_orden": o["tiempo_orden"]}
+            for o in omitidos
+        ],
         # Lo que la persona aún no eligió (sale en el ticket) y su entrega
         "pendientes": [p["rotulo"] for p in om.pendientes()],
         # Con su tiempo, para que la caja pueda elegirlo después
@@ -496,6 +499,8 @@ def pendientes_de_impresion(db: Session = Depends(get_db)):
             "items": json.loads(tb.detalle_json),
             "total": tb.total,
             "hora": tb.creado_en.strftime("%H:%M"),
+            "titulo": tb.titulo,
+            "total_orden": tb.total_orden if tb.total_orden is not None else orden_tb.total,
         })
 
     return {

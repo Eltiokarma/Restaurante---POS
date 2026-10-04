@@ -468,6 +468,10 @@ class TicketBebida(Base):
     total: Mapped[float] = mapped_column(Float, nullable=False)
     creado_en: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
     impreso: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # GASEOSAS | CAMBIO (la orden se modificó: solo lo que cambia)
+    titulo: Mapped[str] = mapped_column(String(30), default="GASEOSAS", nullable=False)
+    # Total de la orden justo después del cambio (lo que dice el papel)
+    total_orden: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class TandaLog(Base):

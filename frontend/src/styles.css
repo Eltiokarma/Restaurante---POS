@@ -10597,3 +10597,181 @@ select:focus-visible {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Modificar un pedido ya confirmado (terminal) ---------- */
+.boton-modificar-pedido {
+  margin-top: 28px;
+  min-height: 64px;
+  padding: 0 28px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-radius: 999px;
+  background: var(--papel);
+  color: var(--tinta);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+}
+
+.pantalla-modificar {
+  padding: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.mod-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.mod-cabecera h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.mod-cabecera h1 small {
+  font-size: 1rem;
+  color: var(--tinta-suave);
+}
+
+.mod-total {
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.mod-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mod-orden {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 80px;
+  padding: 10px 16px;
+  text-align: left;
+  background: var(--papel);
+  border: 2px solid var(--linea);
+  border-radius: var(--r);
+}
+
+.mod-orden-numero {
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.mod-orden-detalle {
+  flex: 1;
+  min-width: 0;
+  color: var(--tinta-suave);
+}
+
+.mod-orden-total {
+  font-weight: 800;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.mod-personas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 12px;
+}
+
+.mod-persona {
+  background: var(--papel);
+  border: 2px solid var(--linea);
+  border-radius: var(--r);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mod-persona h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.mod-persona-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mod-plato {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--linea);
+}
+
+.mod-plato-nombre {
+  font-weight: 700;
+}
+
+.mod-falta .mod-plato-nombre {
+  color: var(--achiote);
+}
+
+.mod-empaques {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mod-chip,
+.mod-quitar {
+  min-height: 64px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  background: var(--papel-hondo);
+  color: var(--tinta);
+  box-shadow: inset 0 0 0 2px var(--linea-fuerte);
+}
+
+.mod-chip:disabled,
+.mod-quitar:disabled {
+  opacity: 0.55;
+}
+
+.mod-chip-activo,
+.mod-chip-activo:disabled {
+  background: var(--culantro);
+  color: #fff;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.mod-chip-agregar {
+  background: var(--culantro-tenue);
+}
+
+.mod-chip-quitar,
+.mod-quitar {
+  color: var(--achiote);
+  align-self: flex-start;
+}
+
+.mod-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.mod-acciones > button {
+  flex: 1 1 240px;
+}
+
+.mod-nueva {
+  margin-top: 14px;
+}

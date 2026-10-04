@@ -172,6 +172,8 @@ def _armar_cola(db: Session) -> dict:
             "items": json.loads(tb.detalle_json),
             "total": tb.total,
             "hora": tb.creado_en.strftime("%H:%M"),
+            "titulo": tb.titulo,
+            "total_orden": tb.total_orden if tb.total_orden is not None else orden_tb.total,
         }
         trabajos.append({
             "tipo": "bebida",

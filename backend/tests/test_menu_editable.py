@@ -59,7 +59,7 @@ def test_sin_sopa_descuenta_y_no_manda_la_sopa_a_cocina(client, fonda):
     assert orden["total"] == 10.0  # 11 − 1 de descuento
 
     menu = orden["menus"][0]
-    assert menu["omitidos"] == [{"rotulo": "Sopa", "descuento": 1.0}]
+    assert menu["omitidos"] == [{"rotulo": "Sopa", "descuento": 1.0, "tiempo_orden": 1}]
     assert menu["subtotal"] == 10.0
     nombres = [i["nombre"] for i in menu["items"]]
     assert "Sopa criolla" not in nombres and "Asado con puré" in nombres
