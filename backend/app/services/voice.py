@@ -340,8 +340,23 @@ almuerzos van a ser dos sopas, una causa y de segundos ahorita te digo" →
     {{cantidad 1, elecciones: ninguna, sin: [entrada], empaque taper}}  (el segundo solo)
   ]  → 4 personas en total: 3 almuerzos + 1 segundo solo.
 
-ANTES DE RESPONDER, CUENTA: la suma de las cantidades de "personas" debe ser igual a los \
-almuerzos/menús que pidió MÁS los segundos solos y sopas solas. Si no cuadra, revisa.
+REPARTIR SEGUNDOS: a veces dice las entradas por grupos y DESPUÉS los segundos con \
+cantidades ("cuatro locros y una trucha"). Cada segundo dicho va a UNA persona distinta y \
+la suma de segundos = personas con segundo. Empareja PRIMERO por empaque (un segundo "en \
+bolsa" va con la persona cuya entrada va en bolsa; "en tupper" con la de táper) y el resto \
+en orden. "Uno con causa en bolsa" = esa persona va para llevar en bolsa (empaque de la \
+persona, no solo de la entrada).
+EJEMPLO: "Dame cinco menús, tres para la mesa, tres con sopa, uno va a ser causa en bolsa, \
+el otro causa en tupper, y cuatro locros y una trucha frita. La trucha en bolsa" →
+  personas = [
+    {{cantidad 3, elecciones: entrada=sopa, segundo=locro, empaque mesa}}
+    {{cantidad 1, elecciones: entrada=causa, segundo=trucha, empaque bolsa}}
+    {{cantidad 1, elecciones: entrada=causa, segundo=locro, empaque taper}}
+  ]  → 5 personas; locros 3+1 = 4 ✓; truchas 1 ✓; la trucha en bolsa con la causa en bolsa.
+
+ANTES DE RESPONDER, CUENTA: (1) la suma de las cantidades de "personas" debe ser igual a \
+los almuerzos/menús que pidió MÁS los segundos solos y sopas solas; (2) cada plato que dijo \
+con cantidad ("cuatro locros") aparece esa cantidad de veces en total. Si no cuadra, revisa.
 
 CÓMO ARMAR EL PEDIDO:
 - Cada persona es un elemento de "personas" con el menu_id. "Dos menús, uno con caldo y \
