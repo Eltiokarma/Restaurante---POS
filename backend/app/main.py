@@ -220,6 +220,10 @@ def _migrar(engine_) -> None:
         if columnas_tb and "total_orden" not in columnas_tb:
             conn.execute(text("ALTER TABLE tickets_bebida ADD COLUMN total_orden FLOAT"))
             conn.commit()
+        columnas_ord = [fila[1] for fila in conn.execute(text("PRAGMA table_info(ordenes)"))]
+        if columnas_ord and "pago_al_pedir" not in columnas_ord:
+            conn.execute(text("ALTER TABLE ordenes ADD COLUMN pago_al_pedir VARCHAR(10)"))
+            conn.commit()
 
 
 def _sembrar_agregados(engine_) -> None:

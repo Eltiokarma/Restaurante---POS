@@ -1,5 +1,7 @@
 """Pedido por personas (cada menú = una persona): entrega por menú, platos
 "va a esperar", lo sin elegir en la comanda y el menú del día desde caja."""
+import base64
+
 from app.models import Orden
 from app.services.escpos import render_orden
 from tests.test_menu_encadenado import fonda  # noqa: F401  (fixture)
@@ -63,11 +65,14 @@ def test_comanda_impresa_dice_espera_sin_elegir_y_entregas(client, db, fonda):
     orden = db.query(Orden).one()
     texto = render_orden(orden, {"nombre": "Fonda"}).decode("cp850", errors="ignore")
     assert "(ESPERA)" in texto
-    # Lo que falta elegir va en un recuadro macizo: no se confunde con un plato
-    assert "█ " + "SEGUNDO".center(38) + " █" in texto
-    assert "█ " + "FALTA ELEGIR".center(38) + " █" in texto
+    # Lo que falta elegir va en un recuadro (borde doble) que no se confunde
+    # con un plato; cada renglón cabe en la línea (si no, sale roto)
+    ancho = 36 - 4  # 42 columnas con letras separadas → 36
+    assert "║ " + "SEGUNDO".center(ancho) + " ║" in texto
+    assert "║ " + "FALTA ELEGIR".center(ancho) + " ║" in texto
+    assert "╔" + "═" * 34 + "╗" in texto
     assert "NO PREPARAR" not in texto  # confundía: solo "FALTA ELEGIR"
-    assert "ENTREGA: 1 JUNTO / 1 POR TIEMPOS" in texto
+    assert "ENTREGA: 1 JUNTO / 1 SEPARADO" in texto
 
 
 def test_caja_escoge_el_menu_del_dia_sin_admin(client, fonda):
@@ -114,7 +119,7 @@ def test_nombre_de_la_persona_sale_en_la_comanda(client, db, fonda):
     orden = db.query(Orden).one()
     texto = render_orden(orden, {"nombre": "Fonda"}).decode("cp850", errors="ignore")
     assert "Asado con puré (JUAN)" in texto
-    assert "FALTA ELEGIR" in texto and "(ANA)".center(38) in texto
+    assert "SEGUNDO (ANA)" in texto and "FALTA ELEGIR" in texto
 
 
 def test_nombre_demasiado_largo_se_rechaza(client, fonda):
@@ -204,8 +209,8 @@ def test_tiempos_por_persona_en_la_comanda(client, db, fonda):
     ]})
     orden = db.query(Orden).one()
     texto = render_orden(orden, {"nombre": "Fonda"}).decode("cp850", errors="ignore")
-    assert "Bistec frito (TIEMPOS)" in texto
-    assert "Asado con puré (TIEMPOS)" not in texto
+    assert "Bistec frito (SEPARADO)" in texto
+    assert "Asado con puré (SEPARADO)" not in texto
 
 
 def test_dos_comandas_salen_dos_veces_por_el_puente(client, fonda):
@@ -271,3 +276,49 @@ def test_cola_sin_espera_responde_al_toque(client):
     inicio = reloj.monotonic()
     assert client.get("/api/print/cola").status_code == 200
     assert reloj.monotonic() - inicio < 1
+
+
+def test_comanda_plural_y_lineas_que_caben(client, db, fonda):
+    """"3 SEGUNDOS" en plural, y ningún renglón pasa del ancho de la
+    impresora (antes 64 columnas en una de 48 partían el recuadro)."""
+    import re
+
+    client.post("/api/orders", json={"menus": [
+        {"menu_id": fonda["menu_id"], "cantidad": 3, "elecciones": {"1": fonda["platos"]["Sopa criolla"]}},
+    ]})
+    orden = db.query(Orden).one()
+    for columnas in (32, 42, 48):
+        datos = render_orden(orden, {"nombre": "Fonda"}, columnas=columnas)
+        texto = datos.decode("cp850", errors="ignore")
+        assert "3 SEGUNDOS" in texto
+        # Cada renglón (sin comandos ESC/POS) entra en su ancho: el de los
+        # platos lleva letras separadas (2 puntos) y entran menos
+        con_espacio = (columnas * 12) // 14
+        for linea in re.sub(r"\x1b.|\x1d.|\x1b \x02|\x1dV..", "", texto).split("\n"):
+            limpia = re.sub(r"[\x00-\x1f]", "", linea)
+            assert len(limpia) <= columnas, (columnas, limpia)
+            if "║" in limpia or "╔" in limpia:
+                assert len(limpia) == con_espacio
+
+
+def test_ok_y_pago_en_la_comanda_y_precuenta(client, db, fonda):
+    """"OK y pagó": la comanda dice PAGADO y detrás sale la precuenta
+    (letra chica). "OK y no pagó": NO PAGO y queda en falta pagar."""
+    from app.models import Config
+
+    db.add(Config(clave="modo_impresion", valor="puente"))
+    db.add(Config(clave="impresora_ip", valor="192.168.1.77"))
+    db.commit()
+    menu = {"menu_id": fonda["menu_id"], "cantidad": 1,
+            "elecciones": {"1": fonda["platos"]["Sopa criolla"], "2": fonda["platos"]["Asado con puré"]}}
+    pagada = client.post("/api/orders", json={"menus": [menu], "pago": "pagado"}).json()["orden"]
+    debe = client.post("/api/orders", json={"menus": [menu], "pago": "pendiente"}).json()["orden"]
+    assert pagada["pago_al_pedir"] == "pagado" and not pagada["pago_pendiente"]
+    assert debe["pago_pendiente"] is True
+
+    trabajos = {t["orden_id"]: base64.b64decode(t["datos_b64"]).decode("cp850", errors="ignore")
+                for t in client.get("/api/print/cola").json()["trabajos"]}
+    assert "PAGADO" in trabajos[pagada["id"]] and "PRECUENTA" in trabajos[pagada["id"]]
+    assert "TOTAL PAGADO" in trabajos[pagada["id"]] and "\x1bM\x01" in trabajos[pagada["id"]]
+    assert "NO PAGO" in trabajos[debe["id"]] and "PRECUENTA" not in trabajos[debe["id"]]
+    assert client.post("/api/orders", json={"menus": [menu], "pago": "quizas"}).status_code == 422

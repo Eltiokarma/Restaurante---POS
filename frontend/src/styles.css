@@ -1928,6 +1928,31 @@ select:focus-visible {
   margin: 10px 0 4px;
 }
 
+/* "OK y pagó" / "OK y no pagó" en la ventana de cancelación */
+.botones-pago {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+/* Orden pegada a la izquierda y mesa a la derecha, en la misma línea */
+.ticket-orden-mesa {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 24px;
+  font-weight: 900;
+  margin: 6px 0 4px;
+}
+
+.ticket-pago {
+  text-align: center;
+  font-size: 20px;
+  font-weight: 900;
+  margin: 2px 0;
+}
+
 .ticket-fecha {
   font-size: 12px;
   letter-spacing: 0.05em;
