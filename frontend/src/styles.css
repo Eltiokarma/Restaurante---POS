@@ -10977,3 +10977,43 @@ select:focus-visible {
   outline: 4px solid var(--aji);
   outline-offset: 3px;
 }
+
+/* Hoja de empaque: todo el pedido (entrada y segundo de todas las
+   personas) de un toque, debajo de las opciones de esta persona */
+.rh-todo-pedido {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 2px dashed var(--linea-fuerte);
+}
+
+.rh-todo-pedido-titulo {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tinta-media);
+}
+
+.rh-todo-pedido-botones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+  gap: 8px;
+}
+
+.rh-todo-pedido-boton {
+  min-height: 64px;
+  padding: 0 12px;
+  border: 2px solid var(--mayolica);
+  border-radius: var(--r);
+  background: var(--mayolica-tenue);
+  color: var(--mayolica);
+  font-size: 1.05rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.rh-todo-pedido-activo {
+  background: var(--mayolica);
+  color: #fff;
+}

@@ -225,7 +225,7 @@ export function HojaTiempo({ tiempoOrden, persona, lineas, onCerrar, onEsta, onS
 /** Hoja de empaque (dibujo 5): tocar la letra M/T del ticket. Tocar un
  *  empaque lo pone a ESTA persona; con varias, contadores ± que reparten
  *  entre todas (la suma no pasa de las personas que tienen ese plato). */
-export function HojaEmpaque({ tiempoOrden, persona, lineas, empaques, onCerrar, onEsta, onRepartir }: {
+export function HojaEmpaque({ tiempoOrden, persona, lineas, empaques, onCerrar, onEsta, onRepartir, onTodoElPedido }: {
   tiempoOrden: number
   persona: number
   lineas: MenuCarrito[]
@@ -233,6 +233,8 @@ export function HojaEmpaque({ tiempoOrden, persona, lineas, empaques, onCerrar, 
   onCerrar: () => void
   onEsta: (e: Empaque) => void
   onRepartir: (cuotas: [Empaque, number][]) => void
+  // Entrada y segundo de todas las personas en ese empaque, de un toque
+  onTodoElPedido: (e: Empaque) => void
 }) {
   const linea = lineas[persona]
   const tiempo = linea?.menu.tiempos.find((t) => t.orden === tiempoOrden)
@@ -267,6 +269,27 @@ export function HojaEmpaque({ tiempoOrden, persona, lineas, empaques, onCerrar, 
             {total > 1 && <button className="rh-todas" onClick={() => onRepartir([[e, total]])}>☐ Todas</button>}
           </div>
         ))}
+      </div>
+      {/* Pedido del dueño: desde un ticket, todo el pedido (entrada y
+          segundo de todas las personas) a mesa, táper, bolsa o lonchera */}
+      <div className="rh-todo-pedido">
+        <p className="rh-todo-pedido-titulo">
+          {lineas.length > 1 ? `Todos (${lineas.length} personas): entrada y segundo` : 'Entrada y segundo'}
+        </p>
+        <div className="rh-todo-pedido-botones">
+          {empaques.map((e) => {
+            const todosAsi = lineas.every((l) => l.empaque === e && Object.keys(l.empaques).length === 0)
+            return (
+              <button
+                key={e}
+                className={`rh-todo-pedido-boton ${todosAsi ? 'rh-todo-pedido-activo' : ''}`}
+                onClick={() => onTodoElPedido(e)}
+              >
+                {NOMBRE_EMPAQUE[e]}
+              </button>
+            )
+          })}
+        </div>
       </div>
       {total > 1 && (
         <div className="rh-reparto">
@@ -555,6 +578,7 @@ export function useTicketsPersonas(carrito: Carrito, opciones: {
           onCerrar={cerrar}
           onEsta={(e) => { carrito.cambiarEmpaqueTiempo(hoja.idx, t, e); cerrar() }}
           onRepartir={(cuotas) => { carrito.repartirEmpaque(menuId, t, cuotas); cerrar() }}
+          onTodoElPedido={(e) => { carrito.empaqueMenuParaTodas(menuId, e); cerrar() }}
         />
       )
     } else {

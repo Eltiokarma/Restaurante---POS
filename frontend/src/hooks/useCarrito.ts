@@ -420,6 +420,12 @@ export function useCarrito() {
   }, [])
 
   // "Todo el menú en X" borra los empaques por tiempo: el general manda
+  // Desde la hoja de empaque: entrada y segundo de TODAS las personas de
+  // ese menú en el mismo empaque (se borran las excepciones por plato)
+  const empaqueMenuParaTodas = useCallback((menuId: number, empaque: Empaque) => {
+    setMenus((prev) => prev.map((m) => (m.menu.id === menuId ? { ...m, empaque, empaques: {} } : m)))
+  }, [])
+
   const cambiarEmpaqueMenu = useCallback((idx: number, empaque: Empaque) => {
     setMenus((prev) => prev.map((m, i) => (i === idx ? { ...m, empaque, empaques: {} } : m)))
   }, [])
@@ -584,6 +590,7 @@ export function useCarrito() {
     cambiarNotaMenu,
     vaciar,
     quitarMenusVacios,
+    empaqueMenuParaTodas,
     eliminarNoDisponibles,
     sincronizarConMenu,
     totalItems,
