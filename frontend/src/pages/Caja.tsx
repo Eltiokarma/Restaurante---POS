@@ -165,6 +165,16 @@ export function Caja() {
     }, filas.length === 1 ? `${filas[0].nombre}: ${filas[0].sugerido} porciones` : 'Listo: las cantidades de la última vez')
   }
 
+  const abrirCajon = async () => {
+    try {
+      const r = await api.abrirGaveta()
+      setMensaje(r.encolada ? 'Abriendo el cajón…' : 'El cajón no está configurado')
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo abrir el cajón')
+    }
+  }
+
   const cambiarMenuDelDia = async (accion: () => Promise<MenuCaja>, aviso: string) => {
     try {
       setMenuCaja(await accion())
@@ -758,6 +768,11 @@ export function Caja() {
         <button className="boton boton--sm boton--papel" onClick={abrirMenuDelDia}>
           📋 Menú del día
         </button>
+        {config?.modo_impresion === 'puente' && config.gaveta !== 'no' && (
+          <button className="boton boton--sm boton--papel" onClick={abrirCajon}>
+            💵 Abrir cajón
+          </button>
+        )}
         <span className="caja-total-dia">Vendido hoy: <strong>{soles(totalVendido)}</strong></span>
       </header>
       {tickets.hojas}

@@ -19,12 +19,21 @@ from ..auth import requiere_admin
 from ..db import get_db
 from ..models import CierreCaja, Config, Mesa, Orden, Plato, TicketBebida, hoy_lima
 from ..routes.config import leer_config
-from ..services.escpos import render_bebida, render_cierre, render_orden, render_precuenta, render_prueba
+from ..services.escpos import INICIALIZAR, abrir_gaveta, render_bebida, render_cierre, render_orden, render_precuenta, render_prueba
 
 router = APIRouter(prefix="/api/print", tags=["impresion"])
 
 CLAVE_PRUEBA = "imprimir_prueba"
 CLAVE_CIERRE = "imprimir_cierre"
+CLAVE_GAVETA = "abrir_gaveta"
+
+
+def _marcar(db: Session, clave: str, valor: str) -> None:
+    registro = db.get(Config, clave)
+    if registro is None:
+        db.add(Config(clave=clave, valor=valor))
+    else:
+        registro.valor = valor
 
 
 @router.post("/prueba", dependencies=[Depends(requiere_admin)])
@@ -49,10 +58,27 @@ def confirmar_ticket_de_prueba(db: Session = Depends(get_db)):
     Igual que las órdenes, el trabajo espera en cola hasta confirmarse.
     """
     registro = db.get(Config, CLAVE_PRUEBA)
-    if registro is not None:
+    if registro is not None and registro.valor == "1":
         registro.valor = "0"
-        db.commit()
+    else:
+        # El pulso del cajón viaja como trabajo "prueba" (así lo atienden
+        # la app y el puente ya instalados): se confirma aquí también
+        _marcar(db, CLAVE_GAVETA, "0")
+    db.commit()
     return {"confirmada": True}
+
+
+@router.post("/gaveta")
+def pedir_abrir_gaveta(db: Session = Depends(get_db)):
+    """Botón "Abrir cajón" de la caja (dar vuelto, cambiar sencillo). Sin
+    admin, como el resto de la caja. Solo en modo puente: la impresión del
+    navegador no puede mandar el pulso al cajón."""
+    config = leer_config(db)
+    if config["modo_impresion"] != "puente" or config["gaveta"] == "no":
+        return {"encolada": False}
+    _marcar(db, CLAVE_GAVETA, "1")
+    db.commit()
+    return {"encolada": True}
 
 
 @router.post("/cierre/impresa")
@@ -127,6 +153,23 @@ def _armar_cola(db: Session) -> dict:
             "datos_b64": base64.b64encode(render_prueba(local, columnas)).decode(),
         })
 
+    # "Abrir cajón": solo el pulso, sin papel. Viaja como tipo "prueba"
+    # (la app y el puente ya instalados lo imprimen y lo confirman sin
+    # actualizarse); nunca a la vez que una prueba de verdad.
+    marca_gaveta = db.get(Config, CLAVE_GAVETA)
+    if (
+        marca_gaveta is not None and marca_gaveta.valor == "1"
+        and not (registro_prueba is not None and registro_prueba.valor == "1")
+    ):
+        pulso = abrir_gaveta(config["gaveta"])
+        if pulso:
+            trabajos.append({
+                "tipo": "prueba",
+                "orden_id": None,
+                "numero": "CAJON",
+                "datos_b64": base64.b64encode(INICIALIZAR + pulso).decode(),
+            })
+
     # Resumen de cierre de caja pendiente (lo encola POST /api/caja/cerrar
     # en modo puente); espera en cola hasta confirmarse, como la prueba.
     marca_cierre = db.get(Config, CLAVE_CIERRE)
@@ -200,8 +243,10 @@ def _armar_cola(db: Session) -> dict:
             "numero": f"{orden.numero_orden_dia:03d}",
             # 2 comandas = los mismos bytes dos veces (cada una con su corte)
             # Pagó al pedir: detrás de la comanda sale su precuenta
+            # "OK y pagó": el cajón se abre cuando empieza a salir el papel
             "datos_b64": base64.b64encode(
-                render_orden(orden, local, columnas, categorias) * max(1, orden.copias or 1)
+                (abrir_gaveta(config["gaveta"]) if orden.pago_al_pedir == "pagado" else b"")
+                + render_orden(orden, local, columnas, categorias) * max(1, orden.copias or 1)
                 + (render_precuenta(orden, local, columnas, categorias) if orden.pago_al_pedir == "pagado" else b"")
             ).decode(),
         })

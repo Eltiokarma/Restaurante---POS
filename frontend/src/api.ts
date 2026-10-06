@@ -454,6 +454,8 @@ export interface ConfigOut {
   impresora_ip: string
   impresora_puerto: number
   impresora_columnas: number
+  // Cajón de dinero en el puerto DK de la impresora (modo puente)
+  gaveta: 'pin2' | 'pin5' | 'no'
   // Toggle guardado (admin) y disponibilidad efectiva (toggle + API keys)
   voz_habilitada: boolean
   voz_disponible: boolean
@@ -1537,6 +1539,10 @@ export const api = {
   // Encola un ticket de prueba para el puente de impresión
   imprimirPrueba: () =>
     request<{ encolada: boolean }>('/api/print/prueba', { method: 'POST' }, true),
+
+  // "Abrir cajón" de la caja: el puente manda el pulso al cajón de dinero
+  abrirGaveta: () =>
+    request<{ encolada: boolean }>('/api/print/gaveta', { method: 'POST' }),
 
   // El ticket de prueba se confirma como las órdenes: si no sale, sigue en cola
   confirmarPruebaImpresa: () =>
