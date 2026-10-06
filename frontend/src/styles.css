@@ -11017,3 +11017,66 @@ select:focus-visible {
   background: var(--mayolica);
   color: #fff;
 }
+
+/* Hoja del plato: presa, 2 huevos en vez de la carne y "que espere" */
+.rh-detalles {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 2px dashed var(--linea-fuerte);
+}
+
+.rh-detalle-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rh-detalle-rotulo {
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tinta-media);
+}
+
+.rh-detalle-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 110px), 1fr));
+  gap: 8px;
+}
+
+.rh-detalle-chip {
+  min-height: 64px;
+  padding: 0 14px;
+  border: 2px solid var(--linea-fuerte);
+  border-radius: var(--r);
+  background: var(--papel-alto);
+  color: var(--tinta);
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.rh-detalle-activo {
+  background: var(--culantro);
+  border-color: var(--culantro-hondo);
+  color: #fff;
+}
+
+.rh-detalle-espera.rh-detalle-activo {
+  background: var(--aji-tenue);
+  border-color: var(--aji);
+  color: var(--aji-hondo);
+}
+
+/* En el ticket de la persona: lo elegido del plato, chiquito y a la vista */
+.ticket-persona-variante {
+  display: block;
+  font-style: normal;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--culantro-hondo);
+}

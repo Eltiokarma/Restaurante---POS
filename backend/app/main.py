@@ -224,6 +224,10 @@ def _migrar(engine_) -> None:
         if columnas_ord and "pago_al_pedir" not in columnas_ord:
             conn.execute(text("ALTER TABLE ordenes ADD COLUMN pago_al_pedir VARCHAR(10)"))
             conn.commit()
+        columnas_it = [fila[1] for fila in conn.execute(text("PRAGMA table_info(orden_items)"))]
+        if columnas_it and "detalle" not in columnas_it:
+            conn.execute(text("ALTER TABLE orden_items ADD COLUMN detalle VARCHAR(60) NOT NULL DEFAULT ''"))
+            conn.commit()
         columnas_pl = [fila[1] for fila in conn.execute(text("PRAGMA table_info(platos)"))]
         if columnas_pl and "stock_hoy" not in columnas_pl:
             conn.execute(text("ALTER TABLE platos ADD COLUMN stock_hoy INTEGER"))

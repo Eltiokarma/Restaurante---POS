@@ -285,6 +285,9 @@ class OrdenItem(Base):
     # "Va a esperar": plato reservado para la persona; cocina no lo saca
     # con el resto hasta que lo pidan (sale marcado ESPERA en la comanda)
     espera: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Variante del plato que cocina debe ver: la presa ("PIERNA") o el
+    # cambio de proteína ("2 HUEVOS FRITOS, A LA INGLESA"). "" = como viene
+    detalle: Mapped[str] = mapped_column(String(60), default="", nullable=False)
     # Estado POR ÍTEM (§3): la cocina cocina por bulks (4 asados de un
     # toque), no ticket por ticket. ordenes.estado queda como caché
     # derivada = el estado MÍNIMO de sus ítems (ver services/cocina.py).

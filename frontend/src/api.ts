@@ -87,6 +87,31 @@ export interface ExtraMenu {
   cantidad: number
 }
 
+// Cómo quiere ESE plato: presa de pollo, o la proteína cambiada por 2
+// huevos fritos (mismo precio) y su cocción. Nada elegido = como viene
+// (y no se imprime nada)
+export type Presa = 'pecho' | 'pierna' | 'ala' | 'encuentro'
+export type CoccionHuevo = 'inglesa' | 'bien_frito'
+export interface VarianteMenu {
+  presa?: Presa
+  huevo?: boolean
+  coccion?: CoccionHuevo
+}
+export const NOMBRE_PRESA: Record<Presa, string> = { pecho: 'Pecho', pierna: 'Pierna', ala: 'Ala', encuentro: 'Encuentro' }
+export const NOMBRE_COCCION: Record<CoccionHuevo, string> = { inglesa: 'A la inglesa', bien_frito: 'Bien frito' }
+
+/** ¿Se le elige presa? Los platos con "pollo" en el nombre (dueño). */
+export function llevaPollo(nombre: string): boolean {
+  return nombre.toLowerCase().includes('pollo')
+}
+
+/** Texto corto de la variante para el ticket en pantalla. */
+export function textoVariante(v?: VarianteMenu): string {
+  if (!v) return ''
+  if (v.huevo) return `🍳 2 huevos${v.coccion ? ` · ${NOMBRE_COCCION[v.coccion].toLowerCase()}` : ''}`
+  return v.presa ? `🍗 ${NOMBRE_PRESA[v.presa]}` : ''
+}
+
 // Un menú armado dentro del carrito (elecciones ya resueltas)
 export interface MenuCarrito {
   menu: MenuHoy
@@ -107,6 +132,8 @@ export interface MenuCarrito {
   espera?: number[]
   // Nombre opcional de la persona ("Juan"): sale en la comanda de cocina
   nombre_persona?: string
+  // tiempo_orden → presa / cambio a huevo
+  variantes?: Partial<Record<number, VarianteMenu>>
 }
 
 // Estado POR ÍTEM (§3): la cocina tacha porciones, no tickets enteros
@@ -114,6 +141,8 @@ export type EstadoItem = 'pendiente' | 'preparando' | 'listo' | 'entregado'
 
 export interface OrdenItemOut {
   id?: number
+  // Presa o cambio a huevo ("PIERNA", "2 HUEVOS … EN VEZ DE CARNE"); "" = como viene
+  detalle?: string
   // Línea de cobro (ej. "Táper × 3"): al total y al ticket, no a cocina
   es_cargo?: boolean
   // Categoría del plato (null si el plato salió del catálogo): cocina
@@ -778,6 +807,7 @@ export interface MenuOrdenIn {
   entrega?: Entrega
   espera?: number[]
   nombre_persona?: string
+  variantes?: Record<number, VarianteMenu>
 }
 
 // Menú del día como lo ve la caja: plantillas con TODAS sus alternativas
@@ -897,7 +927,23 @@ export function menuAPayload(m: MenuCarrito): MenuOrdenIn {
     // Solo lo elegido puede esperar
     espera: (m.espera ?? []).filter((t) => m.elecciones[t] !== undefined && !m.omitidos.includes(t)),
     nombre_persona: (m.nombre_persona ?? '').trim(),
+    variantes: variantesValidas(m),
   }
+}
+
+/** Solo las variantes de platos elegidos que las admiten: la presa, si el
+ *  plato lleva pollo (repartir o cambiar de plato pudo dejar una vieja). */
+function variantesValidas(m: MenuCarrito): Record<number, VarianteMenu> {
+  const salida: Record<number, VarianteMenu> = {}
+  for (const [clave, v] of Object.entries(m.variantes ?? {})) {
+    const t = Number(clave)
+    const platoId = m.elecciones[t]
+    if (!v || platoId === undefined || m.omitidos.includes(t)) continue
+    const nombre = m.menu.tiempos.find((x) => x.orden === t)?.alternativas.find((a) => a.plato_id === platoId)?.nombre ?? ''
+    if (v.huevo) salida[t] = { huevo: true, ...(v.coccion ? { coccion: v.coccion } : {}) }
+    else if (v.presa && llevaPollo(nombre)) salida[t] = { presa: v.presa }
+  }
+  return salida
 }
 
 export const api = {
