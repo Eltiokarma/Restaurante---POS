@@ -586,7 +586,8 @@ def borrar_menu_guardado(guardado_id: int, db: Session = Depends(get_db)):
 class AgregadoIn(BaseModel):
     id: int | None = None
     nombre: str = Field(min_length=1, max_length=60)
-    precio: float = Field(gt=0)
+    # 0 vale: el refresco va gratis con el menú (pedido del dueño)
+    precio: float = Field(ge=0)
     activo: bool = True
 
 

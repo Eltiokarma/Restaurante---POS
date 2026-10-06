@@ -96,6 +96,44 @@ export interface VarianteMenu {
   presa?: Presa
   huevo?: boolean
   coccion?: CoccionHuevo
+  // "Sin puré", "Jugoso"… (claves de OPCIONES_PLATO)
+  opciones?: string[]
+}
+
+/** Cambios rápidos de un plato. Mismas claves que el backend. */
+export const OPCIONES_PLATO: Record<string, string> = {
+  sin_pure: 'Sin puré', sin_lentejas: 'Sin lentejas', sin_ensalada: 'Sin ensalada',
+  sin_frejoles: 'Sin frejoles', sin_arroz: 'Sin arroz', poco_arroz: 'Poco arroz',
+  sin_papas: 'Sin papas', sin_jugo: 'Sin jugo', jugoso: 'Jugoso', sin_aji: 'Sin ají',
+  sin_cebolla: 'Sin cebolla',
+}
+// Pares que se excluyen: marcar uno quita el otro
+export const OPCIONES_OPUESTAS: Record<string, string> = {
+  sin_jugo: 'jugoso', jugoso: 'sin_jugo', sin_arroz: 'poco_arroz', poco_arroz: 'sin_arroz',
+}
+
+const sinTildes = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+/** Qué cambios ofrecer según el nombre del plato (pedido del dueño: los
+ *  que lleve; el segundo además "sin ají" y, si es de salsa, jugo). */
+export function opcionesDePlato(nombre: string, esSegundo: boolean): string[] {
+  const n = sinTildes(nombre)
+  const lleva = (x: string) => n.includes(x) && !n.startsWith(x)
+  const salida: string[] = []
+  if (lleva('pure')) salida.push('sin_pure')
+  if (lleva('lenteja')) salida.push('sin_lentejas')
+  if (lleva('ensalada')) salida.push('sin_ensalada')
+  if (lleva('frejol') || lleva('frijol')) salida.push('sin_frejoles')
+  if (lleva('papa')) salida.push('sin_papas')
+  if (n.includes('arroz')) salida.push('poco_arroz', 'sin_arroz')
+  if (esSegundo) {
+    if (/saltad|estofad|seco|cau cau|aji de gallina|tallarin|olla|guiso|locro|chanfainita|carapulcra|adobo|picante|asado|menestr/.test(n)) {
+      salida.push('jugoso', 'sin_jugo')
+    }
+    if (/saltad|seco|sarsa|criolla/.test(n)) salida.push('sin_cebolla')
+    salida.push('sin_aji')
+  }
+  return salida
 }
 export const NOMBRE_PRESA: Record<Presa, string> = { pecho: 'Pecho', pierna: 'Pierna', ala: 'Ala', encuentro: 'Encuentro' }
 export const NOMBRE_COCCION: Record<CoccionHuevo, string> = { inglesa: 'A la inglesa', bien_frito: 'Bien frito' }
@@ -108,8 +146,11 @@ export function llevaPollo(nombre: string): boolean {
 /** Texto corto de la variante para el ticket en pantalla. */
 export function textoVariante(v?: VarianteMenu): string {
   if (!v) return ''
-  if (v.huevo) return `🍳 2 huevos${v.coccion ? ` · ${NOMBRE_COCCION[v.coccion].toLowerCase()}` : ''}`
-  return v.presa ? `🍗 ${NOMBRE_PRESA[v.presa]}` : ''
+  const partes: string[] = []
+  if (v.huevo) partes.push(`🍳 2 huevos${v.coccion ? ` · ${NOMBRE_COCCION[v.coccion].toLowerCase()}` : ''}`)
+  else if (v.presa) partes.push(`🍗 ${NOMBRE_PRESA[v.presa]}`)
+  for (const o of v.opciones ?? []) if (OPCIONES_PLATO[o]) partes.push(OPCIONES_PLATO[o].toLowerCase())
+  return partes.join(' · ')
 }
 
 // Un menú armado dentro del carrito (elecciones ya resueltas)
@@ -683,6 +724,8 @@ export interface VozPersona {
   elecciones: {
     tiempo_orden: number; rotulo: string; plato_id: number; nombre: string
     empaque: Empaque | null; espera: boolean
+    // Presa de pollo / 2 huevos en vez de la carne (si lo dijo)
+    presa?: Presa; huevo?: boolean; coccion?: CoccionHuevo
   }[]
   sin: number[]
   sin_rotulos: string[]
@@ -893,6 +936,7 @@ export function personaVozAMenu(p: VozPersona, menu: MenuHoy): MenuCarrito {
   const elecciones: Record<number, number> = {}
   const empaques: Partial<Record<number, Empaque>> = {}
   const espera: number[] = []
+  const variantes: Partial<Record<number, VarianteMenu>> = {}
   for (const t of menu.tiempos) {
     if (p.sin.includes(t.orden)) continue
     const dicho = p.elecciones.find((e) => e.tiempo_orden === t.orden)
@@ -900,6 +944,8 @@ export function personaVozAMenu(p: VozPersona, menu: MenuHoy): MenuCarrito {
       elecciones[t.orden] = dicho.plato_id
       if (dicho.empaque && dicho.empaque !== p.empaque) empaques[t.orden] = dicho.empaque
       if (dicho.espera) espera.push(t.orden)
+      if (dicho.huevo) variantes[t.orden] = { huevo: true, ...(dicho.coccion ? { coccion: dicho.coccion } : {}) }
+      else if (dicho.presa) variantes[t.orden] = { presa: dicho.presa }
     } else if (t.alternativas.length === 1) {
       elecciones[t.orden] = t.alternativas[0].plato_id
     }
@@ -912,7 +958,7 @@ export function personaVozAMenu(p: VozPersona, menu: MenuHoy): MenuCarrito {
       return agregado ? [{ agregado, cantidad: a.cantidad }] : []
     }),
     empaque: p.empaque, empaques, nota: p.nota,
-    entrega: p.entrega ?? undefined, nombre_persona: p.nombre, espera,
+    entrega: p.entrega ?? undefined, nombre_persona: p.nombre, espera, variantes,
   }
 }
 
@@ -940,8 +986,14 @@ function variantesValidas(m: MenuCarrito): Record<number, VarianteMenu> {
     const platoId = m.elecciones[t]
     if (!v || platoId === undefined || m.omitidos.includes(t)) continue
     const nombre = m.menu.tiempos.find((x) => x.orden === t)?.alternativas.find((a) => a.plato_id === platoId)?.nombre ?? ''
-    if (v.huevo) salida[t] = { huevo: true, ...(v.coccion ? { coccion: v.coccion } : {}) }
-    else if (v.presa && llevaPollo(nombre)) salida[t] = { presa: v.presa }
+    const esSegundo = (m.menu.tiempos.find((x) => x.orden === t)?.rotulo ?? '').toLowerCase().includes('segundo')
+    const validas = opcionesDePlato(nombre, esSegundo)
+    const opciones = (v.opciones ?? []).filter((o) => validas.includes(o))
+    const limpia: VarianteMenu = {}
+    if (v.huevo) Object.assign(limpia, { huevo: true }, v.coccion ? { coccion: v.coccion } : {})
+    else if (v.presa && llevaPollo(nombre)) limpia.presa = v.presa
+    if (opciones.length > 0) limpia.opciones = opciones
+    if (Object.keys(limpia).length > 0) salida[t] = limpia
   }
   return salida
 }

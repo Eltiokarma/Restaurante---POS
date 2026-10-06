@@ -318,10 +318,14 @@ export function useCarrito() {
   const cambiarEleccion = useCallback((idx: number, tiempoOrden: number, platoId: number) => {
     setMenus((prev) => prev.map((m, i) => {
       if (i !== idx) return m
-      // Otro plato: la presa elegida ya no aplica (el huevo sí se queda)
+      // Otro plato: la presa y los "sin…" eran de ese plato (el huevo sí
+      // se queda: vale para cualquier segundo)
       const variantes = { ...(m.variantes ?? {}) }
       const v = variantes[tiempoOrden]
-      if (v && m.elecciones[tiempoOrden] !== platoId && !v.huevo) delete variantes[tiempoOrden]
+      if (v && m.elecciones[tiempoOrden] !== platoId) {
+        if (v.huevo) variantes[tiempoOrden] = { huevo: true, ...(v.coccion ? { coccion: v.coccion } : {}) }
+        else delete variantes[tiempoOrden]
+      }
       return {
         ...m,
         elecciones: { ...m.elecciones, [tiempoOrden]: platoId },
@@ -337,7 +341,9 @@ export function useCarrito() {
     setMenus((prev) => prev.map((m, i) => {
       if (i !== idx) return m
       const variantes = { ...(m.variantes ?? {}) }
-      if (variante && (variante.huevo || variante.presa)) variantes[tiempoOrden] = variante
+      if (variante && (variante.huevo || variante.presa || (variante.opciones ?? []).length > 0)) {
+        variantes[tiempoOrden] = variante
+      }
       else delete variantes[tiempoOrden]
       return { ...m, variantes }
     }))

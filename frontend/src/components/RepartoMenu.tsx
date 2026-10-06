@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
-  entregaDeMenu, llevaPollo, menuConAlMomento, NOMBRE_COCCION, NOMBRE_EMPAQUE, NOMBRE_PRESA, soles,
-  subtotalMenu, textoVariante, tiemposPendientes,
+  entregaDeMenu, llevaPollo, menuConAlMomento, NOMBRE_COCCION, NOMBRE_EMPAQUE, NOMBRE_PRESA,
+  OPCIONES_OPUESTAS, OPCIONES_PLATO, opcionesDePlato, soles, subtotalMenu, textoVariante, tiemposPendientes,
 } from '../api'
 import type { CoccionHuevo, Empaque, Entrega, MenuCarrito, MenuHoy, Presa, VarianteMenu } from '../api'
 import { TarjetaMenuCarrito } from './TarjetaMenuCarrito'
@@ -182,7 +182,7 @@ export function HojaTiempo({
       {elegido !== undefined && (
         <DetallesDelPlato
           esSegundo={tiempo.rotulo.toLowerCase().includes('segundo')}
-          conPollo={llevaPollo(opciones.find((a) => a.plato_id === elegido)?.nombre ?? '')}
+          nombrePlato={opciones.find((a) => a.plato_id === elegido)?.nombre ?? ''}
           variante={linea.variantes?.[tiempoOrden]}
           conEspera={conEspera}
           enEspera={(linea.espera ?? []).includes(tiempoOrden)}
@@ -247,33 +247,59 @@ export function HojaTiempo({
 }
 
 /** Lo fino del plato elegido, sin cerrar la hoja: la presa de pollo, la
- *  proteína cambiada por 2 huevos fritos (mismo precio) con su cocción, y
- *  "que espere". Nada marcado = como viene; en la comanda no sale nada. */
-function DetallesDelPlato({ esSegundo, conPollo, variante, conEspera, enEspera, onEspera, onVariante }: {
+ *  proteína cambiada por 2 huevos fritos (mismo precio) con su cocción,
+ *  los "sin…" que le tocan a ESE plato (sin puré, jugoso…) y "que espere".
+ *  Nada marcado = como viene; en la comanda no sale nada. */
+export function DetallesDelPlato({ esSegundo, nombrePlato, variante, conEspera, enEspera, onEspera, onVariante }: {
   esSegundo: boolean
-  conPollo: boolean
+  nombrePlato: string
   variante?: VarianteMenu
   conEspera: boolean
   enEspera: boolean
   onEspera: () => void
   onVariante: (v: VarianteMenu | null) => void
 }) {
-  const huevo = !!variante?.huevo
-  if (!esSegundo && !conPollo && !conEspera) return null
+  const v = variante ?? {}
+  const huevo = !!v.huevo
+  const conPollo = llevaPollo(nombrePlato)
+  const opciones = opcionesDePlato(nombrePlato, esSegundo)
+  const marcadas = v.opciones ?? []
+  if (!esSegundo && !conPollo && !conEspera && opciones.length === 0) return null
+  const alternarOpcion = (o: string) => {
+    const opuesta = OPCIONES_OPUESTAS[o]
+    const nuevas = marcadas.includes(o)
+      ? marcadas.filter((x) => x !== o)
+      : [...marcadas.filter((x) => x !== opuesta), o]
+    onVariante({ ...v, opciones: nuevas })
+  }
   return (
     <div className="rh-detalles">
+      {opciones.length > 0 && (
+        <div className="rh-detalle-chips">
+          {opciones.map((o) => (
+            <button
+              key={o}
+              className={`rh-detalle-chip ${marcadas.includes(o) ? 'rh-detalle-activo' : ''}`}
+              aria-pressed={marcadas.includes(o)}
+              onClick={() => alternarOpcion(o)}
+            >
+              {OPCIONES_PLATO[o]}
+            </button>
+          ))}
+        </div>
+      )}
       {conPollo && !huevo && (
         <div className="rh-detalle-grupo">
           <span className="rh-detalle-rotulo">Presa</span>
           <div className="rh-detalle-chips">
-            {(Object.keys(NOMBRE_PRESA) as Presa[]).map((p) => (
+            {(Object.keys(NOMBRE_PRESA) as Presa[]).map((pr) => (
               <button
-                key={p}
-                className={`rh-detalle-chip ${variante?.presa === p ? 'rh-detalle-activo' : ''}`}
-                aria-pressed={variante?.presa === p}
-                onClick={() => onVariante(variante?.presa === p ? null : { presa: p })}
+                key={pr}
+                className={`rh-detalle-chip ${v.presa === pr ? 'rh-detalle-activo' : ''}`}
+                aria-pressed={v.presa === pr}
+                onClick={() => onVariante({ ...v, presa: v.presa === pr ? undefined : pr })}
               >
-                {NOMBRE_PRESA[p]}
+                {NOMBRE_PRESA[pr]}
               </button>
             ))}
           </div>
@@ -284,7 +310,7 @@ function DetallesDelPlato({ esSegundo, conPollo, variante, conEspera, enEspera, 
           <button
             className={`rh-detalle-chip rh-detalle-huevo ${huevo ? 'rh-detalle-activo' : ''}`}
             aria-pressed={huevo}
-            onClick={() => onVariante(huevo ? null : { huevo: true })}
+            onClick={() => onVariante(huevo ? { opciones: marcadas } : { huevo: true, opciones: marcadas })}
           >
             🍳 2 huevos fritos en vez de la carne
           </button>
@@ -293,9 +319,9 @@ function DetallesDelPlato({ esSegundo, conPollo, variante, conEspera, enEspera, 
               {(Object.keys(NOMBRE_COCCION) as CoccionHuevo[]).map((c) => (
                 <button
                   key={c}
-                  className={`rh-detalle-chip ${variante?.coccion === c ? 'rh-detalle-activo' : ''}`}
-                  aria-pressed={variante?.coccion === c}
-                  onClick={() => onVariante({ huevo: true, ...(variante?.coccion === c ? {} : { coccion: c }) })}
+                  className={`rh-detalle-chip ${v.coccion === c ? 'rh-detalle-activo' : ''}`}
+                  aria-pressed={v.coccion === c}
+                  onClick={() => onVariante({ ...v, coccion: v.coccion === c ? undefined : c })}
                 >
                   {NOMBRE_COCCION[c]}
                 </button>
@@ -681,6 +707,29 @@ export function useTicketsPersonas(carrito: Carrito, opciones: {
       const idx = hoja.idx
       hojas = (
         <Hoja titulo={`Persona ${persona + 1} — ¿algo más?`} onCerrar={cerrar}>
+          {/* Pedido del dueño: aquí, a la mano, cómo quiere cada plato
+              (sin puré, jugoso, presa, 2 huevos…), y luego los agregados */}
+          {lineaAbierta.menu.tiempos
+            .filter((t) => !lineaAbierta.omitidos.includes(t.orden) && lineaAbierta.elecciones[t.orden] !== undefined)
+            .map((t) => {
+              const nombre = t.alternativas.find((a) => a.plato_id === lineaAbierta.elecciones[t.orden])?.nombre ?? ''
+              const esSegundo = t.rotulo.toLowerCase().includes('segundo')
+              if (!esSegundo && !llevaPollo(nombre) && opcionesDePlato(nombre, false).length === 0) return null
+              return (
+                <div key={t.orden} className="mas-plato">
+                  <p className="mas-plato-titulo"><small>{t.rotulo}</small> {nombre}</p>
+                  <DetallesDelPlato
+                    esSegundo={esSegundo}
+                    nombrePlato={nombre}
+                    variante={lineaAbierta.variantes?.[t.orden]}
+                    conEspera={false}
+                    enEspera={false}
+                    onEspera={() => {}}
+                    onVariante={(v) => carrito.cambiarVariante(idx, t.orden, v)}
+                  />
+                </div>
+              )
+            })}
           <TarjetaMenuCarrito
             linea={lineaAbierta}
             numero={persona + 1}

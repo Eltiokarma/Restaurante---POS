@@ -11080,3 +11080,42 @@ select:focus-visible {
   font-weight: 800;
   color: var(--culantro-hondo);
 }
+
+/* "＋ Más": cada plato con sus cambios (sin puré, jugoso…) arriba */
+.mas-plato {
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--linea-fuerte);
+}
+
+.mas-plato-titulo {
+  margin: 0;
+  font-weight: 900;
+  font-size: 1.05rem;
+}
+
+.mas-plato-titulo small {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tinta-media);
+}
+
+.mas-plato .rh-detalles {
+  margin-top: 8px;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* Agregados en "＋ Más": rejilla pareja en vez de píldoras sueltas */
+.tarjeta-menu-extras .chips-agregados {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
+  gap: 8px;
+}
+
+.tarjeta-menu-extras .chip-agregado {
+  justify-content: space-between;
+}

@@ -704,6 +704,12 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       carne por 2 huevos fritos (mismo precio: 2 huevos = una porción), a la inglesa o
       bien fritos. Sin elegir no se imprime nada. Va en `OrdenItem.detalle` y sale en la
       comanda ("-> PIERNA", "-> 2 HUEVOS A LA INGLESA EN VEZ DE CARNE") y en cocina.
+- [x] **Cambios del plato** ("＋ Más" y hoja del plato): según el nombre se ofrecen Sin
+      puré, Sin lentejas, Sin ensalada, Sin frejoles, Sin papas, Poco/Sin arroz; los
+      segundos de salsa Jugoso/Sin jugo; saltados y secos Sin cebolla; todo segundo Sin
+      ají. Van con la presa/huevo en `OrdenItem.detalle` ("SIN AJÍ, SIN JUGO"). La voz
+      entiende presa y huevo (los manda a la IA; "locro de pecho" sigue siendo el locro).
+      Agregados pueden costar 0 (refresco gratis).
 - [x] **"Va a esperar" sin toques accidentales**: el circulito junto a la letra del
       empaque se marcaba al elegir mesa/bolsa; ahora se pone en la hoja del plato
       ("⏳ Que espere") y el ticket lo muestra como "⏳ después".

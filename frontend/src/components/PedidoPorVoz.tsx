@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, NOMBRE_EMPAQUE, personaVozAMenu, soles, subtotalMenu } from '../api'
+import { api, NOMBRE_EMPAQUE, personaVozAMenu, soles, subtotalMenu, textoVariante } from '../api'
 import type { Bebida, MenuCarrito, MenuHoy, Plato, VozItemResuelto, VozResultado } from '../api'
 
 // Lo normal es tocar "Ya pedí" al terminar (envía al toque, sin esperar
@@ -323,7 +323,10 @@ export function PedidoPorVoz({ platos, gaseosasLista, menus, onContinuar, onUsar
                     const nombre = t.alternativas.find((a) => a.plato_id === p.elecciones[t.orden])?.nombre
                     const propio = p.empaques[t.orden]
                     const despues = p.espera?.includes(t.orden) ? ' (después)' : ''
-                    return (propio ? `${nombre} (${NOMBRE_EMPAQUE[propio]})` : nombre) + despues
+                    // Presa / 2 huevos dictados: "Arroz con Pollo [🍗 Pierna]"
+                    const variante = textoVariante(p.variantes?.[t.orden])
+                    return (propio ? `${nombre} (${NOMBRE_EMPAQUE[propio]})` : nombre)
+                      + (variante ? ` [${variante}]` : '') + despues
                   })
                 const faltan = p.menu.tiempos
                   .filter((t) => p.elecciones[t.orden] === undefined && !p.omitidos.includes(t.orden))

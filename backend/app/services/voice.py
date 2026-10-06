@@ -125,8 +125,21 @@ FORMATO_PEDIDO = {
                                         "description": "true si este plato sale DESPUÉS (\"el segundo "
                                                        "más tarde\", \"todavía no\")",
                                     },
+                                    "presa": {
+                                        "type": "string", "enum": ["", "pecho", "pierna", "ala", "encuentro"],
+                                        "description": "Presa de pollo si la dijo y el plato lleva pollo; si no, vacío",
+                                    },
+                                    "huevo": {
+                                        "type": "boolean",
+                                        "description": "true si cambia la carne del segundo por huevo frito",
+                                    },
+                                    "coccion": {
+                                        "type": "string", "enum": ["", "inglesa", "bien_frito"],
+                                        "description": "Del huevo: a la inglesa / bien frito; si no lo dijo, vacío",
+                                    },
                                 },
-                                "required": ["tiempo_orden", "plato_id", "empaque", "espera"],
+                                "required": ["tiempo_orden", "plato_id", "empaque", "espera",
+                                             "presa", "huevo", "coccion"],
                                 "additionalProperties": False,
                             },
                         },
@@ -419,6 +432,13 @@ se sirve" sin nombrar plato → ese tiempo NO va en elecciones ni en "sin": qued
 (sale "FALTA ELEGIR" en la comanda). Si ya dijo la entrada, lo que falta es el segundo. \
 "Un menú con sopa y un segundo solo, el segundo todavía no" = persona 1 con sopa y segundo \
 por elegir; persona 2 sin entrada y segundo por elegir.
+- Presa de pollo: "arroz con pollo pierna", "un pollo a la olla con pecho", "encuentro" → \
+"presa" de ESA elección (solo si el plato lleva pollo; si no la dice, vacío). Ojo: si hay un \
+plato de pollo, "pecho" es la presa, no otro plato.
+- Huevo: "cámbiale la carne por huevo", "con huevo en vez de carne", "su segundo con dos \
+huevos" → "huevo" true en la elección del segundo (2 huevos fritos en vez de la carne, mismo \
+precio). "A la inglesa" / "bien frito" → "coccion"; si no lo dice, vacío. Un huevo frito \
+AGREGADO ("con un huevo frito encima", "más un huevo") es el agregado, no esto.
 - Mesa: "para la mesa 2B", "estamos en la 3A", "para la 7" → "mesa" con el nombre EXACTO \
 de la lista (ignora mayúsculas y espacios: "dos be" = "2 B"). Si dice el número sin la \
 letra ("mesa 3" y en la lista hay 3 A y 3 B), pon solo el número ("3"): el sistema elige \
@@ -506,6 +526,7 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
         elecciones: dict[int, int] = {}
         empaques: dict[int, str] = {}
         espera: list[int] = []
+        variantes: dict[int, dict] = {}
         for e in persona.get("elecciones", []):
             orden, plato_id = _entero(e.get("tiempo_orden")), _entero(e.get("plato_id"))
             tiempo = tiempos.get(orden)
@@ -519,6 +540,9 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
                     empaques[orden] = propio
                 if e.get("espera") is True:
                     espera.append(orden)
+                variante = _variante_valida(e, tiempo, plato_id)
+                if variante:
+                    variantes[orden] = variante
         entrega = persona.get("entrega")
         personas.append({
             "menu_id": menu["id"],
@@ -528,6 +552,7 @@ def _depurar(resultado: dict, contexto: dict) -> dict:
             "empaque": empaque,
             "empaques": empaques,
             "espera": sorted(espera),
+            "variantes": variantes,
             "agregados": _agregados_validos(persona.get("agregados", []), menu),
             "entrega": entrega if entrega in ("junto", "separado") else None,
             "nombre": str(persona.get("nombre") or "").strip()[:40],
@@ -587,6 +612,20 @@ def _mesa_por_nombre(dicha: str, mesas: list[dict]) -> int | None:
     return next((m["id"] for m in con_letra if not m.get("ocupada")), None)
 
 
+def _variante_valida(eleccion: dict, tiempo: dict, plato_id: int) -> dict:
+    """Presa (solo si el plato lleva pollo) o 2 huevos en vez de la carne
+    (solo el segundo) con su cocción. Lo que no cuadra se descarta."""
+    nombre = next((a["nombre"] for a in tiempo["alternativas"] if a["plato_id"] == plato_id), "")
+    if eleccion.get("huevo") is True and "segundo" in tiempo["rotulo"].lower():
+        variante: dict = {"huevo": True}
+        if eleccion.get("coccion") in ("inglesa", "bien_frito"):
+            variante["coccion"] = eleccion["coccion"]
+        return variante
+    if eleccion.get("presa") in ("pecho", "pierna", "ala", "encuentro") and "pollo" in nombre.lower():
+        return {"presa": eleccion["presa"]}
+    return {}
+
+
 def _agregados_validos(crudos: list, menu: dict) -> list[dict]:
     ids = {a["id"] for a in menu.get("agregados", [])}
     salida = []
@@ -610,7 +649,8 @@ def resolver_personas(personas: list[dict], contexto: dict) -> list[dict]:
             platos.append({"tiempo_orden": orden, "rotulo": tiempos[orden]["rotulo"],
                            "plato_id": plato_id, "nombre": alt["nombre"],
                            "empaque": p["empaques"].get(orden),
-                           "espera": orden in p["espera"]})
+                           "espera": orden in p["espera"],
+                           **p.get("variantes", {}).get(orden, {})})
         salida.append({
             **p,
             # JSON no tiene claves enteras: el frontend recibe la lista

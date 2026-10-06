@@ -191,3 +191,12 @@ def test_el_segundo_es_de_las_mismas_personas(contexto):
     assert personas(r) == [(2, {1: CHAIRITO}, [], "taper", {1: "mesa"})]
     r = interpretar_rapido("dos sopas para la mesa y los segundos de locro en tupper", contexto)
     assert personas(r) == [(2, {1: CHAIRITO, 2: LOCRO}, [], "taper", {1: "mesa"})]
+
+
+def test_presa_y_huevo_van_a_la_ia(contexto):
+    """Presa y huevo los entiende la IA; "locro de pecho" sigue siendo el locro."""
+    assert interpretar_rapido("un almuerzo con causa y pollo a la olla pierna", contexto) is None
+    assert interpretar_rapido("un pollo a la olla pecho con causa, un almuerzo", contexto) is None
+    assert interpretar_rapido("un almuerzo con causa y trucha con huevo", contexto) is None
+    r = interpretar_rapido("un almuerzo con causa y locro de pecho", contexto)
+    assert personas(r) == [(1, {1: CAUSA, 2: LOCRO}, [], "mesa", {})]
