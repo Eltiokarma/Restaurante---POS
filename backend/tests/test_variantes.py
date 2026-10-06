@@ -63,3 +63,24 @@ def test_variantes_invalidas(client, db):
     # Presa que no existe
     r = client.post("/api/orders", json={"menus": [_persona(menu_id, p["Arroz con Pollo"], {"presa": "cola"})]})
     assert r.status_code == 422
+
+
+def test_opciones_del_plato_en_la_comanda(client, db):
+    menu_id, p = _local(db)
+    r = client.post("/api/orders", json={"menus": [
+        _persona(menu_id, p["Arroz con Pollo"], {"presa": "ala", "opciones": ["poco_arroz", "sin_aji"]}),
+        _persona(menu_id, p["Trucha"], {"opciones": ["jugoso"]}),
+    ]})
+    assert r.status_code == 201, r.text
+    detalles = [i["detalle"] for m in r.json()["orden"]["menus"] for i in m["items"] if i["nombre"] != "Caldo"]
+    assert detalles == ["ALA, POCO ARROZ, SIN AJÍ", "JUGOSO"]
+    r = client.post("/api/orders", json={"menus": [_persona(menu_id, p["Trucha"], {"opciones": ["con_todo"]})]})
+    assert r.status_code == 422
+
+
+def test_agregado_gratis(client, db, admin_headers):
+    """El refresco va gratis con el menú (precio 0)."""
+    r = client.put("/api/menu/agregados", headers=admin_headers,
+                   json={"agregados": [{"nombre": "Refresco", "precio": 0}]})
+    assert r.status_code == 200, r.text
+    assert r.json()["agregados"][0]["precio"] == 0

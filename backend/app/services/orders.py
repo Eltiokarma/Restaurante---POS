@@ -45,6 +45,15 @@ class EntregaObligadaSeparado(Exception):
 
 PRESAS = {"pecho": "PECHO", "pierna": "PIERNA", "ala": "ALA", "encuentro": "ENCUENTRO"}
 COCCIONES = {"inglesa": "A LA INGLESA", "bien_frito": "BIEN FRITOS"}
+# Cambios rápidos del plato (la terminal ofrece los que tocan según el
+# nombre: "Sin puré" si lleva puré, "Jugoso" si es saltado…). Lo que va
+# en la comanda, tal cual
+OPCIONES_PLATO = {
+    "sin_pure": "SIN PURÉ", "sin_lentejas": "SIN LENTEJAS", "sin_ensalada": "SIN ENSALADA",
+    "sin_frejoles": "SIN FREJOLES", "sin_arroz": "SIN ARROZ", "poco_arroz": "POCO ARROZ",
+    "sin_papas": "SIN PAPAS", "sin_jugo": "SIN JUGO", "jugoso": "JUGOSO", "sin_aji": "SIN AJÍ",
+    "sin_cebolla": "SIN CEBOLLA",
+}
 
 
 def detalle_de_variante(plato: Plato, variante: dict | None) -> str:
@@ -53,19 +62,23 @@ def detalle_de_variante(plato: Plato, variante: dict | None) -> str:
     Sin variante (o sin elegir nada) no se imprime nada: lo de siempre."""
     if not variante:
         return ""
+    partes: list[str] = []
     if variante.get("huevo"):
         if plato.categoria != "fondo":
             raise EleccionInvalida(f"{plato.nombre}: solo el segundo cambia la proteína por huevo")
         coccion = COCCIONES.get(variante.get("coccion") or "")
-        return "2 HUEVOS" + (f" {coccion}" if coccion else " FRITOS") + " EN VEZ DE CARNE"
-    if variante.get("coccion"):
+        partes.append("2 HUEVOS" + (f" {coccion}" if coccion else " FRITOS") + " EN VEZ DE CARNE")
+    elif variante.get("coccion"):
         raise EleccionInvalida(f"{plato.nombre}: la cocción es del huevo frito")
-    presa = variante.get("presa")
-    if presa:
+    elif variante.get("presa"):
         if "pollo" not in plato.nombre.lower():
             raise EleccionInvalida(f"{plato.nombre} no lleva presa de pollo")
-        return PRESAS[presa]
-    return ""
+        partes.append(PRESAS[variante["presa"]])
+    for clave in dict.fromkeys(variante.get("opciones") or []):
+        if clave not in OPCIONES_PLATO:
+            raise EleccionInvalida(f"{plato.nombre}: opción desconocida ({clave})")
+        partes.append(OPCIONES_PLATO[clave])
+    return ", ".join(partes)[:120]
 
 
 def crear_orden(

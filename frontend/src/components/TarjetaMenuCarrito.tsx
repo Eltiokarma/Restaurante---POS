@@ -55,7 +55,7 @@ function ChipStepper({ etiqueta, precio, cantidad, onCambiar }: {
       >−</button>
       <span className="chip-agregado-texto">
         {cantidad > 0 && <strong>{cantidad} </strong>}
-        {etiqueta} <small>{soles(precio)}</small>
+        {etiqueta} <small>{precio > 0 ? soles(precio) : 'gratis'}</small>
       </span>
       <button className="boton-mini" onClick={() => onCambiar(1)} aria-label={`Agregar ${etiqueta}`}>
         +

@@ -32,6 +32,9 @@ A_LA_IA = {
     "uno", "otro", "otra", "otros", "otras", "despues", "luego", "ahorita", "todavia", "aun",
     "no", "mejor", "sin", "pero", "cambia", "cambiame", "extra", "doble", "aparte", "cada",
     "todos", "todas", "primero", "segunda", "tercero", "nombre", "llama",
+    # Presa y huevo: los entiende la IA
+    "pierna", "piernas", "ala", "alas", "encuentro", "huevo", "huevos", "huevito", "huevitos",
+    "inglesa", "presa",
 }
 
 NUMEROS = {
@@ -265,6 +268,15 @@ def interpretar_rapido(texto: str, contexto: dict) -> dict | None:
         return None  # varios menús: hay que decidir cuál, eso es criterio
     lexico = _Lexico(contexto)
     palabras = normalizar(texto).split()
+    # Con un plato de pollo en el menú, "pecho" puede ser la presa (y no el
+    # locro de pecho): eso lo decide la IA
+    hay_pollo = any("pollo" in a["nombre"].lower()
+                    for t in lexico.menu["tiempos"] for a in t["alternativas"])
+    for i, palabra in enumerate(palabras):
+        if hay_pollo and palabra == "pecho" and not any(
+            p.startswith("locro") for p in palabras[max(0, i - 2):i]
+        ):
+            return None
     tokens = lexico.tokenizar(palabras)
     if tokens is None:
         return None

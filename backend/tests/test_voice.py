@@ -225,11 +225,11 @@ def test_depurar_valida_cada_persona_contra_su_menu(db, menu_voz):
     assert r["personas"] == [
         {"menu_id": m["menu_id"], "cantidad": 1,
          "elecciones": {1: m["Caldo de gallina"], 2: m["Lomo saltado"]}, "sin": [],
-         "empaque": "taper", "empaques": {}, "espera": [], "agregados": [],
+         "empaque": "taper", "empaques": {}, "espera": [], "variantes": {}, "agregados": [],
          "entrega": "junto", "nombre": "Juan", "nota": ""},
         {"menu_id": m["menu_id"], "cantidad": 2,
          "elecciones": {2: m["Pollo al horno"]}, "sin": [],
-         "empaque": "mesa", "empaques": {}, "espera": [], "agregados": [],
+         "empaque": "mesa", "empaques": {}, "espera": [], "variantes": {}, "agregados": [],
          "entrega": None, "nombre": "", "nota": "sin cebolla"},
     ]
     assert r["items"] == [{"plato_id": m["Chicha morada"], "cantidad": 1}]
@@ -625,3 +625,28 @@ def test_ia_con_varios_grupos_nunca_va_directo(client, admin_headers, extras_voz
     }, contexto), 0.0))
     r = client.post("/api/voice/order", files={"audio": ("a.webm", b"x", "audio/webm")})
     assert r.json()["seguro"] is False
+
+
+def test_voz_presa_y_huevo(db, menu_voz):
+    """La IA marca presa (solo platos con pollo) y huevo (solo el segundo)."""
+    from app.models import Plato
+    from app.services.voice import _depurar, contexto_de_hoy
+
+    lomo = db.get(Plato, menu_voz["Lomo saltado"])
+    lomo.nombre = "Pollo saltado"
+    db.commit()
+    eleccion = {"empaque": "igual", "espera": False, "presa": "", "huevo": False, "coccion": ""}
+    r = _depurar({
+        "personas": [
+            {"menu_id": menu_voz["menu_id"], "cantidad": 1, "sin": [], "empaque": "mesa", "entrega": "auto",
+             "nombre": "", "nota": "", "agregados": [], "elecciones": [
+                 {**eleccion, "tiempo_orden": 1, "plato_id": menu_voz["Caldo de gallina"], "huevo": True},
+                 {**eleccion, "tiempo_orden": 2, "plato_id": lomo.id, "presa": "pierna"}]},
+            {"menu_id": menu_voz["menu_id"], "cantidad": 1, "sin": [], "empaque": "mesa", "entrega": "auto",
+             "nombre": "", "nota": "", "agregados": [], "elecciones": [
+                 {**eleccion, "tiempo_orden": 2, "plato_id": lomo.id, "huevo": True, "coccion": "inglesa"}]},
+        ],
+        "items": [], "gaseosas": [], "mesa": "", "no_encontrados": [], "notas": "",
+    }, contexto_de_hoy(db))
+    assert r["personas"][0]["variantes"] == {2: {"presa": "pierna"}}  # el huevo en la entrada no vale
+    assert r["personas"][1]["variantes"] == {2: {"huevo": True, "coccion": "inglesa"}}

@@ -59,6 +59,8 @@ class VarianteIn(BaseModel):
     presa: Literal["pecho", "pierna", "ala", "encuentro"] | None = None
     huevo: bool = False
     coccion: Literal["inglesa", "bien_frito"] | None = None
+    # "Sin puré", "Jugoso"… (claves de services.orders.OPCIONES_PLATO)
+    opciones: list[str] = Field(default_factory=list, max_length=8)
 
 
 class MenuIn(BaseModel):

@@ -3035,7 +3035,8 @@ function EditorAgregados({ onSesionVencida }: { onSesionVencida: () => void }) {
   const guardar = async () => {
     setError('')
     const validos = agregados.filter((a) => a.nombre.trim() !== '')
-    const sinPrecio = validos.filter((a) => !(parseFloat(a.precio) > 0))
+    // 0 vale (refresco gratis con el menú, pedido del dueño); vacío o negativo no
+    const sinPrecio = validos.filter((a) => !(parseFloat(a.precio) >= 0))
     if (sinPrecio.length > 0) {
       setError(`Pon el precio de: ${sinPrecio.map((a) => a.nombre).join(', ')}.`)
       return
