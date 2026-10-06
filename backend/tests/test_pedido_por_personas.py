@@ -1,6 +1,7 @@
 """Pedido por personas (cada menú = una persona): entrega por menú, platos
 "va a esperar", lo sin elegir en la comanda y el menú del día desde caja."""
 import base64
+import re
 
 from app.models import Orden
 from app.services.escpos import render_orden
@@ -319,6 +320,62 @@ def test_ok_y_pago_en_la_comanda_y_precuenta(client, db, fonda):
     trabajos = {t["orden_id"]: base64.b64decode(t["datos_b64"]).decode("cp850", errors="ignore")
                 for t in client.get("/api/print/cola").json()["trabajos"]}
     assert "PAGADO" in trabajos[pagada["id"]] and "PRECUENTA" in trabajos[pagada["id"]]
-    assert "TOTAL PAGADO" in trabajos[pagada["id"]] and "\x1bM\x01" in trabajos[pagada["id"]]
+    assert "TOTAL PAGADO S/" in trabajos[pagada["id"]] and "\x1bM\x01" in trabajos[pagada["id"]]
     assert "NO PAGO" in trabajos[debe["id"]] and "PRECUENTA" not in trabajos[debe["id"]]
     assert client.post("/api/orders", json={"menus": [menu], "pago": "quizas"}).status_code == 422
+
+
+def test_precuenta_corta_a_dos_columnas(client, db, fonda):
+    """La precuenta describe la entrada/sopa y el segundo de cada menú en
+    un renglón (también el de recargo, lo que falta elegir y la presa o
+    el "sin puré"), sin el refresco del menú ni el pie largo."""
+    import re
+
+    from app.models import Plato
+    from app.services.escpos import render_precuenta
+
+    p = fonda["platos"]
+    client.post("/api/orders", json={"pago": "pagado", "entrega": "separado", "menus": [
+        {"menu_id": fonda["menu_id"], "cantidad": 2,
+         "elecciones": {"1": p["Sopa criolla"], "2": p["Asado con puré"]},
+         "variantes": {"2": {"opciones": ["sin_pure"]}}},
+        {"menu_id": fonda["menu_id"], "cantidad": 1,
+         "elecciones": {"1": p["Papa a la huancaína"], "2": p["Bistec frito"]}},
+        {"menu_id": fonda["menu_id"], "cantidad": 1, "elecciones": {"1": p["Sopa criolla"]}},
+    ], "items": [{"plato_id": p["Tallarín rojo"], "cantidad": 1},
+                 {"plato_id": p["Chicha morada"], "cantidad": 2}]})
+    orden = db.query(Orden).one()
+    categorias = {pl.id: pl.categoria for pl in db.query(Plato).all()}
+    texto = render_precuenta(orden, {"nombre": "Fonda"}, 48, categorias).decode("cp850", errors="ignore")
+    lineas = [re.sub(r"[\x00-\x1f]", "", ln)
+              for ln in re.sub(r"\x1dV..|\x1b[@taEM \-].|\x1d!.", "", texto).split("\n")]
+    platos = [ln for ln in lineas if ln.startswith(("1x", "2x"))]
+    assert any("Sopa criolla" in ln and "Asado con puré (sin puré)" in ln and ln.endswith("22.00")
+               for ln in platos)
+    assert any("Papa a la huancaína" in ln and "Bistec frito" in ln for ln in platos)  # con recargo
+    assert any("Segundo: falta elegir" in ln for ln in platos)
+    # Los sueltos van de a dos: segundo solo y gaseosas en un renglón
+    assert any("Tallarín rojo" in ln and "Chicha morada" in ln for ln in platos)
+    assert sum("Chicha morada" in ln for ln in lineas) == 1  # el refresco del menú no sale
+    assert "Guarde este papel" not in texto and "Fonda" not in texto
+    assert any("TOTAL PAGADO S/ 63.00" in ln for ln in lineas)
+    assert all(len(ln) <= 64 for ln in lineas)
+    assert len([ln for ln in lineas if ln.strip()]) <= 8
+
+
+def test_precuenta_parte_nombres_largos_sin_pasarse(client, db, fonda):
+    from app.services.escpos import render_precuenta
+
+    p = fonda["platos"]
+    client.post("/api/orders", json={"pago": "pagado", "menus": [
+        {"menu_id": fonda["menu_id"], "cantidad": 1,
+         "elecciones": {"1": p["Papa a la huancaína"], "2": p["Asado con puré"]},
+         "variantes": {"2": {"opciones": ["sin_pure", "poco_arroz", "sin_ensalada", "sin_cebolla"]}}},
+    ]})
+    orden = db.query(Orden).one()
+    for columnas in (32, 42, 48):
+        texto = render_precuenta(orden, {}, columnas).decode("cp850", errors="ignore")
+        for ln in texto.split("\n"):
+            limpia = re.sub(r"[\x00-\x1f]", "", re.sub(r"\x1dV..|\x1b[@taEM \-].|\x1d!.", "", ln))
+            assert len(limpia) <= columnas * 12 // 9, (columnas, limpia)
+        assert "cebolla)" in texto  # partido en renglones, no cortado

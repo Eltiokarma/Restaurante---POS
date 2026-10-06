@@ -41,3 +41,11 @@ def test_el_stock_de_ayer_no_vale_hoy(client, db, fonda):
     sopa.stock_fecha = hoy_lima() - timedelta(days=1)
     db.commit()
     assert _stock(client, sopa.id)["stock"] is None
+    # …pero queda de sugerencia para la caja (pedido del dueño)
+    s = _stock(client, sopa.id)
+    assert (s["sugerido"], s["sugerido_fecha"]) == (10, (hoy_lima() - timedelta(days=1)).isoformat())
+
+    # Al poner el de hoy ya no hace falta sugerir
+    client.patch(f"/api/menu/platos/{sopa.id}/stock", json={"stock": 12})
+    s = _stock(client, sopa.id)
+    assert (s["stock"], s["sugerido"]) == (12, None)

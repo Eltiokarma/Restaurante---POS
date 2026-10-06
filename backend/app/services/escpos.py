@@ -423,36 +423,122 @@ def render_cierre(datos: dict, local: dict, columnas: int = 42) -> bytes:
     return b"".join(partes)
 
 
-def render_precuenta(orden: Orden, local: dict, columnas: int = 42) -> bytes:
+def _partir(texto: str, ancho: int) -> list[str]:
+    """Parte un texto en renglones de `ancho` por palabras (la precuenta
+    describe el plato completo en vez de cortarlo)."""
+    renglones: list[str] = []
+    actual = ""
+    for palabra in texto.split():
+        while len(palabra) > ancho:
+            if actual:
+                renglones.append(actual)
+                actual = ""
+            renglones.append(palabra[:ancho])
+            palabra = palabra[ancho:]
+        if not actual:
+            actual = palabra
+        elif len(actual) + 1 + len(palabra) <= ancho:
+            actual += " " + palabra
+        else:
+            renglones.append(actual)
+            actual = palabra
+    if actual:
+        renglones.append(actual)
+    return renglones or [""]
+
+
+def render_precuenta(
+    orden: Orden,
+    local: dict,
+    columnas: int = 42,
+    categorias: dict[int, str] | None = None,
+) -> bytes:
     """Precuenta para el cliente que pagó al pedir ("OK y pagó"): corta y
     en letra chica (Font B, 9 puntos: entran 4/3 de las columnas). Le sirve
-    de comprobante si su pedido se pierde."""
+    de comprobante si su pedido se pierde.
+
+    A dos columnas para que salga corta (pedido del dueño): cada menú en
+    un renglón con su entrada/sopa a la izquierda y su segundo a la
+    derecha; los sueltos de a dos por renglón; la fecha junto al total.
+    El refresco del menú no sale (no se cobra aparte)."""
+    categorias = categorias or {}
     ancho = (columnas * 12) // 9
     numero = f"{orden.numero_orden_dia:03d}"
     mesas = json.loads(orden.mesa_ids or "[]")
     nombres = local.get("mesas") or {}
-    cabecera = f"Orden #{numero}"
     if mesas:
-        cabecera += " - Mesa " + " + ".join(nombres.get(m, f"#{m}") for m in mesas)
-    partes: list[bytes] = [INICIALIZAR, CODEPAGE_CP850, FUENTE_B, CENTRAR,
-                           NEGRITA_ON, _texto(local.get("nombre") or "Restaurante"),
-                           _texto("PRECUENTA"), NEGRITA_OFF, _texto(cabecera),
-                           _texto(f"{orden.fecha.isoformat()} - {orden.hora}"),
-                           ALINEAR_IZQ, _texto("-" * ancho)]
+        donde = "Mesa " + " + ".join(nombres.get(m, f"#{m}") for m in mesas)
+    elif orden.tipo_servicio == "llevar":
+        donde = "Para llevar"
+    else:
+        donde = ""
+    partes: list[bytes] = [INICIALIZAR, CODEPAGE_CP850, FUENTE_B, ESPACIADO_NORMAL, ALINEAR_IZQ,
+                           NEGRITA_ON, _texto(_fila(f"PRECUENTA - Orden #{numero}", donde, ancho)),
+                           NEGRITA_OFF, _texto("-" * ancho)]
+
+    # Columnas de un menú: "2x  " | entrada | segundo | monto
+    cant_ancho, monto_ancho = 4, 8
+    izq_ancho = (ancho - cant_ancho - monto_ancho) * 2 // 5
+    der_ancho = ancho - cant_ancho - monto_ancho - izq_ancho - 1
+
+    def plato_con_detalle(item) -> str:
+        detalle = "; ".join(filter(None, [item.detalle, (item.nota or "").strip()]))
+        return f"{item.nombre_snapshot} ({detalle.lower()})" if detalle else item.nombre_snapshot
+
+    nombres_menu = {om.nombre_snapshot for om in orden.menus}
     for om in orden.menus:
         propios = [i for i in orden.items if i.orden_menu_id == om.id]
-        platos = " + ".join(i.nombre_snapshot for i in propios if not i.es_agregado and i.precio_snapshot == 0)
         monto = om.precio_cobrado * om.cantidad + sum(i.precio_snapshot * i.cantidad for i in propios)
-        partes.append(_texto(_fila(f"{om.cantidad} x {om.nombre_snapshot}", _soles(monto), ancho)))
-        if platos:
-            partes.append(_texto(f"  {platos}"[:ancho]))
-    for item in orden.items:
-        if item.orden_menu_id is None:
-            partes.append(_texto(_fila(f"{item.cantidad} x {item.nombre_snapshot}",
-                                       _soles(item.precio_snapshot * item.cantidad), ancho)))
+        # Lo de cada tiempo: el plato elegido (con recargo o no), lo que
+        # falta elegir y lo quitado, en el orden del menú
+        tiempos: dict[int, str] = {}
+        for item in propios:
+            if item.es_agregado or item.es_extra or item.tiempo_orden is None:
+                continue
+            if categorias.get(item.plato_id) == "bebida":
+                continue
+            tiempos[item.tiempo_orden] = plato_con_detalle(item)
+        for pendiente in om.pendientes():
+            tiempos[pendiente["tiempo_orden"]] = f"{pendiente['rotulo']}: falta elegir"
+        for omitido in om.omitidos():
+            tiempos[omitido["tiempo_orden"]] = f"sin {omitido['rotulo'].lower()}"
+        textos = [tiempos[t] for t in sorted(tiempos)]
+        izquierda = textos[0] if textos else om.nombre_snapshot
+        derecha = " + ".join(textos[1:])
+        if om.nota and om.nota.strip():
+            derecha = f"{derecha} ({om.nota.strip().lower()})".strip()
+        if len(nombres_menu) > 1:
+            # Varios tipos de menú en la orden: cuál es cuál
+            partes.append(_texto(f"{' ' * cant_ancho}{om.nombre_snapshot}"[:ancho]))
+        col_izq = _partir(izquierda, izq_ancho)
+        col_der = _partir(derecha, der_ancho) if derecha else [""]
+        for n in range(max(len(col_izq), len(col_der))):
+            cant = f"{om.cantidad}x" if n == 0 else ""
+            linea = (cant.ljust(cant_ancho)
+                     + (col_izq[n] if n < len(col_izq) else "").ljust(izq_ancho) + " "
+                     + (col_der[n] if n < len(col_der) else "").ljust(der_ancho))
+            partes.append(_texto(linea + (_soles(monto).rjust(monto_ancho) if n == 0 else "")))
+        # Porciones de más y agregados: ya van en el monto, se nombran
+        adicionales = [
+            f"+{i.cantidad} {i.nombre_snapshot}" for i in propios if i.es_agregado or i.es_extra
+        ]
+        for renglon in _partir(", ".join(adicionales), ancho - cant_ancho) if adicionales else []:
+            partes.append(_texto(" " * cant_ancho + renglon))
+
+    # Sueltos (segundo solo, gaseosas…): de a dos por renglón
+    sueltos = [
+        _fila(f"{i.cantidad}x {plato_con_detalle(i)}",
+              _soles(i.precio_snapshot * i.cantidad) if i.precio_snapshot else "",
+              (ancho - 2) // 2)
+        for i in orden.items if i.orden_menu_id is None
+    ]
+    for n in range(0, len(sueltos), 2):
+        par = sueltos[n:n + 2]
+        partes.append(_texto(par[0].ljust((ancho - 2) // 2) + ("  " + par[1] if len(par) > 1 else "")))
+
+    cuando = f"{orden.fecha.strftime('%d/%m/%Y')} {orden.hora[:5]}"
     partes += [_texto("-" * ancho), NEGRITA_ON,
-               _texto(_fila("TOTAL PAGADO", f"S/ {_soles(orden.total)}", ancho)), NEGRITA_OFF,
-               CENTRAR, _texto("Guarde este papel: es el comprobante de su pedido"),
+               _texto(_fila(cuando, f"TOTAL PAGADO S/ {_soles(orden.total)}", ancho)), NEGRITA_OFF,
                FUENTE_A, CORTAR]
     return b"".join(partes)
 
