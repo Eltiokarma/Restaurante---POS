@@ -3586,6 +3586,36 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
               onChange={(e) => setConfig({ ...config, impresora_columnas: parseInt(e.target.value) || 42 })}
             />
           </label>
+          <label>
+            Cajón de dinero (conectado al puerto DK de la impresora)
+            <select
+              value={config.gaveta}
+              onChange={(e) => setConfig({ ...config, gaveta: e.target.value as ConfigOut['gaveta'] })}
+            >
+              <option value="pin2">Sí — pin 2 (casi todos)</option>
+              <option value="pin5">Sí — pin 5 (si con pin 2 no abre)</option>
+              <option value="no">No tengo cajón</option>
+            </select>
+          </label>
+          {config.gaveta !== 'no' && (
+            <button
+              onClick={async () => {
+                setMensaje('')
+                setError('')
+                try {
+                  setConfig(await api.guardarConfig(config))
+                  const r = await api.abrirGaveta()
+                  setMensaje(r.encolada
+                    ? 'Cajón enviado ✔ — debe abrirse en unos segundos. Si no abre, prueba con el otro pin'
+                    : 'El cajón solo se abre en modo puente')
+                } catch (e) {
+                  setError(manejarError(e, onSesionVencida))
+                }
+              }}
+            >
+              💵 Probar cajón
+            </button>
+          )}
           <button
             onClick={async () => {
               setMensaje('')

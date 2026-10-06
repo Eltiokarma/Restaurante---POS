@@ -20,6 +20,7 @@ class ConfigIn(BaseModel):
     impresora_ip: str | None = None  # impresora térmica de red (modo puente)
     impresora_puerto: int | None = None
     impresora_columnas: int | None = None
+    gaveta: str | None = None  # cajón de dinero: "pin2" | "pin5" | "no"
     voz_habilitada: bool | None = None  # kill switch del pedido por voz
     exigir_caja_abierta: bool | None = None  # bloquear ventas sin apertura de caja
     terminal_solo_menus: bool | None = None  # la terminal muestra solo los menús
@@ -48,6 +49,7 @@ def leer_config(db: Session) -> dict:
         "impresora_ip": valores["impresora_ip"].strip(),
         "impresora_puerto": int(valores["impresora_puerto"] or 9100),
         "impresora_columnas": max(24, min(64, int(valores["impresora_columnas"] or 42))),
+        "gaveta": valores["gaveta"] if valores["gaveta"] in ("pin2", "pin5", "no") else "pin2",
         # El toggle guardado (para el admin) y la disponibilidad efectiva
         # (toggle encendido + API keys presentes) para la terminal
         "voz_habilitada": voz_habilitada,
@@ -80,6 +82,9 @@ def actualizar(payload: ConfigIn, db: Session = Depends(get_db)):
             valor = "1" if valor else "0"
         elif clave == "empaques_ofrecidos":
             valor = ",".join(e for e in valor if e in ("mesa", "taper", "bolsa", "lonchera"))
+        elif clave == "gaveta":
+            if valor not in ("pin2", "pin5", "no"):
+                continue
         elif clave == "precio_taper":
             valor = round(max(0.0, float(valor)), 2)
         registro = db.get(Config, clave)

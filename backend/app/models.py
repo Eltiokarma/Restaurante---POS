@@ -587,6 +587,10 @@ CONFIG_DEFAULTS: dict[str, str] = {
     "impresora_ip": "",
     "impresora_puerto": "9100",
     "impresora_columnas": "42",
+    # Cajón de dinero conectado al puerto DK de la impresora (modo puente):
+    # "pin2" (casi todos), "pin5" (algunos modelos) o "no" (no hay cajón).
+    # Se abre con "OK y pagó" y con el botón "Abrir cajón" de la caja.
+    "gaveta": "pin2",
     # Kill switch del pedido por voz: apagado por defecto hasta validar la
     # Fase 2 (además requiere OPENAI_API_KEY en .env)
     "voz_habilitada": "0",

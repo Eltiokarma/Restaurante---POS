@@ -43,8 +43,9 @@
       nuevo "puente": el backend genera los bytes del ticket y
       `scripts/puente_impresion.py` (PC del local, solo Python estándar) los manda a la
       impresora de red por IP:9100 usando la cola existente. Config de impresora en
-      Admin → Configuración con ticket de prueba. Gaveta y doble copia quedan como
-      mejoras futuras.
+      Admin → Configuración con ticket de prueba. Gaveta (cajón en el puerto DK,
+      pin 2 o 5): se abre con "OK y pagó" y con "💵 Abrir cajón" en Caja; el pulso
+      viaja como trabajo "prueba" para no exigir actualizar la app ni el puente.
 - [ ] Endurecer multi-terminal si se agrega una segunda tablet (hoy ya es seguro a nivel de
       datos; revisar UX de números de orden y capacidad de la ticketera).
 - [x] Backup automático: el servidor refresca la copia del día cada 30 minutos mientras

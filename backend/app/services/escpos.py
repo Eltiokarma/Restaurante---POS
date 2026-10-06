@@ -41,6 +41,17 @@ def columnas_con_espaciado(columnas: int, puntos: int) -> int:
     """Cuántas letras entran por línea si cada una lleva `puntos` extra.
     `columnas` es la configuración en Font A (12 puntos por letra)."""
     return (columnas * 12) // (12 + puntos)
+
+
+def abrir_gaveta(pin: str) -> bytes:
+    """Pulso al cajón de dinero conectado al puerto DK de la impresora
+    (ESC p m t1 t2: pin 2 → m=0, pin 5 → m=1; 50 ms encendido y 500 ms
+    de pausa). "no" = no hay cajón: nada."""
+    if pin not in ("pin2", "pin5"):
+        return b""
+    return b"\x1bp" + bytes([0 if pin == "pin2" else 1, 25, 250])
+
+
 # Alimenta papel y corta (corte parcial con avance: no arranca a mitad)
 CORTAR = b"\n\n\n\n" + b"\x1dV\x42\x03"
 
