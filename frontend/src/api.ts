@@ -882,6 +882,9 @@ export interface StockPlato {
   stock: number | null
   vendidos: number
   quedan: number | null
+  /** Lo puesto el último día que se contó: sugerencia para hoy */
+  sugerido?: number | null
+  sugerido_fecha?: string | null
 }
 
 /** ¿El menú lleva algún plato que se prepara al momento? Entonces esa

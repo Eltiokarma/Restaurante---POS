@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, lineaEntrega, menuAPayload, soles, subtotalMenu, tiemposPendientes, unidadesEnTaper } from '../api'
-import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuCaja, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, TicketBebidaOut } from '../api'
+import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuCaja, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, StockPlato, TicketBebidaOut } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
 import { menusEnPedido } from '../components/TarjetaOfertaMenu'
@@ -30,6 +30,17 @@ const SIGUIENTE_ESTADO: Record<string, string> = {
  * terminal (sin ventana de cancelación: el cajero confirma en persona)
  * y gestiona los pedidos del día — avanzar estado, reimprimir, anular.
  */
+
+/** "ayer" / "el lun 28/09": cuándo se puso la cantidad que se sugiere */
+function cuandoSugerido(fecha: string | null | undefined): string {
+  if (!fecha) return 'última vez'
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date())
+  const dias = Math.round((Date.parse(hoy) - Date.parse(fecha)) / 86400000)
+  if (dias === 1) return 'ayer'
+  const dia = new Date(`${fecha}T12:00:00`)
+  return `el ${dia.toLocaleDateString('es-PE', { weekday: 'short' }).replace('.', '')} ${fecha.slice(8, 10)}/${fecha.slice(5, 7)}`
+}
+
 export function Caja() {
   const [platos, setPlatos] = useState<Plato[]>([])
   const [menusHoy, setMenusHoy] = useState<MenuHoy[]>([])
@@ -145,6 +156,15 @@ export function Caja() {
       setError('No se pudo cargar el menú del día')
     }
   }
+  /** "Usar lo de ayer en todos": pone cada sugerencia de un solo toque */
+  const usarStockSugerido = async (filas: StockPlato[]) => {
+    await cambiarMenuDelDia(async () => {
+      let ultimo: MenuCaja | null = null
+      for (const s of filas) ultimo = await api.stockPlato(s.plato_id, s.sugerido ?? 0)
+      return ultimo as MenuCaja
+    }, filas.length === 1 ? `${filas[0].nombre}: ${filas[0].sugerido} porciones` : 'Listo: las cantidades de la última vez')
+  }
+
   const cambiarMenuDelDia = async (accion: () => Promise<MenuCaja>, aviso: string) => {
     try {
       setMenuCaja(await accion())
@@ -824,10 +844,21 @@ export function Caja() {
               <p className="rh-ayuda">
                 Se ve en la terminal cuántos quedan. Es solo aviso: si se acaba, igual se puede vender.
               </p>
+              {(() => {
+                const sugeribles = menuCaja.stock.filter((s) => s.stock === null && s.sugerido != null)
+                return sugeribles.length > 1 ? (
+                  <button className="stock-usar-todos" onClick={() => usarStockSugerido(sugeribles)}>
+                    Usar lo de la última vez en todos ({sugeribles.length})
+                  </button>
+                ) : null
+              })()}
               {menuCaja.stock.map((s) => (
                 <div key={s.plato_id} className="stock-fila">
                   <span className="stock-fila-nombre">
                     {s.nombre}
+                    {s.stock === null && s.sugerido != null && (
+                      <small> · {cuandoSugerido(s.sugerido_fecha)}: {s.sugerido}</small>
+                    )}
                     {s.stock !== null && (
                       <small> · vendidos {s.vendidos} · quedan <strong className={(s.quedan ?? 0) <= 0 ? 'stock-fila-agotado' : ''}>{s.quedan}</strong></small>
                     )}
@@ -856,6 +887,15 @@ export function Caja() {
                     >
                       +5
                     </button>
+                    {s.stock === null && s.sugerido != null && (
+                      <button
+                        className="defecto-chip stock-usar"
+                        aria-label={`Poner ${s.sugerido} porciones de ${s.nombre}, como la última vez`}
+                        onClick={() => usarStockSugerido([s])}
+                      >
+                        Usar {s.sugerido}
+                      </button>
+                    )}
                     {s.stock !== null && (
                       <button
                         className="defecto-chip"

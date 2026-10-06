@@ -144,7 +144,10 @@ def menu_de_hoy(db: Session = Depends(get_db)):
 def stock_de_hoy(db: Session) -> list[dict]:
     """Entradas y segundos de hoy con porciones puestas por la caja:
     cuántas había, cuántas se vendieron (órdenes de hoy no anuladas) y
-    cuántas quedan. Puede quedar en negativo: es aviso, no candado."""
+    cuántas quedan. Puede quedar en negativo: es aviso, no candado.
+
+    Lo puesto un día anterior no cuenta, pero queda de SUGERENCIA (pedido
+    del dueño): la caja lo usa con un toque en vez de contarlo de nuevo."""
     from sqlalchemy import func
 
     from ..models import Orden, OrdenItem
@@ -165,11 +168,14 @@ def stock_de_hoy(db: Session) -> list[dict]:
     salida = []
     for p in platos:
         stock = p.stock_hoy if p.stock_fecha == hoy else None
+        anterior = p.stock_fecha is not None and p.stock_fecha < hoy and p.stock_hoy is not None
         vendido = int(vendidos.get(p.id) or 0)
         salida.append({
             "plato_id": p.id, "nombre": p.nombre, "categoria": p.categoria,
             "stock": stock, "vendidos": vendido,
             "quedan": None if stock is None else stock - vendido,
+            "sugerido": p.stock_hoy if anterior else None,
+            "sugerido_fecha": p.stock_fecha.isoformat() if anterior else None,
         })
     return salida
 

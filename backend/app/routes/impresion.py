@@ -202,7 +202,7 @@ def _armar_cola(db: Session) -> dict:
             # Pagó al pedir: detrás de la comanda sale su precuenta
             "datos_b64": base64.b64encode(
                 render_orden(orden, local, columnas, categorias) * max(1, orden.copias or 1)
-                + (render_precuenta(orden, local, columnas) if orden.pago_al_pedir == "pagado" else b"")
+                + (render_precuenta(orden, local, columnas, categorias) if orden.pago_al_pedir == "pagado" else b"")
             ).decode(),
         })
 
