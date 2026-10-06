@@ -43,6 +43,31 @@ class EntregaObligadaSeparado(Exception):
         super().__init__(nombre)
 
 
+PRESAS = {"pecho": "PECHO", "pierna": "PIERNA", "ala": "ALA", "encuentro": "ENCUENTRO"}
+COCCIONES = {"inglesa": "A LA INGLESA", "bien_frito": "BIEN FRITOS"}
+
+
+def detalle_de_variante(plato: Plato, variante: dict | None) -> str:
+    """Lo que cocina debe leer del plato: la presa de pollo ("PIERNA") o
+    la proteína cambiada por 2 huevos fritos, con su cocción si la dijeron.
+    Sin variante (o sin elegir nada) no se imprime nada: lo de siempre."""
+    if not variante:
+        return ""
+    if variante.get("huevo"):
+        if plato.categoria != "fondo":
+            raise EleccionInvalida(f"{plato.nombre}: solo el segundo cambia la proteína por huevo")
+        coccion = COCCIONES.get(variante.get("coccion") or "")
+        return "2 HUEVOS" + (f" {coccion}" if coccion else " FRITOS") + " EN VEZ DE CARNE"
+    if variante.get("coccion"):
+        raise EleccionInvalida(f"{plato.nombre}: la cocción es del huevo frito")
+    presa = variante.get("presa")
+    if presa:
+        if "pollo" not in plato.nombre.lower():
+            raise EleccionInvalida(f"{plato.nombre} no lleva presa de pollo")
+        return PRESAS[presa]
+    return ""
+
+
 def crear_orden(
     db: Session,
     items: list[dict],
@@ -114,6 +139,7 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
     if not set(empaques_por_tiempo) <= numeros_de_tiempo:
         raise EleccionInvalida(f"El {plantilla.nombre} no tiene ese tiempo")
     elecciones = {int(k): int(v) for k, v in (pedido.get("elecciones") or {}).items()}
+    variantes = {int(k): v for k, v in (pedido.get("variantes") or {}).items() if v}
 
     # Tiempos que el cliente quitó ("sin sopa"): descuentan lo configurado
     # en el tiempo y no generan item. Quitar y elegir a la vez no tiene
@@ -200,6 +226,7 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
             tiempo_orden=tiempo.orden,
             es_extra=False,
             espera=tiempo.orden in en_espera,
+            detalle=detalle_de_variante(plato, variantes.get(tiempo.orden)),
         )
         item.orden_menu = orden_menu
         orden.items.append(item)

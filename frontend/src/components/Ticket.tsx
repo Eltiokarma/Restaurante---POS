@@ -148,6 +148,7 @@ function TicketCuerpo({ orden, id }: Props & { id?: string }) {
                     {item.empaque !== 'mesa' && (
                       <span className="ticket-item-empaque"> [{item.empaque.toUpperCase()}]</span>
                     )}
+                    {item.detalle && <div className="ticket-item-nota">→ {item.detalle}</div>}
                   </td>
                   <td className="ticket-subtotal">{item.subtotal > 0 ? soles(item.subtotal) : ''}</td>
                 </tr>

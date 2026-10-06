@@ -219,7 +219,8 @@ def render_orden(
         bucket = "fondo" if item.es_agregado else categorias.get(item.plato_id)
         clave = (
             bucket, item.nombre_snapshot, item.empaque,
-            _nota_de(item) or nota_por_item.get(item.id, ""),
+            # La presa / el cambio a huevo va primero, luego la observación
+            "; ".join(filter(None, [item.detalle, _nota_de(item) or nota_por_item.get(item.id, "")])),
             item.es_extra, item.es_agregado, item.espera,
             persona_de_menu.get(item.orden_menu_id, ""),
             mixta and entrega_de_menu.get(item.orden_menu_id, orden.entrega) == "separado",

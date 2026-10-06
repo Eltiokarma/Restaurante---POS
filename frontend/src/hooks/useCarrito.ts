@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { subtotalMenu } from '../api'
-import type { AgregadoHoy, Bebida, Empaque, Entrega, ItemCarrito, MenuCarrito, MenuHoy, Plato } from '../api'
+import type { AgregadoHoy, Bebida, Empaque, Entrega, ItemCarrito, MenuCarrito, MenuHoy, Plato, VarianteMenu } from '../api'
 import type { SugerenciaMenu } from '../menuSugerido'
 
 // La opción con la que arranca un tiempo: la primera sin recargo (para
@@ -316,11 +316,31 @@ export function useCarrito() {
 
   // Cambiar el plato de un tiempo del menú idx (y des-quitarlo si estaba quitado)
   const cambiarEleccion = useCallback((idx: number, tiempoOrden: number, platoId: number) => {
-    setMenus((prev) => prev.map((m, i) => (i === idx ? {
-      ...m,
-      elecciones: { ...m.elecciones, [tiempoOrden]: platoId },
-      omitidos: m.omitidos.filter((o) => o !== tiempoOrden),
-    } : m)))
+    setMenus((prev) => prev.map((m, i) => {
+      if (i !== idx) return m
+      // Otro plato: la presa elegida ya no aplica (el huevo sí se queda)
+      const variantes = { ...(m.variantes ?? {}) }
+      const v = variantes[tiempoOrden]
+      if (v && m.elecciones[tiempoOrden] !== platoId && !v.huevo) delete variantes[tiempoOrden]
+      return {
+        ...m,
+        elecciones: { ...m.elecciones, [tiempoOrden]: platoId },
+        omitidos: m.omitidos.filter((o) => o !== tiempoOrden),
+        variantes,
+      }
+    }))
+  }, [])
+
+  // Presa de pollo / cambio a 2 huevos fritos de UN plato de UNA persona.
+  // null borra la variante (vuelve "como viene")
+  const cambiarVariante = useCallback((idx: number, tiempoOrden: number, variante: VarianteMenu | null) => {
+    setMenus((prev) => prev.map((m, i) => {
+      if (i !== idx) return m
+      const variantes = { ...(m.variantes ?? {}) }
+      if (variante && (variante.huevo || variante.presa)) variantes[tiempoOrden] = variante
+      else delete variantes[tiempoOrden]
+      return { ...m, variantes }
+    }))
   }, [])
 
   // "Sin sopa": quitar (o devolver) un tiempo del menú idx. Al devolverlo
@@ -591,6 +611,7 @@ export function useCarrito() {
     vaciar,
     quitarMenusVacios,
     empaqueMenuParaTodas,
+    cambiarVariante,
     eliminarNoDisponibles,
     sincronizarConMenu,
     totalItems,

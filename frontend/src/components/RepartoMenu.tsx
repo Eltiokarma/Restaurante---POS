@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { entregaDeMenu, menuConAlMomento, NOMBRE_EMPAQUE, soles, subtotalMenu, tiemposPendientes } from '../api'
-import type { Empaque, Entrega, MenuCarrito, MenuHoy } from '../api'
+import {
+  entregaDeMenu, llevaPollo, menuConAlMomento, NOMBRE_COCCION, NOMBRE_EMPAQUE, NOMBRE_PRESA, soles,
+  subtotalMenu, textoVariante, tiemposPendientes,
+} from '../api'
+import type { CoccionHuevo, Empaque, Entrega, MenuCarrito, MenuHoy, Presa, VarianteMenu } from '../api'
 import { TarjetaMenuCarrito } from './TarjetaMenuCarrito'
 import type { DefectoMenu, useCarrito } from '../hooks/useCarrito'
 
@@ -100,7 +103,10 @@ export function clasePlato(alternativas: { plato_id: number }[], platoId: number
  *  opciones. Arriba, para ESTA persona; con varias personas, al lado de
  *  cada opción "☐ Todas", y abajo 50/50 y el reparto exacto (dibujo 4.1:
  *  deslizador con 2 opciones, contadores con más). */
-export function HojaTiempo({ tiempoOrden, persona, lineas, onCerrar, onEsta, onSinElegir, onNoLleva, onATodas, onNadie, onRepartir }: {
+export function HojaTiempo({
+  tiempoOrden, persona, lineas, onCerrar, onEsta, onSinElegir, onNoLleva, onATodas, onNadie, onRepartir,
+  conEspera, onEspera, onVariante,
+}: {
   tiempoOrden: number
   persona: number // posición (0..) dentro de `lineas`
   lineas: MenuCarrito[] // las tarjetas de ESTE menú, en orden
@@ -111,6 +117,12 @@ export function HojaTiempo({ tiempoOrden, persona, lineas, onCerrar, onEsta, onS
   onATodas: (platoId: number | null) => void
   onNadie: () => void
   onRepartir: (cuotas: [number, number][]) => void
+  // "Va a esperar" (sale después): aquí y no como circulito junto a la
+  // letra del empaque, donde se marcaba sin querer (pedido del dueño)
+  conEspera: boolean
+  onEspera: () => void
+  // Presa de pollo / 2 huevos fritos en vez de la proteína
+  onVariante: (v: VarianteMenu | null) => void
 }) {
   const linea = lineas[persona]
   const tiempo = linea?.menu.tiempos.find((t) => t.orden === tiempoOrden)
@@ -167,6 +179,18 @@ export function HojaTiempo({ tiempoOrden, persona, lineas, onCerrar, onEsta, onS
         </div>
       </div>
 
+      {elegido !== undefined && (
+        <DetallesDelPlato
+          esSegundo={tiempo.rotulo.toLowerCase().includes('segundo')}
+          conPollo={llevaPollo(opciones.find((a) => a.plato_id === elegido)?.nombre ?? '')}
+          variante={linea.variantes?.[tiempoOrden]}
+          conEspera={conEspera}
+          enEspera={(linea.espera ?? []).includes(tiempoOrden)}
+          onEspera={onEspera}
+          onVariante={onVariante}
+        />
+      )}
+
       {n > 1 && opciones.length >= 2 && (
         <div className="rh-reparto">
           <div className="rh-fila">
@@ -219,6 +243,77 @@ export function HojaTiempo({ tiempoOrden, persona, lineas, onCerrar, onEsta, onS
         </div>
       )}
     </Hoja>
+  )
+}
+
+/** Lo fino del plato elegido, sin cerrar la hoja: la presa de pollo, la
+ *  proteína cambiada por 2 huevos fritos (mismo precio) con su cocción, y
+ *  "que espere". Nada marcado = como viene; en la comanda no sale nada. */
+function DetallesDelPlato({ esSegundo, conPollo, variante, conEspera, enEspera, onEspera, onVariante }: {
+  esSegundo: boolean
+  conPollo: boolean
+  variante?: VarianteMenu
+  conEspera: boolean
+  enEspera: boolean
+  onEspera: () => void
+  onVariante: (v: VarianteMenu | null) => void
+}) {
+  const huevo = !!variante?.huevo
+  if (!esSegundo && !conPollo && !conEspera) return null
+  return (
+    <div className="rh-detalles">
+      {conPollo && !huevo && (
+        <div className="rh-detalle-grupo">
+          <span className="rh-detalle-rotulo">Presa</span>
+          <div className="rh-detalle-chips">
+            {(Object.keys(NOMBRE_PRESA) as Presa[]).map((p) => (
+              <button
+                key={p}
+                className={`rh-detalle-chip ${variante?.presa === p ? 'rh-detalle-activo' : ''}`}
+                aria-pressed={variante?.presa === p}
+                onClick={() => onVariante(variante?.presa === p ? null : { presa: p })}
+              >
+                {NOMBRE_PRESA[p]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {esSegundo && (
+        <div className="rh-detalle-grupo">
+          <button
+            className={`rh-detalle-chip rh-detalle-huevo ${huevo ? 'rh-detalle-activo' : ''}`}
+            aria-pressed={huevo}
+            onClick={() => onVariante(huevo ? null : { huevo: true })}
+          >
+            🍳 2 huevos fritos en vez de la carne
+          </button>
+          {huevo && (
+            <div className="rh-detalle-chips">
+              {(Object.keys(NOMBRE_COCCION) as CoccionHuevo[]).map((c) => (
+                <button
+                  key={c}
+                  className={`rh-detalle-chip ${variante?.coccion === c ? 'rh-detalle-activo' : ''}`}
+                  aria-pressed={variante?.coccion === c}
+                  onClick={() => onVariante({ huevo: true, ...(variante?.coccion === c ? {} : { coccion: c }) })}
+                >
+                  {NOMBRE_COCCION[c]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {conEspera && (
+        <button
+          className={`rh-detalle-chip rh-detalle-espera ${enEspera ? 'rh-detalle-activo' : ''}`}
+          aria-pressed={enEspera}
+          onClick={onEspera}
+        >
+          ⏳ {enEspera ? 'Sale después (toca para quitar)' : 'Que espere: sale después'}
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -316,14 +411,13 @@ const LETRA_EMPAQUE: Record<Empaque, string> = { mesa: 'M', taper: 'T', bolsa: '
  *  platos; a la derecha de cada uno el circulito "va a esperar" (caja) y
  *  la letra del empaque. Tocar el plato abre sus opciones; tocar la letra,
  *  el empaque. Lo demás (agregados, porciones, nota) en "＋ Más". */
-export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmpaque, onEspera, onEntrega, onMas, onQuitar, onNombre }: {
+export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmpaque, onEntrega, onMas, onQuitar, onNombre }: {
   linea: MenuCarrito
   numero: number
   domId: string
   conEspera: boolean
   onTiempo: (tiempoOrden: number) => void
   onEmpaque: (tiempoOrden: number) => void
-  onEspera: (tiempoOrden: number) => void
   onEntrega: (e: Entrega) => void
   onMas: () => void
   onQuitar: () => void
@@ -366,18 +460,16 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
               <span className={!quitado && !elegida ? 'linea-sin-elegir' : ''}>
                 {quitado ? `Sin ${t.rotulo.toLowerCase()}` : elegida ? elegida.nombre : 'toca para elegir'}
               </span>
+              {/* Presa, huevo y "sale después" se ven aquí; se cambian
+                  tocando el plato (el circulito junto a la letra se
+                  marcaba sin querer al elegir mesa o bolsa) */}
+              {!quitado && elegida && (textoVariante(linea.variantes?.[t.orden]) || (conEspera && espera.includes(t.orden))) && (
+                <em className="ticket-persona-variante">
+                  {[textoVariante(linea.variantes?.[t.orden]), conEspera && espera.includes(t.orden) ? '⏳ después' : '']
+                    .filter(Boolean).join(' · ')}
+                </em>
+              )}
             </button>
-            {conEspera && (
-              <button
-                className={`boton-espera ${espera.includes(t.orden) ? 'boton-espera-activo' : ''}`}
-                disabled={quitado || !elegida}
-                onClick={() => onEspera(t.orden)}
-                aria-pressed={espera.includes(t.orden)}
-                aria-label={`${t.rotulo}: va a esperar (reservado)`}
-              >
-                <span />
-              </button>
-            )}
             <button
               className={`ticket-persona-empaque empaque-${empaque}`}
               disabled={quitado}
@@ -564,6 +656,9 @@ export function useTicketsPersonas(carrito: Carrito, opciones: {
           onATodas={(platoId) => { carrito.eleccionATodos(menuId, t, platoId); cerrar() }}
           onNadie={() => { carrito.omitirATodos(menuId, t); cerrar() }}
           onRepartir={(cuotas) => { carrito.repartirEleccion(menuId, t, cuotas); cerrar() }}
+          conEspera={opciones.conEspera}
+          onEspera={() => carrito.alternarEspera(hoja.idx, t)}
+          onVariante={(v) => carrito.cambiarVariante(hoja.idx, t, v)}
         />
       )
     } else if (hoja.tipo === 'empaque') {
@@ -621,7 +716,6 @@ export function useTicketsPersonas(carrito: Carrito, opciones: {
             conEspera={opciones.conEspera}
             onTiempo={(t) => setHoja({ tipo: 'tiempo', idx, tiempo: t })}
             onEmpaque={(t) => setHoja({ tipo: 'empaque', idx, tiempo: t })}
-            onEspera={(t) => carrito.alternarEspera(idx, t)}
             onEntrega={(e) => carrito.cambiarEntregaMenu(idx, e)}
             onMas={() => setHoja({ tipo: 'mas', idx })}
             onQuitar={() => carrito.quitarMenu(idx)}

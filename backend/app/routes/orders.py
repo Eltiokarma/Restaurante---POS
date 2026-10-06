@@ -53,6 +53,14 @@ class MenuAgregadoIn(BaseModel):
     cantidad: int = Field(gt=0, le=50)
 
 
+class VarianteIn(BaseModel):
+    """Cómo quiere ESE plato: presa de pollo, o la proteína cambiada por 2
+    huevos fritos (mismo precio) y cómo se fríen. Nada = como viene."""
+    presa: Literal["pecho", "pierna", "ala", "encuentro"] | None = None
+    huevo: bool = False
+    coccion: Literal["inglesa", "bien_frito"] | None = None
+
+
 class MenuIn(BaseModel):
     menu_id: int
     cantidad: int = Field(gt=0, le=50)
@@ -71,6 +79,8 @@ class MenuIn(BaseModel):
     entrega: str | None = None
     # Tiempos "va a esperar" (reservados): cocina no los saca aún
     espera: list[int] = Field(default_factory=list, max_length=6)
+    # {tiempo_orden: variante} — presa de pollo o cambio a huevo frito
+    variantes: dict[int, VarianteIn] = Field(default_factory=dict)
     # Nombre opcional de la persona ("Juan"): sale en la comanda de cocina
     nombre_persona: str = Field(default="", max_length=40)
 
@@ -230,6 +240,7 @@ def _item_a_dict(item, categorias: dict[int, str] | None = None) -> dict:
         "nota": item.nota,
         "estado": item.estado,
         "subtotal": round(item.precio_snapshot * item.cantidad, 2),
+        "detalle": item.detalle or "",
     }
 
 

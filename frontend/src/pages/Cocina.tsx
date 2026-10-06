@@ -444,6 +444,7 @@ export function Cocina() {
                           {item.es_agregado ? <strong>＋{item.cantidad} {item.nombre.toUpperCase()}</strong>
                             : <>{item.cantidad} × {item.nombre}</>}
                           {item.es_extra && <span className="item-extra-tag">extra</span>}
+                          {item.detalle && <div className="nota-cocina">🍽 {item.detalle}</div>}
                           {item.espera && (
                             <button
                               className="item-espera-tag item-espera-boton"

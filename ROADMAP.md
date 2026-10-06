@@ -699,6 +699,14 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       "Quedan" chico en el inicio y en el pedido, ámbar con pocos y rojo ⚠ en 0 o menos.
       Solo AVISA: nunca bloquea la venta (el conteo puede fallar). Vale solo el día que
       se puso (`Plato.stock_fecha`); vendido = ítems de órdenes de hoy no anuladas.
+- [x] **Presa y huevo**: en la hoja del plato, los segundos con "pollo" en el nombre
+      eligen presa (pecho, pierna, ala, encuentro) y cualquier segundo puede cambiar la
+      carne por 2 huevos fritos (mismo precio: 2 huevos = una porción), a la inglesa o
+      bien fritos. Sin elegir no se imprime nada. Va en `OrdenItem.detalle` y sale en la
+      comanda ("-> PIERNA", "-> 2 HUEVOS A LA INGLESA EN VEZ DE CARNE") y en cocina.
+- [x] **"Va a esperar" sin toques accidentales**: el circulito junto a la letra del
+      empaque se marcaba al elegir mesa/bolsa; ahora se pone en la hoja del plato
+      ("⏳ Que espere") y el ticket lo muestra como "⏳ después".
 - [x] **"Así nomás: Pagó / No pagó"** en la barra de "Falta elegir" de la terminal: sigue
       sin elegir y ya dice si pagó (la ventana de cancelación sigue; al vencer confirma
       con eso).
