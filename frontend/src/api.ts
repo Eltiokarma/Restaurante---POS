@@ -914,7 +914,15 @@ export function menuConAlMomento(m: MenuCarrito): boolean {
 /** Por defecto la comanda sale POR TIEMPOS; "todo junto" es lo especial
  *  y lo de siempre para llevar (pedido del dueño): sin elegir a mano, junto
  *  solo si todo lo de la persona va en táper, bolsa o lonchera. */
+/** La persona lleva un solo plato de cocina (p. ej. segundo sin entrada). */
+export function unSoloPlato(m: MenuCarrito): boolean {
+  return m.menu.tiempos.filter((t) => t.alternativas.length > 1 && !m.omitidos.includes(t.orden)).length < 2
+}
+
 export function entregaDeMenu(m: MenuCarrito): Entrega {
+  // Un solo plato (segundo sin entrada): no hay tiempos que separar. Igual
+  // que el backend; antes salía "Estofado (SEPARADO)" y parecía reservado
+  if (unSoloPlato(m)) return 'junto'
   if (menuConAlMomento(m)) return 'separado'
   if (m.entrega) return m.entrega
   // Los tiempos de una sola opción (el refresco) no deciden

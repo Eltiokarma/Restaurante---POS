@@ -52,13 +52,16 @@ Entregado y en producción (PR #102 a #119):
    `ordenes.pago_yape`); sin desglosar cuenta como efectivo y la caja avisa.
    Pendiente: revisar anulados que ya estaban pagados (05/10 #54 S/ 20;
    06/10 #1 S/ 11 y #38 S/ 33).
-2b. **"(ESPERA)" que aparece solo** (estofado mesa + estofado llevar):
-   sin acceso a las ventas en la sesión 6 se blindaron los dos caminos —
-   la voz por IA ya no marca "sale después" si no se dijo (después, luego,
-   todavía no…), y en la hoja del plato "Que espere" bajó al fondo, aparte,
-   cierra la hoja al tocarlo, sale "⏳ SALE DESPUÉS" en el ticket y en la
-   ventana de cancelación. **Confirmar con los datos**: buscar en producción
-   la orden con estofado y mirar su `origen` (voz/tactil) y `voz_logs`.
+2b. **"Plato reservado" en la comanda** — RESUELTO con datos (sesión 6):
+   no era "espera" (ninguna orden del 03 al 06/10 tiene `espera`). Era la
+   orden #55 del 06/10 (táctil): estofado mesa + estofado llevar, ambos sin
+   entrada. La persona de mesa quedó "por tiempos" (el default) y la de
+   llevar "junto"; al mezclarse, la comanda imprimía "Estofado (SEPARADO)",
+   que se lee como plato separado/reservado. Ahora una persona con un solo
+   plato de cocina siempre va "junto" (backend al crear la orden y botón
+   de entrega bloqueado en la terminal). De paso quedaron blindados la voz
+   (no marca "sale después" si no se dijo) y el "Que espere" (al fondo de
+   la hoja, visible como "⏳ SALE DESPUÉS").
 3. **Diferidos de sesiones anteriores** (no arrancar sin el dueño):
    validar tandas con `tanda_logs` y el orquestador IA; migrar botones
    viejos a la clase base `.boton`.

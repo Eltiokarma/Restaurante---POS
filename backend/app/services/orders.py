@@ -193,6 +193,9 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
     subtotal = plantilla.precio * cantidad
     subtotal -= sum(o["descuento"] for o in omitidos) * cantidad
     numeros_omitidos = {o["tiempo_orden"] for o in omitidos}
+    # Tiempos que pasan por cocina (el refresco no): con uno solo no hay
+    # nada que separar
+    tiempos_cocina: set[int] = set()
 
     for tiempo in plantilla.tiempos:
         if tiempo.orden in numeros_omitidos:
@@ -227,6 +230,8 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
             )
         plato = _plato_activo(db, eleccion)
         _revisar_al_momento(plato, entrega)
+        if plato.categoria != "bebida":
+            tiempos_cocina.add(tiempo.orden)
         recargo = alternativas[eleccion].recargo
         subtotal += recargo * cantidad
         item = OrdenItem(
@@ -244,6 +249,11 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
         item.orden_menu = orden_menu
         orden.items.append(item)
     orden_menu.pendientes_json = json.dumps(pendientes, ensure_ascii=False)
+    if len(tiempos_cocina | {p["tiempo_orden"] for p in pendientes}) < 2:
+        # Un solo plato (segundo sin entrada): "por tiempos" no significa
+        # nada y en la comanda salía "Estofado (SEPARADO)", que se leía
+        # como plato reservado (orden #55 del 06/10). Va junto
+        orden_menu.entrega = "junto"
 
     for extra in pedido.get("extras") or []:
         tiempo = tiempos_por_orden.get(int(extra["tiempo_orden"]))
