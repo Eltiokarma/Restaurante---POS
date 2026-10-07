@@ -381,6 +381,38 @@ def test_precuenta_parte_nombres_largos_sin_pasarse(client, db, fonda):
         assert "cebolla)" in texto  # partido en renglones, no cortado
 
 
+def test_menu_de_solo_segundo_no_cuenta_en_la_entrega(client, db, fonda):
+    """Ticket #39: un menú completo "separado" + otro de solo segundo que
+    llegó "junto". El de un solo plato no tiene nada que separar: la
+    comanda dice SEPARADO a secas, sin "(SEPARADO)" en cada plato."""
+    from app.models import Plato
+
+    p = fonda["platos"]
+    r = client.post("/api/orders", json={"entrega": "separado", "menus": [
+        {"menu_id": fonda["menu_id"], "cantidad": 1, "entrega": "separado",
+         "elecciones": {"1": p["Papa a la huancaína"], "2": p["Tallarín rojo"]}},
+        {"menu_id": fonda["menu_id"], "cantidad": 1, "entrega": "junto", "omitidos": [1],
+         "elecciones": {"2": p["Tallarín rojo"]}},
+    ]})
+    assert r.status_code == 201, r.text
+    orden = db.query(Orden).one()
+    categorias = {pl.id: pl.categoria for pl in db.query(Plato).all()}
+    texto = render_orden(orden, {}, 48, categorias).decode("cp850", errors="ignore")
+    assert "ENTREGA: SEPARADO" in texto
+    assert "JUNTO" not in texto and "(SEPARADO)" not in texto
+
+    # Dos menús completos con entregas distintas sí se distinguen
+    client.post("/api/orders", json={"entrega": "separado", "menus": [
+        {"menu_id": fonda["menu_id"], "cantidad": 1, "entrega": "separado",
+         "elecciones": {"1": p["Papa a la huancaína"], "2": p["Tallarín rojo"]}},
+        {"menu_id": fonda["menu_id"], "cantidad": 1, "entrega": "junto",
+         "elecciones": {"1": p["Sopa criolla"], "2": p["Asado con puré"]}},
+    ]})
+    orden = db.query(Orden).order_by(Orden.id.desc()).first()
+    texto = render_orden(orden, {}, 48, categorias).decode("cp850", errors="ignore")
+    assert "ENTREGA: 1 JUNTO / 1 SEPARADO" in texto and "(SEPARADO)" in texto
+
+
 def test_un_solo_plato_no_sale_separado(client, db, fonda):
     """Orden #55 del 06/10: un estofado para la mesa (por tiempos, el
     default) y otro para llevar (junto), los dos sin entrada. Con un solo

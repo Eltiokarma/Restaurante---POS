@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, lineaEntrega, NOMBRE_EMPAQUE, NOMBRE_SERVICIO } from '../api'
+import { api, decideEntrega, lineaEntrega, NOMBRE_EMPAQUE, NOMBRE_SERVICIO } from '../api'
 import type { EstadoItem, ImpresionPendiente, MetricasServido, OrdenOut, Tanda } from '../api'
 import { AvisoImpresion } from '../components/AvisoImpresion'
 import { IconoProhibido, IconoReloj, IconoSarten, IconoSilla } from '../components/Iconos'
@@ -424,7 +424,7 @@ export function Cocina() {
                     <span className="item-menu-titulo">
                       <strong>{menu.cantidad} ×</strong> {menu.nombre}
                       {menu.nombre_persona && <strong className="item-menu-persona"> · {menu.nombre_persona}</strong>}
-                      {menu.entrega === 'separado' && lineaEntrega(orden).texto.includes('/') && (
+                      {menu.entrega === 'separado' && decideEntrega(menu) && lineaEntrega(orden).texto.includes('/') && (
                         <span className="item-extra-tag">⏱ por tiempos</span>
                       )}
                     </span>

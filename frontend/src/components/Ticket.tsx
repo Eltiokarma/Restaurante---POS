@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import type { CajaEstado, DatosLocal, EgresoOut, OrdenOut, TicketBebidaOut } from '../api'
-import { esperadoEnCaja, lineaEntrega, soles } from '../api'
+import { decideEntrega, esperadoEnCaja, lineaEntrega, soles } from '../api'
 
 /**
  * Ticket chico de SOLO las gaseosas agregadas a una orden desde caja:
@@ -109,7 +109,7 @@ function TicketCuerpo({ orden, id }: Props & { id?: string }) {
                 <td>
                   {menu.cantidad} × {menu.nombre}
                   {menu.nombre_persona && <strong> — {menu.nombre_persona.toUpperCase()}</strong>}
-                  {menu.entrega === 'separado' && lineaEntrega(orden).texto.includes('/') && ' · SEPARADO'}
+                  {menu.entrega === 'separado' && decideEntrega(menu) && lineaEntrega(orden).texto.includes('/') && ' · SEPARADO'}
                   {menu.nota && <div className="ticket-item-nota">→ {menu.nota}</div>}
                 </td>
                 <td className="ticket-subtotal">
