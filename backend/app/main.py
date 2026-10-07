@@ -233,6 +233,9 @@ def _migrar(engine_) -> None:
             conn.execute(text("ALTER TABLE platos ADD COLUMN stock_hoy INTEGER"))
             conn.execute(text("ALTER TABLE platos ADD COLUMN stock_fecha DATE"))
             conn.commit()
+        if columnas_ord and "pago_yape" not in columnas_ord:
+            conn.execute(text("ALTER TABLE ordenes ADD COLUMN pago_yape FLOAT"))
+            conn.commit()
 
 
 def _sembrar_agregados(engine_) -> None:

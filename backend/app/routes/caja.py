@@ -47,6 +47,11 @@ def _ventas_de_hoy(db: Session, desde_id: int | None = None) -> dict:
     efectivo = sum(o.total for o in ordenes if o.metodo_pago in (None, "efectivo"))
     tarjeta = sum(o.total for o in ordenes if o.metodo_pago == "tarjeta")
     yape = sum(o.total for o in ordenes if o.metodo_pago == "yape")
+    # Mixto: la parte Yape que puso la caja; el resto es efectivo. Sin
+    # desglosar aún, todo cuenta como efectivo (y se avisa para ponerlo)
+    mixtos = [o for o in ordenes if o.metodo_pago == "mixto"]
+    yape += sum(o.pago_yape or 0.0 for o in mixtos)
+    efectivo += sum(o.total - (o.pago_yape or 0.0) for o in mixtos)
     return {
         "total_vendido": round(efectivo + tarjeta + yape, 2),
         "ventas_efectivo": round(efectivo, 2),
@@ -55,6 +60,7 @@ def _ventas_de_hoy(db: Session, desde_id: int | None = None) -> dict:
         "sin_registrar": sum(
             1 for o in ordenes if o.metodo_pago is None and not o.pago_pendiente
         ),
+        "mixto_sin_desglose": sum(1 for o in mixtos if o.pago_yape is None),
         # Tickets marcados "falta pagar": esa plata NO entró todavía
         "por_cobrar": round(sum(o.total for o in ordenes if o.pago_pendiente), 2),
         # Vueltos por dar: esa plata está DE MÁS en el cajón

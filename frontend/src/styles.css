@@ -1928,10 +1928,11 @@ select:focus-visible {
   margin: 10px 0 4px;
 }
 
-/* "OK y pagó" / "OK y no pagó" en la ventana de cancelación */
+/* "Pagó efectivo / Yape / mixto" / "OK y no pagó" en la ventana de
+   cancelación: los tres de pago en una fila en tablet */
 .botones-pago {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: 12px;
   width: 100%;
 }
@@ -10953,8 +10954,8 @@ select:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-/* "Así nomás: Pagó / No pagó" — seguir sin elegir y decir si pagó, en
-   dos botones cortos con el color de cada caso (no un botonazo largo) */
+/* "Así nomás: Efectivo / Yape / Mixto / No pagó" — seguir sin elegir y
+   decir si pagó, en botones cortos con el color de cada caso */
 .sin-elegir-pago {
   display: flex;
   align-items: center;
@@ -11099,6 +11100,31 @@ select:focus-visible {
   font-size: 0.8rem;
   font-weight: 800;
   color: var(--culantro-hondo);
+}
+
+/* "Que espere" marcado: rótulo fuerte, que no pase desapercibido */
+.ticket-persona-espera {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-style: normal;
+  font-size: 0.8rem;
+  font-weight: 900;
+  background: var(--aji-tenue);
+  border: 2px solid var(--aji);
+  color: var(--aji-hondo);
+}
+
+/* "Que espere" en la hoja del plato: al fondo, separado de lo demás */
+.rh-espera {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 28px;
+  padding-top: 14px;
+  border-top: 2px dashed var(--linea-fuerte);
 }
 
 /* "＋ Más": cada plato con sus cambios (sin puré, jugoso…) arriba */
