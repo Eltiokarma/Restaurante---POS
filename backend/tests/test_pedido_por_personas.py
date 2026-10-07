@@ -321,7 +321,9 @@ def test_ok_y_pago_en_la_comanda_y_precuenta(client, db, fonda):
                 for t in client.get("/api/print/cola").json()["trabajos"]}
     assert "PAGADO" in trabajos[pagada["id"]] and "PRECUENTA" in trabajos[pagada["id"]]
     assert "TOTAL PAGADO S/" in trabajos[pagada["id"]] and "\x1bM\x01" in trabajos[pagada["id"]]
-    assert "NO PAGO" in trabajos[debe["id"]] and "PRECUENTA" not in trabajos[debe["id"]]
+    # La precuenta sale SIEMPRE; si no pagó, lo dice
+    assert "NO PAGO" in trabajos[debe["id"]] and "PRECUENTA" in trabajos[debe["id"]]
+    assert "NO PAGADO - TOTAL S/" in trabajos[debe["id"]]
     assert client.post("/api/orders", json={"menus": [menu], "pago": "quizas"}).status_code == 422
 
 

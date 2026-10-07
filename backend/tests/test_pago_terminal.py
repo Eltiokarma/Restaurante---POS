@@ -96,3 +96,19 @@ def test_mixto_en_finanzas(client, admin_headers, menu_ejemplo):
     entradas = r.json()["entradas_por_metodo"]
     assert entradas["yape"] == 10
     assert "mixto" not in entradas
+
+
+def test_precuenta_sale_aunque_no_pague_o_no_se_diga(client, db, menu_ejemplo):
+    """Pedido del dueño: la precuenta sale siempre; sin pago dice NO PAGADO
+    (y el cajón no se abre)."""
+    activar_modo_puente(db)
+    item = [{"plato_id": menu_ejemplo["Lomo saltado"], "cantidad": 1}]
+    debe = client.post("/api/orders", json={"items": item, "pago": "pendiente"}).json()["orden"]
+    sin_decir = client.post("/api/orders", json={"items": item}).json()["orden"]
+    datos = {t["orden_id"]: base64.b64decode(t["datos_b64"])
+             for t in client.get("/api/print/cola").json()["trabajos"]}
+    for orden in (debe, sin_decir):
+        texto = datos[orden["id"]].decode("cp850", errors="ignore")
+        assert "PRECUENTA" in texto and "NO PAGADO - TOTAL S/" in texto
+        assert "TOTAL PAGADO" not in texto
+        assert PULSO_PIN2 not in datos[orden["id"]]
