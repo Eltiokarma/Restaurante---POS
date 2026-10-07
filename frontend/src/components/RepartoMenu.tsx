@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  entregaDeMenu, llevaPollo, menuConAlMomento, NOMBRE_COCCION, NOMBRE_EMPAQUE, NOMBRE_PRESA,
+  entregaDeMenu, unSoloPlato, llevaPollo, menuConAlMomento, NOMBRE_COCCION, NOMBRE_EMPAQUE, NOMBRE_PRESA,
   OPCIONES_OPUESTAS, OPCIONES_PLATO, opcionesDePlato, soles, subtotalMenu, textoVariante, tiemposPendientes,
 } from '../api'
 import type { CoccionHuevo, Empaque, Entrega, MenuCarrito, MenuHoy, Presa, VarianteMenu } from '../api'
@@ -470,6 +470,7 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
   const espera = linea.espera ?? []
   const alMomento = menuConAlMomento(linea)
   const entrega = entregaDeMenu(linea)
+  const solo = unSoloPlato(linea)
   const pendientes = tiemposPendientes(linea).length
   const extras =
     linea.extras.reduce((s, e) => s + e.cantidad, 0) + linea.agregados.reduce((s, a) => s + a.cantidad, 0)
@@ -529,9 +530,10 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
       <div className="ticket-persona-pie">
         <button
           className={`ticket-persona-entrega ${entrega === 'separado' ? 'entrega-tiempos' : 'entrega-junto'}`}
-          disabled={alMomento}
+          disabled={alMomento || solo}
           onClick={() => onEntrega(entrega === 'junto' ? 'separado' : 'junto')}
-          title={alMomento ? 'Lleva un plato al momento: sale por tiempos' : 'Cambiar cómo sale'}
+          title={solo ? 'Un solo plato: no hay tiempos que separar'
+            : alMomento ? 'Lleva un plato al momento: sale por tiempos' : 'Cambiar cómo sale'}
         >
           {entrega === 'junto' ? '🍽 Todo junto' : '⏱ Por tiempos'}
         </button>
