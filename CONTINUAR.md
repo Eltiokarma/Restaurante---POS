@@ -1,93 +1,73 @@
-# CONTINUAR — Sesión 4: validar las tandas en campo y pensar el orquestador
+# CONTINUAR — Sesión 6: validar en campo lo nuevo y decidir lo pendiente
 
 > Plan de la sesión en curso. Empezar por el bloque 1 sin pedir contexto.
-> El prototipo está VIVO en el local (Railway despliega `main`, ~2-3 min).
+> El sistema está VIVO en el local (Railway despliega `main`, ~2-3 min).
 > Flujo por cambio: implementar → `python -m pytest tests/ -q` (backend/.venv)
 > → `npm run build` → navegador real → commit en español → PR a main →
 > merge → realinear la rama de sesión con `origin/main`.
 
-## Dónde quedó todo (sesión 2, cerrada 2026-09-06)
+## Dónde quedó todo (sesión 5, cerrada 2026-10-07)
 
-Entregado y en producción: varias cajas por día (turnos) con doble check,
-resumen de cierre en pantalla + impreso, egresos del turno, **falta pagar /
-falta vuelto por ticket** (afectan el esperado del cierre), comanda impresa
-por grupos (ENTRADAS/SEGUNDOS con observaciones al costado), mesa desde el
-pedido + SIN MESA + reimpresión al asignar, menús guardados por día,
-contador de menús, caja con la tarjeta "+ UN MENÚ" de la terminal (sin
-platos sueltos), auditoría visual de Claude Design aplicada (tablero de
-caja, contraste AA, piso táctil 48/56px, iconos SVG, menú "⋯" en filas de
-caja y tabs del admin).
+Entregado y en producción (PR #102 a #119):
 
-Pendiente diferido: migrar todos los botones viejos a la clase base
-`.boton`, voz (fase 3).
+- **Voz**: intérprete rápido por reglas (`voz_rapida.py`) antes de la IA;
+  diminutivos en todo; "falta elegir / ahorita te digo" deja el tiempo
+  pendiente; mesa sin letra se autoasigna (14 → 14A, 14B…); "para la 7"
+  es mesa; reparte segundos y empaques; desglose vs adicional ("cuatro
+  menús, uno para llevar" = 4); entiende presa y huevo. Lo seguro va
+  directo a la ventana de cancelación; lo dudoso pasa por "¿Eso pediste?".
+- **Comanda**: sin nombre del local ni "Gracias", ORDEN izq / MESA der,
+  "SEPARADO" por defecto ("TODO JUNTO" solo si todo es para llevar),
+  recuadro chico "FALTA ELEGIR" con plural, refresco oculto, letras
+  separadas (ESC SP 2), PAGADO / NO PAGO. Producción a 48 columnas.
+- **Pago al pedir**: botones "OK y pagó" / "OK y no pagó" (y "Así nomás:
+  Pagó / No pagó" cuando falta elegir). Con "pagó" sale la **precuenta**
+  (Font B, dos columnas: entrada | segundo | monto por menú; ~8 renglones).
+- **Plato**: presa de pollo (platos con "pollo" en el nombre), "2 huevos
+  fritos en vez de la carne" (a la inglesa / bien frito), opciones Sin
+  puré / lentejas / ensalada / frejoles / papas / ají / cebolla, Poco o
+  Sin arroz, Jugoso / Sin jugo. El "⏳ Que espere" se movió dentro de la
+  hoja del plato (antes se tocaba por error).
+- **Stock del día**: Caja → "📋 Menú del día" → "¿Cuántos hay hoy?"; la
+  terminal muestra "Quedan N" (solo aviso, nunca bloquea). Lo de la última
+  vez queda de sugerencia ("ayer: 25" → "Usar 25" / "Usar en todos").
+- **Cajón de dinero** (CBX en el puerto DK, pin 2, probado OK por el dueño):
+  se abre con "OK y pagó" y con "💵 Abrir cajón" en la cabecera de Caja.
+  Config en Admin → Configuración (pin 2 / pin 5 / no). El pulso suelto
+  viaja como trabajo "prueba" (numero "CAJON") para no exigir actualizar
+  la app Android ni el puente.
 
-## APP DE IMPRESIÓN: ENTREGADA (2026-09-07, pedido del dueño)
+## Sesión 6 (propuesta)
 
-La app Android que reemplaza a RawBT vive en `android-impresora/` (Kotlin
-sin dependencias; servicio en primer plano que atiende `/api/print/cola`
-y confirma orden/bebida/cierre/prueba cada uno en su endpoint; sigue con
-la tablet bloqueada; rearranca al prender). GitHub Actions compila y
-publica el APK en el release `app-impresora` en cada push a `main`
-(workflow `app-impresora.yml`). Guía: `docs/impresora-tablet.md`.
-Siguiente paso de campo: instalarla en la tablet del local y desinstalar
-RawBT; si el dueño reporta algo, los mensajes de la bitácora de la app
-dicen exactamente qué pasó.
-
-## TANDAS: ENTREGADO (sesión 3, 2026-09-06)
-
-Las 3 decisiones del dueño quedaron aplicadas: la tanda cierra con LO QUE
-SE LLENE PRIMERO (ventana `cocina_bulk_min` o tope `cocina_tanda_max_tickets`,
-default 4, 0 = sin tope); capacidad opcional por plato
-(`platos.capacidad_tanda`, editable en el "⋯" del plato: 9 chuletas con
-capacidad 6 → "6 + 3 · 2 sartenes"); el gating de "por tiempos" SOLO AVISA
-("el segundo del #003 espera su entrada"), nunca bloquea.
-
-Qué quedó construido:
-
-- `services/tandas.py` + `GET /api/orders/tandas`: partición determinista
-  de órdenes COMPLETAS (al salir la tanda salen mesas completas), gating
-  del segundo en "separado" hasta que su entrada esté lista, estaciones
-  🍳 al momento (primero: lo frito manda) / 🥘 de olla.
-- `POST /api/orders/tandas/empezar` (todo a preparando, abre `tanda_logs`)
-  y `/salio` (todo a listo, cierra el log). `tanda_logs` guarda
-  composición + hora de inicio + hora en que salió: es el dato de
-  entrenamiento del futuro orquestador IA.
-- `/cocina`: tablero de tarjetas arriba de la grilla (tickets/mesas,
-  espera, platos por estación, partición por capacidad, "⏳ espera su
-  entrada", botones ▶ EMPEZAR / ✔ SALIÓ de 64px). La tira "Por salir"
-  sigue para el ajuste fino por porciones.
-- Admin → Configuración: toggle `cocina_tandas` (default ON) + tope de
-  tickets. Tests de partición/gating/capacidad/logs (suite completa en
-  verde).
-
-## La sesión 4 (propuesta)
-
-1. **Validar las tandas en servicio real** (v2 ya aplicada tras la
-   primera prueba del dueño: sin "Por salir", sin botón Empezar, tachado
-   dentro de la tanda, métricas de servido y estimado "Sale ≈ en N min"):
-   mirar 2-3 días de `tanda_logs` + `ordenes.listo_en` y ajustar
-   ventana/tope/capacidades reales de su cocina.
-2. **Orquestador IA (fase siguiente, NO arrancar solos)**: reemplazar el
-   cálculo determinista por una sugerencia inteligente usando los
-   `tanda_logs` acumulados; la pantalla y los endpoints ya están.
-
-## Ya entregado en la sesión 2 (cerrado, decisiones del dueño aplicadas)
-
-- **Gaseosas en el pedido** (HECHO): lista fija con marca/tamaño/precio en
-  Admin → Menú del día → "🥤 Bebidas de caja"; la caja las agrega a una
-  orden YA creada con el botón "🥤 Gaseosa"; descuentan botellas del kardex
-  (insumo en "unidad" auto-creado); imprime SOLO un ticket chico de
-  gaseosas, sin reimprimir la comanda (tipo "bebida" en la cola).
-- **Trasladar pedidos de mesa** (HECHO): botón "⇄ Trasladar mesa" en caja
-  mueve TODOS los pedidos de hoy de una mesa a otra; reimpresión de
-  comandas opcional (checkbox, modos puente/estación).
+1. **Validar en campo lo nuevo** (preguntar al dueño, mirar datos):
+   - la precuenta en papel (¿se lee bien la letra chica a dos columnas?);
+   - el stock sugerido al abrir el día siguiente a poner cantidades;
+   - que el cajón abra con cada "OK y pagó" y no con "no pagó".
+2. **Cuadre de caja**: el 05/10 faltaron S/ 20 con S/ 0 de Yape registrado
+   (el 06/10 igual, S/ 0 Yape de S/ 977). No hay bug de cálculo (los
+   totales de todas las órdenes cuadran); la causa probable es Yape no
+   marcado, porque "OK y pagó" no pregunta el medio y el sistema asume
+   efectivo. El dueño decidió tratarlo como tema del equipo. **Si vuelve a
+   descuadrar**, ofrecer: "Pagó efectivo" / "Pagó Yape" en la terminal en
+   lugar de un solo "OK y pagó". Revisar también anulados que ya estaban
+   pagados (05/10 #54 S/ 20; 06/10 #1 S/ 11 y #38 S/ 33).
+3. **Diferidos de sesiones anteriores** (no arrancar sin el dueño):
+   validar tandas con `tanda_logs` y el orquestador IA; migrar botones
+   viejos a la clase base `.boton`.
 
 ## Datos operativos
 
 - Producción: `https://restaurante-pos-production-dc39.up.railway.app`
-  (menú real cargado; el dueño debía rotar `ADMIN_PASSWORD` en Railway).
-- Rama de trabajo: `claude/pos-restaurante-sesion-2-oybq0g` (alineada a
-  `origin/main`); crear PR por bloque y mergear al toque.
-- Playwright: `executable_path="/opt/pw-browsers/chromium"`,
-  `args=["--no-sandbox"]`; el server de prueba con `DATABASE_PATH` en el
-  scratchpad + `seed.py`; `pkill` sale con 144 (correrlo solo).
+  (headers `X-Pin-Local` y `X-Admin-Token` de `POST /api/admin/login`).
+  El PIN y la contraseña los da el dueño en el chat: NUNCA escribirlos en
+  archivos, commits ni PRs. Se compartieron en chat: sugerir rotar
+  `ADMIN_PASSWORD` en Railway.
+- Impresión: modo `puente`, app Android de la tablet (`android-impresora/`),
+  `impresora_columnas` = 48, `gaveta` = pin2.
+- Rama de trabajo: `claude/hopeful-keller-jbjz46` (alineada a
+  `origin/main`); PR por bloque y merge al toque.
+- Playwright: Chromium en `/opt/pw-browsers/chromium`; desde Node importar
+  `/opt/node22/lib/node_modules/playwright/index.mjs`. Server de prueba
+  con `DATABASE_PATH` en el scratchpad + `seed.py`, puerto 8011. Para
+  matarlo: `ps -eo pid,args | grep "[u]vicorn ... --port 8011" | awk
+  '{print $1}' | xargs -r kill` (`pkill -f` mata la propia shell).
