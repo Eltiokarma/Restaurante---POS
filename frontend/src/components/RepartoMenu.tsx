@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  entregaDeMenu, llevaPollo, menuConAlMomento, NOMBRE_COCCION, NOMBRE_EMPAQUE, NOMBRE_PRESA,
+  entregaDeMenu, unSoloPlato, llevaPollo, menuConAlMomento, NOMBRE_COCCION, NOMBRE_EMPAQUE, NOMBRE_PRESA,
   OPCIONES_OPUESTAS, OPCIONES_PLATO, opcionesDePlato, soles, subtotalMenu, textoVariante, tiemposPendientes,
 } from '../api'
 import type { CoccionHuevo, Empaque, Entrega, MenuCarrito, MenuHoy, Presa, VarianteMenu } from '../api'
@@ -138,6 +138,7 @@ export function HojaTiempo({
   if (!tiempo || !linea) return null
   const rotulo = tiempo.rotulo.toLowerCase()
   const elegido = linea.omitidos.includes(tiempoOrden) ? undefined : linea.elecciones[tiempoOrden]
+  const enEspera = (linea.espera ?? []).includes(tiempoOrden)
 
   const partesIguales = () => {
     const base = Math.floor(n / opciones.length)
@@ -184,9 +185,9 @@ export function HojaTiempo({
           esSegundo={tiempo.rotulo.toLowerCase().includes('segundo')}
           nombrePlato={opciones.find((a) => a.plato_id === elegido)?.nombre ?? ''}
           variante={linea.variantes?.[tiempoOrden]}
-          conEspera={conEspera}
-          enEspera={(linea.espera ?? []).includes(tiempoOrden)}
-          onEspera={onEspera}
+          conEspera={false}
+          enEspera={false}
+          onEspera={() => {}}
           onVariante={onVariante}
         />
       )}
@@ -240,6 +241,23 @@ export function HojaTiempo({
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* "Que espere" al fondo y aparte: junto a los cambios del plato (sin
+          puré, 2 huevos) y al 50/50 se marcaba sin querer y salía ESPERA
+          en la comanda (pedido del dueño). Marcarlo cierra la hoja para
+          que se vea en el ticket */}
+      {conEspera && elegido !== undefined && (
+        <div className="rh-espera">
+          <span className="rh-detalle-rotulo">¿Este plato sale más tarde?</span>
+          <button
+            className={`rh-detalle-chip rh-detalle-espera ${enEspera ? 'rh-detalle-activo' : ''}`}
+            aria-pressed={enEspera}
+            onClick={() => { onEspera(); onCerrar() }}
+          >
+            ⏳ {enEspera ? 'Sale después — toca para quitar' : 'Que espere: sale después'}
+          </button>
         </div>
       )}
     </Hoja>
@@ -452,6 +470,7 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
   const espera = linea.espera ?? []
   const alMomento = menuConAlMomento(linea)
   const entrega = entregaDeMenu(linea)
+  const solo = unSoloPlato(linea)
   const pendientes = tiemposPendientes(linea).length
   const extras =
     linea.extras.reduce((s, e) => s + e.cantidad, 0) + linea.agregados.reduce((s, a) => s + a.cantidad, 0)
@@ -489,11 +508,12 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
               {/* Presa, huevo y "sale después" se ven aquí; se cambian
                   tocando el plato (el circulito junto a la letra se
                   marcaba sin querer al elegir mesa o bolsa) */}
-              {!quitado && elegida && (textoVariante(linea.variantes?.[t.orden]) || (conEspera && espera.includes(t.orden))) && (
-                <em className="ticket-persona-variante">
-                  {[textoVariante(linea.variantes?.[t.orden]), conEspera && espera.includes(t.orden) ? '⏳ después' : '']
-                    .filter(Boolean).join(' · ')}
-                </em>
+              {!quitado && elegida && textoVariante(linea.variantes?.[t.orden]) && (
+                <em className="ticket-persona-variante">{textoVariante(linea.variantes?.[t.orden])}</em>
+              )}
+              {/* Que se note: sale ESPERA en la comanda y cocina no lo saca */}
+              {!quitado && elegida && conEspera && espera.includes(t.orden) && (
+                <em className="ticket-persona-espera">⏳ SALE DESPUÉS</em>
               )}
             </button>
             <button
@@ -510,9 +530,10 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
       <div className="ticket-persona-pie">
         <button
           className={`ticket-persona-entrega ${entrega === 'separado' ? 'entrega-tiempos' : 'entrega-junto'}`}
-          disabled={alMomento}
+          disabled={alMomento || solo}
           onClick={() => onEntrega(entrega === 'junto' ? 'separado' : 'junto')}
-          title={alMomento ? 'Lleva un plato al momento: sale por tiempos' : 'Cambiar cómo sale'}
+          title={solo ? 'Un solo plato: no hay tiempos que separar'
+            : alMomento ? 'Lleva un plato al momento: sale por tiempos' : 'Cambiar cómo sale'}
         >
           {entrega === 'junto' ? '🍽 Todo junto' : '⏱ Por tiempos'}
         </button>

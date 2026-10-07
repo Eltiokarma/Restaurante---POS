@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, lineaEntrega, menuAPayload, soles, subtotalMenu, tiemposPendientes, unidadesEnTaper } from '../api'
 import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuCaja, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, StockPlato, TicketBebidaOut } from '../api'
 
-const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape']
+const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape', 'mixto']
 import { menusEnPedido } from '../components/TarjetaOfertaMenu'
 import {
   BarraPersonas, guardarDefectos, Hoja, HojaDefecto, leerDefectos, useTicketsPersonas,
@@ -96,6 +96,9 @@ export function Caja() {
   const [trasladoDe, setTrasladoDe] = useState<number | null>(null)
   const [trasladoReimprimir, setTrasladoReimprimir] = useState(false)
   const [pagoConTexto, setPagoConTexto] = useState('')
+  // Pago mixto: ticket con el "¿cuánto fue por Yape?" abierto
+  const [mixtoAbierto, setMixtoAbierto] = useState<number | null>(null)
+  const [yapeTexto, setYapeTexto] = useState('')
 
   // El "⋯" cierra con Escape y con un toque fuera
   useEffect(() => {
@@ -616,6 +619,29 @@ export function Caja() {
     }
   }
 
+  // Mixto: parte efectivo y parte Yape. La terminal solo dice "mixto"; aquí
+  // se pone cuánto fue por Yape y el resto cuadra como efectivo
+  const guardarMixto = async (orden: OrdenOut) => {
+    const yape = Math.round((parseFloat(yapeTexto) || 0) * 100) / 100
+    if (!(yape > 0 && yape < orden.total)) {
+      setError(`Pon cuánto fue por Yape (más de S/ 0 y menos de ${soles(orden.total)})`)
+      return
+    }
+    try {
+      await api.cobrarOrden(orden.id, 'mixto', yape)
+      setMixtoAbierto(null)
+      setYapeTexto('')
+      setMensaje(
+        `Ticket #${String(orden.numero_orden_dia).padStart(3, '0')}: Yape ${soles(yape)} + efectivo ${soles(orden.total - yape)}`,
+      )
+      setError('')
+      cargarOrdenes()
+      cargarCaja()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo registrar el pago mixto')
+    }
+  }
+
   // "Falta vuelto": pagó con billete grande; se registra con cuánto pagó
   // y el sistema calcula el vuelto que se le debe
   const guardarVuelto = async (orden: OrdenOut) => {
@@ -976,6 +1002,12 @@ export function Caja() {
             {estadoCaja.sin_registrar > 0 && (
               <span className="chip-aviso">
                 {estadoCaja.sin_registrar} sin registrar → efectivo
+              </span>
+            )}
+            {(estadoCaja.mixto_sin_desglose ?? 0) > 0 && (
+              <span className="chip-aviso">
+                {estadoCaja.mixto_sin_desglose} mixto{estadoCaja.mixto_sin_desglose === 1 ? '' : 's'} sin
+                poner el Yape → efectivo
               </span>
             )}
           </div>
@@ -1545,9 +1577,19 @@ export function Caja() {
                       <button
                         key={m}
                         className={`boton-cobro ${o.metodo_pago === m ? 'cobro-activo' : ''}`}
-                        onClick={() => cobrar(o, m)}
+                        onClick={() => {
+                          if (m !== 'mixto') {
+                            cobrar(o, m)
+                            return
+                          }
+                          setMixtoAbierto(mixtoAbierto === o.id ? null : o.id)
+                          setYapeTexto(o.pago_yape ? String(o.pago_yape) : '')
+                        }}
                       >
                         {NOMBRE_PAGO[m]}
+                        {m === 'mixto' && o.metodo_pago === 'mixto' && (
+                          o.pago_yape ? ` (Yape ${soles(o.pago_yape)})` : ' · falta el Yape'
+                        )}
                       </button>
                     ))}
                     <button
@@ -1597,6 +1639,28 @@ export function Caja() {
                       Guardar
                     </button>
                     <button className="boton boton--sm boton--papel" onClick={() => setVueltoAbierto(null)}>
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+                {mixtoAbierto === o.id && (
+                  <div className="caja-orden-cobro fila-vuelto">
+                    <label className="etiqueta-vuelto">
+                      ¿Cuánto fue por Yape?
+                      <input
+                        type="number" step="0.10" min="0" autoFocus placeholder="10.00"
+                        value={yapeTexto} onChange={(e) => setYapeTexto(e.target.value)}
+                      />
+                    </label>
+                    {parseFloat(yapeTexto) > 0 && parseFloat(yapeTexto) < o.total && (
+                      <span className="vuelto-calculado">
+                        efectivo: <strong>{soles(o.total - parseFloat(yapeTexto))}</strong>
+                      </span>
+                    )}
+                    <button className="boton boton--sm boton--culantro" onClick={() => guardarMixto(o)}>
+                      Guardar
+                    </button>
+                    <button className="boton boton--sm boton--papel" onClick={() => setMixtoAbierto(null)}>
                       Cancelar
                     </button>
                   </div>

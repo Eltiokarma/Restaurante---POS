@@ -480,6 +480,14 @@ def _partir(texto: str, ancho: int) -> list[str]:
     return renglones or [""]
 
 
+METODO_EN_PRECUENTA = {
+    "efectivo": "EFECTIVO",
+    "yape": "YAPE",
+    "mixto": "EFECTIVO+YAPE",
+    "tarjeta": "TARJETA",
+}
+
+
 def render_precuenta(
     orden: Orden,
     local: dict,
@@ -570,8 +578,20 @@ def render_precuenta(
         partes.append(_texto(par[0].ljust((ancho - 2) // 2) + ("  " + par[1] if len(par) > 1 else "")))
 
     cuando = f"{orden.fecha.strftime('%d/%m/%Y')} {orden.hora[:5]}"
+    total = f"TOTAL PAGADO S/ {_soles(orden.total)}"
+    # Cómo pagó ("Pagó efectivo / Yape / mixto" de la terminal), junto al
+    # total; si no entra en el renglón, va en uno propio
+    metodo = METODO_EN_PRECUENTA.get(orden.metodo_pago or "", "")
+    renglones_total = [_fila(cuando, total, ancho)]
+    if metodo:
+        con_metodo = f"{metodo} - {total}"
+        renglones_total = (
+            [_fila(cuando, con_metodo, ancho)]
+            if len(cuando) + 1 + len(con_metodo) <= ancho
+            else [_fila(cuando, total, ancho), _fila("", f"PAGO: {metodo}", ancho)]
+        )
     partes += [_texto("-" * ancho), NEGRITA_ON,
-               _texto(_fila(cuando, f"TOTAL PAGADO S/ {_soles(orden.total)}", ancho)), NEGRITA_OFF,
+               *[_texto(r) for r in renglones_total], NEGRITA_OFF,
                FUENTE_A, CORTAR]
     return b"".join(partes)
 

@@ -43,14 +43,25 @@ Entregado y en producción (PR #102 a #119):
    - la precuenta en papel (¿se lee bien la letra chica a dos columnas?);
    - el stock sugerido al abrir el día siguiente a poner cantidades;
    - que el cajón abra con cada "OK y pagó" y no con "no pagó".
-2. **Cuadre de caja**: el 05/10 faltaron S/ 20 con S/ 0 de Yape registrado
-   (el 06/10 igual, S/ 0 Yape de S/ 977). No hay bug de cálculo (los
-   totales de todas las órdenes cuadran); la causa probable es Yape no
-   marcado, porque "OK y pagó" no pregunta el medio y el sistema asume
-   efectivo. El dueño decidió tratarlo como tema del equipo. **Si vuelve a
-   descuadrar**, ofrecer: "Pagó efectivo" / "Pagó Yape" en la terminal en
-   lugar de un solo "OK y pagó". Revisar también anulados que ya estaban
-   pagados (05/10 #54 S/ 20; 06/10 #1 S/ 11 y #38 S/ 33).
+2. **Cuadre de caja** — HECHO (sesión 6): la terminal ya no tiene un solo
+   "OK y pagó": son "💵 Pagó efectivo" / "📱 Pagó Yape" / "💵📱 Pagó mixto"
+   (y en "Así nomás": Efectivo / Yape / Mixto / No pagó). El método sale en
+   la precuenta ("YAPE - TOTAL PAGADO S/ …") y queda en la orden; con Yape
+   el cajón no se abre. El mixto NO pide montos en la terminal: en Caja,
+   botón "💵📱 Mixto · falta el Yape" → "¿Cuánto fue por Yape?" (columna
+   `ordenes.pago_yape`); sin desglosar cuenta como efectivo y la caja avisa.
+   Pendiente: revisar anulados que ya estaban pagados (05/10 #54 S/ 20;
+   06/10 #1 S/ 11 y #38 S/ 33).
+2b. **"Plato reservado" en la comanda** — RESUELTO con datos (sesión 6):
+   no era "espera" (ninguna orden del 03 al 06/10 tiene `espera`). Era la
+   orden #55 del 06/10 (táctil): estofado mesa + estofado llevar, ambos sin
+   entrada. La persona de mesa quedó "por tiempos" (el default) y la de
+   llevar "junto"; al mezclarse, la comanda imprimía "Estofado (SEPARADO)",
+   que se lee como plato separado/reservado. Ahora una persona con un solo
+   plato de cocina siempre va "junto" (backend al crear la orden y botón
+   de entrega bloqueado en la terminal). De paso quedaron blindados la voz
+   (no marca "sale después" si no se dijo) y el "Que espere" (al fondo de
+   la hoja, visible como "⏳ SALE DESPUÉS").
 3. **Diferidos de sesiones anteriores** (no arrancar sin el dueño):
    validar tandas con `tanda_logs` y el orquestador IA; migrar botones
    viejos a la clase base `.boton`.

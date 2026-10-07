@@ -237,6 +237,8 @@ export interface OrdenOut {
   // tactil | voz | mixto, o "manual" (venta anotada a mano en finanzas)
   origen?: OrigenPedido | 'manual'
   metodo_pago: MetodoPago | null
+  // Pago mixto: cuánto fue por Yape (lo pone la caja; null = sin desglosar)
+  pago_yape?: number | null
   // "Falta pagar": salió el ticket, la plata no entró todavía
   pago_pendiente?: boolean
   // "OK y pagó" / "OK y no pagó" al crear el pedido en la terminal
@@ -267,13 +269,18 @@ export const NOMBRE_SERVICIO: Record<TipoServicio, string> = {
   mixto: '🥡 Mixto',
 }
 
-export type MetodoPago = 'efectivo' | 'tarjeta' | 'yape'
+export type MetodoPago = 'efectivo' | 'tarjeta' | 'yape' | 'mixto'
 
 export const NOMBRE_PAGO: Record<MetodoPago, string> = {
   efectivo: '💵 Efectivo',
   tarjeta: '💳 Tarjeta',
   yape: '📱 Yape',
+  mixto: '💵📱 Mixto',
 }
+
+/** Lo que se dice en la terminal al confirmar: pagó (y cómo) o no pagó.
+ *  El monto de cada parte de un mixto lo pone la caja después. */
+export type PagoTerminal = 'efectivo' | 'yape' | 'mixto' | 'pendiente'
 
 export interface Insumo {
   id: number
@@ -328,6 +335,8 @@ export interface CajaEstado {
   ventas_tarjeta: number
   ventas_yape: number
   sin_registrar: number
+  // Pagos mixtos a los que falta poner cuánto fue por Yape
+  mixto_sin_desglose?: number
   ventas_despues_del_cierre: boolean
   // Número de caja dentro del día (1 = la primera; puede haber varias)
   turno?: number
@@ -905,7 +914,15 @@ export function menuConAlMomento(m: MenuCarrito): boolean {
 /** Por defecto la comanda sale POR TIEMPOS; "todo junto" es lo especial
  *  y lo de siempre para llevar (pedido del dueño): sin elegir a mano, junto
  *  solo si todo lo de la persona va en táper, bolsa o lonchera. */
+/** La persona lleva un solo plato de cocina (p. ej. segundo sin entrada). */
+export function unSoloPlato(m: MenuCarrito): boolean {
+  return m.menu.tiempos.filter((t) => t.alternativas.length > 1 && !m.omitidos.includes(t.orden)).length < 2
+}
+
 export function entregaDeMenu(m: MenuCarrito): Entrega {
+  // Un solo plato (segundo sin entrada): no hay tiempos que separar. Igual
+  // que el backend; antes salía "Estofado (SEPARADO)" y parecía reservado
+  if (unSoloPlato(m)) return 'junto'
   if (menuConAlMomento(m)) return 'separado'
   if (m.entrega) return m.entrega
   // Los tiempos de una sola opción (el refresco) no deciden
@@ -1029,12 +1046,14 @@ export const api = {
     menus: MenuOrdenIn[] = [],
     copias = 1,
     bebidas: { bebida_id: number; cantidad: number }[] = [],
-    pago?: 'pagado' | 'pendiente',
+    pago?: PagoTerminal,
   ) =>
     request<{ orden: OrdenOut; local: DatosLocal }>('/api/orders', {
       method: 'POST',
       body: JSON.stringify({
-        items, menus, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega, copias, bebidas, pago,
+        items, menus, duracion_seg: duracionSeg, origen, mesa_ids: mesaIds, entrega, copias, bebidas,
+        pago: pago === undefined ? undefined : pago === 'pendiente' ? 'pendiente' : 'pagado',
+        metodo_pago: pago === undefined || pago === 'pendiente' ? undefined : pago,
       }),
     }),
 
@@ -1142,10 +1161,10 @@ export const api = {
 
   vozLogsHoy: () => request<VozPanel>('/api/voice/logs/today', {}, true),
 
-  cobrarOrden: (id: number, metodo: MetodoPago) =>
-    request<{ id: number; metodo_pago: MetodoPago }>(`/api/orders/${id}/pago`, {
+  cobrarOrden: (id: number, metodo: MetodoPago, montoYape?: number) =>
+    request<{ id: number; metodo_pago: MetodoPago; pago_yape: number | null }>(`/api/orders/${id}/pago`, {
       method: 'PATCH',
-      body: JSON.stringify({ metodo_pago: metodo }),
+      body: JSON.stringify({ metodo_pago: metodo, monto_yape: montoYape }),
     }),
 
   // --- Insumos, recetas y kardex (admin) ---

@@ -163,9 +163,14 @@ class Orden(Base):
     tipo_servicio: Mapped[str] = mapped_column(String(10), default="sala", nullable=False)
     # tactil | voz | mixto — cómo se armó el carrito (para comparar canales)
     origen: Mapped[str] = mapped_column(String(10), default="tactil", nullable=False)
-    # efectivo | tarjeta | yape — lo registra la caja al cobrar.
+    # efectivo | tarjeta | yape | mixto — lo registra la caja al cobrar, o
+    # la terminal con "Pagó efectivo / Yape / mixto".
     # None = sin registrar (el cierre lo asume efectivo, comportamiento histórico)
     metodo_pago: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Pago mixto: cuánto entró por Yape (el resto fue efectivo). La terminal
+    # solo dice "mixto"; el monto lo pone la caja después. None = sin
+    # desglosar todavía (el cierre lo cuenta todo como efectivo y avisa).
+    pago_yape: Mapped[float | None] = mapped_column(Float, nullable=True)
     # "Falta pagar": el ticket salió pero la plata aún no entró al cajón.
     # "Falta vuelto": pagó de más y se le debe el vuelto. Los dos afectan
     # el efectivo esperado del cierre hasta que se resuelven — antes se

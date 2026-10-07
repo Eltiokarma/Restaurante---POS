@@ -650,3 +650,34 @@ def test_voz_presa_y_huevo(db, menu_voz):
     }, contexto_de_hoy(db))
     assert r["personas"][0]["variantes"] == {2: {"presa": "pierna"}}  # el huevo en la entrada no vale
     assert r["personas"][1]["variantes"] == {2: {"huevo": True, "coccion": "inglesa"}}
+
+
+def test_ia_no_marca_espera_si_no_lo_dijeron(db, extras_voz, monkeypatch):
+    """"Un estofado para la mesa y otro para llevar": la IA a veces marcaba
+    "sale después" sola y salía ESPERA en la comanda. Solo vale si lo
+    dijeron ("el segundo después", "todavía no", "luego")."""
+    from app.services import voice
+
+    m = extras_voz
+    crudo = {
+        "personas": [{
+            "menu_id": m["menu_id"], "cantidad": 1,
+            "elecciones": [{"tiempo_orden": 2, "plato_id": m["Lomo saltado"], "empaque": "igual", "espera": True}],
+            "sin": [], "empaque": "taper", "entrega": "auto", "nombre": "", "nota": "", "agregados": [],
+        }],
+        "items": [], "gaseosas": [], "mesa": "", "no_encontrados": [], "notas": "", "seguro": False,
+    }
+    from app.services import voz_rapida
+
+    monkeypatch.setattr(voz_rapida, "interpretar_rapido", lambda texto, contexto: None)  # directo a la IA
+    monkeypatch.setattr(voice, "interpretar", lambda texto, contexto, esfuerzo=None: (
+        voice._depurar(crudo, contexto), 0.0))
+    contexto = voice.contexto_de_hoy(db)
+    for dicho, espera in [
+        ("un lomito para la mesa y otro lomito para llevar", []),
+        ("un lomito pero el segundo me lo traes después", [2]),
+        ("un lomito, el segundo todavía no", [2]),
+        ("un lomito y el segundo luego", [2]),
+    ]:
+        r, _ = voice.interpretar_con_atajo(dicho, contexto)
+        assert r["personas"][0]["espera"] == espera, dicho
