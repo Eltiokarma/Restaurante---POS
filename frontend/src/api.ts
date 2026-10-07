@@ -917,10 +917,21 @@ export function entregaDeMenu(m: MenuCarrito): Entrega {
 /** La entrega en grande (ticket y cocina). Cada persona (menú) puede
  *  tener la suya: si todas coinciden se dice como siempre; si no, cuántas
  *  de cada una. Mismo criterio que la comanda ESC/POS del backend. */
+export function decideEntrega(m: OrdenMenuOut): boolean {
+  // Solo importa si el menú tiene 2+ tiempos que pasan por cocina (elegidos
+  // o por elegir): uno de solo segundo no tiene nada que separar
+  const tiempos = new Set<number>()
+  for (const i of m.items) {
+    if (!i.es_agregado && !i.es_extra && i.tiempo_orden != null && i.categoria !== 'bebida') tiempos.add(i.tiempo_orden)
+  }
+  for (const p of m.pendientes_detalle ?? []) tiempos.add(p.tiempo_orden)
+  return tiempos.size >= 2
+}
+
 export function lineaEntrega(orden: OrdenOut): { texto: string; separado: boolean } {
-  const entregas: Entrega[] = orden.menus.flatMap((m) =>
-    Array.from({ length: m.cantidad }, () => m.entrega ?? orden.entrega),
-  )
+  const entregas: Entrega[] = orden.menus
+    .filter(decideEntrega)
+    .flatMap((m) => Array.from({ length: m.cantidad }, () => m.entrega ?? orden.entrega))
   // Las bebidas sueltas no cuentan: no pasan por cocina
   if (orden.items.some((i) => !i.es_cargo && i.categoria !== 'bebida') || entregas.length === 0) {
     entregas.push(orden.entrega)

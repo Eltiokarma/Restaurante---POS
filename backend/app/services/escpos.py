@@ -218,7 +218,10 @@ def render_orden(
     persona_de_menu = {om.id: (om.nombre_persona or "").strip().upper() for om in orden.menus}
     # Si las personas salen distinto (unas junto, otras por tiempos), cada
     # plato de quien va por tiempos lo dice: la línea de arriba solo cuenta
-    entrega_de_menu = {om.id: om.entrega or orden.entrega for om in orden.menus}
+    entrega_de_menu = {
+        om.id: (om.entrega or orden.entrega) if _decide_entrega(om, orden, categorias) else "junto"
+        for om in orden.menus
+    }
     mixta = "/" in _linea_entrega(orden, categorias)
 
     # Juntar iguales: mismo plato + mismo empaque + misma observación
@@ -300,12 +303,31 @@ def render_orden(
     return b"".join(partes)
 
 
+def _decide_entrega(om, orden, categorias: dict[int, str]) -> bool:
+    """¿La entrega de este menú importa? Solo si tiene 2 o más tiempos que
+    pasan por cocina (elegidos o por elegir). Un menú de solo segundo (sin
+    entrada) no tiene nada que separar: su "junto" o "separado" no cuenta
+    (antes ponía "(SEPARADO)" a los platos de los demás, ticket #39)."""
+    tiempos = {
+        i.tiempo_orden for i in orden.items
+        if i.orden_menu_id == om.id and not i.es_agregado and not i.es_extra
+        and i.tiempo_orden is not None and categorias.get(i.plato_id) != "bebida"
+    }
+    tiempos |= {p["tiempo_orden"] for p in om.pendientes()}
+    return len(tiempos) >= 2
+
+
 def _linea_entrega(orden, categorias: dict[int, str] | None = None) -> str:
     """La entrega en grande. Cada persona (menú) puede tener la suya: si
     todas coinciden se imprime como siempre; si no, cuántas de cada una.
-    Las bebidas sueltas no cuentan: no pasan por cocina."""
+    Las bebidas sueltas no cuentan: no pasan por cocina, y tampoco los
+    menús de un solo plato."""
     categorias = categorias or {}
-    entregas = [om.entrega or orden.entrega for om in orden.menus for _ in range(om.cantidad)]
+    entregas = [
+        om.entrega or orden.entrega
+        for om in orden.menus if _decide_entrega(om, orden, categorias)
+        for _ in range(om.cantidad)
+    ]
     if any(
         i.orden_menu_id is None and not i.es_cargo and categorias.get(i.plato_id) != "bebida"
         for i in orden.items
