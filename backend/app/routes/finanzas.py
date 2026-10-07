@@ -277,10 +277,23 @@ def resumen_financiero(
         .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada")
         .group_by(Orden.metodo_pago)
     ).all():
+        if metodo == "mixto":
+            continue  # se reparte abajo entre efectivo y Yape
         clave = metodo or "sin_cobrar"
         entradas_por_metodo[clave] = round(
             entradas_por_metodo.get(clave, 0.0) + float(monto or 0.0), 2
         )
+    # Pago mixto: la parte Yape desglosada en caja; el resto (o todo, si
+    # aún no se desglosó) es efectivo
+    for total, pago_yape in db.execute(
+        select(Orden.total, Orden.pago_yape)
+        .where(Orden.fecha >= desde, Orden.fecha <= hasta, Orden.estado != "anulada",
+               Orden.metodo_pago == "mixto")
+    ).all():
+        yape = float(pago_yape or 0.0)
+        for clave, monto in (("yape", yape), ("efectivo", float(total) - yape)):
+            if monto > 0:
+                entradas_por_metodo[clave] = round(entradas_por_metodo.get(clave, 0.0) + monto, 2)
 
     # Cobertura de recetas: qué tan confiable es el costo de insumos
     activos = db.scalars(

@@ -680,11 +680,26 @@ def interpretar_con_atajo(texto: str, contexto: dict, esfuerzo: str | None = Non
             # Las reglas no adivinan: si resolvieron, es seguro
             return {**resultado, "via": "reglas", "seguro": _hay_pedido(resultado)}, 0.0
     resultado, costo = interpretar(texto, contexto, esfuerzo)
+    if not _pide_despues(texto):
+        # "Sale después" solo si lo DIJO: la IA a veces lo marcaba sola
+        # (p. ej. al plato "para llevar") y salía ESPERA en la comanda
+        for persona in resultado["personas"]:
+            persona["espera"] = []
     # La IA se dice "segura" aun repartiendo mal entre varias personas
     # (medido: "4 menús… el pollo en tupper" sale con el pollo en bolsa y
     # seguro=true). Con más de un grupo de personas siempre se verifica
     seguro = resultado.get("seguro", False) and _hay_pedido(resultado) and len(resultado["personas"]) <= 1
     return {**resultado, "via": "ia", "seguro": seguro}, costo
+
+
+_DICHO_DESPUES = re.compile(
+    r"despu[eé]s|luego|m[aá]s\s+tarde|todav[ií]a\s+no|a[uú]n\s+no|ahorita\s+no|esper"
+)
+
+
+def _pide_despues(texto: str) -> bool:
+    """¿Dijo que algo sale después ("el segundo luego", "todavía no")?"""
+    return bool(_DICHO_DESPUES.search(texto.lower()))
 
 
 def _hay_pedido(resultado: dict) -> bool:

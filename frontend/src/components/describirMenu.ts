@@ -20,7 +20,9 @@ export function describirMenu(linea: MenuCarrito): string {
     const distinto = linea.empaques[t.orden]
     partes.push(
       alternativa.nombre +
-        (distinto && distinto !== linea.empaque ? ` (${NOMBRE_EMPAQUE[distinto]})` : ''),
+        (distinto && distinto !== linea.empaque ? ` (${NOMBRE_EMPAQUE[distinto]})` : '') +
+        // "Que espere": que se vea antes de confirmar, no recién en la comanda
+        ((linea.espera ?? []).includes(t.orden) ? ' (⏳ sale después)' : ''),
     )
   }
   const extras = linea.extras.reduce((s, e) => s + e.cantidad, 0)

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_ENTREGA, menuAPayload, precioUnitarioMenu, soles, subtotalMenu, tiemposPendientes, unidadesEnTaper } from '../api'
-import type { Bebida, ConfigOut, DatosLocal, Entrega, MenuCarrito, MenuHoy, MesaEstado, OrdenOut, Plato, StockPlato, VozItemResuelto } from '../api'
+import type { Bebida, ConfigOut, DatosLocal, Entrega, MenuCarrito, MenuHoy, MesaEstado, OrdenOut, PagoTerminal, Plato, StockPlato, VozItemResuelto } from '../api'
 import { describirMenu } from '../components/describirMenu'
 import { menusEnPedido, TarjetaOfertaMenu } from '../components/TarjetaOfertaMenu'
 import {
@@ -38,6 +38,14 @@ function ModalCancelarTodo({ onSeguir, onCancelar }: { onSeguir: () => void; onC
 }
 
 type Pantalla = 'inicio' | 'menu' | 'resumen' | 'countdown' | 'final' | 'modificar'
+
+// Cómo pagó, dicho al confirmar (pedido del dueño: antes un solo "OK y
+// pagó" asumía efectivo y el Yape descuadraba la caja)
+const PAGOS_TERMINAL: { pago: Exclude<PagoTerminal, 'pendiente'>; texto: string; corto: string }[] = [
+  { pago: 'efectivo', texto: '💵 Pagó efectivo', corto: 'Efectivo' },
+  { pago: 'yape', texto: '📱 Pagó Yape', corto: 'Yape' },
+  { pago: 'mixto', texto: '💵📱 Pagó mixto', corto: 'Mixto' },
+]
 
 export function Cliente() {
   const [pantalla, setPantalla] = useState<Pantalla>('inicio')
@@ -314,17 +322,18 @@ export function Cliente() {
   const sinPlatos = carrito.menus.length === 0 && carrito.items.length === 0
 
   const guardandoRef = useRef(false)
-  // "Pagó" / "No pagó" dicho antes de la ventana (seguir sin elegir): al
-  // vencer la ventana se confirma con eso
-  const [pagoElegido, setPagoElegido] = useState<'pagado' | 'pendiente' | undefined>(undefined)
-  const irAVentana = (pago?: 'pagado' | 'pendiente') => {
+  // "Pagó efectivo / Yape / mixto" o "No pagó" dicho antes de la ventana
+  // (seguir sin elegir): al vencer la ventana se confirma con eso
+  const [pagoElegido, setPagoElegido] = useState<PagoTerminal | undefined>(undefined)
+  const irAVentana = (pago?: PagoTerminal) => {
     setCopias(1)
     setPagoElegido(pago)
     setPantalla('countdown')
   }
 
-  // pago: "OK y pagó" / "OK y no pagó"; si la ventana vence sola, no se dice
-  const confirmarDefinitivo = async (pago?: 'pagado' | 'pendiente') => {
+  // pago: "Pagó efectivo / Yape / mixto" / "OK y no pagó"; si la ventana
+  // vence sola, no se dice
+  const confirmarDefinitivo = async (pago?: PagoTerminal) => {
     if (guardandoRef.current) return
     guardandoRef.current = true
     setGuardando(true)
@@ -533,16 +542,20 @@ export function Cliente() {
         <button className="boton-grande boton-secundario" onClick={() => setPantalla('resumen')} disabled={guardando}>
           ↩ VOLVER A CORREGIR
         </button>
-        {/* Confirman ya y dicen si pagó: sale en la comanda; si pagó, además
-            la precuenta para el cliente (pedido del dueño) */}
+        {/* Confirman ya y dicen si pagó y cómo: sale en la comanda; si
+            pagó, además la precuenta con el método (pedido del dueño). El
+            mixto no pide montos: cuánto fue por Yape lo pone la caja */}
         <div className="botones-pago">
-          <button
-            className={`boton-grande boton-confirmar ${pagoElegido === 'pagado' ? 'pago-elegido' : ''}`}
-            onClick={() => confirmarDefinitivo('pagado')}
-            disabled={guardando}
-          >
-            {guardando ? 'Guardando…' : '✅ OK y pagó'}
-          </button>
+          {PAGOS_TERMINAL.map(({ pago, texto }) => (
+            <button
+              key={pago}
+              className={`boton-grande boton-confirmar ${pagoElegido === pago ? 'pago-elegido' : ''}`}
+              onClick={() => confirmarDefinitivo(pago)}
+              disabled={guardando}
+            >
+              {guardando ? 'Guardando…' : texto}
+            </button>
+          ))}
           <button
             className={`boton-grande boton-secundario ${pagoElegido === 'pendiente' ? 'pago-elegido' : ''}`}
             onClick={() => confirmarDefinitivo('pendiente')}
@@ -740,9 +753,11 @@ export function Cliente() {
                       (sale "FALTA ELEGIR") y de una se dice si pagó */}
                   <div className="sin-elegir-pago" role="group" aria-label="Seguir sin elegir">
                     <span className="sin-elegir-rotulo">Así nomás:</span>
-                    <button className="boton-sin-elegir-pago pagado" onClick={() => irAVentana('pagado')}>
-                      Pagó
-                    </button>
+                    {PAGOS_TERMINAL.map(({ pago, corto }) => (
+                      <button key={pago} className="boton-sin-elegir-pago pagado" onClick={() => irAVentana(pago)}>
+                        {corto}
+                      </button>
+                    ))}
                     <button className="boton-sin-elegir-pago pendiente" onClick={() => irAVentana('pendiente')}>
                       No pagó
                     </button>

@@ -112,6 +112,9 @@ class OrdenIn(BaseModel):
     # "OK y pagó" (pagado: sale la precuenta) | "OK y no pagó" (pendiente:
     # queda en "falta pagar" de caja) | sin decir (None, como siempre)
     pago: Literal["pagado", "pendiente"] | None = None
+    # Con "pagado": cómo pagó ("Pagó efectivo / Yape / mixto"). El monto de
+    # cada parte de un mixto NO se pide aquí: lo desglosa la caja después
+    metodo_pago: Literal["efectivo", "yape", "mixto"] | None = None
 
 
 class EstadoIn(BaseModel):
@@ -209,6 +212,7 @@ def _orden_a_dict(
         "tipo_servicio": orden.tipo_servicio,
         "origen": orden.origen,
         "metodo_pago": orden.metodo_pago,
+        "pago_yape": orden.pago_yape,
         "pago_pendiente": orden.pago_pendiente,
         "pago_al_pedir": orden.pago_al_pedir,
         "vuelto_pendiente": orden.vuelto_pendiente,
@@ -347,6 +351,8 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
     orden.pago_al_pedir = payload.pago
     if payload.pago == "pendiente":
         orden.pago_pendiente = True
+    elif payload.pago == "pagado" and payload.metodo_pago:
+        orden.metodo_pago = payload.metodo_pago
     # Gaseosas pedidas con el pedido: van en la misma comanda (en OTROS),
     # sin ticket chico aparte (ese es para las que se suman después)
     if payload.bebidas:
@@ -952,27 +958,41 @@ def liberar_mesa_del_ticket(orden_id: int, db: Session = Depends(get_db)):
 
 
 METODOS_PAGO = ["efectivo", "tarjeta", "yape"]
+# Mixto = parte efectivo y parte Yape, en la misma venta del día
+METODOS_PAGO_CAJA = [*METODOS_PAGO, "mixto"]
 
 
 class PagoIn(BaseModel):
     metodo_pago: str
+    # Solo con "mixto": cuánto fue por Yape (el resto, efectivo). Sin
+    # monto queda "mixto sin desglosar" hasta que la caja lo ponga
+    monto_yape: float | None = Field(default=None, ge=0, le=100_000)
 
 
 @router.patch("/{orden_id}/pago")
 def registrar_pago(orden_id: int, payload: PagoIn, db: Session = Depends(get_db)):
     """La caja registra cómo se pagó la orden. Re-PATCH corrige el método."""
-    if payload.metodo_pago not in METODOS_PAGO:
+    if payload.metodo_pago not in METODOS_PAGO_CAJA:
         raise HTTPException(status_code=422, detail=f"Método inválido: {payload.metodo_pago}")
     orden = db.get(Orden, orden_id)
     if orden is None:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     if orden.estado == "anulada":
         raise HTTPException(status_code=409, detail="Una orden anulada no se cobra")
+    pago_yape = None
+    if payload.metodo_pago == "mixto" and payload.monto_yape is not None:
+        pago_yape = round(payload.monto_yape, 2)
+        if not 0 < pago_yape < round(orden.total, 2):
+            raise HTTPException(
+                status_code=422,
+                detail=f"En un pago mixto el Yape va entre S/ 0 y S/ {orden.total:.2f} (el total)",
+            )
     orden.metodo_pago = payload.metodo_pago
+    orden.pago_yape = pago_yape
     # Pagó: la marca de "falta pagar" se levanta sola
     orden.pago_pendiente = False
     db.commit()
-    return {"id": orden.id, "metodo_pago": orden.metodo_pago}
+    return {"id": orden.id, "metodo_pago": orden.metodo_pago, "pago_yape": orden.pago_yape}
 
 
 class PagoPendienteIn(BaseModel):
@@ -993,6 +1013,7 @@ def marcar_pago_pendiente(orden_id: int, payload: PagoPendienteIn, db: Session =
     if payload.pendiente:
         # Aún no se sabe cómo pagará: el método se registra al cobrar
         orden.metodo_pago = None
+        orden.pago_yape = None
     db.commit()
     return {"id": orden.id, "pago_pendiente": orden.pago_pendiente}
 
@@ -1026,6 +1047,7 @@ def registrar_vuelto(orden_id: int, payload: VueltoIn, db: Session = Depends(get
     orden.vuelto_pendiente = vuelto if vuelto > 0 else None
     # El vuelto es cosa de efectivo: pagar con billete cobra la orden
     orden.metodo_pago = "efectivo"
+    orden.pago_yape = None
     orden.pago_pendiente = False
     db.commit()
     return {"id": orden.id, "vuelto_pendiente": orden.vuelto_pendiente}
@@ -1103,6 +1125,7 @@ def cobrar_pendiente(orden_id: int, payload: PagoIn, db: Session = Depends(get_d
         raise HTTPException(status_code=409, detail="Una orden anulada no se cobra")
 
     orden.metodo_pago = payload.metodo_pago
+    orden.pago_yape = None
     orden.pago_pendiente = False
 
     ahora = ahora_lima()
