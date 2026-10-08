@@ -6,6 +6,7 @@ import pytest
 from app.models import (
     MenuAgregado, MenuAlternativa, MenuPlantilla, MenuTiempo, Plato,
 )
+from tests.test_impresion import solo_comanda
 
 
 @pytest.fixture()
@@ -173,7 +174,7 @@ def test_ticket_escpos_con_sin_sopa_y_agregado(client, db, fonda):
     assert r.status_code == 201
 
     trabajo = client.get("/api/print/cola").json()["trabajos"][0]
-    datos = base64.b64decode(trabajo["datos_b64"])
+    datos = solo_comanda(base64.b64decode(trabajo["datos_b64"]))
     assert b"** SIN SOPA **" in datos
     assert b"** +1 PRESA **" in datos and b"4.00" in datos
     # La comanda impresa no lleva TOTAL, ni bebidas, ni la línea del menú
@@ -199,7 +200,7 @@ def test_comanda_agrupada_por_tiempos(client, db, fonda):
     assert r.status_code == 201
 
     trabajo = client.get("/api/print/cola").json()["trabajos"][0]
-    datos = base64.b64decode(trabajo["datos_b64"])
+    datos = solo_comanda(base64.b64decode(trabajo["datos_b64"]))
     assert datos.index(b"ENTRADAS") < datos.index(b"SEGUNDOS")
     # Las 2 sopas del menú y la de la carta salen juntadas
     assert b"3 x Sopa criolla" in datos

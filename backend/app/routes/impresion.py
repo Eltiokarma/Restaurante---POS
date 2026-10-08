@@ -242,14 +242,15 @@ def _armar_cola(db: Session) -> dict:
             "orden_id": orden.id,
             "numero": f"{orden.numero_orden_dia:03d}",
             # 2 comandas = los mismos bytes dos veces (cada una con su corte)
-            # Pagó al pedir: detrás de la comanda sale su precuenta
             # "Pagó efectivo / mixto": el cajón se abre cuando empieza a
             # salir el papel. Con Yape no entra billete: no se abre
             "datos_b64": base64.b64encode(
                 (abrir_gaveta(config["gaveta"])
                  if orden.pago_al_pedir == "pagado" and orden.metodo_pago != "yape" else b"")
                 + render_orden(orden, local, columnas, categorias) * max(1, orden.copias or 1)
-                + (render_precuenta(orden, local, columnas, categorias) if orden.pago_al_pedir == "pagado" else b"")
+                # Detrás, la precuenta para el cliente: SIEMPRE (pedido del
+                # dueño); si no pagó o no se dijo, sale "NO PAGADO"
+                + render_precuenta(orden, local, columnas, categorias)
             ).decode(),
         })
 

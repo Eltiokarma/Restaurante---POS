@@ -4,6 +4,13 @@ import base64
 from app.models import Config
 
 
+def solo_comanda(datos: bytes) -> bytes:
+    """La cola trae la comanda y detrás la precuenta del cliente (sale
+    siempre): los tests de la comanda miran solo su parte."""
+    corte = datos.find(b"PRECUENTA - Orden")
+    return datos if corte < 0 else datos[:corte]
+
+
 def activar_modo_puente(db, ip="192.168.1.77"):
     db.add(Config(clave="modo_impresion", valor="puente"))
     db.add(Config(clave="impresora_ip", valor=ip))
@@ -61,7 +68,7 @@ def test_ticket_de_prueba_requiere_admin_y_espera_confirmacion(client, admin_hea
     cola = client.get("/api/print/cola").json()
     tipos = [t["tipo"] for t in cola["trabajos"]]
     assert tipos == ["prueba"]
-    datos = base64.b64decode(cola["trabajos"][0]["datos_b64"])
+    datos = solo_comanda(base64.b64decode(cola["trabajos"][0]["datos_b64"]))
     assert b"PRUEBA OK" in datos
 
     # Sigue en cola hasta que quien imprime confirme: si la impresora no
@@ -91,7 +98,7 @@ def test_ticket_escpos_con_menu_encadenado(client, db, menu_ejemplo):
     assert r.status_code == 201
 
     cola = client.get("/api/print/cola").json()
-    datos = base64.b64decode(cola["trabajos"][0]["datos_b64"])
+    datos = solo_comanda(base64.b64decode(cola["trabajos"][0]["datos_b64"]))
     # La comanda no imprime la línea del menú: va directo a los platos
     assert "Menú del día".encode("cp850") not in datos
     assert b"(EXTRA)" in datos
@@ -141,7 +148,7 @@ def test_comanda_empaque_completo_y_otros_sin_monto(client, db, admin_headers, m
 
     cola = client.get("/api/print/cola").json()
     trabajo = next(t for t in cola["trabajos"] if t["tipo"] == "orden")
-    texto = base64.b64decode(trabajo["datos_b64"]).decode("cp850", errors="replace")
+    texto = solo_comanda(base64.b64decode(trabajo["datos_b64"])).decode("cp850", errors="replace")
 
     assert "[BOLSA]" in texto, texto            # la etiqueta sale completa
     assert "OTROS" in texto and "Inca Kola" in texto

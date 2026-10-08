@@ -494,7 +494,8 @@ def render_precuenta(
     columnas: int = 42,
     categorias: dict[int, str] | None = None,
 ) -> bytes:
-    """Precuenta para el cliente que pagó al pedir ("OK y pagó"): corta y
+    """Precuenta para el cliente (sale siempre; si no pagó dice "NO
+    PAGADO"): corta y
     en letra chica (Font B, 9 puntos: entran 4/3 de las columnas). Le sirve
     de comprobante si su pedido se pierde.
 
@@ -578,10 +579,12 @@ def render_precuenta(
         partes.append(_texto(par[0].ljust((ancho - 2) // 2) + ("  " + par[1] if len(par) > 1 else "")))
 
     cuando = f"{orden.fecha.strftime('%d/%m/%Y')} {orden.hora[:5]}"
-    total = f"TOTAL PAGADO S/ {_soles(orden.total)}"
+    pagado = orden.pago_al_pedir == "pagado"
+    total = f"TOTAL {'PAGADO ' if pagado else ''}S/ {_soles(orden.total)}"
     # Cómo pagó ("Pagó efectivo / Yape / mixto" de la terminal), junto al
-    # total; si no entra en el renglón, va en uno propio
-    metodo = METODO_EN_PRECUENTA.get(orden.metodo_pago or "", "")
+    # total; si no pagó (o no se dijo), "NO PAGADO". Si no entra en el
+    # renglón, va en uno propio
+    metodo = METODO_EN_PRECUENTA.get(orden.metodo_pago or "", "") if pagado else "NO PAGADO"
     renglones_total = [_fila(cuando, total, ancho)]
     if metodo:
         con_metodo = f"{metodo} - {total}"
