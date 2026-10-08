@@ -26,6 +26,7 @@ from ..models import (
     TandaLog,
     TicketBebida,
     VozLog,
+    hoy_lima,
 )
 
 router = APIRouter(
@@ -159,3 +160,82 @@ def borrar_un_dia(payload: BorrarDiaIn, db: Session = Depends(get_db)):
     db.execute(delete(TandaLog).where(TandaLog.fecha == fecha))
     db.commit()
     return {"borrado": borrado}
+
+
+# ---------- Corregir un plato ya vendido (sin imprimir nada) ----------
+#
+# Pedido del dueño: el jueves se vendió "Ensalada de Palta" cuando en
+# realidad era camote. El precio no cambia; solo hay que dejar bien el
+# registro (lo vendido, el stock del día, el kardex). "Modificar pedido"
+# imprime un CAMBIO a cocina por cada orden: esto no imprime nada.
+
+
+def _platos_vendidos_del_dia(db: Session, fecha: date) -> list[dict]:
+    filas: dict[int, dict] = {}
+    for item in db.scalars(
+        select(OrdenItem).join(Orden, OrdenItem.orden_id == Orden.id).where(
+            Orden.fecha == fecha, Orden.estado != "anulada",
+            OrdenItem.plato_id.is_not(None), OrdenItem.es_cargo == False,  # noqa: E712
+        )
+    ).all():
+        fila = filas.setdefault(item.plato_id, {
+            "plato_id": item.plato_id, "nombre": item.nombre_snapshot,
+            "cantidad": 0, "pedidos": set(),
+        })
+        fila["cantidad"] += item.cantidad
+        fila["pedidos"].add(item.orden_id)
+    return sorted(
+        ({**f, "pedidos": len(f["pedidos"])} for f in filas.values()),
+        key=lambda f: f["nombre"],
+    )
+
+
+@router.get("/platos-vendidos")
+def platos_vendidos(fecha: date | None = None, db: Session = Depends(get_db)):
+    """Lo vendido en un día (hoy por defecto), por plato."""
+    fecha = fecha or hoy_lima()
+    return {"fecha": fecha.isoformat(), "platos": _platos_vendidos_del_dia(db, fecha)}
+
+
+class ReemplazoIn(BaseModel):
+    de_plato_id: int
+    a_plato_id: int
+    fecha: date | None = None
+
+
+@router.post("/reemplazar-plato")
+def reemplazar_plato(payload: ReemplazoIn, db: Session = Depends(get_db)):
+    """Cambia un plato por otro en los pedidos de un día: nombre y plato,
+    con el MISMO precio cobrado (la plata no cambia). El kardex devuelve
+    la receta del plato viejo y consume la del nuevo. No imprime nada."""
+    from ..models import Plato
+    from ..services.inventario import consumir_item, devolver_item
+
+    if payload.de_plato_id == payload.a_plato_id:
+        raise HTTPException(status_code=422, detail="Elige un plato distinto")
+    nuevo = db.get(Plato, payload.a_plato_id)
+    if nuevo is None:
+        raise HTTPException(status_code=404, detail="Plato no encontrado")
+    fecha = payload.fecha or hoy_lima()
+    items = db.scalars(
+        select(OrdenItem).join(Orden, OrdenItem.orden_id == Orden.id).where(
+            Orden.fecha == fecha, OrdenItem.plato_id == payload.de_plato_id,
+        )
+    ).all()
+    pedidos = set()
+    for item in items:
+        orden = db.get(Orden, item.orden_id)
+        if orden.estado != "anulada":
+            devolver_item(db, orden, item)
+        item.plato_id = nuevo.id
+        item.nombre_snapshot = nuevo.nombre
+        if orden.estado != "anulada":
+            consumir_item(db, orden, item)
+        pedidos.add(orden.id)
+    db.commit()
+    return {
+        "fecha": fecha.isoformat(),
+        "porciones": sum(i.cantidad for i in items),
+        "pedidos": len(pedidos),
+        "platos": _platos_vendidos_del_dia(db, fecha),
+    }

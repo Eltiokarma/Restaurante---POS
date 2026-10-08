@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, urlFotoPlato, CATEGORIAS_MOVIMIENTO, COSTOS_FIJOS_SUGERIDOS, NOMBRE_CATEGORIA, NOMBRE_CATEGORIA_EGRESO, NOMBRE_CATEGORIA_MOVIMIENTO, NOMBRE_EMPAQUE, NOMBRE_METODO_PAGO, ROLES_SUGERIDOS } from '../api'
 import { IconoAjustes, IconoAspa, IconoBillete, IconoEgreso, IconoMovil, IconoTarjeta } from '../components/Iconos'
-import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, FinanzasFijos, FinanzasResumen, FlujoFila, Insumo, MenuGuardadoOut, MesaEstado, MovimientoCaja, MovimientoKardex, MovimientosOut, OrdenOut, Plato, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
+import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, FinanzasFijos, FinanzasResumen, FlujoFila, Insumo, MenuGuardadoOut, MesaEstado, MovimientoCaja, MovimientoKardex, MovimientosOut, OrdenOut, Plato, PlatoVendido, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { TabTablero } from '../components/TabTablero'
 import { PorCobrar } from '../components/PorCobrar'
 import { CabeceraVista, SECCIONES } from '../components/CabeceraVista'
@@ -3675,6 +3675,7 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
       <button className="boton-grande boton-primario" onClick={guardar}>💾 Guardar configuración</button>
 
       <GestorMesas onSesionVencida={onSesionVencida} />
+      <CorregirPlatoVendido onSesionVencida={onSesionVencida} />
       <EmpezarLimpio onSesionVencida={onSesionVencida} />
       <BorrarUnDia onSesionVencida={onSesionVencida} />
       </div>
@@ -3838,6 +3839,93 @@ function AsistenteMenu({
         (ej. una sola chicha) sale como "incluido" sin preguntar. Abajo puedes afinar recargos y
         extras por plato.
       </p>
+    </div>
+  )
+}
+
+// ---------- Corregir un plato ya vendido ----------
+
+/**
+ * Se vendió un plato con el nombre equivocado (salió "Ensalada de Palta" y
+ * era camote): se cambia en los pedidos del día con el MISMO precio, sin
+ * imprimir nada. "Modificar pedido" sacaría un CAMBIO a cocina por orden.
+ */
+function CorregirPlatoVendido({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [fecha, setFecha] = useState('')
+  const [vendidos, setVendidos] = useState<PlatoVendido[]>([])
+  const [catalogo, setCatalogo] = useState<Plato[]>([])
+  const [de, setDe] = useState('')
+  const [a, setA] = useState('')
+  const [mensaje, setMensaje] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.platosVendidos(fecha || undefined).then((r) => setVendidos(r.platos)).catch(() => setVendidos([]))
+    setDe('')
+  }, [fecha])
+  useEffect(() => {
+    api.catalogo().then((r) => setCatalogo(r.platos)).catch(() => {})
+  }, [])
+
+  const elegido = vendidos.find((v) => String(v.plato_id) === de)
+  const categoria = catalogo.find((p) => String(p.id) === de)?.categoria
+  const opciones = catalogo
+    .filter((p) => String(p.id) !== de && (!categoria || p.categoria === categoria))
+    .sort((x, y) => x.nombre.localeCompare(y.nombre))
+  const nuevo = catalogo.find((p) => String(p.id) === a)
+
+  const cambiar = async () => {
+    setError('')
+    setMensaje('')
+    try {
+      const r = await api.reemplazarPlato(Number(de), Number(a), fecha || undefined)
+      setMensaje(`Listo: ${r.porciones} porción(es) en ${r.pedidos} pedido(s) ahora dicen "${nuevo?.nombre}". La plata no cambió y no se imprimió nada.`)
+      setVendidos(r.platos)
+      setDe('')
+      setA('')
+    } catch (e) {
+      setError(manejarError(e, onSesionVencida))
+    }
+  }
+
+  return (
+    <div className="fd-corregir-plato">
+      <h3 className="subtitulo-resumen">✏️ Corregir un plato vendido</h3>
+      <p className="nota-admin">
+        ¿Se vendió con el nombre equivocado (por ejemplo "Ensalada de Palta" y era camote)?
+        Cámbialo en los pedidos del día: el precio cobrado se queda igual y no se imprime nada.
+      </p>
+      {mensaje && <div className="banner-ok">{mensaje}</div>}
+      {error && <div className="banner-error">{error}</div>}
+      <label>
+        Día (vacío = hoy)
+        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+      </label>
+      <label>
+        Lo que se vendió
+        <select value={de} onChange={(e) => { setDe(e.target.value); setA('') }}>
+          <option value="">— Elige el plato —</option>
+          {vendidos.map((v) => (
+            <option key={v.plato_id} value={v.plato_id}>
+              {v.nombre} ({v.cantidad} en {v.pedidos} pedido{v.pedidos === 1 ? '' : 's'})
+            </option>
+          ))}
+        </select>
+      </label>
+      {de && (
+        <label>
+          En realidad era
+          <select value={a} onChange={(e) => setA(e.target.value)}>
+            <option value="">— Elige el plato correcto —</option>
+            {opciones.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+        </label>
+      )}
+      {elegido && nuevo && (
+        <button className="boton-grande boton-primario" onClick={cambiar}>
+          Cambiar {elegido.cantidad} × {elegido.nombre} → {nuevo.nombre}
+        </button>
+      )}
     </div>
   )
 }
