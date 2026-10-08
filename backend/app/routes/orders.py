@@ -237,6 +237,7 @@ def _item_a_dict(item, categorias: dict[int, str] | None = None) -> dict:
     return {
         "id": item.id,
         "nombre": item.nombre_snapshot,
+        "nombre_corto": item.nombre_corto,
         "es_cargo": item.es_cargo,
         # Un plato borrado del catálogo queda sin categoría: cocina lo muestra
         "categoria": (categorias or {}).get(item.plato_id),

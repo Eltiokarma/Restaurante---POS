@@ -1,6 +1,15 @@
 import { Fragment } from 'react'
-import type { CajaEstado, DatosLocal, EgresoOut, OrdenOut, TicketBebidaOut } from '../api'
+import type { CajaEstado, DatosLocal, EgresoOut, OrdenMenuOut, OrdenOut, TicketBebidaOut } from '../api'
 import { decideEntrega, esperadoEnCaja, lineaEntrega, soles } from '../api'
+
+/** La marca de entrega de una persona cuando no sale como lo normal (mesa
+ *  por tiempos, para llevar todo junto). Igual que la comanda ESC/POS. */
+function marcaEntrega(menu: OrdenMenuOut): string {
+  const deMesa = menu.items.filter((i) => i.categoria !== 'bebida').every((i) => i.empaque === 'mesa')
+  if (deMesa && menu.entrega === 'junto') return ' · JUNTO'
+  if (!deMesa && menu.entrega === 'separado') return ' · POR TIEMPOS'
+  return ''
+}
 
 /**
  * Ticket chico de SOLO las gaseosas agregadas a una orden desde caja:
@@ -109,7 +118,9 @@ function TicketCuerpo({ orden, id }: Props & { id?: string }) {
                 <td>
                   {menu.cantidad} × {menu.nombre}
                   {menu.nombre_persona && <strong> — {menu.nombre_persona.toUpperCase()}</strong>}
-                  {menu.entrega === 'separado' && decideEntrega(menu) && lineaEntrega(orden).texto.includes('/') && ' · SEPARADO'}
+                  {/* Entregas mezcladas: solo la excepción (mesa todo junto o
+                      llevar por tiempos); "SEPARADO" se leía como reservado */}
+                  {decideEntrega(menu) && lineaEntrega(orden).texto.includes('/') && marcaEntrega(menu)}
                   {menu.nota && <div className="ticket-item-nota">→ {menu.nota}</div>}
                 </td>
                 <td className="ticket-subtotal">
@@ -142,7 +153,7 @@ function TicketCuerpo({ orden, id }: Props & { id?: string }) {
                 <tr key={`menu-${m}-item-${i}`} className={`ticket-item-tiempo ${item.es_agregado ? 'ticket-item-agregado' : ''}`}>
                   <td>
                     {item.es_agregado ? `** +${item.cantidad} ${item.nombre.toUpperCase()} **`
-                      : <>· {item.cantidad} × {item.nombre}</>}
+                      : <>· {item.cantidad} × {item.nombre_corto || item.nombre}</>}
                     {item.es_extra && ' (EXTRA)'}
                     {item.espera && ' (ESPERA)'}
                     {item.empaque !== 'mesa' && (
@@ -158,7 +169,7 @@ function TicketCuerpo({ orden, id }: Props & { id?: string }) {
           {orden.items.map((item, i) => (
             <tr key={i}>
               <td>
-                {item.cantidad} × {item.nombre}
+                {item.cantidad} × {item.nombre_corto || item.nombre}
                 {item.empaque !== 'mesa' && (
                   <span className="ticket-item-empaque"> [{item.empaque.toUpperCase()}]</span>
                 )}

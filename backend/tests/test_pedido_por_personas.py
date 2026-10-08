@@ -210,8 +210,10 @@ def test_tiempos_por_persona_en_la_comanda(client, db, fonda):
     ]})
     orden = db.query(Orden).one()
     texto = render_orden(orden, {"nombre": "Fonda"}).decode("cp850", errors="ignore")
-    assert "Bistec frito (SEPARADO)" in texto
-    assert "Asado con puré (SEPARADO)" not in texto
+    # Ya no dice "(SEPARADO)" (se leía como reservado): solo la excepción,
+    # el plato de mesa que va todo junto
+    assert "(SEPARADO)" not in texto and "Bistec frito\n" in texto
+    assert "Asado con puré (JUNTO)" in texto
 
 
 def test_dos_comandas_salen_dos_veces_por_el_puente(client, fonda):
@@ -412,7 +414,7 @@ def test_menu_de_solo_segundo_no_cuenta_en_la_entrega(client, db, fonda):
     ]})
     orden = db.query(Orden).order_by(Orden.id.desc()).first()
     texto = render_orden(orden, {}, 48, categorias).decode("cp850", errors="ignore")
-    assert "ENTREGA: 1 JUNTO / 1 SEPARADO" in texto and "(SEPARADO)" in texto
+    assert "ENTREGA: 1 JUNTO / 1 SEPARADO" in texto and "(JUNTO)" in texto
 
 
 def test_un_solo_plato_no_sale_separado(client, db, fonda):
@@ -435,3 +437,68 @@ def test_un_solo_plato_no_sale_separado(client, db, fonda):
     # Con entrada y segundo, "por tiempos" sí se respeta
     r = client.post("/api/orders", json={"menus": [_menu(fonda, entrega="separado")]})
     assert r.json()["orden"]["menus"][0]["entrega"] == "separado"
+
+
+def test_ticket_14_mesa_por_tiempos_y_taper_junto(client, db, fonda):
+    """Ticket #14 del 08/10: dos personas de mesa por tiempos y una para
+    llevar todo junto. Es lo normal: ningún plato lleva marca de entrega
+    (antes "Camote Rebosado (SEPARADO)" se leía como plato reservado)."""
+    from app.models import Plato
+
+    mesa = _menu(fonda, "Tallarín rojo", entrega="separado")
+    llevar = _menu(fonda, entrega="junto", empaque="taper")
+    r = client.post("/api/orders", json={"entrega": "separado", "menus": [mesa, mesa, llevar]})
+    assert r.status_code == 201, r.text
+    categorias = {pl.id: pl.categoria for pl in db.query(Plato).all()}
+    orden = db.query(Orden).one()
+    texto = render_orden(orden, {}, 48, categorias).decode("cp850", errors="ignore")
+    assert "ENTREGA: 1 JUNTO / 2 SEPARADO" in texto
+    assert "(SEPARADO)" not in texto and "(JUNTO)" not in texto and "(POR TIEMPOS)" not in texto
+
+
+def test_nombre_largo_no_se_come_las_marcas(client, db, fonda):
+    """Con un nombre largo se recorta el plato, nunca "(JUAN)" ni el [TAPER]."""
+    from app.models import Plato
+
+    largo = db.query(Plato).filter_by(nombre="Asado con puré").one()
+    largo.nombre = "Asado de Carne con Ensalada Rusa y Arroz Blanco"
+    db.commit()
+    client.post("/api/orders", json={"menus": [
+        _menu(fonda, "Asado con puré", empaque="taper", nombre_persona="Juan")]})
+    orden = db.query(Orden).one()
+    texto = render_orden(orden, {}, 48).decode("cp850", errors="ignore")
+    linea = next(l for l in texto.split("\n") if "Asado de Carne" in l)
+    assert linea.rstrip().endswith("(JUAN) [TAPER]"), linea
+
+
+def test_nombre_corto_en_comanda_y_precuenta(client, db, admin_headers, fonda):
+    """El admin le pone nombre corto a un plato largo: la comanda, la
+    precuenta y la terminal lo usan; el nombre completo queda para los
+    reportes. Es snapshot: cambiarlo después no altera la orden."""
+    from app.models import Plato
+    from app.services.escpos import render_precuenta
+
+    plato = db.query(Plato).filter_by(nombre="Asado con puré").one()
+    r = client.put("/api/menu/today", headers=admin_headers, json={"platos": [
+        {"id": p.id, "nombre": p.nombre, "categoria": p.categoria, "precio": p.precio,
+         "nombre_corto": "Asado" if p.id == plato.id else ""}
+        for p in db.query(Plato).filter_by(activo_hoy=True).all()
+    ]})
+    assert r.status_code == 200, r.text
+    alternativas = [a for m in r.json()["menus"] for t in m["tiempos"] for a in t["alternativas"]]
+    assert {"plato_id": plato.id, "nombre_corto": "Asado"}.items() <= next(
+        a for a in alternativas if a["plato_id"] == plato.id).items()
+
+    orden = client.post("/api/orders", json={"menus": [_menu(fonda)]}).json()["orden"]
+    item = next(i for i in orden["menus"][0]["items"] if i["nombre"] == "Asado con puré")
+    assert item["nombre_corto"] == "Asado"
+
+    db.expire_all()
+    plato = db.get(Plato, plato.id)
+    plato.nombre_corto = "Otro"
+    db.commit()
+    o = db.get(Orden, orden["id"])
+    comanda = render_orden(o, {}, 48).decode("cp850", errors="ignore")
+    precuenta = render_precuenta(o, {}, 48).decode("cp850", errors="ignore")
+    assert "1 x Asado" in comanda and "Asado con puré" not in comanda and "Otro" not in comanda
+    assert "Asado" in precuenta and "Asado con puré" not in precuenta

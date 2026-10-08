@@ -503,7 +503,7 @@ export function TicketPersona({ linea, numero, domId, conEspera, onTiempo, onEmp
             >
               <small>{t.rotulo}</small>
               <span className={!quitado && !elegida ? 'linea-sin-elegir' : ''}>
-                {quitado ? `Sin ${t.rotulo.toLowerCase()}` : elegida ? elegida.nombre : 'toca para elegir'}
+                {quitado ? `Sin ${t.rotulo.toLowerCase()}` : elegida ? (elegida.nombre_corto || elegida.nombre) : 'toca para elegir'}
               </span>
               {/* Presa, huevo y "sale después" se ven aquí; se cambian
                   tocando el plato (el circulito junto a la letra se

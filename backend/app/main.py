@@ -236,6 +236,12 @@ def _migrar(engine_) -> None:
         if columnas_ord and "pago_yape" not in columnas_ord:
             conn.execute(text("ALTER TABLE ordenes ADD COLUMN pago_yape FLOAT"))
             conn.commit()
+        if columnas_pl and "nombre_corto" not in columnas_pl:
+            conn.execute(text("ALTER TABLE platos ADD COLUMN nombre_corto VARCHAR(30)"))
+            conn.commit()
+        if columnas_it and "nombre_corto" not in columnas_it:
+            conn.execute(text("ALTER TABLE orden_items ADD COLUMN nombre_corto VARCHAR(30)"))
+            conn.commit()
 
 
 def _sembrar_agregados(engine_) -> None:

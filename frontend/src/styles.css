@@ -10163,8 +10163,11 @@ select:focus-visible {
 }
 
 .ticket-persona-plato span {
-  /* Corta en espacios; solo parte una palabra si no entra sola */
-  overflow-wrap: break-word;
+  /* Corta en espacios; solo parte una palabra si no entra sola. Con
+     max-width el texto no se sale del recuadro ni se mete debajo de la
+     letra del empaque ("Sancochadas" tapaba la M en tablet vertical) */
+  max-width: 100%;
+  overflow-wrap: anywhere;
   hyphens: auto;
   line-height: 1.2;
 }
@@ -11187,4 +11190,10 @@ select:focus-visible {
 .fd-corregir-plato input {
   min-height: var(--toque);
   max-width: 100%;
+}
+
+/* Admin → Menú: el nombre corto va debajo del nombre, más chico */
+.tabla-editable input.input-nombre-corto {
+  margin-top: 4px;
+  font-size: 0.85rem;
 }

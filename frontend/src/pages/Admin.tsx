@@ -11,6 +11,7 @@ import { Ticket } from '../components/Ticket'
 interface PlatoEditable {
   id?: number
   nombre: string
+  nombre_corto: string // "" = en tickets sale el nombre
   categoria: string
   precio: string // como texto mientras se edita
   activo_hoy: boolean
@@ -653,10 +654,19 @@ function SeccionMenusGuardados({ onSesionVencida, onCargado }: {
 
 // ---------- Menú del día ----------
 
+// Sugerencia para el nombre corto (solo de ejemplo en el campo vacío):
+// lo de antes de " con " ("Estofado de Carne con Papas…" → "Estofado de
+// Carne"). Ojo: dos platos pueden quedar iguales; el admin decide
+function sugerirCorto(nombre: string): string {
+  const corte = nombre.search(/\s+con\s+/i)
+  const corto = (corte > 0 ? nombre.slice(0, corte) : nombre).trim()
+  return corto.length < nombre.trim().length ? corto.slice(0, 30) : ''
+}
+
 // Qué campos viven en el estado local hasta "Guardar" (la foto NO: se sube
 // al instante). Sirve para contar cambios sin guardar (hallazgo 25).
 const serialPlato = (p: PlatoEditable) =>
-  JSON.stringify([p.nombre, p.categoria, p.precio, p.activo_hoy, p.sale_al_momento, p.capacidad_tanda, p.sinonimos])
+  JSON.stringify([p.nombre, p.nombre_corto, p.categoria, p.precio, p.activo_hoy, p.sale_al_momento, p.capacidad_tanda, p.sinonimos])
 
 function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [platos, setPlatos] = useState<PlatoEditable[]>([])
@@ -671,6 +681,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
   const aEditable = (p: Plato): PlatoEditable => ({
     id: p.id,
     nombre: p.nombre,
+    nombre_corto: p.nombre_corto ?? '',
     categoria: p.categoria,
     precio: p.precio.toFixed(2),
     activo_hoy: p.activo_hoy,
@@ -718,7 +729,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
   const agregar = () => {
     setPlatos((prev) => [
       ...prev,
-      { nombre: '', categoria: 'fondo', precio: '', activo_hoy: true, sale_al_momento: false, capacidad_tanda: '0', foto: null, sinonimos: [] },
+      { nombre: '', nombre_corto: '', categoria: 'fondo', precio: '', activo_hoy: true, sale_al_momento: false, capacidad_tanda: '0', foto: null, sinonimos: [] },
     ])
   }
 
@@ -784,6 +795,7 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
         validos.map((p) => ({
           id: p.id,
           nombre: p.nombre.trim(),
+          nombre_corto: p.nombre_corto.trim(),
           categoria: p.categoria,
           precio: parseFloat(p.precio),
           activo_hoy: p.activo_hoy,
@@ -902,6 +914,11 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
             <tr key={p.id ?? `nuevo-${idx}`} className={tocado(p) ? 'fila-tocada' : ''}>
               <td>
                 <input value={p.nombre} onChange={(e) => editar(idx, { nombre: e.target.value })} placeholder="Nombre del plato" />
+                {/* Lo que sale en la terminal y los tickets si el nombre es largo */}
+                <input className="input-nombre-corto" value={p.nombre_corto} maxLength={30}
+                       onChange={(e) => editar(idx, { nombre_corto: e.target.value })}
+                       placeholder={`Corto: ${sugerirCorto(p.nombre) || 'igual'}`}
+                       aria-label={`Nombre corto de ${nombreDe(p)}`} />
               </td>
               <td>
                 <CeldaFoto
@@ -986,6 +1003,12 @@ function TabMenu({ onSesionVencida }: { onSesionVencida: () => void }) {
                 <input type="text" value={platos[editando].nombre}
                        onChange={(e) => editar(editando, { nombre: e.target.value })}
                        placeholder="Nombre del plato" />
+              </div>
+              <div className="campo-etiquetado">
+                <label>Nombre corto (terminal y tickets; vacío = el nombre)</label>
+                <input type="text" maxLength={30} value={platos[editando].nombre_corto}
+                       onChange={(e) => editar(editando, { nombre_corto: e.target.value })}
+                       placeholder={sugerirCorto(platos[editando].nombre) || 'Igual que el nombre'} />
               </div>
               <div className="campo-etiquetado">
                 <label>Categoría</label>
