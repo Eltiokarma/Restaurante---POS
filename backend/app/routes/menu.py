@@ -28,6 +28,7 @@ class PlatoOut(BaseModel):
 
     id: int
     nombre: str
+    nombre_corto: str | None = None
     categoria: str
     precio: float
     activo_hoy: bool
@@ -52,6 +53,8 @@ class PlatoOut(BaseModel):
 class PlatoIn(BaseModel):
     id: int | None = None
     nombre: str = Field(min_length=1, max_length=120)
+    # Para la terminal y los tickets; vacío = se usa el nombre
+    nombre_corto: str = Field(default="", max_length=30)
     categoria: str
     # ge=0: hay platos que van gratis con el menú (pedido del dueño)
     precio: float = Field(ge=0)
@@ -92,6 +95,7 @@ def _menus_activos(db: Session) -> list[dict]:
                 {
                     "plato_id": a.plato_id,
                     "nombre": platos[a.plato_id].nombre,
+                    "nombre_corto": platos[a.plato_id].nombre_corto,
                     "precio": platos[a.plato_id].precio,
                     "recargo": a.recargo,
                     "sale_al_momento": platos[a.plato_id].sale_al_momento,
@@ -201,6 +205,7 @@ def actualizar_menu(payload: MenuUpdate, db: Session = Depends(get_db)):
             if plato is None:
                 continue
             plato.nombre = p.nombre
+            plato.nombre_corto = p.nombre_corto.strip() or None
             plato.categoria = p.categoria
             plato.precio = round(p.precio, 2)
             plato.activo_hoy = p.activo_hoy
@@ -210,6 +215,7 @@ def actualizar_menu(payload: MenuUpdate, db: Session = Depends(get_db)):
         else:
             plato = Plato(
                 nombre=p.nombre,
+                nombre_corto=p.nombre_corto.strip() or None,
                 categoria=p.categoria,
                 precio=round(p.precio, 2),
                 activo_hoy=p.activo_hoy,

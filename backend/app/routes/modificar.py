@@ -162,7 +162,7 @@ def agregar_a_orden(orden_id: int, payload: AgregarIn, db: Session = Depends(get
         for pedido in payload.items:
             plato = _plato_activo(db, pedido.plato_id)
             orden.items.append(OrdenItem(
-                plato_id=plato.id, nombre_snapshot=plato.nombre, precio_snapshot=plato.precio,
+                plato_id=plato.id, nombre_snapshot=plato.nombre, nombre_corto=plato.nombre_corto, precio_snapshot=plato.precio,
                 cantidad=pedido.cantidad, empaque=pedido.empaque, nota=pedido.nota.strip(),
             ))
     except PlatoNoDisponible as e:
@@ -188,7 +188,7 @@ def agregar_a_orden(orden_id: int, payload: AgregarIn, db: Session = Depends(get
         etiqueta = f" [{item.empaque.upper()}]" if item.empaque != "mesa" else ""
         espera = " (ESPERA)" if item.espera else ""
         prefijo = "+" if item.es_agregado else "AGREGAR: "
-        lineas.append(_linea(item.cantidad, f"{prefijo}{item.nombre_snapshot}{etiqueta}{espera}{_de_quien(om)}"))
+        lineas.append(_linea(item.cantidad, f"{prefijo}{item.nombre_impreso}{etiqueta}{espera}{_de_quien(om)}"))
     for om in orden.menus:
         if om.id in menus_antes:
             continue
@@ -244,7 +244,7 @@ def devolver_tiempo(orden_id: int, orden_menu_id: int, payload: DevolverIn,
         if plato is None or not plato.activo_hoy:
             raise HTTPException(status_code=409, detail="Ese plato ya no está disponible")
         item = OrdenItem(
-            plato_id=plato.id, nombre_snapshot=plato.nombre, precio_snapshot=alternativa.recargo,
+            plato_id=plato.id, nombre_snapshot=plato.nombre, nombre_corto=plato.nombre_corto, precio_snapshot=alternativa.recargo,
             cantidad=om.cantidad, empaque=empaque, nota="", tiempo_orden=tiempo.orden,
         )
         item.orden_menu = om
@@ -252,7 +252,7 @@ def devolver_tiempo(orden_id: int, orden_menu_id: int, payload: DevolverIn,
         db.flush()
         consumir_item(db, orden, item)
         etiqueta = f" [{empaque.upper()}]" if empaque != "mesa" else ""
-        lineas = [_linea(om.cantidad, f"AGREGAR: {plato.nombre}{etiqueta}{_de_quien(om)}")]
+        lineas = [_linea(om.cantidad, f"AGREGAR: {plato.nombre_corto or plato.nombre}{etiqueta}{_de_quien(om)}")]
     return _cerrar_cambio(db, orden, total_antes, lineas)
 
 
@@ -274,7 +274,7 @@ def cambiar_empaque(orden_id: int, item_id: int, payload: EmpaqueIn, db: Session
         return _cerrar_cambio(db, orden, orden.total, [])
     total_antes = orden.total
     item.empaque = payload.empaque
-    lineas = [_linea(item.cantidad, f"{item.nombre_snapshot} -> {payload.empaque.upper()}{_de_quien(item.orden_menu)}")]
+    lineas = [_linea(item.cantidad, f"{item.nombre_impreso} -> {payload.empaque.upper()}{_de_quien(item.orden_menu)}")]
     return _cerrar_cambio(db, orden, total_antes, lineas)
 
 
@@ -321,7 +321,7 @@ def quitar_item(orden_id: int, item_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Es lo único del pedido: mejor anula la orden")
     total_antes = orden.total
     devolver_item(db, orden, item)
-    lineas = [_linea(item.cantidad, f"QUITAR: {item.nombre_snapshot}{_de_quien(item.orden_menu)}")]
+    lineas = [_linea(item.cantidad, f"QUITAR: {item.nombre_impreso}{_de_quien(item.orden_menu)}")]
     quitado = [{"nombre": item.nombre_snapshot, "precio": item.precio_snapshot, "cantidad": item.cantidad}]
     orden.items.remove(item)
     db.delete(item)

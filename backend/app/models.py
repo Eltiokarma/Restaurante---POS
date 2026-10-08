@@ -22,6 +22,9 @@ class Plato(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     nombre: Mapped[str] = mapped_column(String(120), nullable=False)
+    # Nombre corto para la terminal y los tickets ("Estofado" en vez de
+    # "Estofado de Carne con Papas Sancochadas y Arroz"). None = el nombre
+    nombre_corto: Mapped[str | None] = mapped_column(String(30), nullable=True)
     categoria: Mapped[str] = mapped_column(String(30), nullable=False)  # entrada | fondo | bebida | postre
     precio: Mapped[float] = mapped_column(Float, nullable=False)
     activo_hoy: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -266,6 +269,8 @@ class OrdenItem(Base):
     plato_id: Mapped[int | None] = mapped_column(ForeignKey("platos.id"), nullable=True)
     # Snapshot: si mañana cambia el precio del plato, la orden histórica no se altera
     nombre_snapshot: Mapped[str] = mapped_column(String(120), nullable=False)
+    # Snapshot del nombre corto: lo que sale en comanda y precuenta
+    nombre_corto: Mapped[str | None] = mapped_column(String(30), nullable=True)
     precio_snapshot: Mapped[float] = mapped_column(Float, nullable=False)
     cantidad: Mapped[int] = mapped_column(Integer, nullable=False)
     # mesa | taper | bolsa | lonchera — en qué se sirve ESTE plato
@@ -302,6 +307,11 @@ class OrdenItem(Base):
 
     orden: Mapped[Orden] = relationship(back_populates="items")
     orden_menu: Mapped[OrdenMenu | None] = relationship(back_populates="items")
+
+    @property
+    def nombre_impreso(self) -> str:
+        """Lo que sale en la comanda y la precuenta: el nombre corto si lo hay."""
+        return self.nombre_corto or self.nombre_snapshot
 
 
 class Cancelacion(Base):

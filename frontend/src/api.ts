@@ -3,6 +3,8 @@
 export interface Plato {
   id: number
   nombre: string
+  // Para la terminal y los tickets; null = se usa el nombre
+  nombre_corto?: string | null
   categoria: string
   precio: number
   activo_hoy: boolean
@@ -50,6 +52,7 @@ export interface ItemCarrito {
 export interface MenuAlternativaHoy {
   plato_id: number
   nombre: string
+  nombre_corto?: string | null
   precio: number
   recargo: number
   sale_al_momento: boolean
@@ -182,6 +185,7 @@ export type EstadoItem = 'pendiente' | 'preparando' | 'listo' | 'entregado'
 
 export interface OrdenItemOut {
   id?: number
+  nombre_corto?: string | null
   // Presa o cambio a huevo ("PIERNA", "2 HUEVOS … EN VEZ DE CARNE"); "" = como viene
   detalle?: string
   // Línea de cobro (ej. "Táper × 3"): al total y al ticket, no a cocina
@@ -1538,7 +1542,7 @@ export const api = {
 
   menuAnterior: () => request<{ fecha: string | null; platos: Plato[] }>('/api/menu/previous', {}, true),
 
-  guardarMenu: (platos: { id?: number; nombre: string; categoria: string; precio: number; activo_hoy: boolean; sale_al_momento?: boolean; capacidad_tanda?: number; sinonimos?: string[] }[]) =>
+  guardarMenu: (platos: { id?: number; nombre: string; nombre_corto?: string; categoria: string; precio: number; activo_hoy: boolean; sale_al_momento?: boolean; capacidad_tanda?: number; sinonimos?: string[] }[]) =>
     request<{ categorias: string[]; platos: Plato[] }>('/api/menu/today', {
       method: 'PUT',
       body: JSON.stringify({ platos }),

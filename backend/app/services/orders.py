@@ -237,6 +237,7 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
         item = OrdenItem(
             plato_id=plato.id,
             nombre_snapshot=plato.nombre,
+            nombre_corto=plato.nombre_corto,
             precio_snapshot=recargo,  # el precio del plato ya está en el menú
             cantidad=cantidad,
             empaque=empaques_por_tiempo.get(tiempo.orden, empaque),
@@ -280,6 +281,7 @@ def _armar_menu(db: Session, orden: Orden, pedido: dict, entrega: str) -> float:
         item = OrdenItem(
             plato_id=plato.id,
             nombre_snapshot=plato.nombre,
+            nombre_corto=plato.nombre_corto,
             precio_snapshot=precio_extra,
             cantidad=cantidad_extra,
             empaque=empaques_por_tiempo.get(tiempo.orden, empaque),
@@ -365,6 +367,7 @@ def _crear_orden(
             OrdenItem(
                 plato_id=plato.id,
                 nombre_snapshot=plato.nombre,
+                nombre_corto=plato.nombre_corto,
                 precio_snapshot=plato.precio,
                 cantidad=cantidad,
                 empaque=item.get("empaque", "mesa"),

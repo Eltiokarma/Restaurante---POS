@@ -62,6 +62,15 @@ Entregado y en producción (PR #102 a #119):
    de entrega bloqueado en la terminal). De paso quedaron blindados la voz
    (no marca "sale después" si no se dijo) y el "Que espere" (al fondo de
    la hoja, visible como "⏳ SALE DESPUÉS").
+2c. **Sesión 6 (08/10)**: (a) ticket #14: "Camote Rebosado (SEPARADO)" se
+   leía como reservado → la comanda ya no marca "(SEPARADO)" por plato; en
+   entregas mezcladas solo marca la excepción ("(JUNTO)" en mesa, "(POR
+   TIEMPOS)" en llevar). (b) Nombres largos: campo **nombre corto** por
+   plato (Admin → Menú, debajo del nombre y en la hoja ⋯), snapshot en
+   `orden_items.nombre_corto`; sale en la terminal, comanda, precuenta y
+   tickets de cambios. Las marcas ([TAPER], la persona) ya no se recortan.
+   **Pendiente con el dueño**: llenar los nombres cortos de los platos
+   largos (Estofado…, Bistec Frito…, Arroz a la Jardinera…).
 3. **Diferidos de sesiones anteriores** (no arrancar sin el dueño):
    validar tandas con `tanda_logs` y el orquestador IA; migrar botones
    viejos a la clase base `.boton`.

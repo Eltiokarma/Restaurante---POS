@@ -216,8 +216,10 @@ def render_orden(
     # Nombre de la persona (opcional) de cada menú: va al costado de sus
     # platos para que cocina y el mozo sepan de quién es cada uno
     persona_de_menu = {om.id: (om.nombre_persona or "").strip().upper() for om in orden.menus}
-    # Si las personas salen distinto (unas junto, otras por tiempos), cada
-    # plato de quien va por tiempos lo dice: la línea de arriba solo cuenta
+    # Si las personas salen distinto (unas junto, otras por tiempos), solo
+    # se marca la EXCEPCIÓN: lo normal es mesa por tiempos y lo para llevar
+    # todo junto. Antes cada plato por tiempos decía "(SEPARADO)" y en
+    # cocina se leía como plato reservado (ticket #14 del 08/10)
     entrega_de_menu = {
         om.id: (om.entrega or orden.entrega) if _decide_entrega(om, orden, categorias) else "junto"
         for om in orden.menus
@@ -232,12 +234,12 @@ def render_orden(
             continue
         bucket = "fondo" if item.es_agregado else categorias.get(item.plato_id)
         clave = (
-            bucket, item.nombre_snapshot, item.empaque,
+            bucket, item.nombre_impreso, item.empaque,
             # La presa / el cambio a huevo va primero, luego la observación
             "; ".join(filter(None, [item.detalle, _nota_de(item) or nota_por_item.get(item.id, "")])),
             item.es_extra, item.es_agregado, item.espera,
             persona_de_menu.get(item.orden_menu_id, ""),
-            mixta and entrega_de_menu.get(item.orden_menu_id, orden.entrega) == "separado",
+            _etiqueta_entrega(item, entrega_de_menu.get(item.orden_menu_id, orden.entrega)) if mixta else "",
         )
         grupo = grupos.setdefault(clave, {"cantidad": 0, "monto": 0.0})
         grupo["cantidad"] += item.cantidad
@@ -257,33 +259,33 @@ def render_orden(
         primera_seccion = False
         partes += [NEGRITA_ON, _texto(titulo), NEGRITA_OFF]
         for clave in del_grupo:
-            _, nombre_plato, empaque, nota, es_extra, es_agregado, espera, persona, por_tiempos = clave
+            _, nombre_plato, empaque, nota, es_extra, es_agregado, espera, persona, etiqueta_entrega = clave
             datos = grupos[clave]
+            # Las marcas (EXTRA, ESPERA, la persona, la entrega, el [TAPER])
+            # van SIEMPRE completas: si no entra, se recorta el nombre del
+            # plato, nunca una marca (antes se perdía "(JUAN)" o el empaque)
+            marcas = ""
             if es_agregado:
                 nombre = f"** +{datos['cantidad']} {nombre_plato.upper()} **"
             else:
                 nombre = f"{datos['cantidad']} x {nombre_plato}"
                 if es_extra:
-                    nombre += " (EXTRA)"
+                    marcas += " (EXTRA)"
                 if espera:
                     # "Va a esperar": reservado, cocina no lo saca todavía
-                    nombre += " (ESPERA)"
+                    marcas += " (ESPERA)"
             if persona:
-                nombre += f" ({persona})"
-            if por_tiempos:
-                nombre += " (SEPARADO)"
+                marcas += f" ({persona})"
+            marcas += etiqueta_entrega
+            if empaque != "mesa":
+                marcas += f" [{empaque.upper()}]"
             # En OTROS (gaseosas y cargos sin plato) no van montos: la
             # comanda es para cocina, la plata se ve en caja
             monto = "" if bucket is None else (_soles(datos["monto"]) if datos["monto"] > 0 else "")
-            if empaque != "mesa":
-                # La etiqueta va SIEMPRE completa, con su espacio: si el
-                # nombre es largo se recorta el plato, nunca el [TAPER]
-                # (antes salía "...Huancaína [." y no se entendía nada)
-                etiqueta = f" [{empaque.upper()}]"
-                ancho = columnas - len(etiqueta) - (len(monto) + 1 if monto else 0)
-                if len(nombre) > ancho:
-                    nombre = nombre[: max(0, ancho - 1)] + "."
-                nombre += etiqueta
+            ancho = columnas - len(marcas) - (len(monto) + 1 if monto else 0)
+            if len(nombre) > ancho:
+                nombre = nombre[: max(0, ancho - 1)] + "."
+            nombre += marcas
             if nota:
                 # La observación al costado si entra; si no, debajo
                 con_nota = f"{nombre} -> {nota}"
@@ -315,6 +317,16 @@ def _decide_entrega(om, orden, categorias: dict[int, str]) -> bool:
     }
     tiempos |= {p["tiempo_orden"] for p in om.pendientes()}
     return len(tiempos) >= 2
+
+
+def _etiqueta_entrega(item, entrega: str) -> str:
+    """En un pedido con entregas mezcladas, la marca del plato que NO sale
+    como lo normal: de mesa pero todo junto, o para llevar pero por tiempos."""
+    if item.empaque == "mesa" and entrega == "junto":
+        return " (JUNTO)"
+    if item.empaque != "mesa" and entrega == "separado":
+        return " (POR TIEMPOS)"
+    return ""
 
 
 def _linea_entrega(orden, categorias: dict[int, str] | None = None) -> str:
@@ -525,7 +537,7 @@ def render_precuenta(
 
     def plato_con_detalle(item) -> str:
         detalle = "; ".join(filter(None, [item.detalle, (item.nota or "").strip()]))
-        return f"{item.nombre_snapshot} ({detalle.lower()})" if detalle else item.nombre_snapshot
+        return f"{item.nombre_impreso} ({detalle.lower()})" if detalle else item.nombre_impreso
 
     nombres_menu = {om.nombre_snapshot for om in orden.menus}
     for om in orden.menus:
@@ -562,7 +574,7 @@ def render_precuenta(
             partes.append(_texto(linea + (_soles(monto).rjust(monto_ancho) if n == 0 else "")))
         # Porciones de más y agregados: ya van en el monto, se nombran
         adicionales = [
-            f"+{i.cantidad} {i.nombre_snapshot}" for i in propios if i.es_agregado or i.es_extra
+            f"+{i.cantidad} {i.nombre_impreso}" for i in propios if i.es_agregado or i.es_extra
         ]
         for renglon in _partir(", ".join(adicionales), ancho - cant_ancho) if adicionales else []:
             partes.append(_texto(" " * cant_ancho + renglon))
