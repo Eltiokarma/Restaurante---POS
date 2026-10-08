@@ -886,6 +886,14 @@ export interface MenuCaja {
 
 /** Porciones de hoy de una entrada o segundo. stock/quedan null = no se
  *  cuenta. quedan puede ser negativo: es aviso, no bloquea la venta. */
+/** Lo vendido en un día por plato (Admin → corregir un plato vendido) */
+export interface PlatoVendido {
+  plato_id: number
+  nombre: string
+  cantidad: number
+  pedidos: number
+}
+
 export interface StockPlato {
   plato_id: number
   nombre: string
@@ -1311,6 +1319,18 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ fecha, confirmacion }),
     }, true),
+
+  // Corregir un plato ya vendido (mismo precio, sin imprimir nada)
+  platosVendidos: (fecha?: string) =>
+    request<{ fecha: string; platos: PlatoVendido[] }>(
+      `/api/mantenimiento/platos-vendidos${fecha ? `?fecha=${fecha}` : ''}`, {}, true),
+
+  reemplazarPlato: (dePlatoId: number, aPlatoId: number, fecha?: string) =>
+    request<{ fecha: string; porciones: number; pedidos: number; platos: PlatoVendido[] }>(
+      '/api/mantenimiento/reemplazar-plato', {
+        method: 'POST',
+        body: JSON.stringify({ de_plato_id: dePlatoId, a_plato_id: aPlatoId, fecha: fecha || null }),
+      }, true),
 
   reiniciarDatos: (confirmacion: string, reiniciarStock: boolean) =>
     request<{ borrado: ResumenDatos; stock_reiniciado: boolean }>('/api/mantenimiento/reiniciar', {
