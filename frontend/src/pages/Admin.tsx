@@ -3621,13 +3621,31 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
             </select>
           </label>
           {config.gaveta !== 'no' && (
+            <label>
+              PIN para "Abrir cajón" en la caja (4 a 8 números).{' '}
+              {config.gaveta_con_pin ? 'Ya tiene PIN: escribe uno nuevo para cambiarlo.' : 'Hoy no pide PIN.'}
+              <input
+                type="password" inputMode="numeric" maxLength={8} autoComplete="new-password"
+                placeholder={config.gaveta_con_pin ? '••••' : 'Sin PIN'}
+                value={config.pin_gaveta ?? ''}
+                // Vacío = no tocar el PIN; para quitarlo está "Quitar PIN"
+                onChange={(e) => setConfig({ ...config, pin_gaveta: e.target.value.replace(/\D/g, '') || undefined })}
+              />
+              {config.gaveta_con_pin && (
+                <button type="button" onClick={() => setConfig({ ...config, pin_gaveta: '' , gaveta_con_pin: false })}>
+                  Quitar PIN
+                </button>
+              )}
+            </label>
+          )}
+          {config.gaveta !== 'no' && (
             <button
               onClick={async () => {
                 setMensaje('')
                 setError('')
                 try {
                   setConfig(await api.guardarConfig(config))
-                  const r = await api.abrirGaveta()
+                  const r = await api.abrirGaveta('', true)
                   setMensaje(r.encolada
                     ? 'Cajón enviado ✔ — debe abrirse en unos segundos. Si no abre, prueba con el otro pin'
                     : 'El cajón solo se abre en modo puente')

@@ -12,6 +12,7 @@ import { CountdownCancel } from '../components/CountdownCancel'
 import { GaseosasTerminal } from '../components/GaseosasTerminal'
 import { StockHoy } from '../components/StockHoy'
 import { ModificarPedido } from '../components/ModificarPedido'
+import { AnularPedido } from '../components/AnularPedido'
 import { PedidoPorVoz } from '../components/PedidoPorVoz'
 import type { ExtrasVoz } from '../components/PedidoPorVoz'
 import { TarjetaPlato } from '../components/TarjetaPlato'
@@ -49,6 +50,21 @@ const PAGOS_TERMINAL: { pago: Exclude<PagoTerminal, 'pendiente'>; texto: string;
 
 export function Cliente() {
   const [pantalla, setPantalla] = useState<Pantalla>('inicio')
+  // Número que tendrá este pedido (pedido del dueño: tener clara la
+  // numeración mientras se arma). Vista previa: el definitivo lo pone el
+  // backend al guardar; se refresca por si otra terminal ganó el número
+  const [numeroPrevio, setNumeroPrevio] = useState<number | null>(null)
+  useEffect(() => {
+    if (pantalla !== 'resumen' && pantalla !== 'countdown' && pantalla !== 'menu') return
+    let vivo = true
+    const pedir = () => api.siguienteNumero().then((r) => { if (vivo) setNumeroPrevio(r.numero) }).catch(() => {})
+    pedir()
+    const t = window.setInterval(pedir, 10000)
+    return () => { vivo = false; window.clearInterval(t) }
+  }, [pantalla])
+  const rotuloTicket = numeroPrevio !== null && (
+    <span className="numero-previo">Ticket #{String(numeroPrevio).padStart(3, '0')}</span>
+  )
   const [platos, setPlatos] = useState<Plato[]>([])
   const [menusHoy, setMenusHoy] = useState<MenuHoy[]>([])
   const [gaseosas, setGaseosas] = useState<Bebida[]>([])
@@ -69,6 +85,9 @@ export function Cliente() {
   const [errorConexion, setErrorConexion] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [ordenFinal, setOrdenFinal] = useState<{ orden: OrdenOut; local: DatosLocal } | null>(null)
+  // "Anular este pedido" desde la pantalla final (se arrepintió / duplicado)
+  const [anulando, setAnulando] = useState(false)
+  const [anulada, setAnulada] = useState(false)
   const [vozAbierta, setVozAbierta] = useState(false)
   const [entrega, setEntrega] = useState<Entrega>('separado')
   // Mesa elegida al tomar el pedido (opcional): si no eligen, el ticket
@@ -357,6 +376,7 @@ export function Cliente() {
         pago,
       )
       setOrdenFinal(resultado)
+      setAnulada(false)
       carrito.vaciar()
       setPantalla('final')
     } catch (e) {
@@ -418,15 +438,16 @@ export function Cliente() {
     return () => window.clearTimeout(timer)
   }, [pantalla, ordenFinal, imprimeAqui])
 
-  // Pantalla final: volver al inicio a los 10 segundos
+  // Pantalla final: volver al inicio a los 10 segundos (no mientras se
+  // está anulando el pedido)
   useEffect(() => {
-    if (pantalla !== 'final') return
+    if (pantalla !== 'final' || anulando) return
     const timer = window.setTimeout(() => {
       setOrdenFinal(null)
       volverAlInicio()
     }, 10_000)
     return () => window.clearTimeout(timer)
-  }, [pantalla, volverAlInicio])
+  }, [pantalla, volverAlInicio, anulando])
 
   // ---------- Pantallas ----------
 
@@ -476,10 +497,16 @@ export function Cliente() {
 
   if (pantalla === 'final' && ordenFinal) {
     return (
-      <div className="pantalla pantalla-final" onClick={() => { setOrdenFinal(null); volverAlInicio() }}>
-        <div className="numero-orden-gigante">
+      <div className="pantalla pantalla-final" onClick={() => {
+        if (anulando) return
+        setOrdenFinal(null)
+        setAnulada(false)
+        volverAlInicio()
+      }}>
+        <div className={`numero-orden-gigante ${anulada ? 'orden-anulada' : ''}`}>
           ORDEN #{String(ordenFinal.orden.numero_orden_dia).padStart(3, '0')}
         </div>
+        {anulada && <p className="texto-final">🗑 Pedido anulado</p>}
         <p className="texto-final">Paga en caja mostrando este ticket. ¡Gracias!</p>
         <button
           className="boton-grande boton-secundario"
@@ -495,8 +522,26 @@ export function Cliente() {
         >
           🖨️ Imprimir de nuevo
         </button>
+        {/* Pedido del dueño: el cliente se arrepiente al toque (aunque ya
+            haya pagado) o el pedido salió dos veces */}
+        {!anulada && (
+          <button
+            className="boton-grande boton-anular-pedido"
+            onClick={(e) => { e.stopPropagation(); setAnulando(true) }}
+          >
+            🗑 Anular este pedido
+          </button>
+        )}
         <p className="texto-toca">Volviendo al inicio…</p>
-        <Ticket orden={ordenFinal.orden} local={ordenFinal.local} />
+        {!anulada && <Ticket orden={ordenFinal.orden} local={ordenFinal.local} />}
+        {anulando && (
+          <AnularPedido
+            orden={ordenFinal.orden}
+            local={ordenFinal.local}
+            onAnulado={() => setAnulada(true)}
+            onCerrar={() => setAnulando(false)}
+          />
+        )}
       </div>
     )
   }
@@ -505,6 +550,9 @@ export function Cliente() {
     return (
       <div className="pantalla pantalla-countdown">
         <h1>¿Estás seguro?</h1>
+        {numeroPrevio !== null && (
+          <div className="numero-previo-grande">Ticket #{String(numeroPrevio).padStart(3, '0')}</div>
+        )}
         <p className="texto-countdown">Tienes {config?.ventana_cancelacion_seg ?? 30} segundos para cancelar.</p>
         {copias > 1 && <p className="aviso-dos-comandas">🖨 Saldrán {copias} comandas</p>}
         <CountdownCancel
@@ -576,7 +624,7 @@ export function Cliente() {
             <button className="boton-cancelar-todo" onClick={() => setConfirmandoCancelarTodo(true)}>
               ← Cancelar todo
             </button>
-            <h1>Tu pedido</h1>
+            <h1>Tu pedido {rotuloTicket}</h1>
             {config?.voz_disponible && (
               <button className="boton-pedir-voz" onClick={() => setVozAbierta(true)}>
                 🎤 PEDIR POR VOZ
@@ -584,7 +632,7 @@ export function Cliente() {
             )}
           </div>
         ) : (
-          <h1>Tu pedido</h1>
+          <h1>Tu pedido {rotuloTicket}</h1>
         )}
         {/* Sin riel de pasos (pedido del dueño): el espacio es para los tickets */}
         {errorConexion && <div className="banner-error">{errorConexion}</div>}

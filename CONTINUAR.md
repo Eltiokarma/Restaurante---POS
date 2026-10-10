@@ -71,6 +71,13 @@ Entregado y en producción (PR #102 a #119):
    tickets de cambios. Las marcas ([TAPER], la persona) ya no se recortan.
    **Pendiente con el dueño**: llenar los nombres cortos de los platos
    largos (Estofado…, Bistec Frito…, Arroz a la Jardinera…).
+2d. **Sesión 6 (10/10)**: número de ticket a la vista mientras se arma el
+   pedido ("Ticket #015", vista previa de `GET /api/orders/siguiente-numero`);
+   **anular desde la terminal** (pantalla final y "Modificar un pedido"):
+   motivo "Se arrepintió" / "Es duplicado" (`ordenes.motivo_anulacion`),
+   mini voucher "ANULADO" con "DEVOLVER S/ …" si ya pagó; **PIN del cajón**
+   en Caja (`pin_gaveta` en Configuración, nunca en el código; la config
+   pública solo dice `gaveta_con_pin`). El PIN lo dio el dueño en el chat.
 3. **Diferidos de sesiones anteriores** (no arrancar sin el dueño):
    validar tandas con `tanda_logs` y el orquestador IA; migrar botones
    viejos a la clase base `.boton`.

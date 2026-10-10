@@ -236,6 +236,12 @@ def _migrar(engine_) -> None:
         if columnas_ord and "pago_yape" not in columnas_ord:
             conn.execute(text("ALTER TABLE ordenes ADD COLUMN pago_yape FLOAT"))
             conn.commit()
+        if columnas_ord and "motivo_anulacion" not in columnas_ord:
+            conn.execute(text("ALTER TABLE ordenes ADD COLUMN motivo_anulacion VARCHAR(20)"))
+            conn.commit()
+        if columnas_tb and "nota" not in columnas_tb:
+            conn.execute(text("ALTER TABLE tickets_bebida ADD COLUMN nota TEXT"))
+            conn.commit()
         if columnas_pl and "nombre_corto" not in columnas_pl:
             conn.execute(text("ALTER TABLE platos ADD COLUMN nombre_corto VARCHAR(30)"))
             conn.commit()

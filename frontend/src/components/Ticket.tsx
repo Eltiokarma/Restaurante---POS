@@ -38,7 +38,18 @@ export function TicketBebidaImpreso({ ticket, local }: {
           </div>
         ))}
       </div>
-      {(ticket.titulo ?? 'GASEOSAS') === 'GASEOSAS' ? (
+      {ticket.titulo === 'ANULADO' ? (
+        <>
+          <div className="ticket-total">
+            <span>ANULADO</span>
+            <span>{soles(Math.abs(ticket.total))}</span>
+          </div>
+          {(ticket.nota ?? '').split('\n').filter(Boolean).map((renglon) => (
+            <div className="ticket-pie" key={renglon}><strong>{renglon}</strong></div>
+          ))}
+          <div className="ticket-pie">Cocina: NO preparar esta orden</div>
+        </>
+      ) : (ticket.titulo ?? 'GASEOSAS') === 'GASEOSAS' ? (
         <>
           <div className="ticket-total">
             <span>TOTAL GASEOSAS</span>

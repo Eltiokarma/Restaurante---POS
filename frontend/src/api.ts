@@ -260,6 +260,8 @@ export interface OrdenOut {
   servido_min?: number | null
   // Segundos desde que se anuló (cintillo "no preparar" en cocina); null si no aplica
   anulada_hace_seg: number | null
+  // Anulada desde la terminal: "arrepentido" | "duplicado" (null = en caja)
+  motivo_anulacion?: string | null
   // Solo la venta a la carta; los platos de menú van agrupados en "menus"
   items: OrdenItemOut[]
   menus: OrdenMenuOut[]
@@ -469,6 +471,10 @@ export interface ConfigOut {
   impresora_columnas: number
   // Cajón de dinero en el puerto DK de la impresora (modo puente)
   gaveta: 'pin2' | 'pin5' | 'no'
+  // "Abrir cajón" pide PIN (el PIN nunca viaja en la config pública)
+  gaveta_con_pin?: boolean
+  // Solo para guardar desde el admin ("" = quitar el PIN)
+  pin_gaveta?: string
   // Toggle guardado (admin) y disponibilidad efectiva (toggle + API keys)
   voz_habilitada: boolean
   voz_disponible: boolean
@@ -667,10 +673,15 @@ export interface TicketBebidaOut {
   items: { nombre: string; precio: number; cantidad: number }[]
   total: number
   hora?: string
-  // GASEOSAS (default) | CAMBIO: la orden ya registrada se modificó
+  // GASEOSAS (default) | CAMBIO: la orden ya registrada se modificó |
+  // ANULADO: mini voucher de una orden anulada desde la terminal
   titulo?: string
   total_orden?: number
+  // Renglones al pie (ANULADO: el motivo y si hay que devolver)
+  nota?: string
 }
+
+export type MotivoAnulacion = 'arrepentido' | 'duplicado'
 
 // Respuesta de un cambio a una orden ya registrada
 export interface RespuestaCambio {
@@ -1595,8 +1606,18 @@ export const api = {
     request<{ encolada: boolean }>('/api/print/prueba', { method: 'POST' }, true),
 
   // "Abrir cajón" de la caja: el puente manda el pulso al cajón de dinero
-  abrirGaveta: () =>
-    request<{ encolada: boolean }>('/api/print/gaveta', { method: 'POST' }),
+  abrirGaveta: (pin = '', comoAdmin = false) =>
+    request<{ encolada: boolean }>('/api/print/gaveta', { method: 'POST', body: JSON.stringify({ pin }) }, comoAdmin),
+
+  // El número que tendrá el próximo pedido (vista previa mientras se arma)
+  siguienteNumero: () => request<{ numero: number }>('/api/orders/siguiente-numero'),
+
+  // Anular un pedido ya confirmado desde la terminal: se arrepintió o era
+  // duplicado. Sale un mini voucher "ANULADO"; devolver = lo que ya pagó
+  anularOrden: (id: number, motivo: MotivoAnulacion) =>
+    request<RespuestaCambio & { devolver: number }>(`/api/orders/${id}/anular`, {
+      method: 'POST', body: JSON.stringify({ motivo }),
+    }),
 
   // El ticket de prueba se confirma como las órdenes: si no sale, sigue en cola
   confirmarPruebaImpresa: () =>

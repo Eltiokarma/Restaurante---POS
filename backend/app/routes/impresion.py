@@ -9,10 +9,12 @@ nube (Railway) y la impresora en la red del restaurante.
 from datetime import timedelta
 import time
 import base64
+import hmac
 import json
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..auth import requiere_admin
@@ -68,11 +70,27 @@ def confirmar_ticket_de_prueba(db: Session = Depends(get_db)):
     return {"confirmada": True}
 
 
+class GavetaIn(BaseModel):
+    pin: str = ""
+
+
 @router.post("/gaveta")
-def pedir_abrir_gaveta(db: Session = Depends(get_db)):
+def pedir_abrir_gaveta(payload: GavetaIn | None = None, x_admin_token: str = Header(default=""),
+                       db: Session = Depends(get_db)):
     """Botón "Abrir cajón" de la caja (dar vuelto, cambiar sencillo). Sin
-    admin, como el resto de la caja. Solo en modo puente: la impresión del
+    admin, como el resto de la caja, pero con el PIN del cajón si el admin
+    lo puso (pedido del dueño). Solo en modo puente: la impresión del
     navegador no puede mandar el pulso al cajón."""
+    from .config import pin_gaveta
+
+    pin = pin_gaveta(db)
+    dado = (payload.pin if payload else "").strip()
+    if pin and not hmac.compare_digest(dado.encode(), pin.encode()):
+        # "Probar cajón" del admin: su sesión vale por el PIN
+        try:
+            requiere_admin(x_admin_token)
+        except HTTPException:
+            raise HTTPException(status_code=403, detail="PIN incorrecto") from None
     config = leer_config(db)
     if config["modo_impresion"] != "puente" or config["gaveta"] == "no":
         return {"encolada": False}
@@ -202,7 +220,8 @@ def _armar_cola(db: Session) -> dict:
         .where(
             TicketBebida.impreso == False,  # noqa: E712
             Orden.fecha == hoy_lima(),
-            Orden.estado != "anulada",
+            # El voucher ANULADO es justamente de una orden anulada
+            or_(Orden.estado != "anulada", TicketBebida.titulo == "ANULADO"),
         )
         .order_by(TicketBebida.id)
     ).all()
@@ -217,6 +236,7 @@ def _armar_cola(db: Session) -> dict:
             "hora": tb.creado_en.strftime("%H:%M"),
             "titulo": tb.titulo,
             "total_orden": tb.total_orden if tb.total_orden is not None else orden_tb.total,
+            "nota": tb.nota or "",
         }
         trabajos.append({
             "tipo": "bebida",

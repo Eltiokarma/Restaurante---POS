@@ -11197,3 +11197,91 @@ select:focus-visible {
   margin-top: 4px;
   font-size: 0.85rem;
 }
+
+/* Número del ticket mientras se arma el pedido (vista previa) */
+.numero-previo {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 10px;
+  border-radius: var(--r-chico);
+  background: var(--tinta);
+  color: var(--papel);
+  font-family: var(--fuente-ui);
+  font-size: 0.8em;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+.numero-previo-grande {
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  margin: 4px 0 8px;
+}
+
+/* PIN del cajón (caja) */
+.modal-pin-cajon {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: stretch;
+  max-width: 340px;
+}
+
+.input-pin-cajon {
+  font-size: 2rem;
+  text-align: center;
+  letter-spacing: 0.4em;
+  min-height: 64px;
+}
+
+.error-pin-cajon {
+  color: var(--achiote);
+  font-weight: 800;
+  margin: 0;
+}
+
+.botones-pin-cajon {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* Anular un pedido ya confirmado (terminal) */
+.boton-anular-pedido {
+  background: var(--papel);
+  border: 2px solid var(--achiote);
+  color: var(--achiote-hondo);
+}
+
+.orden-anulada {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.modal-anular {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 520px;
+}
+
+.botones-anular {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 10px;
+}
+
+.anular-devolver {
+  font-size: 1.3rem;
+  color: var(--achiote-hondo);
+}
+
+.anular-ayuda {
+  color: var(--tinta-suave);
+}
+
+.mod-anular {
+  margin-left: auto;
+}
