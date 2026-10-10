@@ -364,7 +364,7 @@ export function DetallesDelPlato({ esSegundo, nombrePlato, variante, conEspera, 
 /** Hoja de empaque (dibujo 5): tocar la letra M/T del ticket. Tocar un
  *  empaque lo pone a ESTA persona; con varias, contadores ± que reparten
  *  entre todas (la suma no pasa de las personas que tienen ese plato). */
-export function HojaEmpaque({ tiempoOrden, persona, lineas, empaques, onCerrar, onEsta, onRepartir, onTodoElPedido }: {
+export function HojaEmpaque({ tiempoOrden, persona, lineas, empaques, onCerrar, onEsta, onRepartir, onTiempoATodas, onTodoElPedido }: {
   tiempoOrden: number
   persona: number
   lineas: MenuCarrito[]
@@ -372,6 +372,8 @@ export function HojaEmpaque({ tiempoOrden, persona, lineas, empaques, onCerrar, 
   onCerrar: () => void
   onEsta: (e: Empaque) => void
   onRepartir: (cuotas: [Empaque, number][]) => void
+  // Este tiempo (p. ej. la entrada) de TODAS las personas, elegido o no
+  onTiempoATodas: (e: Empaque) => void
   // Entrada y segundo de todas las personas en ese empaque, de un toque
   onTodoElPedido: (e: Empaque) => void
 }) {
@@ -388,6 +390,7 @@ export function HojaEmpaque({ tiempoOrden, persona, lineas, empaques, onCerrar, 
   const suma = cuotas.reduce((a, b) => a + b, 0)
   if (!tiempo || !linea) return null
   const actual = linea.empaques[tiempoOrden] ?? linea.empaque
+  const conTiempo = lineas.filter((l) => !l.omitidos.includes(tiempoOrden))
 
   return (
     <Hoja titulo={`¿En qué va ${tiempo.rotulo.toLowerCase()}? — Persona ${persona + 1}`} onCerrar={onCerrar}>
@@ -405,12 +408,31 @@ export function HojaEmpaque({ tiempoOrden, persona, lineas, empaques, onCerrar, 
             <button className={`rh-opcion ${actual === e ? 'rh-opcion-activa' : ''}`} onClick={() => onEsta(e)}>
               <span>{actual === e ? '● ' : '○ '}{NOMBRE_EMPAQUE[e]}</span>
             </button>
-            {total > 1 && <button className="rh-todas" onClick={() => onRepartir([[e, total]])}>☐ Todas</button>}
           </div>
         ))}
       </div>
       {/* Pedido del dueño: desde un ticket, todo el pedido (entrada y
           segundo de todas las personas) a mesa, táper, bolsa o lonchera */}
+      {/* Pedido del dueño: "todas las entradas en bolsa" de un toque,
+          aunque las demás personas aún no elijan su entrada */}
+      {lineas.length > 1 && (
+        <div className="rh-todo-pedido">
+          <p className="rh-todo-pedido-titulo">
+            {`${rotuloPlural(tiempo.rotulo)} de las ${conTiempo.length} personas`}
+          </p>
+          <div className="rh-todo-pedido-botones">
+            {empaques.map((e) => (
+              <button
+                key={e}
+                className={`rh-todo-pedido-boton ${conTiempo.every((l) => (l.empaques[tiempoOrden] ?? l.empaque) === e) ? 'rh-todo-pedido-activo' : ''}`}
+                onClick={() => onTiempoATodas(e)}
+              >
+                {NOMBRE_EMPAQUE[e]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="rh-todo-pedido">
         <p className="rh-todo-pedido-titulo">
           {lineas.length > 1 ? `Todos (${lineas.length} personas): entrada y segundo` : 'Entrada y segundo'}
@@ -447,6 +469,14 @@ export function HojaEmpaque({ tiempoOrden, persona, lineas, empaques, onCerrar, 
       )}
     </Hoja>
   )
+}
+
+/** "Entrada" → "Todas las entradas", "Segundo" → "Todos los segundos",
+ *  "Entrada o sopa" → "Todas las entradas o sopas". */
+function rotuloPlural(rotulo: string): string {
+  const palabras = rotulo.toLowerCase().split(' ').map((w) => (w === 'o' || w === 'y' ? w : /[aeiouáéíóú]$/.test(w) ? `${w}s` : `${w}es`))
+  const femenino = /a$/.test(rotulo.toLowerCase().split(' ')[0])
+  return `${femenino ? 'Todas las' : 'Todos los'} ${palabras.join(' ')}`
 }
 
 const LETRA_EMPAQUE: Record<Empaque, string> = { mesa: 'M', taper: 'T', bolsa: 'B', lonchera: 'L' }
@@ -720,6 +750,7 @@ export function useTicketsPersonas(carrito: Carrito, opciones: {
           onCerrar={cerrar}
           onEsta={(e) => { carrito.cambiarEmpaqueTiempo(hoja.idx, t, e); cerrar() }}
           onRepartir={(cuotas) => { carrito.repartirEmpaque(menuId, t, cuotas); cerrar() }}
+          onTiempoATodas={(e) => { carrito.empaqueTiempoATodas(menuId, t, e); cerrar() }}
           onTodoElPedido={(e) => { carrito.empaqueMenuParaTodas(menuId, e); cerrar() }}
         />
       )
