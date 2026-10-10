@@ -448,6 +448,20 @@ export function useCarrito() {
   // "Todo el menú en X" borra los empaques por tiempo: el general manda
   // Desde la hoja de empaque: entrada y segundo de TODAS las personas de
   // ese menú en el mismo empaque (se borran las excepciones por plato)
+  // "Todas las entradas en bolsa": ESE tiempo de todas las personas del
+  // menú, hayan elegido su plato o no (al elegirlo, ya va en ese empaque).
+  // Antes solo contaban las que ya tenían plato y con una sola elegida no
+  // aparecía el botón (pedido del dueño)
+  const empaqueTiempoATodas = useCallback((menuId: number, tiempoOrden: number, empaque: Empaque) => {
+    setMenus((prev) => prev.map((m) => {
+      if (m.menu.id !== menuId || m.omitidos.includes(tiempoOrden)) return m
+      const empaques = { ...m.empaques }
+      if (empaque === m.empaque) delete empaques[tiempoOrden]
+      else empaques[tiempoOrden] = empaque
+      return { ...m, empaques }
+    }))
+  }, [])
+
   const empaqueMenuParaTodas = useCallback((menuId: number, empaque: Empaque) => {
     setMenus((prev) => prev.map((m) => (m.menu.id === menuId ? { ...m, empaque, empaques: {} } : m)))
   }, [])
@@ -617,6 +631,7 @@ export function useCarrito() {
     vaciar,
     quitarMenusVacios,
     empaqueMenuParaTodas,
+    empaqueTiempoATodas,
     cambiarVariante,
     eliminarNoDisponibles,
     sincronizarConMenu,
