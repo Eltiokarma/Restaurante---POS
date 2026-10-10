@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 import json
@@ -224,6 +224,7 @@ def _orden_a_dict(
         "minutos_espera": round(_minutos_espera(orden), 1),
         "servido_min": (lambda v: round(v, 1) if v is not None else None)(_minutos_servido(orden)),
         "anulada_hace_seg": _segundos_desde_anulacion(orden),
+        "motivo_anulacion": orden.motivo_anulacion,
         # Solo la venta a la carta: los platos de un menú van agrupados en
         # "menus" (cocina y ticket muestran el menú como UN bloque)
         "items": [
@@ -383,6 +384,17 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
 def ordenes_de_hoy(db: Session = Depends(get_db)):
     """Órdenes de hoy, para la vista de cocina y el admin."""
     return _ordenes_del_dia(db, hoy_lima())
+
+
+@router.get("/siguiente-numero")
+def siguiente_numero(db: Session = Depends(get_db)):
+    """El número que tendrá el próximo pedido de hoy, para mostrarlo
+    mientras se arma (pedido del dueño). Es una vista previa: el número de
+    verdad se asigna al guardar, con lock (otra terminal puede ganarlo)."""
+    ultimo = db.execute(
+        select(func.max(Orden.numero_orden_dia)).where(Orden.fecha == hoy_lima())
+    ).scalar()
+    return {"numero": (ultimo or 0) + 1}
 
 
 @router.get("/of-day")

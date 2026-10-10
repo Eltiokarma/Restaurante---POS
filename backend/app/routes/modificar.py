@@ -278,6 +278,73 @@ def cambiar_empaque(orden_id: int, item_id: int, payload: EmpaqueIn, db: Session
     return _cerrar_cambio(db, orden, total_antes, lineas)
 
 
+# ---------- anular la orden entera (se arrepintió o era duplicada) ----------
+
+MOTIVOS_ANULACION = {"arrepentido": "SE ARREPINTIO", "duplicado": "PEDIDO DUPLICADO"}
+NOMBRE_METODO = {"efectivo": "efectivo", "yape": "Yape", "mixto": "efectivo + Yape", "tarjeta": "tarjeta"}
+
+
+class AnularIn(BaseModel):
+    motivo: str
+
+
+@router.post("/{orden_id}/anular")
+def anular_orden(orden_id: int, payload: AnularIn, db: Session = Depends(get_db)):
+    """Pedido del dueño: el cliente se arrepiente justo después de
+    confirmar (incluso ya pagado) o el pedido salió dos veces. La orden
+    queda ANULADA con su motivo (no cuenta como venta, devuelve el kardex y
+    cocina ve "no preparar") y sale un mini voucher "ANULADO" que dice si
+    hay que devolver la plata."""
+    if payload.motivo not in MOTIVOS_ANULACION:
+        raise HTTPException(status_code=422, detail=f"Motivo inválido: {payload.motivo}")
+    orden = _orden_modificable(db, orden_id)
+    from ..services.inventario import revertir_por_orden
+
+    revertir_por_orden(db, orden)
+    ahora = ahora_lima()
+    orden.estado = "anulada"
+    orden.anulada_en = ahora
+    orden.motivo_anulacion = payload.motivo
+    pagado = orden.pago_al_pedir == "pagado" or (orden.metodo_pago is not None and not orden.pago_pendiente)
+    renglones = [f"Motivo: {MOTIVOS_ANULACION[payload.motivo]}"]
+    if pagado:
+        metodo = NOMBRE_METODO.get(orden.metodo_pago or "efectivo", orden.metodo_pago or "efectivo")
+        renglones.append(f"YA PAGO ({metodo}): DEVOLVER S/ {orden.total:.2f}")
+    else:
+        renglones.append("No habia pagado: nada que devolver")
+    lineas = [
+        _linea(om.cantidad, ", ".join(
+            i.nombre_impreso for i in orden.items
+            if i.orden_menu_id == om.id and not i.es_agregado and not i.es_extra
+        ) or om.nombre_snapshot)
+        for om in orden.menus
+    ] + [_linea(i.cantidad, i.nombre_impreso) for i in orden.items if i.orden_menu_id is None and not i.es_cargo]
+    modo = leer_config(db)["modo_impresion"]
+    if modo in ("puente", "estacion"):
+        db.add(TicketBebida(
+            orden_id=orden.id, detalle_json=json.dumps(lineas, ensure_ascii=False),
+            total=-orden.total, titulo="ANULADO", total_orden=0.0, nota="\n".join(renglones),
+        ))
+    db.commit()
+    db.refresh(orden)
+    mapa = _mapa_mesas(db)
+    return {
+        "orden": _orden_a_dict(orden, mapa, _mapa_categorias(db)),
+        "modo_impresion": modo,
+        "devolver": round(orden.total, 2) if pagado else 0.0,
+        # En modo terminal la propia pantalla imprime el voucher
+        "ticket_cambio": {
+            "numero": f"{orden.numero_orden_dia:03d}",
+            "mesas": [mapa.get(i, f"#{i}") for i in json.loads(orden.mesa_ids or "[]")],
+            "items": lineas,
+            "total": -orden.total,
+            "titulo": "ANULADO",
+            "total_orden": 0.0,
+            "nota": "\n".join(renglones),
+        },
+    }
+
+
 # ---------- quitar una persona o un plato ----------
 
 @router.delete("/{orden_id}/menus/{orden_menu_id}")

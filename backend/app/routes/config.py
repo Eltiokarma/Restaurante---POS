@@ -21,6 +21,7 @@ class ConfigIn(BaseModel):
     impresora_puerto: int | None = None
     impresora_columnas: int | None = None
     gaveta: str | None = None  # cajón de dinero: "pin2" | "pin5" | "no"
+    pin_gaveta: str | None = None  # PIN de "Abrir cajón" (4 a 8 dígitos; "" = sin PIN)
     voz_habilitada: bool | None = None  # kill switch del pedido por voz
     exigir_caja_abierta: bool | None = None  # bloquear ventas sin apertura de caja
     terminal_solo_menus: bool | None = None  # la terminal muestra solo los menús
@@ -29,6 +30,12 @@ class ConfigIn(BaseModel):
     cocina_bulk_min: int | None = None  # ventana de la tanda en cocina (0 = apagado)
     cocina_tandas: bool | None = None  # tablero de tandas en /cocina
     cocina_tanda_max_tickets: int | None = None  # tope de tickets por tanda (0 = sin tope)
+
+
+def pin_gaveta(db: Session) -> str:
+    """El PIN de "Abrir cajón" ("" = sin PIN). Aparte: no va en la config pública."""
+    registro = db.get(Config, "pin_gaveta")
+    return (registro.valor if registro else CONFIG_DEFAULTS["pin_gaveta"]).strip()
 
 
 def leer_config(db: Session) -> dict:
@@ -50,6 +57,8 @@ def leer_config(db: Session) -> dict:
         "impresora_puerto": int(valores["impresora_puerto"] or 9100),
         "impresora_columnas": max(24, min(64, int(valores["impresora_columnas"] or 42))),
         "gaveta": valores["gaveta"] if valores["gaveta"] in ("pin2", "pin5", "no") else "pin2",
+        # Solo SI hay PIN (esta config es pública: el PIN nunca sale)
+        "gaveta_con_pin": bool(valores["pin_gaveta"].strip()),
         # El toggle guardado (para el admin) y la disponibilidad efectiva
         # (toggle encendido + API keys presentes) para la terminal
         "voz_habilitada": voz_habilitada,
@@ -84,6 +93,10 @@ def actualizar(payload: ConfigIn, db: Session = Depends(get_db)):
             valor = ",".join(e for e in valor if e in ("mesa", "taper", "bolsa", "lonchera"))
         elif clave == "gaveta":
             if valor not in ("pin2", "pin5", "no"):
+                continue
+        elif clave == "pin_gaveta":
+            valor = valor.strip()
+            if valor and not (valor.isdigit() and 4 <= len(valor) <= 8):
                 continue
         elif clave == "precio_taper":
             valor = round(max(0.0, float(valor)), 2)

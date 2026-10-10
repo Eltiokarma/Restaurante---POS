@@ -199,6 +199,9 @@ class Orden(Base):
     # Cuándo se anuló (cintillo "no preparar" en cocina los primeros 60 s).
     # Des-anular la limpia.
     anulada_en: Mapped[datetime | None] = mapped_column(nullable=True)
+    # Por qué se anuló desde la terminal: "arrepentido" (el cliente cambió
+    # de idea) | "duplicado" (se marcó dos veces). None = anulada en caja
+    motivo_anulacion: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
     items: Mapped[list["OrdenItem"]] = relationship(
@@ -499,6 +502,8 @@ class TicketBebida(Base):
     titulo: Mapped[str] = mapped_column(String(30), default="GASEOSAS", nullable=False)
     # Total de la orden justo después del cambio (lo que dice el papel)
     total_orden: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Renglones de aviso al pie (ANULADO: el motivo y si hay que devolver)
+    nota: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class TandaLog(Base):
@@ -606,6 +611,9 @@ CONFIG_DEFAULTS: dict[str, str] = {
     # "pin2" (casi todos), "pin5" (algunos modelos) o "no" (no hay cajón).
     # Se abre con "OK y pagó" y con el botón "Abrir cajón" de la caja.
     "gaveta": "pin2",
+    # PIN para "Abrir cajón" desde la caja (pedido del dueño). Vacío = sin
+    # PIN. Lo pone el admin en Configuración; NUNCA va en el código
+    "pin_gaveta": "",
     # Kill switch del pedido por voz: apagado por defecto hasta validar la
     # Fase 2 (además requiere OPENAI_API_KEY en .env)
     "voz_habilitada": "0",
