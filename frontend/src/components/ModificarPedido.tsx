@@ -5,6 +5,7 @@ import type {
 } from '../api'
 import { GaseosasTerminal } from './GaseosasTerminal'
 import { TicketBebidaImpreso } from './Ticket'
+import { AnularPedido } from './AnularPedido'
 
 interface Props {
   menusHoy: MenuHoy[]
@@ -32,6 +33,8 @@ export function ModificarPedido({ menusHoy, gaseosas, empaques, local, onCerrar 
   const [agregandoGaseosas, setAgregandoGaseosas] = useState(false)
   const [gaseosasNuevas, setGaseosasNuevas] = useState<{ bebida: Bebida; cantidad: number }[]>([])
   const [ticketCambio, setTicketCambio] = useState<TicketBebidaOut | null>(null)
+  const [anulando, setAnulando] = useState(false)
+  const [yaAnulada, setYaAnulada] = useState(false)
 
   const cargar = useCallback(async () => {
     try {
@@ -122,7 +125,23 @@ export function ModificarPedido({ menusHoy, gaseosas, empaques, local, onCerrar 
           {orden.mesas.length > 0 && <small> · Mesa {orden.mesas.join(' + ')}</small>}
         </h1>
         <span className="mod-total">{soles(orden.total)}</span>
+        {/* Se arrepintió del pedido entero (aunque ya pagó) o es duplicado */}
+        <button className="mod-quitar mod-anular" disabled={ocupado} onClick={() => setAnulando(true)}>
+          🗑 Anular pedido
+        </button>
       </div>
+      {anulando && (
+        <AnularPedido
+          orden={orden}
+          local={local}
+          onAnulado={() => { setYaAnulada(true); cargar() }}
+          onCerrar={() => {
+            setAnulando(false)
+            // Si se anuló, ya no se modifica: de vuelta a la lista
+            if (yaAnulada) { setOrden(null); setYaAnulada(false) }
+          }}
+        />
+      )}
       {aviso && <div className="banner-ok">{aviso}</div>}
       {error && <div className="mensaje-error">{error}</div>}
 

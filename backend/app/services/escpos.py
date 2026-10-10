@@ -382,6 +382,15 @@ def render_bebida(datos: dict, local: dict, columnas: int = 42) -> bytes:
                    _texto(_fila("TOTAL GASEOSAS", f"S/ {_soles(datos['total'])}", columnas)),
                    TAMANO_NORMAL, NEGRITA_OFF]
         partes.append(_texto("Se suma al ticket de la orden"))
+    elif titulo == "ANULADO":
+        # Mini voucher: la orden se anuló desde la terminal (se arrepintió
+        # o era duplicada). El monto, en grande, y si hay que devolverlo
+        partes += [NEGRITA_ON, DOBLE_ALTO,
+                   _texto(_fila("ANULADO", f"S/ {_soles(abs(datos['total']))}", columnas)),
+                   TAMANO_NORMAL, NEGRITA_OFF]
+        for renglon in (datos.get("nota") or "").splitlines():
+            partes += [NEGRITA_ON, _texto(renglon[:columnas]), NEGRITA_OFF]
+        partes.append(_texto("Cocina: NO preparar esta orden"))
     else:
         # Cambio de una orden ya registrada: cuánto subió o bajó la cuenta
         signo = "+" if datos["total"] >= 0 else "-"

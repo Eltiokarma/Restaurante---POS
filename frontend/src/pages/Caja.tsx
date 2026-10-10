@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, lineaEntrega, menuAPayload, soles, subtotalMenu, tiemposPendientes, unidadesEnTaper } from '../api'
+import { api, ApiError, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, lineaEntrega, menuAPayload, soles, subtotalMenu, tiemposPendientes, unidadesEnTaper } from '../api'
 import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuCaja, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, StockPlato, TicketBebidaOut } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape', 'mixto']
@@ -168,12 +168,25 @@ export function Caja() {
     }, filas.length === 1 ? `${filas[0].nombre}: ${filas[0].sugerido} porciones` : 'Listo: las cantidades de la última vez')
   }
 
-  const abrirCajon = async () => {
+  // "Abrir cajón" con PIN (pedido del dueño): si el admin puso PIN, se
+  // pide cada vez; "Pagó efectivo" en la terminal lo sigue abriendo solo
+  const [pidiendoPin, setPidiendoPin] = useState(false)
+  const [pinCajon, setPinCajon] = useState('')
+  const [errorPin, setErrorPin] = useState('')
+  const abrirCajon = async (pin = '') => {
     try {
-      const r = await api.abrirGaveta()
+      const r = await api.abrirGaveta(pin)
       setMensaje(r.encolada ? 'Abriendo el cajón…' : 'El cajón no está configurado')
       setError('')
+      setPidiendoPin(false)
+      setPinCajon('')
     } catch (e) {
+      if (e instanceof ApiError && e.status === 403) {
+        setErrorPin('PIN incorrecto')
+        setPinCajon('')
+        return
+      }
+      setPidiendoPin(false)
       setError(e instanceof Error ? e.message : 'No se pudo abrir el cajón')
     }
   }
@@ -795,9 +808,47 @@ export function Caja() {
           📋 Menú del día
         </button>
         {config?.modo_impresion === 'puente' && config.gaveta !== 'no' && (
-          <button className="boton boton--sm boton--papel" onClick={abrirCajon}>
+          <button
+            className="boton boton--sm boton--papel"
+            onClick={() => {
+              if (config.gaveta_con_pin) {
+                setErrorPin('')
+                setPinCajon('')
+                setPidiendoPin(true)
+              } else {
+                abrirCajon()
+              }
+            }}
+          >
             💵 Abrir cajón
           </button>
+        )}
+        {pidiendoPin && (
+          <div className="modal-fondo" onClick={() => setPidiendoPin(false)}>
+            <form
+              className="modal modal-pin-cajon"
+              onClick={(e) => e.stopPropagation()}
+              onSubmit={(e) => { e.preventDefault(); abrirCajon(pinCajon) }}
+            >
+              <h2>💵 PIN del cajón</h2>
+              <input
+                type="password" inputMode="numeric" autoFocus maxLength={8}
+                className="input-pin-cajon"
+                value={pinCajon}
+                onChange={(e) => { setPinCajon(e.target.value.replace(/\D/g, '')); setErrorPin('') }}
+                aria-label="PIN del cajón"
+              />
+              {errorPin && <p className="error-pin-cajon">{errorPin}</p>}
+              <div className="botones-pin-cajon">
+                <button type="button" className="boton boton--md boton--papel" onClick={() => setPidiendoPin(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="boton boton--md boton--culantro" disabled={pinCajon.length < 4}>
+                  Abrir
+                </button>
+              </div>
+            </form>
+          </div>
         )}
         <span className="caja-total-dia">Vendido hoy: <strong>{soles(totalVendido)}</strong></span>
       </header>
