@@ -502,3 +502,28 @@ def test_nombre_corto_en_comanda_y_precuenta(client, db, admin_headers, fonda):
     precuenta = render_precuenta(o, {}, 48).decode("cp850", errors="ignore")
     assert "1 x Asado" in comanda and "Asado con puré" not in comanda and "Otro" not in comanda
     assert "Asado" in precuenta and "Asado con puré" not in precuenta
+
+
+def test_recargo_en_menu_guardado_sin_cargarlo(client, db, admin_headers, fonda):
+    """La causa +S/ 1 en el menú del sábado sin tocar el menú de hoy (en
+    pleno servicio cargar otro menú descuadra los pedidos en curso)."""
+    papa = fonda["platos"]["Papa a la huancaína"]
+    guardado = client.post("/api/menu/guardados", json={"nombre": "Sábado"}, headers=admin_headers).json()
+    gid = next(g["id"] for g in guardado["guardados"] if g["nombre"] == "Sábado")
+    hoy_antes = client.get("/api/menu/today").json()
+
+    r = client.patch(f"/api/menu/guardados/{gid}/recargo", json={"plato_id": papa, "recargo": 1},
+                     headers=admin_headers)
+    assert r.status_code == 200, r.text
+    alt = [a for pl in r.json()["plantillas"] for t in pl["tiempos"] for a in t["alternativas"] if a["plato_id"] == papa]
+    assert alt and all(a["recargo"] == 1 for a in alt)
+    assert client.get("/api/menu/today").json() == hoy_antes  # hoy no cambia
+
+    # Al cargarlo, el recargo viene con él
+    client.post(f"/api/menu/guardados/{gid}/cargar", headers=admin_headers)
+    menus = client.get("/api/menu/today").json()["menus"]
+    assert any(a["plato_id"] == papa and a["recargo"] == 1 for m in menus for t in m["tiempos"] for a in t["alternativas"])
+
+    assert client.patch(f"/api/menu/guardados/{gid}/recargo", json={"plato_id": 999, "recargo": 1},
+                        headers=admin_headers).status_code == 404
+    assert client.patch(f"/api/menu/guardados/{gid}/recargo", json={"plato_id": papa, "recargo": 1}).status_code == 401
