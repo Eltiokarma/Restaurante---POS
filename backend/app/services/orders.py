@@ -53,6 +53,9 @@ OPCIONES_PLATO = {
     "sin_frejoles": "SIN FREJOLES", "sin_arroz": "SIN ARROZ", "poco_arroz": "POCO ARROZ",
     "sin_papas": "SIN PAPAS", "sin_jugo": "SIN JUGO", "jugoso": "JUGOSO", "sin_aji": "SIN AJÍ",
     "sin_cebolla": "SIN CEBOLLA",
+    # Para llevar: la proteína (carne, trucha, pescado, pollo) o la
+    # ensalada en su propia bolsa, aparte del táper (pedido del dueño)
+    "proteina_aparte": "PROTEÍNA APARTE EN BOLSA", "ensalada_aparte": "ENSALADA APARTE",
 }
 
 

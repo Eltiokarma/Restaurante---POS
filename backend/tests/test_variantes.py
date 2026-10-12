@@ -84,3 +84,17 @@ def test_agregado_gratis(client, db, admin_headers):
                    json={"agregados": [{"nombre": "Refresco", "precio": 0}]})
     assert r.status_code == 200, r.text
     assert r.json()["agregados"][0]["precio"] == 0
+
+
+def test_proteina_y_ensalada_aparte_para_llevar(client, db):
+    """Pedido del dueño: para llevar, la proteína (carne, trucha, pescado)
+    o la ensalada en su bolsa aparte; sale en la comanda junto al plato."""
+    menu_id, p = _local(db)
+    persona = _persona(menu_id, p["Trucha"], {"opciones": ["proteina_aparte", "ensalada_aparte"]})
+    persona["empaque"] = "taper"
+    r = client.post("/api/orders", json={"menus": [persona]})
+    assert r.status_code == 201, r.text
+    item = next(i for m in r.json()["orden"]["menus"] for i in m["items"] if i["nombre"] == "Trucha")
+    assert item["detalle"] == "PROTEÍNA APARTE EN BOLSA, ENSALADA APARTE"
+    comanda = base64.b64decode(client.get("/api/print/cola").json()["trabajos"][0]["datos_b64"]).decode("cp850")
+    assert "PROTEÍNA APARTE EN BOLSA" in comanda and "ENSALADA APARTE" in comanda
