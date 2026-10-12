@@ -583,6 +583,58 @@ def cargar_menu_guardado(guardado_id: int, db: Session = Depends(get_db)):
     return menu_de_hoy(db)
 
 
+@router.get("/guardados/{guardado_id}", dependencies=[Depends(requiere_admin)])
+def ver_menu_guardado(guardado_id: int, db: Session = Depends(get_db)):
+    """Qué tiene un menú guardado (platos y recargos), sin cargarlo."""
+    registro = db.get(MenuGuardado, guardado_id)
+    if registro is None:
+        raise HTTPException(status_code=404, detail="Ese menú guardado ya no existe")
+    datos = json.loads(registro.datos_json)
+    platos = {p.id: p for p in db.scalars(select(Plato)).all()}
+    nombre = lambda i: platos[i].nombre if i in platos else f"#{i}"  # noqa: E731
+    return {
+        "id": registro.id,
+        "nombre": registro.nombre,
+        "platos": [{"id": i, "nombre": nombre(i)} for i in datos.get("platos", [])],
+        "plantillas": [
+            {**pl, "tiempos": [
+                {**t, "alternativas": [{**a, "nombre": nombre(a["plato_id"])} for a in t["alternativas"]]}
+                for t in pl.get("tiempos", [])
+            ]}
+            for pl in datos.get("plantillas", [])
+        ],
+    }
+
+
+class RecargoGuardadoIn(BaseModel):
+    plato_id: int
+    recargo: float = Field(ge=0, le=100)
+
+
+@router.patch("/guardados/{guardado_id}/recargo", dependencies=[Depends(requiere_admin)])
+def cambiar_recargo_guardado(guardado_id: int, payload: RecargoGuardadoIn, db: Session = Depends(get_db)):
+    """Cambia el recargo de un plato DENTRO de un menú guardado ("la causa
+    +S/ 1 en el menú del sábado") sin cargarlo: cargar uno cambia el menú
+    de hoy, y en pleno servicio descuadra los pedidos que se están armando."""
+    registro = db.get(MenuGuardado, guardado_id)
+    if registro is None:
+        raise HTTPException(status_code=404, detail="Ese menú guardado ya no existe")
+    datos = json.loads(registro.datos_json)
+    cambiadas = 0
+    for pl in datos.get("plantillas", []):
+        for t in pl.get("tiempos", []):
+            for a in t.get("alternativas", []):
+                if a["plato_id"] == payload.plato_id:
+                    a["recargo"] = round(payload.recargo, 2)
+                    cambiadas += 1
+    if not cambiadas:
+        raise HTTPException(status_code=404, detail="Ese plato no está en los menús de este guardado")
+    registro.datos_json = json.dumps(datos, ensure_ascii=False)
+    registro.actualizado = ahora_lima()
+    db.commit()
+    return ver_menu_guardado(guardado_id, db)
+
+
 @router.delete("/guardados/{guardado_id}", dependencies=[Depends(requiere_admin)])
 def borrar_menu_guardado(guardado_id: int, db: Session = Depends(get_db)):
     registro = db.get(MenuGuardado, guardado_id)
