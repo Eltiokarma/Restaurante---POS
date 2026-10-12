@@ -109,10 +109,13 @@ export const OPCIONES_PLATO: Record<string, string> = {
   sin_frejoles: 'Sin frejoles', sin_arroz: 'Sin arroz', poco_arroz: 'Poco arroz',
   sin_papas: 'Sin papas', sin_jugo: 'Sin jugo', jugoso: 'Jugoso', sin_aji: 'Sin ají',
   sin_cebolla: 'Sin cebolla',
+  // Para llevar: la proteína o la ensalada en su bolsa, aparte del táper
+  proteina_aparte: '🛍 Proteína aparte en bolsa', ensalada_aparte: '🥗 Ensalada aparte',
 }
 // Pares que se excluyen: marcar uno quita el otro
 export const OPCIONES_OPUESTAS: Record<string, string> = {
   sin_jugo: 'jugoso', jugoso: 'sin_jugo', sin_arroz: 'poco_arroz', poco_arroz: 'sin_arroz',
+  sin_ensalada: 'ensalada_aparte', ensalada_aparte: 'sin_ensalada',
 }
 
 const sinTildes = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -135,6 +138,9 @@ export function opcionesDePlato(nombre: string, esSegundo: boolean): string[] {
     }
     if (/saltad|seco|sarsa|criolla/.test(n)) salida.push('sin_cebolla')
     salida.push('sin_aji')
+    // Cualquier segundo: la proteína (carne, trucha, pescado, pollo) o la
+    // ensalada pueden ir en bolsa aparte (pedido del dueño)
+    salida.push('proteina_aparte', 'ensalada_aparte')
   }
   return salida
 }
