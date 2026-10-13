@@ -3,6 +3,10 @@ import { api, ApiError, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATE
 import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuCaja, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, StockPlato, TicketBebidaOut } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape', 'mixto']
+// Pedido del dueño (13/10): los pedidos se toman en la terminal, así que
+// la caja solo muestra los pedidos de hoy (3 por fila). El "Nuevo pedido"
+// de la caja NO se borra: se silencia aquí y vuelve poniendo true
+const TOMAR_PEDIDOS_EN_CAJA = false
 import { menusEnPedido } from '../components/TarjetaOfertaMenu'
 import {
   BarraPersonas, guardarDefectos, Hoja, HojaDefecto, leerDefectos, useTicketsPersonas,
@@ -1383,7 +1387,8 @@ export function Caja() {
         </div>
       )}
 
-      <div className="caja-columnas">
+      <div className={`caja-columnas ${TOMAR_PEDIDOS_EN_CAJA ? '' : 'caja-solo-pedidos'}`}>
+        {TOMAR_PEDIDOS_EN_CAJA && (
         <section className="caja-nuevo">
           <h2>Nuevo pedido</h2>
           {platos.length === 0 && menusHoy.length === 0 && (
@@ -1521,6 +1526,7 @@ export function Caja() {
             </button>
           </div>
         </section>
+        )}
 
         <section className="caja-ordenes">
           <div className="caja-ordenes-cabecera">

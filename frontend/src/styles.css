@@ -11285,3 +11285,30 @@ select:focus-visible {
 .mod-anular {
   margin-left: auto;
 }
+
+/* Caja sin "Nuevo pedido" (se toma en la terminal): solo los pedidos de
+   hoy, 3 por fila; 2 en tablet vertical y 1 en celular */
+.caja-columnas.caja-solo-pedidos {
+  grid-template-columns: 1fr;
+}
+
+.caja-solo-pedidos .caja-lista {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+  max-height: none;
+  overflow-y: visible;
+}
+
+@media (max-width: 1100px) {
+  .caja-solo-pedidos .caja-lista {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .caja-solo-pedidos .caja-lista {
+    grid-template-columns: 1fr;
+  }
+}
