@@ -689,6 +689,34 @@ export interface TicketBebidaOut {
 
 export type MotivoAnulacion = 'arrepentido' | 'duplicado'
 
+/** Lo mismo que sale impreso al cerrar caja, para verlo en pantalla. */
+export interface ResumenCierre {
+  fecha: string
+  turno: number
+  turnos_del_dia: number
+  hora_apertura: string
+  hora_cierre: string | null
+  monto_apertura: number
+  ventas_efectivo: number
+  ventas_tarjeta: number
+  ventas_yape: number
+  total_sistema: number
+  egresos: { hora: string; concepto: string; monto: number }[]
+  egresos_total: number
+  por_cobrar: number
+  vueltos_pendientes: number
+  cobrado_de_otros_dias: number
+  monto_contado: number
+  diferencia: number
+  venta: {
+    pedidos: number
+    anulados: number
+    menus: number
+    // sobran: porciones puestas en "¿Cuántos hay hoy?" − vendidas del día
+    platos: { nombre: string; cantidad: number; sobran: number | null }[]
+  }
+}
+
 // Respuesta de un cambio a una orden ya registrada
 export interface RespuestaCambio {
   orden: OrdenOut
@@ -1281,6 +1309,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ monto_contado: montoContado, notas }),
     }),
+
+  // El resumen del último cierre de hoy, para verlo en pantalla
+  resumenCierre: () => request<ResumenCierre>('/api/caja/resumen-cierre'),
 
   // Vuelve a mandar el resumen del cierre a la ticketera (modo puente)
   imprimirCierre: () =>
