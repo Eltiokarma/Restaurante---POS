@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import requiere_admin
 from ..db import get_db
-from ..models import CierreCaja, EgresoCaja, MovimientoCaja, Orden, ahora_lima, hoy_lima
+from ..models import CierreCaja, EgresoCaja, MovimientoCaja, Orden, OrdenItem, Plato, ahora_lima, hoy_lima
 
 router = APIRouter(prefix="/api/caja", tags=["caja"])
 
@@ -334,19 +334,49 @@ def _venta_del_turno(db: Session, registro: CierreCaja) -> dict:
     ]
     validas = [o for o in ordenes if o.estado != "anulada"]
     platos: dict[str, int] = {}
+    ids_de: dict[str, int] = {}
     for o in validas:
         for i in o.items:
             # El cargo por táper es cobro, no un plato vendido
             if i.es_cargo:
                 continue
             platos[i.nombre_snapshot] = platos.get(i.nombre_snapshot, 0) + i.cantidad
+            if i.plato_id is not None:
+                ids_de[i.nombre_snapshot] = i.plato_id
+
+    # Cuántos SOBRAN (pedido del dueño): las porciones puestas ese día en
+    # "¿Cuántos hay hoy?" menos lo vendido en TODO el día (el stock es del
+    # día, no del turno). Sin porciones puestas, no se sabe: None
+    con_stock = {
+        p.id: p for p in db.scalars(select(Plato).where(Plato.stock_fecha == registro.fecha)).all()
+        if p.stock_hoy is not None
+    }
+    vendidos_dia: dict[int, int] = {}
+    if con_stock:
+        for i in db.scalars(
+            select(OrdenItem).join(Orden, OrdenItem.orden_id == Orden.id).where(
+                Orden.fecha == registro.fecha, Orden.estado != "anulada",
+                OrdenItem.plato_id.in_(con_stock), OrdenItem.es_cargo == False,  # noqa: E712
+            )
+        ).all():
+            vendidos_dia[i.plato_id] = vendidos_dia.get(i.plato_id, 0) + i.cantidad
+    # Lo que tenía porciones y no se vendió en el turno también sobra
+    for p in con_stock.values():
+        if p.nombre not in platos and p.id not in ids_de.values():
+            platos[p.nombre] = 0
+            ids_de[p.nombre] = p.id
+
+    def sobran(nombre: str) -> int | None:
+        plato = con_stock.get(ids_de.get(nombre, -1))
+        return None if plato is None else plato.stock_hoy - vendidos_dia.get(plato.id, 0)
+
     return {
         "pedidos": len(validas),
         "anulados": len(ordenes) - len(validas),
         "menus": sum(m.cantidad for o in validas for m in o.menus),
         # Lo más vendido arriba; a igual cantidad, por nombre
         "platos": [
-            {"nombre": n, "cantidad": c}
+            {"nombre": n, "cantidad": c, "sobran": sobran(n)}
             for n, c in sorted(platos.items(), key=lambda x: (-x[1], x[0]))
         ],
     }
@@ -448,6 +478,16 @@ def borrar_egreso(egreso_id: int, db: Session = Depends(get_db)):
 
 class FondoIn(BaseModel):
     monto_apertura: float = Field(ge=0, le=10_000)
+
+
+@router.get("/resumen-cierre")
+def ver_resumen_de_cierre(db: Session = Depends(get_db)):
+    """El resumen del último cierre de hoy, para verlo en pantalla (lo
+    mismo que sale impreso: lo vendido, cuánto sobra y el cuadre)."""
+    registro, _ = _turno_actual(db)
+    if registro is None or registro.hora_cierre is None:
+        raise HTTPException(status_code=409, detail="La caja de hoy todavía no se ha cerrado")
+    return resumen_de_cierre(db, registro)
 
 
 @router.post("/imprimir-cierre")

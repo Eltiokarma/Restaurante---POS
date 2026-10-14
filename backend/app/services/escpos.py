@@ -430,8 +430,17 @@ def render_cierre(datos: dict, local: dict, columnas: int = 42) -> bytes:
             pedidos += f" (+{venta['anulados']} anulados)"
         partes.append(_texto(_fila("Pedidos", pedidos, columnas)))
         partes.append(_texto(_fila("Menús", str(venta["menus"]), columnas)))
+        # Segunda columna: cuántos SOBRAN (pedido del dueño), de los platos
+        # con porciones puestas en "¿Cuántos hay hoy?"; sin eso, en blanco
+        con_sobran = any(p.get("sobran") is not None for p in venta["platos"])
+        if con_sobran:
+            partes += [NEGRITA_ON, _texto(_fila("VEND. PLATO", "SOBRAN", columnas)), NEGRITA_OFF]
         for p in venta["platos"]:
-            partes.append(_texto(_fila(f"{p['cantidad']:>3} x {p['nombre']}", "", columnas)))
+            sobran = p.get("sobran")
+            partes.append(_texto(_fila(
+                f"{p['cantidad']:>3} x {p['nombre']}",
+                f"{sobran:>4}  " if sobran is not None else "", columnas,
+            )))
         partes.append(_texto("-" * columnas))
 
     partes.append(_texto(_fila("Fondo inicial", _soles(datos["monto_apertura"]), columnas)))

@@ -318,3 +318,37 @@ def test_reabrir_sin_caja_o_sin_cierre_es_409(client):
     assert client.put("/api/caja/apertura", json={"monto_apertura": 50}).status_code == 409
     client.post("/api/caja/abrir", json={"monto_apertura": 100})
     assert client.post("/api/caja/reabrir").status_code == 409  # aún no está cerrada
+
+
+def test_cierre_dice_cuantos_sobran(client, db, menu_ejemplo):
+    """Pedido del dueño: al lado de lo vendido, cuánto SOBRA de cada plato
+    con porciones puestas ("¿Cuántos hay hoy?"); y el resumen se puede ver
+    en pantalla, no solo impreso."""
+    import base64
+
+    from app.models import Config, Plato
+
+    db.add(Config(clave="modo_impresion", valor="puente"))
+    db.add(Config(clave="impresora_ip", valor="192.168.1.77"))
+    seco = db.get(Plato, menu_ejemplo["Seco de res"])
+    seco.activo_hoy = True
+    db.commit()
+    client.patch(f"/api/menu/platos/{menu_ejemplo['Lomo saltado']}/stock", json={"stock": 20})
+    client.patch(f"/api/menu/platos/{menu_ejemplo['Seco de res']}/stock", json={"stock": 8})
+
+    assert client.get("/api/caja/resumen-cierre").status_code == 409  # sin abrir/cerrar
+    client.post("/api/caja/abrir", json={"monto_apertura": 0})
+    crear_orden(client, menu_ejemplo, cantidad=3)
+    client.post("/api/caja/cerrar", json={"monto_contado": 45})
+
+    resumen = client.get("/api/caja/resumen-cierre").json()
+    platos = {p["nombre"]: p for p in resumen["venta"]["platos"]}
+    assert platos["Lomo saltado"]["cantidad"] == 3 and platos["Lomo saltado"]["sobran"] == 17
+    # No se vendió en el turno pero tenía porciones: sobran todas
+    assert platos["Seco de res"]["cantidad"] == 0 and platos["Seco de res"]["sobran"] == 8
+
+    cola = client.get("/api/print/cola").json()["trabajos"]
+    texto = base64.b64decode(next(t for t in cola if t["tipo"] == "cierre")["datos_b64"]).decode("cp850")
+    assert "SOBRAN" in texto
+    linea = next(l for l in texto.split("\n") if "x Lomo saltado" in l)
+    assert linea.rstrip().endswith("17")

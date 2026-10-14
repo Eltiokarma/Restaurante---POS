@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, esperadoEnCaja, CATEGORIAS_EGRESO, EMPAQUES, NOMBRE_CATEGORIA, NOMBRE_EMPAQUE, NOMBRE_PAGO, NOMBRE_SERVICIO, lineaEntrega, menuAPayload, soles, subtotalMenu, tiemposPendientes, unidadesEnTaper } from '../api'
-import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuCaja, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, StockPlato, TicketBebidaOut } from '../api'
+import type { Bebida, CajaEstado, ConfigOut, DatosLocal, EgresoOut, Entrega, ImpresionPendiente, MenuCaja, MenuHoy, MesaEstado, MetodoPago, OrdenOut, Plato, ResumenCierre as ResumenCierreDatos, StockPlato, TicketBebidaOut } from '../api'
 
 const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'yape', 'mixto']
 // Pedido del dueño (13/10): los pedidos se toman en la terminal, así que
@@ -13,6 +13,7 @@ import {
 } from '../components/RepartoMenu'
 import { AvisoImpresion } from '../components/AvisoImpresion'
 import { PorCobrar } from '../components/PorCobrar'
+import { ResumenCierre } from '../components/ResumenCierre'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
 import { IconoBillete, IconoSilla } from '../components/Iconos'
 import { TarjetaPlato } from '../components/TarjetaPlato'
@@ -392,6 +393,8 @@ export function Caja() {
       setError('')
       // El resumen impreso del cierre: en modo puente lo saca la
       // ticketera (lo encola el backend); si no, se imprime aquí mismo
+      // Pedido del dueño: el resumen de la venta también en pantalla
+      api.resumenCierre().then(setResumenCierre).catch(() => {})
       const cfg = config ?? (await api.config())
       if (cfg.modo_impresion !== 'puente') {
         setTicketCierre({
@@ -454,6 +457,15 @@ export function Caja() {
       setError('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo imprimir el resumen')
+    }
+  }
+
+  const [resumenCierre, setResumenCierre] = useState<ResumenCierreDatos | null>(null)
+  const verResumenCierre = async () => {
+    try {
+      setResumenCierre(await api.resumenCierre())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo cargar el resumen')
     }
   }
 
@@ -806,6 +818,7 @@ export function Caja() {
 
   return (
     <div className="pantalla-caja">
+      {resumenCierre && <ResumenCierre resumen={resumenCierre} onCerrar={() => setResumenCierre(null)} />}
       <header className="caja-cabecera">
         <h1><IconoBillete tam={30} /> Caja</h1>
         <button className="boton boton--sm boton--papel" onClick={abrirMenuDelDia}>
@@ -1250,6 +1263,9 @@ export function Caja() {
               <>
                 <button className="boton boton--md boton--culantro" onClick={() => setCerrandoCaja(true)}>
                   <IconoLapiz tam={20} /> Corregir conteo
+                </button>
+                <button className="boton boton--md boton--papel" onClick={verResumenCierre}>
+                  📊 Ver resumen
                 </button>
                 <button className="boton boton--md boton--papel" onClick={imprimirResumenCierre}>
                   <IconoImpresora tam={20} /> Imprimir resumen
