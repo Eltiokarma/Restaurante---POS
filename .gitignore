@@ -22,3 +22,6 @@ voz-lab/resultados.csv
 .DS_Store
 *.log
 *.tsbuildinfo
+
+# Estudio de rentabilidad: base local de pruebas
+estudio/*.db

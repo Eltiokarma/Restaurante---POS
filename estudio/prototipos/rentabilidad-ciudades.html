@@ -1,0 +1,537 @@
+<title>Rentabilidad del Menú por Ciudad</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: barra de escenario arriba; ranking de ciudades; frontera precio×volumen; ficha editable de la ciudad; cocina central; supuestos y fuentes. */
+:root{
+  --bg:#f3f5f1; --surface:#ffffff; --surface-2:#eef1ec; --fg:#17201b; --muted:#5b685f; --line:#d9dfd8;
+  --accent:#1d6a50; --accent-ink:#ffffff; --gold:#b9800f; --faint:#c3cbc4;
+  --pos:#2e8a4b; --warn:#d39a12; --neg:#c43e2b;
+  --f-display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111613; --surface:#18201b; --surface-2:#1f2822; --fg:#e4ebe5; --muted:#93a399; --line:#2c3730;
+    --accent:#5cc196; --accent-ink:#0d1a14; --gold:#e3b445; --faint:#3a4740;
+    --pos:#4cb06c; --warn:#e2ad35; --neg:#e2604c; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111613; --surface:#18201b; --surface-2:#1f2822; --fg:#e4ebe5; --muted:#93a399; --line:#2c3730;
+  --accent:#5cc196; --accent-ink:#0d1a14; --gold:#e3b445; --faint:#3a4740;
+  --pos:#4cb06c; --warn:#e2ad35; --neg:#e2604c; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:20px 56px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(1.6rem,3.6vw,2.3rem);font-weight:750;line-height:1.1}
+h2{font-size:1.2rem;font-weight:600}
+h3{font-size:1rem;font-weight:600}
+p{margin:0}
+.lede{color:var(--muted);margin-top:6px;max-width:68ch}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}
+.sec-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:12px}
+.sec-h p{color:var(--muted);font-size:.85rem;max-width:62ch}
+.btn{font:inherit;font-size:.82rem;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:6px 11px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Escenario */
+.scenario{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-end}
+.ctl{display:flex;flex-direction:column;gap:5px}
+.ctl > span{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-size:.82rem;font-weight:600;border:0;background:var(--surface);color:var(--muted);padding:6px 11px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.numin{display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:3px 8px}
+.numin input{width:64px;border:0;background:transparent;color:var(--fg);font-family:var(--f-mono);font-size:.9rem;text-align:right}
+.numin input:focus{outline:none}
+.numin small{color:var(--muted);font-size:.75rem}
+.chk{display:flex;align-items:center;gap:7px;font-size:.88rem;cursor:pointer}
+.chk input{accent-color:var(--accent);width:16px;height:16px}
+.scen-note{font-size:.8rem;color:var(--muted);margin-top:10px}
+
+/* Ranking */
+.scroll{overflow-x:auto}
+table.rank{width:100%;border-collapse:collapse;font-size:.88rem;min-width:760px}
+table.rank th,table.rank td{padding:8px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+table.rank th:first-child,table.rank td:first-child{text-align:left}
+table.rank th:nth-child(2),table.rank td:nth-child(2){text-align:left}
+table.rank thead th{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;cursor:pointer;user-select:none}
+table.rank thead th[aria-sort] {color:var(--fg)}
+table.rank td{font-family:var(--f-mono);font-size:.84rem;font-variant-numeric:tabular-nums}
+table.rank td.city{font-family:var(--f-body);font-weight:600;font-size:.9rem}
+table.rank tbody tr{cursor:pointer}
+table.rank tbody tr:hover{background:var(--surface-2)}
+table.rank tbody tr.sel{background:color-mix(in oklab,var(--accent) 12%,var(--surface))}
+.rk{display:inline-block;width:1.6em;color:var(--muted);font-family:var(--f-mono);font-size:.78rem}
+.risk{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}
+.bar{width:64px;height:7px;border-radius:4px;background:var(--surface-2);overflow:hidden;display:inline-block}
+.bar i{display:block;height:100%}
+.pill{display:inline-block;font-family:var(--f-body);font-size:.72rem;font-weight:600;padding:1px 8px;border-radius:99px}
+.cf-alta{color:var(--pos);background:color-mix(in oklab,var(--pos) 14%,transparent)}
+.cf-media{color:var(--gold);background:color-mix(in oklab,var(--warn) 16%,transparent)}
+.cf-baja{color:var(--muted);background:var(--surface-2)}
+.tag-own{color:var(--accent);background:color-mix(in oklab,var(--accent) 14%,transparent)}
+.c-pos{color:var(--pos)} .c-neg{color:var(--neg)} .c-warn{color:var(--gold)} .c-mut{color:var(--muted)}
+
+/* Frontera */
+.chart-ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:.85rem}
+select{font:inherit;font-size:.86rem;background:var(--surface-2);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:5px 8px}
+svg.fr{width:100%;height:auto;display:block;margin-top:10px}
+svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
+svg .lbl{fill:var(--fg);font-weight:500}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.8rem;margin-top:8px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:18px;height:0;border-top:2.5px solid;display:inline-block}
+.legend b{width:14px;height:10px;display:inline-block;border-radius:2px}
+
+/* Ficha */
+.ficha{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:20px}
+.fields{display:flex;flex-direction:column;gap:8px}
+.frow{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.86rem}
+.frow label{display:flex;flex-direction:column;line-height:1.25}
+.frow label em{font-style:normal;font-size:.72rem;color:var(--muted)}
+.frow .numin input{width:76px}
+.frow.ov .numin{border-color:var(--accent)}
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 16px;margin-bottom:14px}
+.kv div{display:flex;flex-direction:column;gap:1px;min-width:0}
+.kv .v{font-family:var(--f-mono);font-size:1.08rem;font-weight:500;font-variant-numeric:tabular-nums}
+.kv .s{font-size:.76rem;color:var(--muted)}
+.citynote{font-size:.83rem;color:var(--muted);border-left:3px solid var(--faint);padding-left:10px;margin:4px 0 14px}
+table.heat{border-collapse:separate;border-spacing:2px;font-family:var(--f-mono);font-size:.7rem;font-variant-numeric:tabular-nums}
+table.heat th{font-weight:500;color:var(--muted);padding:2px 4px;white-space:nowrap}
+table.heat th.corner{font-family:var(--f-body);font-size:.66rem;text-align:left;line-height:1.2}
+table.heat td{width:48px;height:27px;text-align:center;border-radius:4px;color:var(--fg);white-space:nowrap}
+table.heat td.now{outline:2px solid var(--fg);outline-offset:-1px;font-weight:700}
+table.heat th.hl{color:var(--fg);font-weight:700}
+
+/* Cocina central */
+.cc-ctl{display:flex;flex-wrap:wrap;gap:12px 20px;margin-bottom:12px}
+table.cc{width:100%;border-collapse:collapse;font-size:.86rem;min-width:620px}
+table.cc th,table.cc td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+table.cc th:first-child,table.cc td:first-child{text-align:left}
+table.cc thead th{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+table.cc td{font-family:var(--f-mono);font-size:.83rem;font-variant-numeric:tabular-nums}
+table.cc tr.best td{background:color-mix(in oklab,var(--pos) 10%,var(--surface))}
+
+details{border-top:1px solid var(--line);padding-top:10px}
+details+details{margin-top:10px}
+summary{cursor:pointer;font-weight:600;font-family:var(--f-display)}
+.notes{font-size:.84rem;color:var(--muted);display:flex;flex-direction:column;gap:6px;margin-top:10px;max-width:80ch}
+.notes a{color:var(--accent);word-break:break-word}
+ul.notes{padding-left:18px}
+
+@media (max-width:860px){
+  .ficha{grid-template-columns:minmax(0,1fr)}
+  .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Estudio del sector · 12 ciudades · datos a octubre 2026</div>
+    <h1>Rentabilidad del Menú por Ciudad</h1>
+    <p class="lede">Dónde un restaurante de menú gana plata, con cuánto volumen y con qué probabilidad de perder en un año. Los costos salen de la investigación del sector; los precios de menú fuera de Lima, Cusco y Piura son estimados, así que corrígelos con tu propio sondeo y el modelo se recalcula.</p>
+  </header>
+
+  <section class="panel" aria-label="Escenario">
+    <div class="scenario">
+      <div class="ctl"><span>Segmento</span><div class="seg" role="group" aria-label="Segmento">
+        <button type="button" data-k="seg" data-v="pop">Menú popular</button><button type="button" data-k="seg" data-v="eje">Menú ejecutivo</button></div></div>
+      <div class="ctl"><span>Año</span><div class="seg" role="group" aria-label="Año">
+        <button type="button" data-k="year" data-v="2026">2026</button><button type="button" data-k="year" data-v="2027">2027</button><button type="button" data-k="year" data-v="2028">2028</button></div></div>
+      <div class="ctl"><span>Operación</span><div class="seg" role="group" aria-label="Formalidad">
+        <button type="button" data-k="formal" data-v="1">Formal (MYPE)</button><button type="button" data-k="formal" data-v="0">Informal</button></div></div>
+      <div class="ctl"><span>Volumen de referencia</span><div class="numin"><input id="qref" type="number" min="10" max="600" step="5"><small>menús/día</small></div></div>
+      <div class="ctl"><span>Gas</span><div class="numin"><input id="balones" type="number" min="0" max="40" step="0.5"><small>balones 45 kg/mes</small></div></div>
+      <label class="chk"><input type="checkbox" id="dueno"> Pagar sueldo al dueño</label>
+      <label class="chk"><input type="checkbox" id="incprecio"> Incluir duda sobre el precio</label>
+    </div>
+    <p class="scen-note" id="scen-note">—</p>
+  </section>
+
+  <section class="panel">
+    <div class="sec-h"><h2>Ranking de ciudades</h2><p>Toca una fila para ver la ciudad. Probabilidad de pérdida: 2,000 simulaciones de un año con volumen, insumos, precio y conflictos inciertos.</p></div>
+    <div class="scroll"><table class="rank" id="rank"></table></div>
+  </section>
+
+  <section class="panel">
+    <div class="sec-h"><h2>Frontera de rentabilidad</h2><p>Precio mínimo del menú para no perder, según cuántos vendes al día. Por encima de la línea, el local gana.</p></div>
+    <div class="chart-ctl"><label for="cmp">Comparar con</label><select id="cmp"></select></div>
+    <svg class="fr" id="fr" viewBox="0 0 680 320" role="img" aria-label="Frontera de precio de equilibrio según volumen"></svg>
+    <div class="legend" id="fr-legend"></div>
+  </section>
+
+  <section class="panel">
+    <div class="sec-h"><h2 id="f-title">—</h2><button type="button" class="btn" id="f-reset">Restablecer datos de la ciudad</button></div>
+    <p class="citynote" id="f-note">—</p>
+    <div class="ficha">
+      <div class="fields" id="f-fields"></div>
+      <div style="min-width:0">
+        <div class="kv" id="f-kv"></div>
+        <h3 style="margin-bottom:8px">Utilidad mensual por precio y volumen</h3>
+        <div class="scroll"><table class="heat" id="f-heat"></table></div>
+        <p class="notes" style="margin-top:8px">Miles de soles al mes. Rojo pierde, ámbar margen menor a 8%, verde gana.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="sec-h"><h2 id="cc-title">Cocina central</h2><p>Local principal más satélites que solo sirven, contra abrir locales independientes con cocina propia. Misma ciudad y supuestos de arriba.</p></div>
+    <div class="cc-ctl">
+      <div class="ctl"><span>Menús/día del local principal</span><div class="numin"><input id="qmain" type="number" min="10" max="600" step="5"><small>menús</small></div></div>
+      <div class="ctl"><span>Menús/día por satélite</span><div class="numin"><input id="qsat" type="number" min="10" max="400" step="5"><small>menús</small></div></div>
+    </div>
+    <div class="scroll"><table class="cc" id="cc"></table></div>
+    <p class="notes" id="cc-note" style="margin-top:10px"></p>
+  </section>
+
+  <section class="panel">
+    <h2 style="margin-bottom:6px">Supuestos y fuentes</h2>
+    <details open><summary>Cómo calcula el modelo</summary><ul class="notes" id="assump"></ul></details>
+    <details><summary>Fuentes principales</summary><ul class="notes" id="sources"></ul></details>
+  </section>
+</div>
+
+<script>
+const DATA = {"nacional": {"rmv": 1230, "rmv_2027": 1300, "igv_restaurantes_2026": 10.5, "igv_restaurantes_2027": 15, "igv_general": 18, "uit_2026": 5500, "mult_micro": 1.05, "mult_pequena": 1.27, "dias_mes": 26, "notas": "RMV S/ 1,230 desde 1-oct-2026 (D.S. 015-2026-TR); S/ 1,300 tiene monto fijado pero su fecha depende de un D.S. del 1S-2027 (est. abr–may 2027). IGV restaurantes MYPE: 2026 = 8% IGV + 2.5% IPM = 10.5%; 2027 = 12% + 3% = 15%; desde 2028 sin norma, se asume 18% (inferencia). Requisitos: ventas <= 1,700 UIT (S/ 9.35 M), >=70% ingresos de restaurante, sin vinculación económica; NRUS no paga IGV (tope S/ 96k/año). Multiplicadores = costo empleador / sueldo base: micro 1.05 (1.13 si va a EsSalud), pequeña 1.27 (1.22 sin reemplazo de vacaciones), régimen general ~1.45; un trabajador informal = 1.0. Micro: ventas <= 150 UIT (S/ 825k/año)."}, "riesgo": {"sd_insumos_anual": 0.08, "sd_volumen": 0.2, "pass_through_precio": 0.6, "inflacion_esperada": 0.025, "notas": "sd_insumos_anual: desviación anual de la canasta ponderada de insumos del menú, est. 6–9 pp (ítems sueltos mucho más volátiles: papa 40–60%, aceite/huevo/cebolla 20–30%, pollo 15–20%, GLP 20–25%); los shocks revierten en 12–24 meses (mejor AR(1) que random walk). sd_volumen (est., sin fuente directa): incertidumbre de la demanda de un local nuevo frente a lo planeado, inferida de la supervivencia de 35–55% a 3 años y 25–40% a 5 años, del 29% de hogares que recortó salidas en 2023 y de un crecimiento sectorial real de +2–5%/año. pass_through_precio: 0.6 en el año del shock (2022: alimentos +15.2% vs restaurantes +9.8%), ~1.0 acumulado en 3 años; precio rígido a la baja y con saltos de S/ 1 (8–12% en mercados de S/ 8–10). inflacion_esperada: base 2027–2030 de 2.0–2.5% (SD 1.5–2 pp); 2026 cierra ~3.8–4.5% (12m set-2026: 4.17% nacional). RMV: proceso de saltos de ~+9–10% cada 2–3 años (prob. ~0.35–0.45/año). IGV restaurantes sube 4.5 pp en 2027. Delivery por app cobra 20–30% de comisión: no rentable para el menú."}, "cocina_central": {"ahorro_compras": 0.05, "menus_por_trabajador_cocina": 150, "costo_transporte_mes": 3550, "overhead_por_local_mes": 900, "capex_cocina_central": 100000, "capex_satelite": 30000, "capex_local_independiente": 50000, "notas": "Todo est. (confianza baja) salvo la productividad independiente (UGEL 05 2026: 160 menús con 1 cocinero + 1 ayudante = 80/trabajador; usar 70, rango 50–90). Central: 150 menús/trabajador de cocina (120–200). ahorro_compras 5% (3–8%) si ya compra en mayorista; 15–25% si hoy compra en minorista. costo_transporte_mes = chofer S/ 1,450 + combustible S/ 900 + vehículo (depreciación, mantenimiento, SOAT) S/ 1,200, para 2–4 satélites en ciudad mediana, modelo caliente el mismo día (máx. 2 h de transporte). overhead_por_local_mes = gestión central (administrador o jefe de producción, contabilidad, POS), S/ 600–1,200 por local con 3–5 locales; sumado a la logística da ~S/ 1,500–3,000 por local (≈7% de una venta de S/ 26k). capex_cocina_central nueva sin vehículo S/ 60–150k; modelo híbrido (ampliar la cocina del local actual) S/ 25k (15–40k). Vehículo aparte S/ 55k (40–70k; motofurgón S/ 10–15k). capex_satelite 'solo sirve' S/ 20–45k (incluye equipo de mantenimiento en caliente ~S/ 4k y contenedores térmicos ~S/ 2.5k). Local independiente completo con local alquilado ~S/ 50k (Gestión 2024). Garantía de alquiler 2–3 meses. Equilibrio: central nueva con ~3 satélites (2–4); híbrido desde 1 satélite si vende >= 60–80 menús/día. Cada satélite elimina ~1 FTE de cocina (0.5–1.5)."}, "ciudades": [{"id": "lima", "nombre": "Lima Metropolitana", "precio_popular": 13, "precio_popular_rango": [10, 15], "precio_popular_fuente": "observado", "precio_ejecutivo": 24, "precio_ejecutivo_rango": [16, 35], "precio_ejecutivo_fuente": "observado", "insumos_popular": 4.4, "insumos_ejecutivo": 9.75, "sueldo_cocinero": 1500, "sueldo_ayudante": 1230, "sueldo_mozo": 1300, "alquiler_mes": 4000, "alquiler_m2": 52, "gas_balon45": 185, "servicios_mes": 600, "poblacion": 10158900, "ingreso_promedio": 2289, "pobreza_pct": 27.6, "informalidad_pct": 54.8, "restaurantes_por_mil": 7.2, "riesgo_conflicto_anual": 0.03, "riesgo_nota": "Bajo riesgo de bloqueos; el shock relevante es de energía (crisis de GLP de mar-2026: el balón de 10 kg pasó de ~S/ 45 a S/ 95–120 y el menú subió S/ 2).", "confianza": "media", "notas": "Precio observado en un solo mercado (Magdalena, S/ 12 → 14 en mar-2026) y ejecutivo de Expatistan (S/ 26, n=14, zona empresarial); la dispersión por distrito y NSE es enorme.", "est_campos": ["insumos_popular", "insumos_ejecutivo", "sueldo_cocinero", "alquiler_mes", "servicios_mes", "riesgo_conflicto_anual"]}, {"id": "arequipa", "nombre": "Arequipa", "precio_popular": 11, "precio_popular_rango": [8, 14], "precio_popular_fuente": "est", "precio_ejecutivo": 20, "precio_ejecutivo_rango": [15, 28], "precio_ejecutivo_fuente": "est", "insumos_popular": 4.2, "insumos_ejecutivo": 9.25, "sueldo_cocinero": 1450, "sueldo_ayudante": 1230, "sueldo_mozo": 1250, "alquiler_mes": 3000, "alquiler_m2": 35, "gas_balon45": 200, "servicios_mes": 500, "poblacion": 1133800, "ingreso_promedio": 2327, "pobreza_pct": 15.8, "informalidad_pct": 58, "restaurantes_por_mil": 7.8, "riesgo_conflicto_anual": 0.08, "riesgo_nota": "Sur del país, afectado por las protestas de 2022–2023 (IPC 12m 10.57% en feb-2023), con menor intensidad que Puno o Cusco.", "confianza": "media", "notas": "No hay precio de menú de restaurante 2024–2026 (solo comedores y mercados); el precio sale del ingreso más alto de la lista (techo S/ 11–13).", "est_campos": ["precio_popular", "precio_ejecutivo", "insumos_popular", "insumos_ejecutivo", "sueldo_cocinero", "sueldo_mozo", "servicios_mes", "informalidad_pct", "riesgo_conflicto_anual"]}, {"id": "trujillo", "nombre": "Trujillo", "precio_popular": 10.5, "precio_popular_rango": [8, 13], "precio_popular_fuente": "est", "precio_ejecutivo": 19, "precio_ejecutivo_rango": [15, 26], "precio_ejecutivo_fuente": "est", "insumos_popular": 4.1, "insumos_ejecutivo": 9.25, "sueldo_cocinero": 1324, "sueldo_ayudante": 1230, "sueldo_mozo": 1250, "alquiler_mes": 4000, "alquiler_m2": 45, "gas_balon45": 205, "servicios_mes": 500, "poblacion": 943200, "ingreso_promedio": 2069, "pobreza_pct": 30.2, "informalidad_pct": 60, "restaurantes_por_mil": 10.8, "riesgo_conflicto_anual": 0.04, "riesgo_nota": "Sin evidencia de bloqueos recurrentes; riesgo climático (El Niño costero) vía precios de insumos.", "confianza": "baja", "notas": "Plaza más saturada medida (~10.8 locales por 1,000 hab.) y alquiler alto con pocos avisos útiles; precio de menú sin dato.", "est_campos": ["precio_popular", "precio_ejecutivo", "insumos_popular", "insumos_ejecutivo", "sueldo_mozo", "servicios_mes", "informalidad_pct", "riesgo_conflicto_anual"]}, {"id": "chiclayo", "nombre": "Chiclayo", "precio_popular": 9.5, "precio_popular_rango": [8, 12], "precio_popular_fuente": "est", "precio_ejecutivo": 17, "precio_ejecutivo_rango": [14, 24], "precio_ejecutivo_fuente": "est", "insumos_popular": 4.1, "insumos_ejecutivo": 9.25, "sueldo_cocinero": 1400, "sueldo_ayudante": 1230, "sueldo_mozo": 1250, "alquiler_mes": 3000, "alquiler_m2": 30, "gas_balon45": 210, "servicios_mes": 500, "poblacion": 606000, "ingreso_promedio": 1633, "pobreza_pct": 14, "informalidad_pct": 62, "restaurantes_por_mil": 8.7, "riesgo_conflicto_anual": 0.04, "riesgo_nota": "Sin evidencia de bloqueos recurrentes; riesgo climático costero.", "confianza": "baja", "notas": "El ingreso bajo (S/ 1,633) choca con la pobreza baja (14%); el precio es un promedio del factor regional (S/ 10–11) y del techo por ingreso (S/ 8–9).", "est_campos": ["precio_popular", "precio_ejecutivo", "insumos_popular", "insumos_ejecutivo", "sueldo_cocinero", "sueldo_mozo", "servicios_mes", "informalidad_pct", "riesgo_conflicto_anual"]}, {"id": "piura", "nombre": "Piura", "precio_popular": 10, "precio_popular_rango": [8, 12], "precio_popular_fuente": "observado", "precio_ejecutivo": 17, "precio_ejecutivo_rango": [14, 24], "precio_ejecutivo_fuente": "est", "insumos_popular": 4, "insumos_ejecutivo": 9.25, "sueldo_cocinero": 1341, "sueldo_ayudante": 1230, "sueldo_mozo": 1250, "alquiler_mes": 2750, "alquiler_m2": 31, "gas_balon45": 220, "servicios_mes": 500, "poblacion": 561000, "ingreso_promedio": 1870, "pobreza_pct": 28.1, "informalidad_pct": 65, "restaurantes_por_mil": 9.8, "riesgo_conflicto_anual": 0.06, "riesgo_nota": "Más riesgo climático (El Niño costero, lluvias) que de conflicto; está fijado como est.", "confianza": "media", "notas": "El precio de S/ 10 sale solo del título de un video de TikTok de oct-2024 (menú económico), sin verificar.", "est_campos": ["precio_popular_rango", "precio_ejecutivo", "insumos_popular", "insumos_ejecutivo", "sueldo_mozo", "servicios_mes", "informalidad_pct", "riesgo_conflicto_anual"]}, {"id": "cusco", "nombre": "Cusco", "precio_popular": 10, "precio_popular_rango": [6, 15], "precio_popular_fuente": "observado", "precio_ejecutivo": 20, "precio_ejecutivo_rango": [15, 30], "precio_ejecutivo_fuente": "est", "insumos_popular": 4.2, "insumos_ejecutivo": 9.25, "sueldo_cocinero": 1400, "sueldo_ayudante": 1230, "sueldo_mozo": 1250, "alquiler_mes": 2500, "alquiler_m2": 35, "gas_balon45": 220, "servicios_mes": 500, "poblacion": 503000, "ingreso_promedio": 2124, "pobreza_pct": 18.5, "informalidad_pct": 68, "restaurantes_por_mil": 8.5, "riesgo_conflicto_anual": 0.15, "riesgo_nota": "Tercera región en conflictos sociales (Defensoría, set-2025); en 2023 perdía S/ 3 M/día en turismo durante las protestas; la rotura del ducto de Camisea (mar-2026) fue en La Convención.", "confianza": "media", "notas": "Los precios observados vienen de blogs de viaje (S/ 6–15; menú turístico S/ 25) y fuera del centro histórico el alquiler es mucho menor que dentro.", "est_campos": ["precio_ejecutivo", "insumos_popular", "insumos_ejecutivo", "sueldo_cocinero", "sueldo_mozo", "servicios_mes", "informalidad_pct", "riesgo_conflicto_anual"]}, {"id": "huancayo", "nombre": "Huancayo", "precio_popular": 9, "precio_popular_rango": [7, 11], "precio_popular_fuente": "est", "precio_ejecutivo": 16, "precio_ejecutivo_rango": [14, 22], "precio_ejecutivo_fuente": "est", "insumos_popular": 4, "insumos_ejecutivo": 8.75, "sueldo_cocinero": 1350, "sueldo_ayudante": 1230, "sueldo_mozo": 1230, "alquiler_mes": 2000, "alquiler_m2": 20, "gas_balon45": 192, "servicios_mes": 450, "poblacion": 434500, "ingreso_promedio": 1729, "pobreza_pct": 13.5, "informalidad_pct": 62, "restaurantes_por_mil": 9.3, "riesgo_conflicto_anual": 0.06, "riesgo_nota": "Sierra central, con conflictos menos intensos que en el sur; IPC 2023 por debajo de Lima.", "confianza": "baja", "notas": "El precio, el sueldo y el alquiler son estimados (solo hay 3 avisos de alquiler, uno sospechosamente bajo); la pobreza 2025 se deriva de Junín 2024 −5 pp.", "est_campos": ["precio_popular", "precio_ejecutivo", "insumos_popular", "insumos_ejecutivo", "sueldo_cocinero", "sueldo_mozo", "alquiler_mes", "alquiler_m2", "servicios_mes", "pobreza_pct", "informalidad_pct", "riesgo_conflicto_anual"]}, {"id": "juliaca", "nombre": "Juliaca", "precio_popular": 8, "precio_popular_rango": [6, 10], "precio_popular_fuente": "est", "precio_ejecutivo": 14, "precio_ejecutivo_rango": [12, 18], "precio_ejecutivo_fuente": "est", "insumos_popular": 4.2, "insumos_ejecutivo": 9.25, "sueldo_cocinero": 1300, "sueldo_ayudante": 1230, "sueldo_mozo": 1230, "alquiler_mes": 2200, "alquiler_m2": 22, "gas_balon45": 220, "servicios_mes": 450, "poblacion": 252900, "ingreso_promedio": 1261, "pobreza_pct": 37.5, "informalidad_pct": 82.3, "restaurantes_por_mil": null, "riesgo_conflicto_anual": 0.2, "riesgo_nota": "Puno es la 2.a región en conflictos (19 en set-2025); bloqueos de varias semanas en dic-2022–mar-2023. Prob. est. 0.15–0.25/año, duración 2–12 semanas, insumos frescos +10–30%; la clientela local amortigua la caída de ventas, pero como nodo de transporte sufre más el desabastecimiento.", "confianza": "baja", "notas": "Ingreso más bajo (S/ 1,261) e informalidad más alta (82.3%) de la lista; sin precio, sueldo ni alquiler observados. Validar con los datos propios del restaurante.", "est_campos": ["precio_popular", "precio_ejecutivo", "insumos_popular", "insumos_ejecutivo", "sueldo_cocinero", "alquiler_mes", "alquiler_m2", "servicios_mes", "riesgo_conflicto_anual"]}, {"id": "puno", "nombre": "Puno", "precio_popular": 9, "precio_popular_rango": [7, 12], "precio_popular_fuente": "est", "precio_ejecutivo": 16, "precio_ejecutivo_rango": [14, 22], "precio_ejecutivo_fuente": "est", "insumos_popular": 4.4, "insumos_ejecutivo": 9.25, "sueldo_cocinero": 1300, "sueldo_ayudante": 1230, "sueldo_mozo": 1230, "alquiler_mes": 2000, "alquiler_m2": 20, "gas_balon45": 245, "servicios_mes": 450, "poblacion": 152600, "ingreso_promedio": 1805, "pobreza_pct": 37.5, "informalidad_pct": 70, "restaurantes_por_mil": null, "riesgo_conflicto_anual": 0.2, "riesgo_nota": "Igual que Juliaca (bloqueos de 2023: Puno perdió S/ 46 M en turismo en dos meses y su IPC 12m llegó a 11.19%); mayor exposición al turismo.", "confianza": "baja", "notas": "La guía turística 2026 da S/ 10–15 en zonas céntricas o turísticas; el menú de barrio probablemente cuesta S/ 8–10. El balón de 45 kg tiene un solo registro.", "est_campos": ["precio_popular", "precio_ejecutivo", "insumos_popular", "insumos_ejecutivo", "sueldo_cocinero", "alquiler_mes", "alquiler_m2", "servicios_mes", "informalidad_pct", "riesgo_conflicto_anual"]}, {"id": "iquitos", "nombre": "Iquitos", "precio_popular": 10, "precio_popular_rango": [8, 12], "precio_popular_fuente": "est", "precio_ejecutivo": 18, "precio_ejecutivo_rango": [15, 25], "precio_ejecutivo_fuente": "est", "insumos_popular": 4.7, "insumos_ejecutivo": 10.25, "sueldo_cocinero": 1350, "sueldo_ayudante": 1230, "sueldo_mozo": 1230, "alquiler_mes": 1900, "alquiler_m2": 18, "gas_balon45": 300, "servicios_mes": 600, "poblacion": 449700, "ingreso_promedio": 1754, "pobreza_pct": 40.1, "informalidad_pct": 68, "restaurantes_por_mil": null, "riesgo_conflicto_anual": 0.08, "riesgo_nota": "Loreto es la 1.a región en conflictos sociales, pero sobre todo petroleros y rurales; el riesgo urbano es el abastecimiento fluvial (insumos y gas +10–15% y +50%).", "confianza": "baja", "notas": "Insumos y gas más caros por el transporte fluvial; el balón de 45 kg no tiene registro (est. = precio por kg del de 10 kg, S/ 72); el dato de Expatistan (S/ 22) no es confiable.", "est_campos": ["precio_popular", "precio_ejecutivo", "insumos_popular", "insumos_ejecutivo", "sueldo_cocinero", "gas_balon45", "servicios_mes", "informalidad_pct", "riesgo_conflicto_anual"]}, {"id": "tacna", "nombre": "Tacna", "precio_popular": 9.5, "precio_popular_rango": [8, 12], "precio_popular_fuente": "est", "precio_ejecutivo": 17, "precio_ejecutivo_rango": [14, 24], "precio_ejecutivo_fuente": "est", "insumos_popular": 4.1, "insumos_ejecutivo": 9.25, "sueldo_cocinero": 1350, "sueldo_ayudante": 1230, "sueldo_mozo": 1230, "alquiler_mes": 2700, "alquiler_m2": 27, "gas_balon45": 212, "servicios_mes": 450, "poblacion": 336800, "ingreso_promedio": 1597, "pobreza_pct": 17.4, "informalidad_pct": 60, "restaurantes_por_mil": null, "riesgo_conflicto_anual": 0.06, "riesgo_nota": "Sur, con IPC 12m de 10.42% en feb-2023, pero la menor rotación empresarial de la lista (bajas/altas 0.48).", "confianza": "baja", "notas": "No hay avisos de alquiler útiles ni precio de menú; la pobreza 2025 se deriva de 24% (2024) −6.6 pp.", "est_campos": ["precio_popular", "precio_ejecutivo", "insumos_popular", "insumos_ejecutivo", "sueldo_cocinero", "alquiler_mes", "alquiler_m2", "servicios_mes", "pobreza_pct", "informalidad_pct", "riesgo_conflicto_anual"]}, {"id": "ica", "nombre": "Ica", "precio_popular": 10.5, "precio_popular_rango": [8, 13], "precio_popular_fuente": "est", "precio_ejecutivo": 19, "precio_ejecutivo_rango": [15, 26], "precio_ejecutivo_fuente": "est", "insumos_popular": 4.1, "insumos_ejecutivo": 9.25, "sueldo_cocinero": 1350, "sueldo_ayudante": 1230, "sueldo_mozo": 1230, "alquiler_mes": 2500, "alquiler_m2": 20, "gas_balon45": 220, "servicios_mes": 500, "poblacion": 358400, "ingreso_promedio": 2067, "pobreza_pct": 4.5, "informalidad_pct": 54, "restaurantes_por_mil": 7.3, "riesgo_conflicto_anual": 0.06, "riesgo_nota": "IPC 12m de 11.12% en feb-2023 (alta inflación), sin evidencia directa de bloqueos prolongados en la ciudad.", "confianza": "baja", "notas": "Es la pobreza más baja del país (4.5%) y la informalidad más baja (54%), pero no hay precio de menú y el GLP es a nivel departamento.", "est_campos": ["precio_popular", "precio_ejecutivo", "insumos_popular", "insumos_ejecutivo", "sueldo_cocinero", "servicios_mes", "riesgo_conflicto_anual"]}], "fuentes": [{"tema": "IGV restaurantes MYPE 2025/2026/2027 (SUNAT)", "url": "https://emprender.sunat.gob.pe/principales-impuestos/imp-general-las-ventas-igv/reduccion-igv-para-restaurantes-hoteles"}, {"tema": "IGV restaurantes: requisitos y tasas (SUNAT Orientación)", "url": "https://orientacion.sunat.gob.pe/reduccion-del-igv-para-restaurantes-hoteles-y-alojamiento-turisticos-1"}, {"tema": "RMV S/ 1,230 y segundo tramo S/ 1,300 (D.S. 015-2026-TR)", "url": "https://busquedas.elperuano.pe/dispositivo/EX/2559163-1"}, {"tema": "UIT 2026 S/ 5,500", "url": "https://lpderecho.pe/valor-uit-2026-decreto-supremo-301-2025-ef/"}, {"tema": "Régimen laboral MYPE (micro y pequeña empresa)", "url": "https://juris.pe/blog/mype-regimen-laboral-microempresa-pequena-empresa-actualizado/"}, {"tema": "Regímenes tributarios NRUS/RER/RMT", "url": "https://perugestiona.pe/tramites-sunat/regimen-tributario-comparar/"}, {"tema": "Precio menú Lima y crisis del gas mar-2026", "url": "https://www.infobae.com/peru/2026/03/10/menus-suben-de-precio-hasta-18-soles-por-tarifa-del-balon-de-gas-que-supera-los-100-soles/"}, {"tema": "Menú ejecutivo Lima (proxy, Expatistan)", "url": "https://expatistan.com/price/daily-menu/lima"}, {"tema": "Precio menú Cusco 2026", "url": "https://viajeroslowcosteros.com/donde-comer-en-cusco/"}, {"tema": "Precio menú Piura (TikTok, oct-2024)", "url": "https://www.tiktok.com/@quierocomerpiura/video/7423166207995481350"}, {"tema": "Precios de insumos en mercados por ciudad, mar-2026", "url": "https://larepublica.pe/economia/2026/03/16/precios-hoy-peru-canasta-basica-mercados-pollo-papa-limon-huevo-arroz-hnews-247611"}, {"tema": "Food cost referencial en Perú (Panca)", "url": "https://www.panca.pe/blog/que-es-el-food-cost/"}, {"tema": "Precio balón GLP por ciudad (Facilito vía preciocombustible)", "url": "https://www.preciocombustible.com/balon-de-gas-glp/puno/juliaca/"}, {"tema": "Sueldo cocinero por ciudad (Indeed)", "url": "https://pe.indeed.com/career/cocinero/salaries/Lima"}, {"tema": "Sueldo mozo/mesero (Indeed)", "url": "https://pe.indeed.com/career/mesero/salaries"}, {"tema": "Alquiler de locales comerciales Lima (Urbania)", "url": "https://urbania.pe/buscar/alquiler-de-locales-comerciales-en-lima--lima?areaMinima=60&areaMaxima=120"}, {"tema": "Población por ciudad 2025 (CPI)", "url": "https://cpi.pe/wp-content/uploads/2025/11/CPI-Market-Report-Proyecciones-Poblacionales-2025.pdf"}, {"tema": "Ingreso laboral por ciudad III T 2024 (ComexPerú/EPEN)", "url": "https://comex-assets.s3.amazonaws.com/comex-assets/web/posts/9387/reporte-laboral-016_.pdf"}, {"tema": "Pobreza monetaria 2025 por departamento", "url": "https://energiminas.com/2026/05/05/inei-pobreza-monetaria-alcanzo-al-257-de-la-poblacion-en-peru-durante-2025/"}, {"tema": "Empleo e informalidad por ciudad 2025 (INEI)", "url": "https://infomercado.pe/empleo-en-peru-alcanzo-17-5-millones-de-ocupados-en-2025-segun-inei/"}, {"tema": "Locales de comida por ciudad (xMap 2025)", "url": "https://www.xmap.ai/location-intelligence-reports/dining--drinking-locations-in-peru"}, {"tema": "Inflación 2022 y pass-through alimentos vs restaurantes", "url": "https://finanzasdigital.com/inflacion-peru-cierre-ano-2022/"}, {"tema": "Pérdidas por protestas en el sur 2023", "url": "https://elcomercio.pe/economia/enero-registro-s-670-millones-de-perdidas-en-ventas-de-pymes-por-protestas-noticia/"}, {"tema": "Concesión comedor UGEL 05 2026 (productividad, menú S/ 10)", "url": "https://cdn.www.gob.pe/uploads/document/file/9455354/7743275-bases-comedor-2026.pdf"}, {"tema": "Inversión para abrir un restaurante en Perú (capex)", "url": "https://gestion.pe/economia/empresas/negocio-propio-cuanto-se-invierte-en-un-restaurante-y-que-comida-es-la-mas-rentable-gastronomia-peruana-cocina-emprendemiento-noticia/"}]};
+const N = DATA.nacional, R = DATA.riesgo, CC = DATA.cocina_central;
+const YEARS = {
+  2026:{igv:10.5, rmv:1230, nota:"IGV restaurantes MYPE 10.5% (8% + 2.5% IPM) y sueldo mínimo S/ 1,230."},
+  2027:{igv:15, rmv:1300, nota:"IGV restaurantes MYPE 15% (12% + 3% IPM) y sueldo mínimo S/ 1,300 (monto fijado, fecha por definir)."},
+  2028:{igv:18, rmv:1300, nota:"Sin norma para 2028: se asume IGV general 18% y sueldo mínimo S/ 1,300. Es un supuesto, no una ley."}
+};
+const DIAS = N.dias_mes || 26, MERMA = 0.05, OTROS_FIJOS = 400, SUELDO_DUENO = 1500;
+const KEY = "rentab-ciudades-v1";
+const FIELDS = [
+  ["precio","Precio del menú","S/",0.5,"segmento"],
+  ["pmin","Precio mínimo del rango","S/",0.5,"segmento"],
+  ["pmax","Precio máximo del rango","S/",0.5,"segmento"],
+  ["insumos","Insumos por menú","S/",0.1,"segmento"],
+  ["alquiler_mes","Alquiler del local","S/",100],
+  ["sueldo_cocinero","Sueldo cocinero","S/",50],
+  ["sueldo_ayudante","Sueldo ayudante","S/",50],
+  ["sueldo_mozo","Sueldo mozo","S/",50],
+  ["gas_balon45","Balón de gas 45 kg","S/",5],
+  ["servicios_mes","Luz, agua e internet","S/",50]
+];
+
+let S = {seg:"pop", year:"2026", formal:"1", qref:100, balones:5, dueno:true, incprecio:true, city:"juliaca", cmp:"lima", qmain:100, qsat:70, sort:"loss", dir:1, ov:{}};
+try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && typeof s === "object") Object.assign(S, s); } catch(e) {}
+if (!DATA.ciudades.some(c => c.id === S.city)) S.city = "juliaca";
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} };
+
+const $ = id => document.getElementById(id);
+const fS = (n,d=0) => (n < 0 ? "−" : "") + "S/ " + Math.abs(n).toLocaleString("es-PE",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fN = (n,d=0) => n.toLocaleString("es-PE",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fP = (n,d=0) => (n*100).toLocaleString("es-PE",{minimumFractionDigits:d,maximumFractionDigits:d}) + "%";
+const fK = n => { const a = Math.abs(n)/1000; return (n < 0 ? "−" : "") + (a >= 10 ? a.toFixed(0) : a.toFixed(1)) + "k"; };
+const city = id => DATA.ciudades.find(c => c.id === id);
+
+/* Valores efectivos de una ciudad: dataset + correcciones del usuario */
+function vals(c){
+  const o = S.ov[c.id] || {}, pop = S.seg === "pop";
+  const base = {
+    precio: pop ? c.precio_popular : c.precio_ejecutivo,
+    pmin: (pop ? c.precio_popular_rango : c.precio_ejecutivo_rango)[0],
+    pmax: (pop ? c.precio_popular_rango : c.precio_ejecutivo_rango)[1],
+    insumos: pop ? c.insumos_popular : c.insumos_ejecutivo,
+    alquiler_mes: c.alquiler_mes, sueldo_cocinero: c.sueldo_cocinero, sueldo_ayudante: c.sueldo_ayudante,
+    sueldo_mozo: c.sueldo_mozo, gas_balon45: c.gas_balon45, servicios_mes: c.servicios_mes
+  };
+  const v = {...base};
+  FIELDS.forEach(([k,,,,scope]) => { const kk = scope ? k + "_" + S.seg : k; if (typeof o[kk] === "number") v[k] = o[kk]; });
+  v.own = FIELDS.some(([k,,,,scope]) => typeof o[scope ? k + "_" + S.seg : k] === "number");
+  v.ownPrice = typeof o["precio_" + S.seg] === "number";
+  v.base = base;
+  return v;
+}
+
+/* Estructura de costos para un volumen diario q */
+function model(v, q, opt = {}){
+  const Y = YEARS[S.year], formal = S.formal === "1", pop = S.seg === "pop";
+  const t = formal ? Y.igv/100 : 0;
+  const precio = opt.precio ?? v.precio;
+  const insMult = opt.insMult ?? 1;
+  const varU = v.insumos*insMult*(1+MERMA) + (pop ? 0.2 : 0.35);
+  const pNet = precio/(1+t);
+  const contribU = pNet - varU;
+  const cocina = Math.max(2, Math.ceil(q/(pop ? 80 : 55)));
+  const mozos = Math.max(1, Math.ceil(q/(pop ? 70 : 40)));
+  const w = x => formal ? Math.max(x, Y.rmv) : x;
+  const mult = formal ? N.mult_micro : 1;
+  const cocinero = formal ? Math.max(v.sueldo_cocinero, Y.rmv*1.06) : v.sueldo_cocinero;
+  const personal = mult*(cocinero + (cocina-1)*w(v.sueldo_ayudante) + mozos*w(v.sueldo_mozo)) + (S.dueno ? SUELDO_DUENO : 0);
+  const alquiler = v.alquiler_mes*(pop ? 1 : 1.25);
+  const gas = v.gas_balon45*S.balones;
+  const fijos = personal + alquiler + gas + v.servicios_mes + OTROS_FIJOS;
+  const Qm = q*DIAS;
+  const ventas = precio*Qm;
+  const util = contribU*Qm - fijos;
+  return {t, varU, pNet, contribU, cocina, mozos, personal, alquiler, gas, fijos, Qm, ventas, util, margen: ventas > 0 ? util/ventas : 0};
+}
+function breakeven(v){
+  for (let q = 5; q <= 600; q++) if (model(v,q).util >= 0) return q;
+  return null;
+}
+function priceAt(v, q){ const m = model(v, q); return (1+m.t)*(m.varU + m.fijos/m.Qm); }
+
+/* Monte Carlo de un año */
+function rng(seed){ return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0)/4294967296; }; }
+function hash(s){ let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h; }
+function normal(r){ let u = 0, v = 0; while (u === 0) u = r(); while (v === 0) v = r(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function tri(r, a, m, b){ if (b <= a) return m; const u = r(), f = (m-a)/(b-a); return u < f ? a + Math.sqrt(u*(b-a)*(m-a)) : b - Math.sqrt((1-u)*(b-a)*(b-m)); }
+function simulate(c, v){
+  const r = rng(hash(c.id + S.seg + S.year + S.formal + S.qref)), n = 2000, sdQ = R.sd_volumen, sdI = R.sd_insumos_anual;
+  const out = new Float64Array(n); let loss = 0;
+  for (let i = 0; i < n; i++){
+    const q = Math.max(5, S.qref*Math.exp(sdQ*normal(r) - sdQ*sdQ/2));
+    const insMult = Math.max(0.6, 1 + sdI*normal(r));
+    let precio = v.precio;
+    if (S.incprecio) precio = v.ownPrice ? v.precio*(1 + 0.04*normal(r)) : tri(r, Math.min(v.pmin, v.precio), v.precio, Math.max(v.pmax, v.precio));
+    const m = model(v, Math.round(q), {precio, insMult});
+    let perdida = 0;
+    if (r() < c.riesgo_conflicto_anual) perdida = (2 + r()*6)/52;
+    const anual = 12*(m.contribU*m.Qm*(1-perdida)) - 12*m.fijos;
+    out[i] = anual; if (anual < 0) loss++;
+  }
+  const s = Array.from(out).sort((a,b) => a-b);
+  return {loss: loss/n, p10: s[Math.floor(n*0.1)], p50: s[Math.floor(n*0.5)], p90: s[Math.floor(n*0.9)]};
+}
+
+/* ---------- Escenario ---------- */
+document.querySelectorAll(".seg button[data-k]").forEach(b => b.addEventListener("click", () => {
+  S[b.dataset.k] = b.dataset.v;
+  if (b.dataset.k === "seg") { S.qref = S.seg === "pop" ? 100 : 60; S.qmain = S.qref; S.qsat = S.seg === "pop" ? 70 : 40; }
+  renderAll();
+}));
+[["qref",10,600],["balones",0,40],["qmain",10,600],["qsat",10,400]].forEach(([id,min,max]) => $(id).addEventListener("input", e => {
+  const x = parseFloat(e.target.value); if (isFinite(x) && x >= min && x <= max) { S[id] = x; renderAll(id); }
+}));
+$("dueno").addEventListener("change", e => { S.dueno = e.target.checked; renderAll(); });
+$("incprecio").addEventListener("change", e => { S.incprecio = e.target.checked; renderAll(); });
+$("cmp").addEventListener("change", e => { S.cmp = e.target.value; save(); drawFrontier(); });
+
+function syncControls(skip){
+  document.querySelectorAll(".seg button[data-k]").forEach(b => b.setAttribute("aria-pressed", String(S[b.dataset.k]) === b.dataset.v));
+  ["qref","balones","qmain","qsat"].forEach(id => { if (id !== skip) $(id).value = S[id]; });
+  $("dueno").checked = S.dueno; $("incprecio").checked = S.incprecio;
+  const Y = YEARS[S.year];
+  $("scen-note").textContent = (S.formal === "1"
+    ? `Formal en Régimen MYPE, microempresa: ${Y.nota} Cargas laborales ×${N.mult_micro}.`
+    : "Informal: sin IGV ni cargas laborales, sueldos pagados en efectivo. Sirve para ver contra quién compites, no como plan de inversión.")
+    + ` Gas: ${S.balones} balones de 45 kg al mes como gasto fijo.`;
+}
+
+/* ---------- Ranking ---------- */
+let ROWS = [];
+function computeRows(){
+  ROWS = DATA.ciudades.map(c => {
+    const v = vals(c), m = model(v, S.qref), be = breakeven(v), sim = simulate(c, v);
+    return {c, v, m, be, sim};
+  });
+}
+const COLS = [
+  ["rank","#"], ["city","Ciudad"], ["precio","Precio"], ["be","Equilibrio"], ["util","Utilidad/mes"], ["margen","Margen"], ["loss","Prob. pérdida"], ["p50","Año típico"], ["rango","P10 – P90 año"], ["conf","Datos"]
+];
+function sortKey(r, k){
+  switch(k){
+    case "city": return r.c.nombre; case "precio": return r.v.precio; case "be": return r.be ?? 1e9;
+    case "util": return -r.m.util; case "margen": return -r.m.margen; case "loss": return r.sim.loss*1e9 - r.sim.p50;
+    case "p50": return -r.sim.p50; case "conf": return {alta:0,media:1,baja:2}[r.c.confianza]; default: return r.sim.loss*1e9 - r.sim.p50;
+  }
+}
+function drawRank(){
+  const k = S.sort, dir = S.dir;
+  const rows = [...ROWS].sort((a,b) => { const x = sortKey(a,k), y = sortKey(b,k); return (x < y ? -1 : x > y ? 1 : 0)*dir; });
+  const byLoss = [...ROWS].sort((a,b) => sortKey(a,"loss") - sortKey(b,"loss"));
+  const pos = new Map(byLoss.map((r,i) => [r.c.id, i+1]));
+  let h = "<thead><tr>" + COLS.map(([key,lbl]) => `<th scope="col" data-sort="${key}"${key === k ? ` aria-sort="${dir > 0 ? "ascending" : "descending"}"` : ""}>${lbl}${key === k ? (dir > 0 ? " ↑" : " ↓") : ""}</th>`).join("") + "</tr></thead><tbody>";
+  rows.forEach(r => {
+    const L = r.sim.loss, col = L < 0.2 ? "var(--pos)" : L < 0.45 ? "var(--warn)" : "var(--neg)";
+    const conf = r.v.own ? `<span class="pill tag-own">tus datos</span>` : `<span class="pill cf-${r.c.confianza}">${r.c.confianza}</span>`;
+    const pFuente = r.v.ownPrice ? "" : ((S.seg === "pop" ? r.c.precio_popular_fuente : r.c.precio_ejecutivo_fuente) === "est" ? '<span class="c-mut">*</span>' : "");
+    h += `<tr data-id="${r.c.id}" class="${r.c.id === S.city ? "sel" : ""}" tabindex="0">
+      <td><span class="rk">${pos.get(r.c.id)}</span></td>
+      <td class="city">${r.c.nombre}</td>
+      <td>${fS(r.v.precio, r.v.precio % 1 ? 1 : 0)}${pFuente}</td>
+      <td>${r.be ? fN(r.be) + "/día" : '<span class="c-neg">no llega</span>'}</td>
+      <td class="${r.m.util < 0 ? "c-neg" : "c-pos"}">${fS(r.m.util)}</td>
+      <td class="${r.m.margen < 0 ? "c-neg" : r.m.margen < 0.08 ? "c-warn" : "c-pos"}">${fP(r.m.margen)}</td>
+      <td><span class="risk">${fP(L)}<span class="bar"><i style="width:${Math.round(L*100)}%;background:${col}"></i></span></span></td>
+      <td class="${r.sim.p50 < 0 ? "c-neg" : ""}">${fK(r.sim.p50)}</td>
+      <td class="c-mut">${fK(r.sim.p10)} – ${fK(r.sim.p90)}</td>
+      <td>${conf}</td></tr>`;
+  });
+  $("rank").innerHTML = h + "</tbody>";
+}
+$("rank").addEventListener("click", e => {
+  const th = e.target.closest("th[data-sort]");
+  if (th) { const k = th.dataset.sort === "rank" ? "loss" : th.dataset.sort; S.dir = S.sort === k ? -S.dir : 1; S.sort = k; save(); drawRank(); return; }
+  const tr = e.target.closest("tr[data-id]"); if (tr) selectCity(tr.dataset.id);
+});
+$("rank").addEventListener("keydown", e => { const tr = e.target.closest("tr[data-id]"); if (tr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); selectCity(tr.dataset.id); } });
+function selectCity(id){ S.city = id; if (S.cmp === id) S.cmp = id === "lima" ? "arequipa" : "lima"; save(); drawRank(); drawFrontier(); drawFicha(); drawCC(); }
+
+/* ---------- Frontera ---------- */
+function niceStep(raw){ const p = Math.pow(10, Math.floor(Math.log10(raw))); for (const m of [1,2,2.5,5,10]) if (m*p >= raw) return m*p; return 10*p; }
+function drawFrontier(){
+  const sel = city(S.city), cmp = city(S.cmp);
+  const W=680, H=320, ml=46, mr=16, mt=14, mb=38;
+  const qmin = 30, qmax = Math.max(250, Math.ceil(S.qref*1.6/50)*50);
+  const vs = vals(sel), vc = vals(cmp);
+  const ymaxRaw = Math.max(vs.pmax, vc.pmax, priceAt(vs, 60), priceAt(vc, 60)) * 1.08;
+  const ymin = 0, ys = niceStep(ymaxRaw/5), ymax = Math.ceil(ymaxRaw/ys)*ys;
+  const sx = q => ml + (q-qmin)/(qmax-qmin)*(W-ml-mr), sy = p => mt + (1 - (p-ymin)/(ymax-ymin))*(H-mt-mb);
+  const clampY = p => Math.max(mt, Math.min(H-mb, sy(p)));
+  let s = "";
+  for (let y = ymin; y <= ymax + 1e-9; y += ys) s += `<line x1="${ml}" x2="${W-mr}" y1="${sy(y)}" y2="${sy(y)}" stroke="var(--line)"/><text x="${ml-6}" y="${sy(y)+4}" text-anchor="end">${fN(y)}</text>`;
+  const xs = niceStep((qmax-qmin)/6);
+  for (let x = Math.ceil(qmin/xs)*xs; x <= qmax; x += xs) s += `<text x="${sx(x)}" y="${H-mb+16}" text-anchor="middle">${x}</text>`;
+  s += `<text x="${W-mr}" y="${H-4}" text-anchor="end">menús por día</text><text x="${ml}" y="${mt-2}" text-anchor="start" dy="-0">S/</text>`;
+  const path = v => { let d = ""; for (let q = qmin; q <= qmax; q += 2) d += (d ? "L" : "M") + sx(q).toFixed(1) + "," + clampY(priceAt(v, q)).toFixed(1); return d; };
+  // otras ciudades tenues
+  DATA.ciudades.forEach(c => { if (c.id !== sel.id && c.id !== cmp.id) s += `<path d="${path(vals(c))}" fill="none" stroke="var(--faint)" stroke-width="1.2"/>`; });
+  // banda de precio de la ciudad seleccionada
+  s += `<rect x="${ml}" y="${sy(vs.pmax)}" width="${W-ml-mr}" height="${Math.max(0, sy(vs.pmin)-sy(vs.pmax))}" fill="var(--accent)" fill-opacity=".08"/>`;
+  s += `<line x1="${ml}" x2="${W-mr}" y1="${sy(vs.precio)}" y2="${sy(vs.precio)}" stroke="var(--accent)" stroke-dasharray="5 4" stroke-width="1.5"/>`;
+  s += `<line x1="${ml}" x2="${W-mr}" y1="${sy(vc.precio)}" y2="${sy(vc.precio)}" stroke="var(--gold)" stroke-dasharray="5 4" stroke-width="1.2"/>`;
+  s += `<path d="${path(vc)}" fill="none" stroke="var(--gold)" stroke-width="2.2"/>`;
+  s += `<path d="${path(vs)}" fill="none" stroke="var(--accent)" stroke-width="3"/>`;
+  // punto de equilibrio
+  const be = breakeven(vs);
+  if (be && be >= qmin && be <= qmax) {
+    s += `<circle cx="${sx(be)}" cy="${sy(vs.precio)}" r="5" fill="var(--surface)" stroke="var(--fg)" stroke-width="2"/>`;
+    const right = sx(be) < W - 170;
+    s += `<text class="lbl" x="${sx(be) + (right ? 9 : -9)}" y="${sy(vs.precio) - 9}" text-anchor="${right ? "start" : "end"}">${sel.nombre}: equilibrio ${be}/día a ${fS(vs.precio, vs.precio % 1 ? 1 : 0)}</text>`;
+  }
+  s += `<line x1="${sx(S.qref)}" x2="${sx(S.qref)}" y1="${mt}" y2="${H-mb}" stroke="var(--fg)" stroke-dasharray="2 3" opacity=".6"/>`;
+  s += `<text x="${sx(S.qref)+5}" y="${H-mb-6}">ref. ${S.qref}/día</text>`;
+  $("fr").innerHTML = s;
+  $("fr-legend").innerHTML = `<span><i style="border-color:var(--accent)"></i>${sel.nombre}: precio mínimo</span><span><b style="background:color-mix(in oklab,var(--accent) 20%,transparent)"></b>${sel.nombre}: rango de precio</span><span><i style="border-color:var(--gold)"></i>${cmp.nombre}</span><span><i style="border-color:var(--faint)"></i>Otras ciudades</span><span>Línea punteada: precio actual</span>`;
+  $("cmp").innerHTML = DATA.ciudades.filter(c => c.id !== sel.id).map(c => `<option value="${c.id}"${c.id === cmp.id ? " selected" : ""}>${c.nombre}</option>`).join("");
+}
+
+/* ---------- Ficha de ciudad ---------- */
+function heatColor(m){
+  if (m.util < 0) return `color-mix(in oklab,var(--neg) ${Math.round(18 + 40*Math.min(1, -m.util/6000))}%,var(--surface))`;
+  if (m.margen < 0.08) return `color-mix(in oklab,var(--warn) 40%,var(--surface))`;
+  return `color-mix(in oklab,var(--pos) ${Math.round(22 + 38*Math.min(1, m.util/15000))}%,var(--surface))`;
+}
+function drawFicha(){
+  const c = city(S.city), v = vals(c), m = model(v, S.qref), be = breakeven(v), row = ROWS.find(r => r.c.id === c.id);
+  $("f-title").textContent = c.nombre + (S.seg === "pop" ? " · menú popular" : " · menú ejecutivo");
+  $("f-note").textContent = c.notas + (c.riesgo_nota ? " Riesgo: " + c.riesgo_nota : "");
+  const est = new Set(c.est_campos || []);
+  const estKey = k => ({precio: S.seg === "pop" ? "precio_popular" : "precio_ejecutivo", pmin: S.seg === "pop" ? "precio_popular" : "precio_ejecutivo", pmax: S.seg === "pop" ? "precio_popular" : "precio_ejecutivo", insumos: S.seg === "pop" ? "insumos_popular" : "insumos_ejecutivo"}[k] || k);
+  $("f-fields").innerHTML = FIELDS.map(([k,lbl,unit,step,scope]) => {
+    const o = S.ov[c.id] || {}, kk = scope ? k + "_" + S.seg : k, isOv = typeof o[kk] === "number";
+    const sub = isOv ? "tu dato" : (est.has(estKey(k)) ? "estimado" : "de la investigación");
+    return `<div class="frow${isOv ? " ov" : ""}"><label for="fv-${k}">${lbl}<em>${sub}</em></label><div class="numin"><small>${unit}</small><input id="fv-${k}" data-k="${kk}" type="number" min="0" step="${step}" value="${+v[k].toFixed(2)}"></div></div>`;
+  }).join("");
+  $("f-fields").querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => {
+    const x = parseFloat(inp.value); if (!isFinite(x) || x < 0) return;
+    S.ov[c.id] = S.ov[c.id] || {}; S.ov[c.id][inp.dataset.k] = x; renderAll();
+  }));
+  $("f-kv").innerHTML = `
+    <div><span class="v ${m.util < 0 ? "c-neg" : "c-pos"}">${fS(m.util)}</span><span class="s">Utilidad al mes con ${S.qref}/día</span></div>
+    <div><span class="v">${be ? be + "/día" : "No llega"}</span><span class="s">Punto de equilibrio</span></div>
+    <div><span class="v">${fS(priceAt(v, S.qref), 2)}</span><span class="s">Precio mínimo a ${S.qref}/día</span></div>
+    <div><span class="v">${fS(m.contribU, 2)}</span><span class="s">Margen de contribución por menú (sin IGV)</span></div>
+    <div><span class="v">${fP(v.insumos*(1+MERMA)/v.precio)}</span><span class="s">Food cost con merma</span></div>
+    <div><span class="v">${fS(m.fijos)}</span><span class="s">Fijos al mes (${m.cocina} en cocina, ${m.mozos} ${m.mozos > 1 ? "mozos" : "mozo"})</span></div>
+    <div><span class="v ${row.sim.loss > 0.45 ? "c-neg" : row.sim.loss > 0.2 ? "c-warn" : "c-pos"}">${fP(row.sim.loss)}</span><span class="s">Probabilidad de perder en el año</span></div>
+    <div><span class="v">${fK(row.sim.p10)} a ${fK(row.sim.p90)}</span><span class="s">Utilidad anual, escenario malo a bueno</span></div>
+    <div><span class="v">${m.util > 0 ? fN((S.seg === "pop" ? CC.capex_local_independiente : CC.capex_local_independiente*1.3)/m.util, 1) + " meses" : "Nunca"}</span><span class="s">Recuperar ${fS(S.seg === "pop" ? CC.capex_local_independiente : CC.capex_local_independiente*1.3)} de inversión</span></div>`;
+  // heatmap precio × volumen
+  const step = v.precio <= 15 ? 0.5 : 1;
+  const cols = []; for (let i = -5; i <= 5; i++) { const p = +(v.precio + i*step).toFixed(2); if (p > 0) cols.push(p); }
+  const set = new Set(); [2,1.6,1.3,1.15,1,0.85,0.7,0.55,0.4].forEach(f => set.add(f === 1 ? S.qref : Math.max(10, Math.round(S.qref*f/5)*5)));
+  const rows = [...set].sort((a,b) => b-a);
+  let h = `<thead><tr><th class="corner">Menús/día ↓<br>Precio →</th>` + cols.map(p => `<th class="${p === v.precio ? "hl" : ""}">${fN(p, p % 1 ? 1 : 0)}</th>`).join("") + "</tr></thead><tbody>";
+  rows.forEach(q => {
+    h += `<tr><th class="${q === S.qref ? "hl" : ""}">${q}</th>`;
+    cols.forEach(p => { const mm = model(v, q, {precio:p}); h += `<td class="${q === S.qref && p === v.precio ? "now" : ""}" style="background:${heatColor(mm)}" title="${fS(p,2)} · ${q}/día → ${fS(mm.util)} al mes">${fK(mm.util)}</td>`; });
+    h += "</tr>";
+  });
+  $("f-heat").innerHTML = h + "</tbody>";
+}
+$("f-reset").addEventListener("click", () => { delete S.ov[S.city]; renderAll(); });
+
+/* ---------- Cocina central ---------- */
+function centralModel(v, nSat){
+  const pop = S.seg === "pop", Y = YEARS[S.year], formal = S.formal === "1";
+  const main = model(v, S.qmain);
+  if (nSat === 0) return {util: main.util, capex: 0};
+  const totalQ = S.qmain + nSat*S.qsat;
+  const t = main.t, mult = formal ? N.mult_micro : 1, w = x => formal ? Math.max(x, Y.rmv) : x;
+  const varU = v.insumos*(1 - CC.ahorro_compras)*(1+MERMA) + (pop ? 0.2 : 0.35);
+  const contribU = v.precio/(1+t) - varU;
+  const cocina = Math.max(2, Math.ceil(totalQ/(pop ? CC.menus_por_trabajador_cocina : CC.menus_por_trabajador_cocina*0.7)));
+  const cocinero = formal ? Math.max(v.sueldo_cocinero, Y.rmv*1.06) : v.sueldo_cocinero;
+  const mozosMain = Math.max(1, Math.ceil(S.qmain/(pop ? 70 : 40)));
+  const mozosSat = Math.max(1, Math.ceil(S.qsat/(pop ? 70 : 40))) + (S.qsat > (pop ? 90 : 50) ? 1 : 0);
+  const personal = mult*(cocinero + (cocina-1)*w(v.sueldo_ayudante) + (mozosMain + nSat*mozosSat)*w(v.sueldo_mozo)) + (S.dueno ? SUELDO_DUENO : 0);
+  const alq = v.alquiler_mes*(pop ? 1 : 1.25);
+  const fijos = personal + alq*(1 + 0.8*nSat) + v.gas_balon45*(S.balones*(totalQ/S.qmain)) + v.servicios_mes*(1 + 0.6*nSat) + OTROS_FIJOS
+    + CC.costo_transporte_mes*Math.ceil(nSat/4) + CC.overhead_por_local_mes*nSat;
+  const util = contribU*totalQ*DIAS - fijos;
+  const capex = (nSat <= 2 ? 25000 : CC.capex_cocina_central) + CC.capex_satelite*nSat;
+  return {util, capex, cocina};
+}
+function drawCC(){
+  const c = city(S.city), v = vals(c);
+  $("cc-title").textContent = "Cocina central en " + c.nombre;
+  const indepMain = model(v, S.qmain).util, indepSat = model(v, S.qsat).util;
+  const capexInd = S.seg === "pop" ? CC.capex_local_independiente : CC.capex_local_independiente*1.3;
+  let best = -1, bestVal = -Infinity; const rows = [];
+  for (let n = 1; n <= 6; n++){
+    const cen = centralModel(v, n), ind = indepMain + n*indepSat;
+    rows.push({n, cen, ind});
+    if (cen.util - indepMain > 0 && (cen.util - indepMain)/cen.capex > bestVal) { bestVal = (cen.util - indepMain)/cen.capex; best = n; }
+  }
+  let h = `<thead><tr><th>Satélites</th><th>Independientes: utilidad/mes</th><th>Cocina central: utilidad/mes</th><th>Diferencia</th><th>Inversión central</th><th>Recupera en</th></tr></thead><tbody>`;
+  h += `<tr><td>Solo el local principal</td><td>${fS(indepMain)}</td><td>${fS(indepMain)}</td><td class="c-mut">—</td><td class="c-mut">—</td><td class="c-mut">—</td></tr>`;
+  rows.forEach(r => {
+    const diff = r.cen.util - r.ind, inc = r.cen.util - indepMain;
+    h += `<tr class="${r.n === best ? "best" : ""}"><td>${r.n} satélite${r.n > 1 ? "s" : ""}</td>
+      <td class="${r.ind < 0 ? "c-neg" : ""}">${fS(r.ind)}</td>
+      <td class="${r.cen.util < 0 ? "c-neg" : ""}">${fS(r.cen.util)}</td>
+      <td class="${diff < 0 ? "c-neg" : "c-pos"}">${diff >= 0 ? "+" : ""}${fS(diff)}</td>
+      <td>${fS(r.cen.capex)}</td>
+      <td>${inc > 0 ? fN(r.cen.capex/inc, 1) + " meses" : '<span class="c-neg">no recupera</span>'}</td></tr>`;
+  });
+  $("cc").innerHTML = h + "</tbody>";
+  $("cc-note").textContent = `Independientes: cada local nuevo cuesta ${fS(capexInd)} y lleva cocina propia. Cocina central: hasta 2 satélites se amplía la cocina del local principal (S/ 25,000); desde 3 se monta una central nueva (${fS(CC.capex_cocina_central)}). Cada satélite cuesta ${fS(CC.capex_satelite)}, paga 80% del alquiler, ${fS(CC.overhead_por_local_mes)} de gestión al mes y comparte un vehículo de reparto (${fS(CC.costo_transporte_mes)}/mes por cada 4 satélites). Compras al por mayor ${fP(CC.ahorro_compras)} más baratas. Fila verde: la que más utilidad extra deja por sol invertido. Casi todo esto es estimado con confianza baja.`;
+}
+
+/* ---------- Supuestos y fuentes ---------- */
+function drawStatic(){
+  $("assump").innerHTML = [
+    `Ventas sin IGV: el precio de la pizarra incluye el impuesto, así que el local recibe precio ÷ (1 + IGV). Con ventas de un menú de 80–100 platos diarios el Nuevo RUS (tope S/ 96,000 al año) no alcanza, por eso el caso formal usa Régimen MYPE con IGV reducido para restaurantes.`,
+    `Costo variable por menú: insumos más ${fP(MERMA)} de merma, más descartables y limpieza (S/ 0.20 popular, S/ 0.35 ejecutivo).`,
+    `Personal escalonado con el volumen: en cocina mínimo 2 (cocinero y ayudante), uno más cada ${80} menús populares o 55 ejecutivos; un mozo cada 70 populares o 40 ejecutivos. Formal: nadie por debajo del sueldo mínimo y cargas de microempresa ×${N.mult_micro}.`,
+    `Gastos fijos: alquiler de la ciudad (×1.25 en ejecutivo por mejor ubicación), gas en balones de 45 kg al mes, luz-agua-internet y S/ ${OTROS_FIJOS} de otros fijos (contador, licencias, sistema). Sueldo del dueño opcional: S/ ${SUELDO_DUENO}.`,
+    `${DIAS} días de atención al mes. Utilidad antes de impuesto a la renta.`,
+    `Simulación de un año, 2,000 corridas por ciudad: volumen con desviación de ${fP(R.sd_volumen)} alrededor del de referencia; insumos con desviación anual de ${fP(R.sd_insumos_anual)}; precio triangular dentro del rango estimado (±4% si es tu dato); conflicto o bloqueo con la probabilidad anual de cada ciudad, que hace perder 2 a 8 semanas de ventas mientras los fijos siguen.`,
+    `Lo que no modela: crecimiento de ventas en el tiempo, inflación general (el modelo está en soles de hoy), delivery por apps (comisión de 20–30%, no conviene en menú) ni la competencia que entra cuando un local va bien.`,
+    `Riesgo: ${R.notas}`
+  ].map(t => `<li>${t}</li>`).join("");
+  $("sources").innerHTML = DATA.fuentes.map(f => `<li>${f.tema}: <a href="${f.url}" target="_blank" rel="noopener">${f.url}</a></li>`).join("");
+}
+
+function renderAll(skip){
+  save(); syncControls(skip); computeRows(); drawRank(); drawFrontier(); drawFicha(); drawCC();
+}
+drawStatic(); renderAll();
+</script>
