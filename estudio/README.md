@@ -23,7 +23,7 @@ El encargo completo está en [`BRIEF.md`](BRIEF.md). Las cifras salen de
 ```bash
 cd estudio
 pip install -r requirements.txt
-python -m pytest tests/ -q            # 114 tests
+python -m pytest tests/ -q            # 118 tests
 python -m motor.bd                    # crea y siembra la base (SQLite local: estudio.db)
 DATABASE_URL=postgres://... python -m motor.bd   # lo mismo en el Postgres de Railway
 ```
@@ -38,6 +38,26 @@ esc = Escenario(segmento="popular", anio=2026, formal=True, balones=5)
 equilibrio(local, esc, data["nacional"])             # menús/día para no perder
 simular(local, esc, data["nacional"], data["riesgo"], q_ref=80)
 ```
+
+## Servicio en Railway (aparte del POS)
+
+`api.py` es una API pequeña (FastAPI) que corre como **su propio servicio**
+en el mismo proyecto de Railway, junto a su base Postgres. Al arrancar crea
+las tablas y siembra `dataset.json` usando la dirección **interna** de la
+base, así la base no necesita acceso público.
+
+Configuración del servicio en Railway:
+- **Source**: este mismo repo; **Root Directory** = `/estudio` (usa el
+  `Dockerfile` y `railway.json` de esta carpeta).
+- **Variables**: `DATABASE_URL` = `${{Postgres.DATABASE_URL}}` (referencia a
+  la base) y `ESTUDIO_TOKEN` = una clave larga (la pide todo menos `/salud`,
+  en el header `X-Token`).
+- **Networking**: generar un dominio público para la API (HTTPS).
+
+Endpoints: `GET /salud` (sin token), `GET /ciudades`, `GET /parametros`,
+`POST /zonas`, `POST /parametros` (cargar cifras de sondeo o propias con su
+fuente) y `POST /calcular` (equilibrio, frontera de precio, mes a q y
+Monte Carlo para una ciudad o zona).
 
 ## Origen de cada cifra
 
