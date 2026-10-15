@@ -1,0 +1,155 @@
+"""Motor de rentabilidad de un local de menú (portado de
+`prototipos/rentabilidad-ciudades.html`, función `model` y vecinas).
+
+Todo en soles por mes salvo que se diga otra cosa. La lógica es la del
+prototipo, línea por línea: si se cambia algo aquí, los tests de regresión
+contra los valores del brief tienen que seguir pasando o explicarse.
+"""
+from __future__ import annotations
+
+import json
+import math
+from dataclasses import dataclass, field, replace
+from pathlib import Path
+
+RUTA_DATASET = Path(__file__).resolve().parent.parent / "data" / "dataset.json"
+
+# Trayectoria regulatoria (BRIEF: verificado; 2028 es supuesto, no ley)
+ANIOS = {
+    2026: {"igv": 10.5, "rmv": 1230, "supuesto": False},
+    2027: {"igv": 15.0, "rmv": 1300, "supuesto": False},
+    2028: {"igv": 18.0, "rmv": 1300, "supuesto": True},
+}
+DIAS_MES = 26
+MERMA = 0.05
+OTROS_FIJOS = 400
+SUELDO_DUENO = 1500
+DESCARTABLES = {"popular": 0.20, "ejecutivo": 0.35}
+
+
+def cargar_dataset(ruta: Path = RUTA_DATASET) -> dict:
+    with open(ruta, encoding="utf-8") as f:
+        return json.load(f)
+
+
+@dataclass(frozen=True)
+class Escenario:
+    """Cómo se mira el negocio (los botones del prototipo)."""
+    segmento: str = "popular"  # popular | ejecutivo
+    anio: int = 2026
+    formal: bool = True
+    balones: float = 5  # balones de gas de 45 kg al mes (gasto fijo)
+    sueldo_dueno: bool = True
+
+    @property
+    def pop(self) -> bool:
+        return self.segmento == "popular"
+
+
+@dataclass(frozen=True)
+class Local:
+    """Valores de una ciudad (o zona) para un segmento: dataset + correcciones."""
+    precio: float
+    pmin: float
+    pmax: float
+    insumos: float
+    alquiler_mes: float
+    sueldo_cocinero: float
+    sueldo_ayudante: float
+    sueldo_mozo: float
+    gas_balon45: float
+    servicios_mes: float
+    precio_propio: bool = False  # el precio es dato propio (no del rango estimado)
+    id: str = ""
+    riesgo_conflicto_anual: float = 0.0
+    extra: dict = field(default_factory=dict, compare=False)
+
+    def con(self, **cambios) -> "Local":
+        return replace(self, **cambios)
+
+
+def local_de_ciudad(ciudad: dict, segmento: str = "popular", **correcciones) -> Local:
+    pop = segmento == "popular"
+    rango = ciudad["precio_popular_rango" if pop else "precio_ejecutivo_rango"]
+    base = Local(
+        id=ciudad["id"],
+        precio=ciudad["precio_popular" if pop else "precio_ejecutivo"],
+        pmin=rango[0],
+        pmax=rango[1],
+        insumos=ciudad["insumos_popular" if pop else "insumos_ejecutivo"],
+        alquiler_mes=ciudad["alquiler_mes"],
+        sueldo_cocinero=ciudad["sueldo_cocinero"],
+        sueldo_ayudante=ciudad["sueldo_ayudante"],
+        sueldo_mozo=ciudad["sueldo_mozo"],
+        gas_balon45=ciudad["gas_balon45"],
+        servicios_mes=ciudad["servicios_mes"],
+        riesgo_conflicto_anual=ciudad.get("riesgo_conflicto_anual", 0.0),
+    )
+    if correcciones:
+        base = base.con(precio_propio="precio" in correcciones, **correcciones)
+    return base
+
+
+@dataclass(frozen=True)
+class Resultado:
+    t: float  # tasa de IGV aplicada
+    var_u: float  # costo variable por menú
+    p_net: float  # precio sin IGV
+    contrib_u: float
+    cocina: int
+    mozos: int
+    personal: float
+    alquiler: float
+    gas: float
+    fijos: float
+    q_mes: float
+    ventas: float
+    util: float
+
+    @property
+    def margen(self) -> float:
+        return self.util / self.ventas if self.ventas > 0 else 0.0
+
+
+def modelo(local: Local, q: float, esc: Escenario, nacional: dict,
+           precio: float | None = None, ins_mult: float = 1.0) -> Resultado:
+    """Estado de resultados de UN mes para q menús por día."""
+    anio = ANIOS[esc.anio]
+    pop = esc.pop
+    t = anio["igv"] / 100 if esc.formal else 0.0
+    precio = local.precio if precio is None else precio
+    var_u = local.insumos * ins_mult * (1 + MERMA) + DESCARTABLES[esc.segmento]
+    p_net = precio / (1 + t)
+    contrib_u = p_net - var_u
+    cocina = max(2, math.ceil(q / (80 if pop else 55)))
+    mozos = max(1, math.ceil(q / (70 if pop else 40)))
+
+    def w(x: float) -> float:
+        return max(x, anio["rmv"]) if esc.formal else x
+
+    mult = nacional["mult_micro"] if esc.formal else 1.0
+    cocinero = max(local.sueldo_cocinero, anio["rmv"] * 1.06) if esc.formal else local.sueldo_cocinero
+    personal = mult * (cocinero + (cocina - 1) * w(local.sueldo_ayudante) + mozos * w(local.sueldo_mozo))
+    personal += SUELDO_DUENO if esc.sueldo_dueno else 0
+    alquiler = local.alquiler_mes * (1 if pop else 1.25)
+    gas = local.gas_balon45 * esc.balones
+    fijos = personal + alquiler + gas + local.servicios_mes + OTROS_FIJOS
+    q_mes = q * DIAS_MES
+    ventas = precio * q_mes
+    util = contrib_u * q_mes - fijos
+    return Resultado(t, var_u, p_net, contrib_u, cocina, mozos, personal, alquiler, gas, fijos,
+                     q_mes, ventas, util)
+
+
+def equilibrio(local: Local, esc: Escenario, nacional: dict) -> int | None:
+    """Primer volumen diario (5–600) con utilidad >= 0."""
+    for q in range(5, 601):
+        if modelo(local, q, esc, nacional).util >= 0:
+            return q
+    return None
+
+
+def precio_minimo(local: Local, q: float, esc: Escenario, nacional: dict) -> float:
+    """Frontera de precio: el precio (con IGV) que deja utilidad 0 a q menús/día."""
+    m = modelo(local, q, esc, nacional)
+    return (1 + m.t) * (m.var_u + m.fijos / m.q_mes)
