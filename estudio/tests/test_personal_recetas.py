@@ -86,3 +86,30 @@ def test_ingenieria_de_menu_y_pareto():
     clases = {p["nombre"]: p["clase"] for p in r["platos"]}
     assert clases == {"A": "estrella", "B": "caballo", "C": "rompecabezas", "D": "perro"}
     assert r["pareto"][0]["insumo"] == "Pollo" and r["pareto"][-1]["acumulado"] == pytest.approx(1)
+
+
+def test_turno_noche_suma_ventas_gas_luz_y_su_equipo():
+    from motor.modelo import Noche
+    dia = modelo(LOCAL, 80, Escenario(), NAC)
+    n = Noche(q=30, precio=12, insumos=4.5, balones=2, servicios=150)
+    ambos = modelo(LOCAL, 80, Escenario(noche=n), NAC)
+    assert ambos.ventas == pytest.approx(dia.ventas + 12 * 30 * 26)
+    assert ambos.gas == pytest.approx(dia.gas + 2 * LOCAL.gas_balon45)
+    assert ambos.personal > dia.personal and ambos.cocina > dia.cocina
+    # noche solo 3 días por semana: equipo pagado por esa parte del mes
+    corta = modelo(LOCAL, 80, Escenario(noche=n.con(dias=13)), NAC)
+    assert dia.personal < corta.personal < ambos.personal
+    # con planilla propia la noche no agrega gente sola
+    plan = Escenario(planilla=(Trabajador("Cocinero", 1500),))
+    assert modelo(LOCAL, 80, replace(plan, noche=n), NAC).personal == modelo(LOCAL, 80, plan, NAC).personal
+    pagos = calendario_pagos(LOCAL, Escenario(noche=n), NAC, dia.cocina, dia.mozos)
+    assert pagos["por_turno"]["noche"] > 0
+
+
+def test_plato_sin_receta_no_baja_los_promedios():
+    a = PlatoR(1, "A", "segundo", 1, precio=11, vendidos=50, items=((1, 0.3),))
+    vacio = PlatoR(2, "Sin receta", "segundo", 1, precio=11, vendidos=50)
+    r = analizar(INS, [a, vacio], igv=10.5)
+    assert r["sin_receta"] == ["Sin receta"]
+    assert r["menu"]["costo"] == pytest.approx(0.3 * 10 / 0.8)
+    assert all(p["clase"] is None for p in r["platos"])

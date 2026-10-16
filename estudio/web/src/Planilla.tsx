@@ -1,10 +1,11 @@
-import type { Area, Calculo, Modalidad, Trabajador } from './api'
+import type { Area, Calculo, Modalidad, Trabajador, Turno } from './api'
 import { Chips } from './Controles'
 import { soles } from './formato'
 
 interface Props {
   planilla: Trabajador[]
   dias: number
+  conNoche: boolean
   onChange: (p: Trabajador[]) => void
 }
 
@@ -20,22 +21,44 @@ const AREAS: { valor: Area; texto: string }[] = [
   { valor: 'otro', texto: 'Otro' },
 ]
 
-const NUEVO: Trabajador = { puesto: '', monto: 50, modalidad: 'diario', cantidad: 1, area: 'cocina', dias: null }
+const TURNOS: { valor: Turno; texto: string }[] = [
+  { valor: 'dia', texto: 'Día' },
+  { valor: 'noche', texto: 'Noche' },
+  { valor: 'ambos', texto: 'Día y noche' },
+]
 
-/** La planilla propia: cada fila es un puesto, cuántos son y cómo se les paga. */
-export function Planilla({ planilla, dias, onChange }: Props) {
+const NUEVO: Trabajador = {
+  puesto: '',
+  monto: 50,
+  modalidad: 'diario',
+  cantidad: 1,
+  area: 'cocina',
+  dias: null,
+  turno: 'dia',
+}
+
+/** Cuánto le cuesta esta persona al mes (sin cargas de planilla). */
+function delMes(t: Trabajador, dias: number) {
+  return t.modalidad === 'diario' ? t.monto * (t.dias ?? dias) * t.cantidad : t.monto * t.cantidad
+}
+
+/** La planilla propia: una fila por persona (o por grupo que gana igual). */
+export function Planilla({ planilla, dias, conNoche, onChange }: Props) {
   const cambiar = (i: number, cambios: Partial<Trabajador>) =>
     onChange(planilla.map((t, k) => (k === i ? { ...t, ...cambios } : t)))
 
   return (
     <div className="es-planilla">
+      <p className="es-nota">
+        Una fila por persona: así cada uno tiene su sueldo o jornal. Si varios ganan igual, usa “Cuántos”.
+      </p>
       {planilla.map((t, i) => (
         <div key={i} className="es-trabajador">
           <div className="es-fila">
             <input
               value={t.puesto}
               onChange={(e) => cambiar(i, { puesto: e.target.value })}
-              placeholder="Puesto (p. ej. Ayudante)"
+              placeholder="Puesto o nombre (p. ej. Ayudante – Rosa)"
               aria-label="Puesto"
             />
             <button
@@ -99,37 +122,53 @@ export function Planilla({ planilla, dias, onChange }: Props) {
             )}
           </div>
           <Chips valor={t.area} onChange={(a) => cambiar(i, { area: a })} opciones={AREAS} />
+          {conNoche && <Chips valor={t.turno} onChange={(tu) => cambiar(i, { turno: tu })} opciones={TURNOS} />}
+          <div className="es-fila es-pie-trabajador">
+            <span className="es-nota">
+              {soles(delMes(t, dias))} al mes
+              {t.modalidad === 'quincenal' ? ` (2 pagos de ${soles(delMes(t, dias) / 2)})` : ''}
+            </span>
+            <button
+              type="button"
+              className="es-secundario"
+              onClick={() => onChange([...planilla.slice(0, i + 1), { ...t, puesto: '' }, ...planilla.slice(i + 1)])}
+            >
+              Duplicar
+            </button>
+          </div>
         </div>
       ))}
       <button type="button" className="es-secundario" onClick={() => onChange([...planilla, NUEVO])}>
-        + Agregar puesto
+        + Agregar persona
       </button>
     </div>
   )
 }
 
-/** Planilla inicial a partir de la automática, para no empezar de cero. */
+/** Planilla inicial a partir de la automática: una fila por persona. */
 export function planillaDesde(calculo: Calculo | null): Trabajador[] {
-  if (!calculo) return [{ ...NUEVO, puesto: 'Cocinero', modalidad: 'mensual', monto: 1300 }]
+  const fila = (puesto: string, monto: number, area: Area, turno: Turno = 'dia'): Trabajador => ({
+    puesto,
+    monto,
+    modalidad: 'mensual',
+    cantidad: 1,
+    area,
+    dias: null,
+    turno,
+  })
+  if (!calculo) return [fila('Cocinero', 1300, 'cocina')]
   const l = calculo.local
-  const m = calculo.mes_a_q
-  const filas: Trabajador[] = [
-    { puesto: 'Cocinero', monto: l.sueldo_cocinero, modalidad: 'mensual', cantidad: 1, area: 'cocina', dias: null },
-  ]
-  if (m.cocina > 1)
-    filas.push({
-      puesto: 'Ayudante de cocina',
-      monto: l.sueldo_ayudante,
-      modalidad: 'mensual',
-      cantidad: m.cocina - 1,
-      area: 'cocina',
-      dias: null,
-    })
-  filas.push({ puesto: 'Mozo', monto: l.sueldo_mozo, modalidad: 'mensual', cantidad: m.mozos, area: 'salon', dias: null })
-  return filas
+  const filas: Trabajador[] = []
+  // las filas automáticas del calendario dicen cuántos hay de cada puesto y turno
+  for (const f of calculo.pagos.filas) {
+    const monto = f.puesto.startsWith('Cocinero') ? l.sueldo_cocinero : f.area === 'salon' ? l.sueldo_mozo : l.sueldo_ayudante
+    for (let k = 1; k <= f.cantidad; k++)
+      filas.push(fila(f.cantidad > 1 ? `${f.puesto} ${k}` : f.puesto, monto, f.area, f.turno))
+  }
+  return filas.length ? filas : [fila('Cocinero', l.sueldo_cocinero, 'cocina')]
 }
 
-export function CalendarioPagos({ calculo, dias }: { calculo: Calculo; dias: number }) {
+export function CalendarioPagos({ calculo, dias, conNoche }: { calculo: Calculo; dias: number; conNoche: boolean }) {
   const p = calculo.pagos
   return (
     <div className="es-tabla-caja">
@@ -159,6 +198,24 @@ export function CalendarioPagos({ calculo, dias }: { calculo: Calculo; dias: num
               <th>Cargas de planilla formal (EsSalud y otras)</th>
               <td>{soles(p.aportes_fin_de_mes)}</td>
             </tr>
+          )}
+          {conNoche && (
+            <>
+              <tr>
+                <th>Personal del día</th>
+                <td>{soles(p.por_turno.dia)}</td>
+              </tr>
+              <tr>
+                <th>Personal de la noche</th>
+                <td>{soles(p.por_turno.noche)}</td>
+              </tr>
+              {p.por_turno.ambos > 0 && (
+                <tr>
+                  <th>Personal de los dos turnos</th>
+                  <td>{soles(p.por_turno.ambos)}</td>
+                </tr>
+              )}
+            </>
           )}
         </tbody>
       </table>

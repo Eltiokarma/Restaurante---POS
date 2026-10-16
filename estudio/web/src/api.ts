@@ -60,6 +60,8 @@ export interface ValoresLocal {
 export type Modalidad = 'mensual' | 'quincenal' | 'diario'
 export type Area = 'cocina' | 'salon' | 'otro'
 
+export type Turno = 'dia' | 'noche' | 'ambos'
+
 export interface Trabajador {
   puesto: string
   monto: number
@@ -67,6 +69,16 @@ export interface Trabajador {
   cantidad: number
   area: Area
   dias: number | null
+  turno: Turno
+}
+
+export interface Noche {
+  q: number
+  precio: number
+  insumos: number
+  dias: number | null
+  balones: number
+  servicios: number
 }
 
 export interface Escenario extends Partial<ValoresLocal> {
@@ -80,6 +92,7 @@ export interface Escenario extends Partial<ValoresLocal> {
   q: number
   dias: number
   planilla: Trabajador[]
+  noche: Noche | null
 }
 
 export interface Calculo {
@@ -98,6 +111,11 @@ export interface Calculo {
     personal: number
     alquiler: number
     gas: number
+    ventas_dia: number
+    ventas_noche: number
+    platos_noche_mes: number
+    contrib_noche: number
+    contrib_dia: number
   }
   anio_montecarlo: { prob_perdida: number; p10: number; p50: number; p90: number }
   curva: { q: number; utilidad: number }[]
@@ -106,7 +124,8 @@ export interface Calculo {
     quincena_15: number
     fin_de_mes: number
     aportes_fin_de_mes: number
-    filas: { puesto: string; cantidad: number; modalidad: Modalidad; area: Area; costo_mes: number }[]
+    filas: { puesto: string; cantidad: number; modalidad: Modalidad; area: Area; turno: Turno; costo_mes: number }[]
+    por_turno: Record<Turno, number>
   }
 }
 
@@ -158,12 +177,14 @@ export interface AnalisisPlatos {
     clase: ClasePlato | null
     consejo: string | null
     popularidad: number | null
+    sin_receta: boolean
     umbral_popularidad?: number
     margen_promedio?: number
   }[]
   costo_entrada_bebida_promedio: number
   menu: { costo: number; precio_promedio: number | null; por_insumo: { insumo_id: number; insumo: string; costo: number }[] }
   gasto_semana: number
+  sin_receta: string[]
   pareto: { insumo_id: number; insumo: string; gasto_semana: number; parte: number; acumulado: number; menu_mas_10pct: number }[]
 }
 

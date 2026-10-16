@@ -13,7 +13,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import date
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
@@ -28,7 +28,7 @@ from motor.bd import (
     local_desde_bd, motor_bd, sembrar,
 )
 from motor.flujo import NOMBRE_REGIMEN, REGIMENES, SUPUESTOS, Supuestos, comparar_regimenes, flujo_caja
-from motor.modelo import AREAS, MODALIDADES, Trabajador, modelo
+from motor.modelo import AREAS, MODALIDADES, TURNOS, Noche, Trabajador, modelo
 from motor.personal import calendario_pagos
 from motor.recetas import TIPOS, InsumoR, PlatoR, analizar
 from motor.sensibilidad import matriz, quiebres, tornado
@@ -165,6 +165,16 @@ class TrabajadorIn(BaseModel):
     cantidad: int = Field(default=1, ge=0, le=50)
     area: str = Field(default="cocina", pattern="^(" + "|".join(AREAS) + ")$")
     dias: float | None = Field(default=None, ge=0, le=31)
+    turno: str = Field(default="dia", pattern="^(" + "|".join(TURNOS) + ")$")
+
+
+class NocheIn(BaseModel):
+    q: float = Field(default=30, ge=0, le=600)
+    precio: float = Field(default=12, gt=0)
+    insumos: float = Field(default=4.5, gt=0)
+    dias: float | None = Field(default=None, ge=1, le=31)
+    balones: float = Field(default=2, ge=0, le=40)
+    servicios: float = Field(default=150, ge=0)
 
 
 class EscenarioIn(BaseModel):
@@ -187,6 +197,7 @@ class EscenarioIn(BaseModel):
     servicios_mes: float | None = Field(default=None, ge=0)
     dias: float = Field(default=26, ge=1, le=31)  # días que abre al mes
     planilla: list[TrabajadorIn] = Field(default_factory=list, max_length=40)  # vacía: automática
+    noche: NocheIn | None = None  # turno noche; None: solo de día
 
 
 def _armar(e: EscenarioIn, s: Session):
@@ -200,8 +211,14 @@ def _armar(e: EscenarioIn, s: Session):
         local = local.con(**cambios)
     esc = Escenario(segmento=e.segmento, anio=e.anio, formal=e.formal, balones=e.balones,
                     sueldo_dueno=e.sueldo_dueno, dias=e.dias,
-                    planilla=tuple(Trabajador(**t.model_dump()) for t in e.planilla))
+                    planilla=tuple(Trabajador(**t.model_dump()) for t in e.planilla),
+                    noche=Noche(**e.noche.model_dump()) if e.noche else None)
     return local, esc, bloque(s, "nacional")
+
+
+def _equipo_dia(local, q, esc, nacional) -> tuple[int, int]:
+    m = modelo(local, q, replace(esc, noche=None), nacional)
+    return m.cocina, m.mozos
 
 
 @api.post("/calcular", dependencies=PROTEGIDO)
@@ -224,11 +241,14 @@ def calcular(e: EscenarioIn, s: Session = Depends(sesion)):
         "mes_a_q": {"ventas": round(m.ventas, 2), "fijos": round(m.fijos, 2), "utilidad": round(m.util, 2),
                     "margen": round(m.margen, 4), "cocina": m.cocina, "mozos": m.mozos,
                     "costo_variable_menu": round(m.var_u, 2), "precio_sin_igv": round(m.p_net, 2),
-                    "personal": round(m.personal, 2), "alquiler": round(m.alquiler, 2), "gas": round(m.gas, 2)},
+                    "personal": round(m.personal, 2), "alquiler": round(m.alquiler, 2), "gas": round(m.gas, 2),
+                    "ventas_dia": round(m.ventas - m.ventas_noche, 2), "ventas_noche": round(m.ventas_noche, 2),
+                    "platos_noche_mes": round(m.q_mes_noche), "contrib_noche": round(m.contrib_noche, 2),
+                    "contrib_dia": round(m.contrib_u, 2)},
         "anio_montecarlo": {"prob_perdida": mc.prob_perdida, "p10": round(mc.p10), "p50": round(mc.p50),
                             "p90": round(mc.p90)},
         "curva": curva,
-        "pagos": calendario_pagos(local, esc, nacional, m.cocina, m.mozos),
+        "pagos": calendario_pagos(local, esc, nacional, *_equipo_dia(local, e.q, esc, nacional)),
     }
 
 

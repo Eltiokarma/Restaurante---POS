@@ -1,4 +1,4 @@
-import type { Calculo, Ciudad, Escenario, ValoresLocal } from './api'
+import type { Calculo, Ciudad, Escenario, Noche, ValoresLocal } from './api'
 import { Barra, Chips, Dato } from './Controles'
 import { soles, pct } from './formato'
 import { CurvaUtilidad } from './Graficos'
@@ -11,6 +11,8 @@ interface Props {
   base: ValoresLocal | null
   calculo: Calculo | null
 }
+
+const NOCHE_INICIAL: Noche = { q: 30, precio: 12, insumos: 4.5, dias: null, balones: 2, servicios: 150 }
 
 const s0 = (v: number) => soles(v)
 const s2 = (v: number) => soles(v, 2)
@@ -96,6 +98,76 @@ export function PanelSimulador({ ciudades, esc, setEsc, base, calculo }: Props) 
         />
         <Barra etiqueta="Días que abre al mes" valor={esc.dias} min={15} max={31} paso={1} onChange={cambiar('dias')} base={26} />
 
+        <h2>Turnos</h2>
+        <Chips
+          valor={esc.noche !== null}
+          onChange={(noche) => setEsc((e) => ({ ...e, noche: noche ? NOCHE_INICIAL : null }))}
+          opciones={[
+            { valor: false, texto: 'Solo de día' },
+            { valor: true, texto: 'Día y noche' },
+          ]}
+        />
+        {esc.noche && (
+          <>
+            <Barra
+              etiqueta="Platos de noche por día"
+              valor={esc.noche.q}
+              min={0}
+              max={200}
+              paso={1}
+              onChange={(q) => setEsc((e) => ({ ...e, noche: { ...e.noche!, q } }))}
+            />
+            <Barra
+              etiqueta="Precio promedio de noche"
+              valor={esc.noche.precio}
+              min={4}
+              max={40}
+              paso={0.5}
+              formato={s2}
+              onChange={(precio) => setEsc((e) => ({ ...e, noche: { ...e.noche!, precio } }))}
+            />
+            <Barra
+              etiqueta="Insumos por plato de noche"
+              valor={esc.noche.insumos}
+              min={0.5}
+              max={20}
+              paso={0.05}
+              formato={s2}
+              onChange={(insumos) => setEsc((e) => ({ ...e, noche: { ...e.noche!, insumos } }))}
+            />
+            <Barra
+              etiqueta="Noches que abre al mes"
+              valor={esc.noche.dias ?? esc.dias}
+              min={1}
+              max={31}
+              paso={1}
+              onChange={(dias) => setEsc((e) => ({ ...e, noche: { ...e.noche!, dias } }))}
+            />
+            <Barra
+              etiqueta="Balones de gas extra por la noche"
+              valor={esc.noche.balones}
+              min={0}
+              max={15}
+              paso={1}
+              onChange={(balones) => setEsc((e) => ({ ...e, noche: { ...e.noche!, balones } }))}
+            />
+            <Barra
+              etiqueta="Luz extra por la noche"
+              valor={esc.noche.servicios}
+              min={0}
+              max={1500}
+              paso={10}
+              formato={s0}
+              onChange={(servicios) => setEsc((e) => ({ ...e, noche: { ...e.noche!, servicios } }))}
+            />
+            <p className="es-nota">
+              {esc.planilla.length
+                ? 'Con tu planilla, marca en cada persona si trabaja de día, de noche o en los dos turnos.'
+                : 'La noche lleva su propio equipo (cocinero y mozo como mínimo), pagado por las noches que abre.'}
+            </p>
+          </>
+        )}
+
         <h2>Personal</h2>
         <Chips
           valor={esc.planilla.length > 0}
@@ -106,7 +178,12 @@ export function PanelSimulador({ ciudades, esc, setEsc, base, calculo }: Props) 
           ]}
         />
         {esc.planilla.length > 0 ? (
-          <Planilla planilla={esc.planilla} dias={esc.dias} onChange={cambiar('planilla')} />
+          <Planilla
+            planilla={esc.planilla}
+            dias={esc.dias}
+            conNoche={esc.noche !== null}
+            onChange={cambiar('planilla')}
+          />
         ) : (
           <>
             <p className="es-nota">Un cocinero, un ayudante más cada 80 menús y un mozo cada 70, con sueldo mensual.</p>
@@ -200,7 +277,7 @@ export function PanelSimulador({ ciudades, esc, setEsc, base, calculo }: Props) 
               <Dato
                 titulo="Equilibrio"
                 valor={calculo.equilibrio_menus_dia === null ? 'más de 600' : `${calculo.equilibrio_menus_dia} menús/día`}
-                nota="lo mínimo para no perder"
+                nota={esc.noche ? 'menús de día para no perder, con la noche como está' : 'lo mínimo para no perder'}
               />
               <Dato
                 titulo={`Utilidad del mes a ${esc.q} menús`}
@@ -234,6 +311,20 @@ export function PanelSimulador({ ciudades, esc, setEsc, base, calculo }: Props) 
                     <th>Ventas (con IGV)</th>
                     <td>{soles(m.ventas)}</td>
                   </tr>
+                  {esc.noche && (
+                    <>
+                      <tr>
+                        <th>· de día</th>
+                        <td>{soles(m.ventas_dia)}</td>
+                      </tr>
+                      <tr>
+                        <th>
+                          · de noche ({m.platos_noche_mes} platos, deja {soles(m.contrib_noche, 2)} c/u)
+                        </th>
+                        <td>{soles(m.ventas_noche)}</td>
+                      </tr>
+                    </>
+                  )}
                   <tr>
                     <th>Precio sin IGV</th>
                     <td>{soles(m.precio_sin_igv, 2)}</td>
@@ -269,7 +360,7 @@ export function PanelSimulador({ ciudades, esc, setEsc, base, calculo }: Props) 
               </table>
             </div>
 
-            <CalendarioPagos calculo={calculo} dias={esc.dias} />
+            <CalendarioPagos calculo={calculo} dias={esc.dias} conNoche={esc.noche !== null} />
 
             <div className="es-datos es-datos-3">
               <Dato titulo="Año malo (1 de cada 10)" valor={soles(mc.p10)} tono={mc.p10 >= 0 ? 'bien' : 'mal'} />

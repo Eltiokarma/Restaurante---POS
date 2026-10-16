@@ -22,13 +22,21 @@ VARIABLES = {
 }
 
 
+def _noche(esc: Escenario, **factores) -> Escenario:
+    """Mueve lo mismo en el turno noche (si abre), para mirar el negocio entero."""
+    if esc.noche is None:
+        return esc
+    n = esc.noche
+    return replace(esc, noche=n.con(**{k: getattr(n, k) * f for k, f in factores.items()}))
+
+
 def _aplicar(var: str, factor: float, local: Local, esc: Escenario, q: float):
     if var == "precio":
-        return local.con(precio=local.precio * factor), esc, q
+        return local.con(precio=local.precio * factor), _noche(esc, precio=factor), q
     if var == "q":
-        return local, esc, q * factor
+        return local, _noche(esc, q=factor), q * factor
     if var == "insumos":
-        return local.con(insumos=local.insumos * factor), esc, q
+        return local.con(insumos=local.insumos * factor), _noche(esc, insumos=factor), q
     if var == "sueldos":
         local = local.con(sueldo_cocinero=local.sueldo_cocinero * factor,
                           sueldo_ayudante=local.sueldo_ayudante * factor,
@@ -39,6 +47,8 @@ def _aplicar(var: str, factor: float, local: Local, esc: Escenario, q: float):
         return local.con(gas_balon45=local.gas_balon45 * factor), esc, q
     if var == "dias":
         return local, replace(esc, dias=esc.dias * factor), q
+    if var == "servicios_mes":
+        return local.con(servicios_mes=local.servicios_mes * factor), _noche(esc, servicios=factor), q
     return local.con(**{var: getattr(local, var) * factor}), esc, q
 
 

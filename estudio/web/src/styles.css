@@ -746,3 +746,10 @@ input[type='password'],
 .es-campos label {
   justify-content: flex-end;
 }
+.es-pie-trabajador {
+  align-items: center;
+  justify-content: space-between;
+}
+.es-pie-trabajador .es-secundario {
+  flex: none;
+}

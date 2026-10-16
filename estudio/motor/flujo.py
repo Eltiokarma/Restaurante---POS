@@ -142,7 +142,11 @@ def flujo_caja(local: Local, esc: Escenario, nacional: dict, sup: Supuestos) -> 
             sueldo_cocinero=local.sueldo_cocinero * f, sueldo_ayudante=local.sueldo_ayudante * f,
             sueldo_mozo=local.sueldo_mozo * f,
         )
-        esc_y = replace(esc, planilla=tuple(t.con(monto=t.monto * f) for t in esc.planilla))
+        noche_y = None
+        if esc.noche is not None:
+            noche_y = esc.noche.con(precio=_medio_sol(esc.noche.precio * (1 + sup.alza_precio) ** y),
+                                    insumos=esc.noche.insumos * f, servicios=esc.noche.servicios * f)
+        esc_y = replace(esc, planilla=tuple(t.con(monto=t.monto * f) for t in esc.planilla), noche=noche_y)
         ventas = igv_pagado = utilidad = menus = 0.0
         ventas_mes: list[float] = []
         for m in range(12):
@@ -150,12 +154,14 @@ def flujo_caja(local: Local, esc: Escenario, nacional: dict, sup: Supuestos) -> 
             rampa = 1.0
             if sup.meses_arranque > 0 and k < sup.meses_arranque:
                 rampa = sup.arranque_desde + (1 - sup.arranque_desde) * k / sup.meses_arranque
-            q = max(1.0, sup.q * rampa * (1 + sup.crecimiento_q) ** y)
-            res = modelo(local_y, q, esc_y, nacional, igv=igv, rmv=rmv, otros_fijos=OTROS_FIJOS * f,
+            crece = rampa * (1 + sup.crecimiento_q) ** y
+            q = max(1.0, sup.q * crece)
+            esc_m = esc_y if noche_y is None else replace(esc_y, noche=noche_y.con(q=noche_y.q * crece))
+            res = modelo(local_y, q, esc_m, nacional, igv=igv, rmv=rmv, otros_fijos=OTROS_FIJOS * f,
                          sueldo_dueno=SUELDO_DUENO * f)
             ventas += res.ventas
             ventas_mes.append(res.ventas)
-            igv_pagado += res.ventas - res.p_net * res.q_mes
+            igv_pagado += res.ventas - res.ventas_netas
             utilidad += res.util
             menus += q
         ventas_netas = ventas - igv_pagado
