@@ -16,6 +16,7 @@ from pathlib import Path
 from motor import Escenario, cargar_dataset, equilibrio, local_de_ciudad, modelo, precio_minimo, simular
 from motor.flujo import NOMBRE_REGIMEN, REGIMENES, Supuestos, comparar_regimenes, flujo_caja
 from motor.modelo import Noche, Trabajador
+from motor.barrido import Factores, barrido, estres, mezcla_desde_analisis, resumen
 from motor.montecarlo import muestras
 from motor.sensibilidad import matriz, quiebres, tornado
 
@@ -78,6 +79,22 @@ def caso(nombre: str, datos: dict) -> dict:
     }
 
 
+def corridas(nombre: str, datos: dict, mezcla=None) -> dict:
+    """Barrido robusto y prueba de estrés de un caso (lo mismo que corre el
+    servicio en la pestaña Corridas)."""
+    local, esc, sup, q = armar(datos)
+    f = Factores(mezcla=sorted({0.25, mezcla.parte_actual, 0.75}) if mezcla else [None])
+    r = barrido(local, esc, q, NAC, RIESGO, sup, f, mezcla)
+    porciones = {}
+    for d in r["decisiones"]:  # peor caso por precio y porción (mejor mezcla y turno)
+        clave = f"{d['precio']}|{d['calidad']}"
+        if clave not in porciones or d["utilidad_peor"] > porciones[clave]["utilidad_peor"]:
+            porciones[clave] = d
+    return {"nombre": nombre, "precio0": local.precio, "q0": q, **resumen(r),
+            "decisiones": r["decisiones"][:15], "por_precio_porcion": list(porciones.values()),
+            "estres": estres(local, esc, q, NAC, RIESGO)}
+
+
 def ciudades() -> list[dict]:
     """Equilibrio de referencia del brief (popular, formal, 100 menús, 5
     balones, sin sueldo del dueño) y sus variantes."""
@@ -113,8 +130,12 @@ def generar() -> dict:
         if g:
             candela = caso(g["nombre"], g["datos"])
             platos = _api("/platos/analisis?igv=10.5&formal=true")
+    mezcla = mezcla_desde_analisis(platos) if platos else None
+    robustez = [corridas(a["nombre"], a["datos"]) for a in arquetipos]
+    if candela:
+        robustez.append(corridas(g["nombre"], g["datos"], mezcla))
     datos = {
-        "ciudades": ciudades(), "casos": casos, "candela": candela, "platos": platos,
+        "ciudades": ciudades(), "casos": casos, "candela": candela, "platos": platos, "robustez": robustez,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},
         "fuentes": DATA["fuentes"], "regimenes": list(REGIMENES),
     }
