@@ -172,15 +172,39 @@ def hallazgos(arquetipos: list[dict], candela_datos: dict | None) -> dict:
         salida["precio_candela"] = {
             "umbral_elasticidad_mas1": lo, "base": m.util,
             "sin_igv": modelo(local, q, sin_igv, NAC).util,
-            # historia: S/ 10 con ~S/ 1,000 diarios; S/ 11 con S/ 750–800
-            "historia": {"p0": 10.0, "q0": 100.0, "p1": 11.0, "q1_bajo": 750 / 11, "q1_alto": 800 / 11},
-            "elasticidad_arco": [math.log(100 / (800 / 11)) / math.log(1.1), math.log(100 / (750 / 11)) / math.log(1.1)],
-            "a_10_con_100": modelo(local.con(precio=10.0), 100, esc, NAC).util,
-            "a_10_con_100_sin_igv": modelo(local.con(precio=10.0), 100, sin_igv, NAC).util,
+            "historia": HISTORIA,
+            # 10 → 11: del par más favorable al más desfavorable, y el central
+            "elasticidad_arco": [math.log(HISTORIA["q0_bajo"] / HISTORIA["q1_alto"]) / math.log(1.1),
+                                 math.log(HISTORIA["q0_alto"] / HISTORIA["q1_bajo"]) / math.log(1.1)],
+            "elasticidad_central": math.log(HISTORIA["q0"] / HISTORIA["q1"]) / math.log(1.1),
+            "elasticidad_ajuste": _ajuste_elasticidad(),
+            "q0": HISTORIA["q0"],
+            "a_10": modelo(local.con(precio=10.0), HISTORIA["q0"], esc, NAC).util,
+            "a_10_sin_igv": modelo(local.con(precio=10.0), HISTORIA["q0"], sin_igv, NAC).util,
+            "a_15": modelo(local.con(precio=15.0), HISTORIA["q_abrir"], esc, NAC).util,
+            "a_15_sin_igv": modelo(local.con(precio=15.0), HISTORIA["q_abrir"], sin_igv, NAC).util,
+            "equilibrio_15_sin_igv": equilibrio(local.con(precio=15.0), sin_igv, NAC),
             "curvas_demanda": {str(el): [{"precio": 9 + 0.5 * k, "q": q * ((9 + 0.5 * k) / local.precio) ** (-el)}
-                                         for k in range(9)] for el in (1.0, 2.0, 3.0, 4.0)},
+                                         for k in range(13)] for el in (1.0, 2.0, 2.5, 3.0, 4.0)},
         }
     return salida
+
+
+# Historia de precios de Candela (entrevista, oct-2026): venta diaria en caja
+HISTORIA = {"p_abrir": 15.0, "q_abrir": 500 / 15, "q_abrir_bajo": 450 / 15, "q_abrir_alto": 550 / 15,
+            "p0": 10.0, "q0": 90.0, "q0_bajo": 80.0, "q0_alto": 100.0,
+            "p1": 11.0, "q1": 775 / 11, "q1_bajo": 750 / 11, "q1_alto": 800 / 11}
+
+
+def _ajuste_elasticidad() -> float:
+    """Elasticidad constante que mejor ajusta (mínimos cuadrados en
+    logaritmos) los tres puntos de la historia de Candela."""
+    h = HISTORIA
+    pts = [(h["p_abrir"], h["q_abrir"]), (h["p0"], h["q0"]), (h["p1"], h["q1"])]
+    xs = [math.log(p) for p, _ in pts]
+    ys = [math.log(q) for _, q in pts]
+    mx, my = sum(xs) / 3, sum(ys) / 3
+    return -sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sum((x - mx) ** 2 for x in xs)
 
 
 def ciudades() -> list[dict]:

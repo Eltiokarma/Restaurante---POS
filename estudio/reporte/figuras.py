@@ -368,7 +368,7 @@ def fig_precio_robusto(d):
         or next(x for x in d["robustez"] if x["nombre"].startswith("Inversor"))
     fig, ax = plt.subplots(figsize=(ANCHO, 2.9))
     etiquetas = {"0.5": "clientela fiel (0.5)", "1.0": "intermedia (1.0)", "1.5": "mucha competencia (1.5)",
-                 "2.0": "2", "3.0": "3 (la medida en Candela)", "4.0": "4"}
+                 "2.0": "2", "2.5": "2.5 (la medida en Candela)", "3.0": "3", "4.0": "4"}
     for (el, serie), col in zip(sorted(r["curvas"].items(), key=lambda x: float(x[0])), (AGUA, NARANJA, PERDIDA)):
         xs = [x["precio"] for x in serie]
         ys = [x["utilidad"] for x in serie]
@@ -455,19 +455,23 @@ def fig_historia(d):
     if not pc:
         return
     h = pc["historia"]
-    fig, ax = plt.subplots(figsize=(ANCHO * 0.72, 2.9))
-    colores = {"1.0": "#9a988f", "2.0": AGUA, "3.0": NARANJA, "4.0": PERDIDA}
+    fig, ax = plt.subplots(figsize=(ANCHO * 0.78, 3.1))
+    colores = {"1.0": "#9a988f", "2.0": AGUA, "2.5": AZUL, "3.0": NARANJA, "4.0": PERDIDA}
     for el, serie in pc["curvas_demanda"].items():
-        ax.plot([x["precio"] for x in serie], [x["q"] for x in serie], color=colores[el], lw=1.6,
+        ax.plot([x["precio"] for x in serie], [x["q"] for x in serie], color=colores[el],
+                lw=2.2 if el == "2.5" else 1.3, ls="-" if el == "2.5" else (0, (4, 2)),
                 label=f"$\\varepsilon$ = {float(el):g}")
-    ax.scatter([h["p0"]], [h["q0"]], color=AZUL, s=46, zorder=5)
-    ax.annotate("antes: S/ 10,\n~S/ 1 000 al día", (h["p0"], h["q0"]), xytext=(8, 4), textcoords="offset points",
-                fontsize=7.5)
-    ax.plot([h["p1"], h["p1"]], [h["q1_bajo"], h["q1_alto"]], color=AZUL, lw=4, solid_capstyle="round", zorder=5)
-    ax.annotate("hoy: S/ 11,\nS/ 750–800 al día", (h["p1"], h["q1_bajo"]), xytext=(-70, -34), textcoords="offset points",
-                fontsize=7.5, arrowprops={"arrowstyle": "-", "color": TINTA2, "lw": 0.5})
+    puntos = [(h["p_abrir"], h["q_abrir_bajo"], h["q_abrir_alto"], "al abrir: S/ 15,\nS/ 450–550 al día", (-78, 48)),
+              (h["p0"], h["q0_bajo"], h["q0_alto"], "S/ 10: S/ 800–1 000,\ncocina al límite", (10, 6)),
+              (h["p1"], h["q1_bajo"], h["q1_alto"], "hoy: S/ 11,\nS/ 750–800 al día", (-20, -52))]
+    for x, q_lo, q_hi, texto, desp in puntos:
+        ax.plot([x, x], [q_lo, q_hi], color=TINTA, lw=5, solid_capstyle="round", zorder=5)
+        ax.annotate(texto, (x, q_hi if desp[1] > 0 else q_lo), xytext=desp, textcoords="offset points", fontsize=7.5,
+                    bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none"},
+                    arrowprops={"arrowstyle": "-", "color": TINTA2, "lw": 0.5})
     ax.set_xlabel("Precio del menú (S/)")
     ax.set_ylabel("Menús al día")
+    ax.set_ylim(0, None)
     ax.yaxis.grid(True, color=GRILLA, lw=0.6)
     ax.legend(fontsize=7.5, loc="upper right", title="Sensibilidad", title_fontsize=7.5)
     guardar(fig, "historia")

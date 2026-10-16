@@ -162,11 +162,12 @@ def construir(d: dict) -> str:
         top3 = ", ".join(f"{esc(x['insumo'].lower())} ({p(x['parte'])})" for x in par[:3])
         prec_neto = pl["menu"]["precio_promedio"] / 1.105
         candela_resumen = (
-            f"\\item \\textbf{{Candela está en su punto de equilibrio antes de impuestos y su clientela es muy sensible "
+            f"\\item \\textbf{{Candela está en su punto de equilibrio antes de impuestos y su clientela es sensible "
             f"al precio.}} Con su alquiler y su planilla reales, la venta cubre insumos, sueldos y local, pero no el "
             f"trabajo del dueño; si paga IGV sobre todo lo vendido, pierde {s(-cand['utilidad_mes'] - 1500)} al mes sin "
-            f"contar su sueldo. Al subir de S/~10 a S/~11 perdió cerca de 3 clientes de cada 10: en su caso, subir el "
-            f"precio no paga.")
+            f"contar su sueldo. Al subir de S/~10 a S/~11 perdió cerca de "
+            f"{round(10 * (1 - pc['historia']['q1'] / pc['historia']['q0']))} clientes de cada 10, lo justo para que el "
+            f"alza no ganara ni perdiera dinero: el precio ya está en su punto y la mejora tiene que venir del costo.")
         candela_seccion = rf"""
 \section{{El caso Candela}}\label{{sec:candela}}
 
@@ -226,7 +227,7 @@ semana sube la utilidad sin tocar la pizarra.
 La entrevista con el dueño completó lo que el sistema de ventas no tiene. El local paga S/~2\,000 de alquiler
 ---un precio de conocido; el de mercado para ese tamaño y esa calle es S/~3\,000---. En cocina trabajan tres
 personas a tiempo completo (S/~1\,500, S/~1\,500 y S/~1\,300) y en el salón tres mozos a medio tiempo (S/~700 cada
-uno); las compras las hace el dueño. Opera con RUC de persona natural. La inversión inicial fue de S/~20 mil y
+uno); las compras las hace el dueño. Opera con RUC de persona natural y emite boleta solo cuando el cliente la pide, así que el IGV que de verdad paga está entre los dos extremos del cuadro. La inversión inicial fue de S/~20 mil y
 el local tardó unos seis meses en llenarse.
 
 \begin{{table}}[h]
@@ -264,26 +265,37 @@ dueño no tiene recompensa.
 
 \subsection{{La lección del precio}}
 
-Candela tiene algo que ningún estudio de mercado ofrece: un experimento propio. Abrió a S/~15 por tres meses,
-bajó a S/~10 durante un año y subió a S/~11 por el alza de los insumos y para mejorar la comida. A S/~10 vendía
-cerca de S/~1\,000 diarios (unos 100 menús); a S/~11 vende S/~750--800 (unos 70). Un alza de 10\,\% en el precio
-se llevó cerca de 30\,\% de la clientela: una elasticidad de {n(pc['elasticidad_arco'][0], 1)} a
-{n(pc['elasticidad_arco'][1], 1)} (figura~\ref{{fig:historia}}).
+Candela tiene algo que ningún estudio de mercado ofrece: un experimento propio, con tres precios. Abrió a
+S/~15 durante tres meses y en un buen día vendía S/~450--550 (unos 33 menús). Bajó a S/~10 durante un año y la
+venta saltó a S/~800--1\,000 diarios (unos 90 menús), tanto que la cocina colapsaba. Subió a S/~11 por el alza
+de los insumos y para mejorar la comida, y hoy vende S/~750--800 (unos 70). Los tres puntos caen cerca de una
+misma curva: la sensibilidad constante que mejor los ajusta es de {n(pc['elasticidad_ajuste'], 1)}, y el paso de
+S/~10 a S/~11, por sí solo, da {n(pc['elasticidad_central'], 1)} (entre {n(pc['elasticidad_arco'][0], 1)} y
+{n(pc['elasticidad_arco'][1], 1)} según qué extremo de cada rango se tome; figura~\ref{{fig:historia}}).
 
 \begin{{figure}}[t]
 \centering
-\includegraphics[width=0.74\textwidth]{{fig/historia.pdf}}
-\caption{{Candela: la venta a S/~10 y a S/~11 frente a curvas de demanda con distinta sensibilidad. Los puntos
-observados caen entre $\varepsilon=3$ y $\varepsilon=4$.}}\label{{fig:historia}}
+\includegraphics[width=0.8\textwidth]{{fig/historia.pdf}}
+\caption{{Candela: la venta diaria en sus tres precios (barras: el rango que da el dueño) frente a curvas de
+demanda con distinta sensibilidad, ancladas en la venta de hoy. La curva de $\varepsilon=2.5$ pasa cerca de
+los tres.}}\label{{fig:historia}}
 \end{{figure}}
 
-Es una sensibilidad muy alta, y cambia la recomendación. El modelo calcula que subir un sol deja de convenir
-cuando se pierde más de {n(pc['umbral_elasticidad_mas1'], 1)}\,\% de clientes por cada 1\,\% de alza; la historia
-de Candela muestra entre {n(pc['elasticidad_arco'][0], 1)} y {n(pc['elasticidad_arco'][1], 1)}. Con los costos de
-hoy, volver a S/~10 con 100 menús dejaría {s(pc['a_10_con_100'] - cand['utilidad_mes'])} más al mes que la
-situación actual. La cifra hay que tomarla con cuidado: el alza coincidió con un cambio en la comida y con
-otros factores de la época, y no toda la caída de la clientela tiene por qué venir del precio. Pero la
-dirección es clara: en Candela, el precio ya está en el límite de lo que su clientela acepta.
+Es una clientela sensible, aunque menos de lo que sugería la primera lectura. El modelo calcula que subir un sol
+deja de convenir cuando se pierde más de {n(pc['umbral_elasticidad_mas1'], 1)}\,\% de clientes por cada 1\,\% de
+alza; la historia de Candela está {"por encima" if pc['elasticidad_ajuste'] > pc['umbral_elasticidad_mas1'] else "apenas por debajo"}
+de ese umbral. Por eso la cuenta en soles sale pareja: con los costos de hoy, S/~10 con {n(pc['q0'])} menús
+dejaría {s(abs(pc['a_10'] - cand['utilidad_mes']))} {"más" if pc['a_10'] > cand['utilidad_mes'] else "menos"} al mes
+que S/~11 con la venta actual. El alza a S/~11 no hizo ganar ni perder mucho dinero; lo que sí hizo fue sacar a la
+cocina del colapso, y eso vale aunque el modelo no lo cobre: menos errores, menos espera, menos clientes que se
+van sin comer.
+
+El precio de apertura deja otra lección. A S/~15 el menú cubre sus costos con muy poca gente: sin IGV, y pagando
+también un sueldo al dueño, el equilibrio está en {pc['equilibrio_15_sin_igv']} menús diarios. Si a ese precio el
+local vendía unos 33 fue, en buena parte, porque recién abría ---tardó seis meses en llenarse---. No se sabe
+cuánta clientela habría tenido a S/~15 un local ya conocido, y es la pregunta más rentable que queda abierta: un
+menú de S/~15 que llegue a 45 o 50 platos diarios gana más que uno de S/~11 con 70, con menos trabajo. Probarlo
+no exige cambiar la pizarra: basta un segundo ``especial'' a S/~15 junto al menú de siempre.
 
 \subsection{{Dónde está Candela}}
 
@@ -413,7 +425,7 @@ utilidad más que cualquier otra variable; en el inversor promedio, basta que el
 {p(abs(inv['quiebres']['precio']), 1)} para que pierda.
 \item \textbf{{Subir el precio conviene solo si la clientela lo tolera.}} Con sensibilidades de 0.5 a 1.5, en
 todos los restaurantes tipo la mejor decisión sube el precio; en Candela, cuya historia muestra una sensibilidad
-de 3 a 4, cada sol de alza resta utilidad.
+de {n(pc['elasticidad_ajuste'], 1) if pc else "2 a 3"}, mover el precio en cualquier dirección apenas cambia la utilidad.
 \item \textbf{{Solo {len(sobreviven)} de {NN} negocios resisten todos los golpes juntos}} (clientela, insumos,
 IGV, sueldos, alquiler y competencia): {esc(', '.join(sobreviven))}.
 \item \textbf{{La fonda familiar es rentable porque su trabajo se paga por debajo del mínimo.}} Repartida entre
@@ -701,9 +713,13 @@ para los {NN} negocios, cada una con su simulación de riesgo y su flujo a diez 
 {"" if not rc else rf"""\subsection{{Candela, con su propia elasticidad}}
 
 Para Candela no hace falta suponer cómo reacciona la clientela: su historia lo mide. El barrido usó tres
-sensibilidades alrededor de la observada (2, 3 y 4) y precios entre S/~9 y S/~13. La figura~\ref{{fig:precio_robusto}}
-muestra el resultado: con la sensibilidad medida, cada sol de alza resta utilidad, y bajar el precio la
-mejora. Solo con la sensibilidad más baja (2) el precio es indiferente.
+sensibilidades alrededor de la observada ({", ".join(n(float(k), 1) for k in sorted(rc['curvas'], key=float))}) y precios entre
+S/~9 y S/~13. La figura~\ref{{fig:precio_robusto}} muestra el resultado: con la sensibilidad medida, la curva es
+casi plana entre S/~10 y S/~11; con una clientela algo más sensible conviene bajar, y con una algo menos
+sensible, subir, pero en ningún caso el mejor precio deja más de
+{s(max(max(x['utilidad'] for x in serie) - next(x['utilidad'] for x in serie if abs(x['precio'] - rc['precio0']) < 1e-9) for serie in rc['curvas'].values()))}
+al mes sobre el de hoy. Hay además un techo que el modelo no ve: a S/~10 la cocina ya colapsaba con unos 90
+menús, así que bajar el precio no puede traer toda la clientela que la curva promete.
 
 \begin{{figure}}[t]
 \centering
@@ -945,13 +961,14 @@ Para Candela, en orden de impacto:
 venta neta. Pesar durante una semana las porciones de los cinco segundos más vendidos, comprar la proteína por
 volumen y servir más segundos de pollo, chancho o pasta que de res ataca el renglón más grande sin que la
 clientela lo note: cada segundo de res que se cambia ahorra entre S/~0.50 y S/~1.50.
-\item \textbf{{No volver a subir el precio, y probar S/~10.50.}} La historia del local muestra una clientela muy
-sensible. Un precio intermedio, con recargo solo en los segundos de res o en los platos más pedidos, puede
-recuperar clientes sin perder margen. Medir dos semanas antes de decidir.
-\item \textbf{{Aclarar el régimen y el IGV.}} Con ventas de unos S/~250 mil al año, Candela no cabe en el Nuevo RUS;
-como persona natural le corresponde el RER o el MYPE, y con ellos el IGV de 10.5\,\% (15\,\% en 2027). Es la
-diferencia entre dejarle {s(pc['sin_igv'] + 1500)} al dueño y perder {s(-(cand['utilidad_mes'] + 1500))} al mes ---unos
-{s(pc['sin_igv'] - cand['utilidad_mes'])} de diferencia---, así que conviene revisarlo con un contador.
+\item \textbf{{Dejar el precio en S/~11 y probar un especial a S/~15.}} Con la sensibilidad que muestra su
+historia, subir o bajar el menú apenas cambia la utilidad, y bajarlo devuelve a la cocina al colapso de los S/~10. Lo
+que sí vale la pena medir es la otra punta: un segundo especial a S/~15 junto al menú de siempre, para saber cuánta
+gente paga más por un plato mejor ahora que el local ya es conocido.
+\item \textbf{{Dejar el IGV para su propio análisis.}} Candela emite boleta solo cuando se la piden, así que el IGV
+que de verdad paga está entre los dos extremos de este estudio: entre dejarle {s(pc['sin_igv'] + 1500)} al dueño y
+perder {s(-(cand['utilidad_mes'] + 1500))} al mes. Cuánto se acerca a uno u otro depende de una situación tributaria
+que este estudio no revisa y que conviene ver aparte, con un contador.
 \item \textbf{{Cuidar el alquiler de conocido.}} Vale S/~1\,000 al mes. Un contrato por escrito con plazo
 largo lo protege.
 \item \textbf{{Ponerle precio al trabajo del dueño.}} Hoy el dueño hace las compras y administra sin que el negocio
