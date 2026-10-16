@@ -136,6 +136,20 @@ def construir(d: dict) -> str:
     sobreviven = [corto(r["nombre"]) for r in d.get("robustez", []) if r["estres"][-1]["utilidad"] >= 0]
     al_tope = sum(1 for r in d.get("robustez", []) if r["mejor"]["precio"] >= r["precio0"] + 3 - 1e-9)
 
+    hz = d.get("hallazgos", {})
+    nr = hz.get("nrus", {})
+    pc = hz.get("precio_candela")
+    hora = {h["nombre"]: h for h in hz.get("hora", [])}
+    medio = sorted(hz.get("medio_sol", []), key=lambda x: x["menus"])
+    noche_u = {x["nombre"]: x for x in hz.get("noche", [])}
+
+    def u_fija(el, dp):
+        serie = pc["tabla"]["fija"][el]
+        return next(x["utilidad"] for x in serie if abs(x["precio"] - serie[0]["precio"] - dp) < 1e-9)
+
+    def menus_medio(prefijo):
+        return next(x["menus"] for x in medio if x["nombre"].startswith(prefijo))
+
     def golpe(r, clave):
         return next(g for g in r["estres"] if g["golpe"] == clave)["utilidad"]
 
@@ -240,6 +254,7 @@ cifra de esta sección se recalcula sola.
 \usepackage{{fancyhdr}}
 \usepackage[most]{{tcolorbox}}
 \usepackage{{float}}
+\usepackage[section]{{placeins}}
 \usepackage[hidelinks]{{hyperref}}
 \usepackage{{xurl}}
 
@@ -325,6 +340,11 @@ sensible, en todos los negocios hay una combinación de precio, porción y turno
 de diez está en el tope de precio probado (S/~3 más).
 \item \textbf{{Solo {len(sobreviven)} de diez negocios resisten todos los golpes juntos}} (clientela, insumos,
 IGV, sueldos, alquiler y competencia): {esc(', '.join(sobreviven))}.
+\item \textbf{{La fonda familiar es rentable porque su trabajo se paga por debajo del mínimo.}} Repartida entre
+tres personas que trabajan 60 horas a la semana, su utilidad equivale a {s(hora['Familia sin sueldos']['por_hora'], 2)}
+por hora, frente a {s(hz['rmv_hora'], 2)} del sueldo mínimo.
+\item \textbf{{El Nuevo RUS castiga crecer.}} Al pasar su tope, un local chico pierde {s(nr['nrus_tope'] - nr['rer_justo_despues'])}
+al mes de golpe y necesita llegar a unos {nr['q_recupera']} menús diarios para recuperarse.
 {candela_resumen}
 \end{{itemize}}
 \end{{recuadro}}
@@ -629,7 +649,23 @@ clientes, la planilla automática necesita un mozo menos; con la planilla real d
 existir. Segunda: el barrido llegó al límite que probó (S/~3 más). Más allá no hay datos sobre la reacción de
 la clientela, así que la conclusión prudente es subir \emph{{hasta}} S/~13.50--14, de a medio sol, midiendo las
 ventas en cada paso.
-"""}
+""" + ("" if not pc else rf"""
+La primera advertencia se puede medir. La figura~\ref{{fig:precio_fijo}} repite la curva de precio dejando
+fija la planilla de hoy ---un cocinero, un ayudante y los mozos actuales--- para que ningún escalón de personal
+ayude. El resultado cambia de tono. Subir el precio sigue conviniendo mientras la clientela no sea muy
+sensible: el alza de S/~1 deja de pagar recién si se pierde más de {n(pc['umbral_elasticidad_mas1'], 1)}\,\% de
+los clientes por cada 1\,\% de alza, una sensibilidad alta para un almuerzo. Pero la ganancia es mucho menor:
+con clientela intermedia, S/~3 más mejoran la utilidad en {s(u_fija('1.0', 3) - pc['base'])} al mes, apenas
+lo justo para llegar a {s(u_fija('1.0', 3))}. El precio, por sí solo, ordena la casa; no la hace rentable. Lo
+que falta tiene que venir del volumen, de la noche o de los costos fijos reales.
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/precio_fijo.pdf}}
+\caption{{Candela: utilidad según el precio con la planilla automática (izquierda) y con la planilla fija
+de hoy (derecha), para cuatro sensibilidades de la clientela. La línea punteada es la utilidad actual.}}\label{{fig:precio_fijo}}
+\end{{figure}}
+""")}
 
 \subsection{{Todos los negocios}}
 
@@ -672,6 +708,67 @@ Solo {len(sobreviven)} de los diez negocios siguen ganando con todos los golpes 
 Los golpes que más daño hacen son los de insumos y el del competidor que obliga a bajar el precio; el alza de
 sueldos y la del alquiler, en cambio, se absorben. La fonda familiar resiste por la misma razón que en la
 simulación de riesgo: no tiene planilla que pagar cuando las ventas caen. {"" if not rc else f"Candela, con los datos actuales, ya pierde antes del golpe; el de insumos le quita otros {s(rc['base']['utilidad_media'] - golpe(rc, 'insumos'))} al mes y el del competidor {s(rc['base']['utilidad_media'] - golpe(rc, 'competidor'))}: son los dos frentes que más le conviene vigilar."}
+
+\section{{Lo que el modelo deja ver}}
+
+Más allá de los números de cada caso, el modelo permite hacer preguntas que en la operación diaria no se
+hacen. Cinco de ellas cambian la manera de pensar el negocio.
+
+\subsection{{Cuánto vale medio sol}}
+
+Medio sol más en la pizarra, con la misma clientela, equivale a vender más menús al precio de hoy. Cuántos,
+depende del margen por plato: en el ejecutivo, medio sol vale {n(menus_medio('Ejecutivo'))} menús diarios; en
+el inversor promedio, {n(menus_medio('Inversor'))}; en el puesto de mercado,
+{n(menus_medio('Puesto'))}{"" if not cand else f"; en Candela, {n(menus_medio('Candela'))}"}. Cuanto más bajo es el
+margen por plato, más vale cada centavo del precio, y más caro resulta competir bajándolo. Es la razón
+aritmética por la que el puesto de mercado, que vende a S/~7, es el que más pierde con el competidor que lo
+obliga a bajar un sol: ese golpe le quita casi toda la utilidad.
+
+\subsection{{El trabajo que no se cobra}}
+
+Si la dueña que cocina trabaja 60 horas a la semana, lo que se lleva equivale a
+{s(hora['Dueña que cocina']['por_hora'], 2)} por hora. En la familia sin sueldos, repartida entre tres personas,
+la cifra cae a {s(hora['Familia sin sueldos']['por_hora'], 2)} por hora y por persona: \emph{{menos que el sueldo
+mínimo}}, que equivale a {s(hz['rmv_hora'], 2)} por hora. El puesto de mercado, con más volumen y menos
+alquiler, llega a {s(hora['Puesto de mercado informal']['por_hora'], 2)}. La fonda familiar es rentable como
+empresa porque sus integrantes cobran, en los hechos, por debajo del mínimo legal. Es la otra cara del hallazgo
+de que en provincia ``gana el trabajo'': gana porque el trabajo se paga barato, y la estabilidad del negocio
+descansa en que la familia acepte esa tarifa.
+
+\subsection{{La trampa del Nuevo RUS}}
+
+La figura~\ref{{fig:nrus}} sigue a un local chico a medida que crece. Mientras vende hasta {nr.get('q_tope')}
+menús diarios cabe en el Nuevo RUS: no cobra IGV y paga una cuota fija. Al pasar el tope de S/~96 mil al año
+tiene que cambiar de régimen y empezar a cobrar IGV, y su utilidad cae de golpe de {s(nr.get('nrus_tope', 0))}
+a {s(nr.get('rer_justo_despues', 0))} al mes. Para volver a ganar lo mismo que antes del salto tiene que llegar a
+unos {nr.get('q_recupera')} menús diarios. El régimen castiga el crecimiento justo en el tramo en que un negocio
+chico intenta despegar; no es raro que muchos prefieran quedarse chicos o salir de la formalidad.
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/nrus.pdf}}
+\caption{{Un local chico que crece: utilidad después de impuestos en el Nuevo RUS (hasta su tope) y en el RER.
+La flecha es el salto al pasar el tope.}}\label{{fig:nrus}}
+\end{{figure}}
+
+\subsection{{Desde cuántas cenas conviene la noche}}
+
+El barrido mostró que la noche mejora a todos los negocios; la pregunta práctica es desde qué volumen. Si la
+noche exige un equipo propio, conviene desde unos {noche_u['Inversor (promedio)']['umbral']} platos por noche
+en el local promedio{"" if not cand else f" (y {noche_u['Candela (datos del POS)']['umbral']} en Candela)"}. Si la
+atienden las mismas personas del día ---la dueña, la familia---, conviene desde
+{noche_u['Dueña que cocina']['umbral']} o {noche_u['Familia sin sueldos']['umbral']} platos: casi cualquier venta.
+Pero esa cuenta no cobra las horas extra de esas personas; es el mismo trabajo no pagado de la sección
+anterior, ahora de noche. La decisión honesta compara las cenas que se venderían con el costo de un equipo
+nocturno, aunque al principio lo cubra la familia.
+
+\subsection{{Los escalones de personal}}
+
+El personal no crece de a poco: crece por personas. Un local que vende 71 menús necesita dos mozos y uno que
+vende 69, uno. Esos escalones explican resultados que parecen extraños ---subir el precio y perder clientes
+puede mejorar la utilidad porque permite prescindir de alguien--- y obligan a leer con cuidado cualquier cifra
+calculada con la planilla automática. Para un local concreto, la planilla real, persona por persona, es el
+dato que más afina el modelo.
 
 \section{{El largo plazo: diez años y cuatro regímenes}}
 
@@ -731,6 +828,45 @@ ley diga lo contrario.
 El exitoso confirma la regla por el otro lado: gana mucho porque vende mucho, no porque su plato sea más
 barato ni su cocina más eficiente. Su riesgo es el de cualquier negocio grande: necesita años para llenarse,
 más inversión y una administración que el dueño ya no puede hacer solo.
+
+\subsection{{La paradoja del inversor}}
+
+Visto desde afuera, el menú parece un buen negocio: todos los días hay clientela, la caja se mueve en
+efectivo y la inversión es modesta. El modelo explica por qué esa impresión engaña a quien solo pone capital.
+Lo que la fonda familiar muestra como utilidad es, en buena parte, el sueldo de sus integrantes; quien compra
+esos mismos trabajos en el mercado laboral descubre que el margen se lo llevaba la familia. El inversor no
+compite contra otro inversor: compite contra hogares que aceptan cobrar menos que el mínimo por su tiempo. Por
+eso, en una plaza como Juliaca, la inversión que no trae su propio trabajo necesita algo que el hogar no tiene:
+escala, un precio más alto sostenido por una marca o un segundo turno que reparta los costos fijos.
+
+\subsection{{Por qué el menú está barato}}
+
+En casi todos los negocios la decisión robusta sube el precio, aun suponiendo una clientela sensible. Que el
+mercado no lo haya hecho ya pide una explicación. La más probable es que el precio del menú no lo fija el costo
+sino la referencia: el cliente compara con la pizarra de la cuadra, y la cuadra la marcan locales informales
+que no pagan IGV ni cargas y que, como se vio, cobran su trabajo por debajo del mínimo. El precio de referencia
+es, en buena medida, un precio subsidiado. Un local formal que lo acepta como dado hereda el subsidio sin poder
+pagarlo. La salida no es necesariamente subir de golpe ---la referencia castiga al que se sale de ella--- sino
+separarse de la comparación: segundos con recargo, platos que no tengan equivalente en la cuadra, servicio más
+rápido para el trabajador con poco tiempo.
+
+\subsection{{Formalidad y política pública}}
+
+Los resultados ayudan a entender por qué la formalización avanza tan despacio en el sector. Para el negocio
+chico, el Nuevo RUS es un techo que castiga crecer; para el mediano, el IGV de restaurantes subirá de 10.5\,\% a
+15\,\% y, sin una ley nueva, a 18\,\%; para la fonda familiar, formalizarse obliga a pagar sueldos que hoy no
+existen. Cada uno de esos tramos hace racional quedarse afuera. Una política que quiera formalizar el menú
+tendría que suavizar los saltos ---un tránsito gradual entre regímenes, una tasa de IGV que no suba de golpe---
+antes que endurecer la fiscalización, porque el modelo sugiere que, a los precios actuales, una parte del
+sector simplemente no cabe en la formalidad.
+
+\subsection{{El valor de saber}}
+
+El análisis de sensibilidad y el barrido coinciden en qué datos mueven más las conclusiones: la reacción de la
+clientela al precio, la demanda nocturna y, para un local concreto, su alquiler y su planilla. Ninguno es caro de
+averiguar. Un alza de medio sol medida durante dos semanas estima la elasticidad mejor que cualquier supuesto;
+un piloto de tres noches por semana mide la demanda nocturna; el alquiler y la planilla ya los conoce el dueño.
+Antes de invertir en cualquier cambio grande, conviene invertir en esas tres mediciones.
 
 \section{{Recomendaciones}}
 

@@ -30,7 +30,7 @@ plt.rcParams.update({
     "axes.edgecolor": TINTA2, "axes.labelcolor": TINTA, "xtick.color": TINTA2, "ytick.color": TINTA2,
     "text.color": TINTA, "axes.spines.top": False, "axes.spines.right": False, "axes.linewidth": 0.6,
     "xtick.major.width": 0.6, "ytick.major.width": 0.6, "axes.grid": False, "legend.frameon": False,
-    "pdf.fonttype": 3, "figure.dpi": 150,
+    "pdf.fonttype": 3, "figure.dpi": 150, "mathtext.fontset": "cm",
 })
 
 
@@ -426,11 +426,57 @@ def fig_estres(d):
     guardar(fig, "estres")
 
 
+def fig_nrus(d):
+    h = d["hallazgos"]["nrus"]
+    c = h["curva"]
+    fig, ax = plt.subplots(figsize=(ANCHO, 2.8))
+    dentro = [x for x in c if x["cabe_nrus"]]
+    fuera = [x for x in c if not x["cabe_nrus"]]
+    ax.plot([x["q"] for x in dentro], [x["nrus"] for x in dentro], color=AMARILLO, lw=2.2, label="Nuevo RUS (cuota fija, sin IGV)")
+    ax.plot([x["q"] for x in fuera], [x["nrus"] for x in fuera], color=AMARILLO, lw=1.4, ls=(0, (3, 2)),
+            label="Nuevo RUS si no hubiera tope")
+    ax.plot([x["q"] for x in c], [x["rer"] for x in c], color=AGUA, lw=2.2, label="RER (IGV y 1.5 % de renta)")
+    ax.axvline(h["q_tope"] + 1, color=TINTA2, lw=0.8)
+    ax.text(h["q_tope"] + 1.3, ax.get_ylim()[1], "tope de S/ 96 mil al año", fontsize=7.5, color=TINTA2, va="top")
+    ax.annotate("", xy=(h["q_tope"] + 2, h["rer_justo_despues"]), xytext=(h["q_tope"], h["nrus_tope"]),
+                arrowprops={"arrowstyle": "->", "color": PERDIDA, "lw": 1.2})
+    ax.axhline(0, color=TINTA2, lw=0.6)
+    ax.yaxis.set_major_formatter(FuncFormatter(soles))
+    ax.set_xlabel("Menús al día")
+    ax.set_ylabel("Utilidad del mes después de impuestos")
+    ax.yaxis.grid(True, color=GRILLA, lw=0.6)
+    ax.legend(fontsize=8, loc="lower right")
+    guardar(fig, "nrus")
+
+
+def fig_precio_fijo(d):
+    pc = d["hallazgos"].get("precio_candela")
+    if not pc:
+        return
+    fig, axs = plt.subplots(1, 2, figsize=(ANCHO, 2.7), sharey=True)
+    colores = {"0.5": AZUL, "1.0": NARANJA, "1.5": AGUA, "2.0": VIOLETA}
+    for ax, (modo, titulo) in zip(axs, (("automatica", "Planilla automática (con escalón)"),
+                                        ("fija", "Planilla fija (sin escalón)"))):
+        for el, serie in pc["tabla"][modo].items():
+            ax.plot([x["precio"] for x in serie], [x["utilidad"] for x in serie], color=colores[el], lw=1.9,
+                    marker="o", ms=3, label=f"$\\varepsilon$ = {el}")
+        ax.axhline(0, color=TINTA2, lw=0.7)
+        ax.axhline(pc["base"], color=TINTA2, lw=0.7, ls=(0, (3, 2)))
+        ax.set_title(titulo, fontsize=9)
+        ax.set_xlabel("Precio (S/)")
+        ax.yaxis.grid(True, color=GRILLA, lw=0.6)
+        ax.yaxis.set_major_formatter(FuncFormatter(soles))
+    axs[0].set_ylabel("Utilidad del mes")
+    axs[1].legend(fontsize=7.5, loc="upper left")
+    fig.tight_layout(w_pad=1.2)
+    guardar(fig, "precio_fijo")
+
+
 def generar(d: dict | None = None) -> None:
     d = d or json.loads((SALIDA / "datos.json").read_text(encoding="utf-8"))
     FIG.mkdir(parents=True, exist_ok=True)
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
-              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres):
+              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_precio_fijo):
         f(d)
 
 
