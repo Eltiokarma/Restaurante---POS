@@ -11,8 +11,9 @@ from __future__ import annotations
 import hmac
 import json
 import os
+import threading
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime, timezone
 
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -24,8 +25,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from motor import Escenario, equilibrio, precio_minimo, simular
+from motor.barrido import GOLPES, NOMBRE_CALIDAD, Factores, barrido, estres, mezcla_desde_analisis
 from motor.bd import (
-    ORIGENES, TIPOS_ZONA, Base, Ciudad, EscenarioGuardado, Insumo, Parametro, Plato, RecetaItem, Zona, bloque,
+    Corrida, ORIGENES, TIPOS_ZONA, Base, Ciudad, EscenarioGuardado, Insumo, Parametro, Plato, RecetaItem, Zona, bloque,
     local_desde_bd, motor_bd, sembrar,
 )
 from motor.flujo import NOMBRE_REGIMEN, REGIMENES, SUPUESTOS, Supuestos, comparar_regimenes, flujo_caja
@@ -56,6 +58,10 @@ async def ciclo(_app: FastAPI):
     with Session(ENGINE) as s:
         sembrar(s)  # idempotente: no toca lo de sondeo ni lo propio
         sembrar_arquetipos(s)
+        # Lo que estaba corriendo cuando se reinició el servicio no va a terminar
+        for c in s.scalars(select(Corrida).where(Corrida.estado.in_(("pendiente", "corriendo")))).all():
+            c.estado = "interrumpida"
+        s.commit()
     yield
 
 
@@ -495,15 +501,22 @@ class CompararIn(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=20)
 
 
-def _metricas(datos: dict, s: Session) -> dict:
+def _desde_guardado(datos: dict, s: Session):
+    """Local, escenario, bloque nacional, supuestos del flujo y el FlujoIn de
+    un escenario guardado (igual que si se abriera en el panel)."""
     e = FlujoIn(**{**datos.get("escenario", {}), **datos.get("supuestos", {})})
     local, esc, nacional = _armar(e, s)
-    m = modelo(local, e.q, esc, nacional)
-    mc = simular(local, esc, nacional, bloque(s, "riesgo"), q_ref=e.q)
     sup = Supuestos(anio_inicio=2026, inversion=e.inversion, q=e.q, meses_arranque=e.meses_arranque,
                     arranque_desde=e.arranque_desde, crecimiento_q=e.crecimiento_q, inflacion=e.inflacion,
                     alza_precio=e.alza_precio, alza_rmv=e.alza_rmv, tasa_descuento=e.tasa_descuento,
                     regimen=e.regimen)
+    return local, esc, nacional, sup, e
+
+
+def _metricas(datos: dict, s: Session) -> dict:
+    local, esc, nacional, sup, e = _desde_guardado(datos, s)
+    m = modelo(local, e.q, esc, nacional)
+    mc = simular(local, esc, nacional, bloque(s, "riesgo"), q_ref=e.q)
     fl = flujo_caja(local, esc, nacional, sup)
     netas = m.ventas_netas or 1
     insumos = (m.var_u * m.q_mes + (m.p_net_noche - m.contrib_noche) * m.q_mes_noche)
@@ -540,6 +553,139 @@ def comparar(c: CompararIn, s: Session = Depends(sesion)):
         salida.append({"id": g.id, "nombre": g.nombre, "ficha": (g.datos or {}).get("ficha"), **metricas})
     orden = {i: k for k, i in enumerate(c.ids)}
     return sorted(salida, key=lambda x: orden.get(x["id"], 0))
+
+
+# ---------- Corridas: cálculos largos que el servicio hace solo ----------
+
+class FactoresIn(BaseModel):
+    precio: list[float] | None = Field(default=None, max_length=15)  # cambios en soles
+    calidad: list[str] | None = None
+    mezcla: list[float] | None = Field(default=None, max_length=6)  # parte de segundos de res
+    noche: list[bool] | None = None
+    elasticidad: list[float] | None = Field(default=None, max_length=6)
+
+
+class CorridaIn(BaseModel):
+    tipo: str = Field(pattern="^(decisiones|estres)$")
+    escenario_id: int | None = None  # decisiones
+    ids: list[int] | None = None  # estrés (vacío: todos)
+    factores: FactoresIn | None = None
+    # Mezcla de segundos desde las recetas cargadas: solo tiene sentido para el
+    # negocio dueño de esas recetas (Candela), no para los restaurantes tipo
+    usar_recetas: bool = False
+
+
+TOPE_COMBINACIONES = 20_000
+
+
+def _correr(corrida_id: int) -> None:
+    """Se ejecuta en un hilo aparte; abre su propia sesión."""
+    with Session(ENGINE) as s:
+        c = s.get(Corrida, corrida_id)
+        c.estado = "corriendo"
+        s.commit()
+        cfg = c.config
+        riesgo = bloque(s, "riesgo")
+
+        def avance(x: float) -> None:
+            c.progreso = round(x, 3)
+            s.commit()
+
+        try:
+            if c.tipo == "decisiones":
+                g = s.get(EscenarioGuardado, cfg["escenario_id"])
+                local, esc, nacional, sup, e = _desde_guardado(g.datos or {}, s)
+                mezcla = None
+                if cfg.get("usar_recetas"):
+                    mezcla = mezcla_desde_analisis(analisis_platos(10.5, True, s))
+                f = Factores(**{k: v for k, v in (cfg.get("factores") or {}).items() if v})
+                if mezcla and not (cfg.get("factores") or {}).get("mezcla"):
+                    f.mezcla = sorted({0.25, mezcla.parte_actual, 0.75})
+                if not mezcla:
+                    f.mezcla = [None]
+                c.total = f.total()
+                s.commit()
+                c.resultado = {"base_nombre": g.nombre, "q0": e.q, "precio0": local.precio,
+                               "factores": {"precio": f.precio, "calidad": f.calidad, "mezcla": f.mezcla,
+                                            "noche": f.noche, "elasticidad": f.elasticidad},
+                               **barrido(local, esc, e.q, nacional, riesgo, sup, f, mezcla, avance)}
+            else:
+                q = select(EscenarioGuardado).order_by(EscenarioGuardado.nombre)
+                if cfg.get("ids"):
+                    q = q.where(EscenarioGuardado.id.in_(cfg["ids"]))
+                gs = s.scalars(q).all()
+                c.total = len(gs) * len(GOLPES)
+                s.commit()
+                filas = []
+                for k, g in enumerate(gs):
+                    try:
+                        local, esc, nacional, _sup, e = _desde_guardado(g.datos or {}, s)
+                        filas.append({"id": g.id, "nombre": g.nombre,
+                                      "categoria": ((g.datos or {}).get("ficha") or {}).get("categoria"),
+                                      "golpes": estres(local, esc, e.q, nacional, riesgo)})
+                    except Exception as err:  # un escenario incompleto no tumba la corrida
+                        filas.append({"id": g.id, "nombre": g.nombre, "error": str(err)[:200]})
+                    avance((k + 1) / len(gs))
+                c.resultado = {"golpes": [{"clave": k, "nombre": n} for k, n in GOLPES], "negocios": filas}
+            c.estado, c.progreso = "lista", 1.0
+        except Exception as err:
+            c.estado, c.error = "error", str(err)[:500]
+        c.terminado = datetime.now(timezone.utc).replace(tzinfo=None)
+        s.commit()
+
+
+def _corrida_dict(c: Corrida, con_resultado: bool = False) -> dict:
+    d = {"id": c.id, "nombre": c.nombre, "tipo": c.tipo, "estado": c.estado, "progreso": c.progreso,
+         "total": c.total, "error": c.error, "creado": c.creado.isoformat(),
+         "terminado": c.terminado.isoformat() if c.terminado else None}
+    if con_resultado:
+        d["config"], d["resultado"] = c.config, c.resultado
+    return d
+
+
+@api.post("/corridas", dependencies=PROTEGIDO, status_code=201)
+def crear_corrida(ci: CorridaIn, s: Session = Depends(sesion)):
+    """Lanza un cálculo largo en segundo plano. Se consulta con GET."""
+    if s.scalar(select(func.count()).select_from(Corrida).where(Corrida.estado == "corriendo")):
+        raise HTTPException(status_code=409, detail="Ya hay una corrida en marcha; espera a que termine")
+    if ci.tipo == "decisiones":
+        g = s.get(EscenarioGuardado, ci.escenario_id) if ci.escenario_id else None
+        if g is None:
+            raise HTTPException(status_code=404, detail="Elige un escenario guardado")
+        if ci.factores and ci.factores.calidad and not set(ci.factores.calidad) <= set(NOMBRE_CALIDAD):
+            raise HTTPException(status_code=422, detail="Calidad: economica, estandar o generosa")
+        f = Factores(**{k: v for k, v in (ci.factores.model_dump() if ci.factores else {}).items() if v})
+        if f.total() * 3 > TOPE_COMBINACIONES:
+            raise HTTPException(status_code=422, detail="Demasiadas combinaciones: reduce los niveles")
+        nombre = f"Decisiones · {g.nombre}"
+    else:
+        nombre = "Prueba de estrés · " + ("todos los negocios" if not ci.ids else f"{len(ci.ids)} negocios")
+    c = Corrida(nombre=nombre, tipo=ci.tipo, config=ci.model_dump(), estado="pendiente")
+    s.add(c)
+    s.commit()
+    threading.Thread(target=_correr, args=(c.id,), daemon=True).start()
+    return _corrida_dict(c)
+
+
+@api.get("/corridas", dependencies=PROTEGIDO)
+def corridas(s: Session = Depends(sesion)):
+    return [_corrida_dict(c) for c in s.scalars(select(Corrida).order_by(Corrida.id.desc()).limit(50)).all()]
+
+
+@api.get("/corridas/{id_}", dependencies=PROTEGIDO)
+def corrida(id_: int, s: Session = Depends(sesion)):
+    c = s.get(Corrida, id_)
+    if c is None:
+        raise HTTPException(status_code=404, detail="Corrida no encontrada")
+    return _corrida_dict(c, con_resultado=True)
+
+
+@api.delete("/corridas/{id_}", dependencies=PROTEGIDO, status_code=204)
+def borrar_corrida(id_: int, s: Session = Depends(sesion)):
+    c = s.get(Corrida, id_)
+    if c is not None and c.estado != "corriendo":
+        s.delete(c)
+        s.commit()
 
 
 app.include_router(api)

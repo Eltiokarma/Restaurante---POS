@@ -128,3 +128,31 @@ def test_comparar_trae_la_sensibilidad_de_cada_caso(cliente):
     assert exitoso["tornado"][0]["variable"] == "precio"
     # el inversor casi en cero aguanta mucho menos que el exitoso
     assert abs(r["Inversor (promedio)"]["quiebres"]["precio"]) < abs(exitoso["quiebres"]["precio"])
+
+
+def _esperar(cliente, id_):
+    import time
+    for _ in range(300):
+        c = cliente.get(f"/api/corridas/{id_}", headers=H).json()
+        if c["estado"] in ("lista", "error"):
+            return c
+        time.sleep(0.05)
+    raise AssertionError("la corrida no terminó")
+
+
+def test_corridas_en_segundo_plano(cliente):
+    inv = next(g for g in cliente.get("/api/escenarios", headers=H).json() if g["nombre"] == "Inversor (promedio)")
+    r = cliente.post("/api/corridas", headers=H, json={
+        "tipo": "decisiones", "escenario_id": inv["id"],
+        "factores": {"precio": [0, 1], "calidad": ["estandar"], "noche": [False], "elasticidad": [0.5, 1.5]}})
+    assert r.status_code == 201
+    c = _esperar(cliente, r.json()["id"])
+    assert c["estado"] == "lista" and len(c["resultado"]["decisiones"]) == 2
+    # "hoy" en la corrida es exactamente el escenario guardado
+    hoy = cliente.post("/api/comparar", headers=H, json={"ids": [inv["id"]]}).json()[0]["utilidad_mes"]
+    assert c["resultado"]["base"]["utilidad_media"] == hoy
+    e = _esperar(cliente, cliente.post("/api/corridas", headers=H, json={"tipo": "estres"}).json()["id"])
+    assert e["estado"] == "lista" and len(e["resultado"]["negocios"]) >= 9
+    assert all(len(n["golpes"]) == 8 for n in e["resultado"]["negocios"])
+    assert len(cliente.get("/api/corridas", headers=H).json()) == 2
+    assert cliente.post("/api/corridas", headers=H, json={"tipo": "decisiones"}).status_code == 404
