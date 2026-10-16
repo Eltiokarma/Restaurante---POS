@@ -113,3 +113,14 @@ def test_plato_sin_receta_no_baja_los_promedios():
     assert r["sin_receta"] == ["Sin receta"]
     assert r["menu"]["costo"] == pytest.approx(0.3 * 10 / 0.8)
     assert all(p["clase"] is None for p in r["platos"])
+
+
+def test_medio_tiempo_prorratea_el_minimo_y_la_planilla_se_separa_del_igv():
+    medio = Trabajador("Mozo", 700, area="salon", jornada=0.5)
+    assert costo_trabajador(medio, formal=True, rmv=1230, mult=1.0, dias_local=26) == 700  # 700 > 615
+    assert costo_trabajador(Trabajador("Mozo", 500, jornada=0.5), True, 1230, 1.0, 26) == 615
+    con_ruc_pago_directo = Escenario(formal=True, laboral_formal=False, sueldo_dueno=False,
+                                     planilla=(Trabajador("Ayudante", 1000),))
+    m = modelo(LOCAL, 80, con_ruc_pago_directo, NAC)
+    assert m.t > 0 and m.personal == 1000  # cobra IGV, pero sin mínimo ni cargas
+    assert modelo(LOCAL, 80, replace(con_ruc_pago_directo, laboral_formal=True), NAC).personal == 1230 * NAC["mult_micro"]

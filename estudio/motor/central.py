@@ -25,16 +25,16 @@ def modelo_central(local: Local, esc: Escenario, nacional: dict, cc: dict,
         return ResultadoCentral(principal.util, 0.0)
     total_q = q_principal + n_satelites * q_satelite
     t = principal.t
-    mult = nacional["mult_micro"] if esc.formal else 1.0
+    mult = nacional["mult_micro"] if esc.laboral else 1.0
 
     def w(x: float) -> float:
-        return max(x, anio["rmv"]) if esc.formal else x
+        return max(x, anio["rmv"]) if esc.laboral else x
 
     var_u = local.insumos * (1 - cc["ahorro_compras"]) * (1 + MERMA) + DESCARTABLES[esc.segmento]
     contrib_u = local.precio / (1 + t) - var_u
     por_trab = cc["menus_por_trabajador_cocina"] if pop else cc["menus_por_trabajador_cocina"] * 0.7
     cocina = max(2, math.ceil(total_q / por_trab))
-    cocinero = max(local.sueldo_cocinero, anio["rmv"] * 1.06) if esc.formal else local.sueldo_cocinero
+    cocinero = max(local.sueldo_cocinero, anio["rmv"] * 1.06) if esc.laboral else local.sueldo_cocinero
     mozos_p = max(1, math.ceil(q_principal / (70 if pop else 40)))
     mozos_s = max(1, math.ceil(q_satelite / (70 if pop else 40))) + (1 if q_satelite > (90 if pop else 50) else 0)
     personal = mult * (cocinero + (cocina - 1) * w(local.sueldo_ayudante)

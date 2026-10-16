@@ -577,5 +577,72 @@
     "regimen": "mype"
    }
   }
+ },
+ {
+  "nombre": "Fonda en casa propia",
+  "datos": {
+   "ficha": {
+    "categoria": "Local",
+    "descripcion": "La dueña cocina en su propia casa: no paga alquiler, pero la casa está fuera de la calle con más paso, así que vende menos. La luz y el agua se mezclan con las de la casa.",
+    "supuestos": [
+     "precio S/ 9",
+     "45 menús/día",
+     "alquiler S/ 0",
+     "jornal S/ 40 y S/ 35"
+    ],
+    "fuente": "Supuesto del estudio, a contrastar con datos reales"
+   },
+   "escenario": {
+    "ciudad_id": "juliaca",
+    "zona_id": null,
+    "segmento": "popular",
+    "anio": 2026,
+    "formal": false,
+    "balones": 3,
+    "sueldo_dueno": true,
+    "q": 45,
+    "dias": 26,
+    "planilla": [
+     {
+      "puesto": "Ayudante de cocina",
+      "monto": 40,
+      "modalidad": "diario",
+      "cantidad": 1,
+      "area": "cocina",
+      "dias": null,
+      "turno": "dia"
+     },
+     {
+      "puesto": "Atención",
+      "monto": 35,
+      "modalidad": "diario",
+      "cantidad": 1,
+      "area": "salon",
+      "dias": null,
+      "turno": "dia"
+     }
+    ],
+    "noche": null,
+    "precio": 9,
+    "insumos": 4.3,
+    "alquiler_mes": 0,
+    "sueldo_cocinero": 1300,
+    "sueldo_ayudante": 1230,
+    "sueldo_mozo": 1230,
+    "gas_balon45": 220,
+    "servicios_mes": 300
+   },
+   "supuestos": {
+    "inversion": 8000,
+    "meses_arranque": 6,
+    "arranque_desde": 0.4,
+    "crecimiento_q": 0,
+    "inflacion": 0.025,
+    "alza_precio": 0.025,
+    "alza_rmv": 0.037,
+    "tasa_descuento": 0.15,
+    "regimen": "informal"
+   }
+  }
  }
 ]

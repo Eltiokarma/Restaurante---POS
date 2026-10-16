@@ -162,7 +162,7 @@ def test_decisiones_de_todos_los_negocios(cliente):
     c = _esperar(cliente, cliente.post("/api/corridas", headers=H, json={"tipo": "decisiones_todos"}).json()["id"])
     assert c["estado"] == "lista"
     negocios = c["resultado"]["negocios"]
-    assert len(negocios) >= 9 and not any("error" in n for n in negocios)
+    assert len(negocios) >= 10 and not any("error" in n for n in negocios)
     for n in negocios:
         assert n["mejor"]["utilidad_peor"] >= n["base"]["utilidad_peor"]  # hoy es una de las opciones
         assert set(n["curvas"]) == {"0.5", "1.0", "1.5"}
