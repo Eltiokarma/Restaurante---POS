@@ -9,6 +9,7 @@ carguen aquí son privados.
 from __future__ import annotations
 
 import hmac
+import json
 import os
 from contextlib import asynccontextmanager
 from datetime import date
@@ -34,6 +35,17 @@ from motor.recetas import TIPOS, InsumoR, PlatoR, analizar
 from motor.sensibilidad import matriz, quiebres, tornado
 
 WEB = Path(__file__).resolve().parent / "web" / "dist"
+ARQUETIPOS = Path(__file__).resolve().parent / "data" / "arquetipos.json"
+
+
+def sembrar_arquetipos(s: Session) -> None:
+    """Los restaurantes tipo del catálogo, como escenarios guardados. Solo
+    agrega los que faltan: si alguien editó uno, no se pisa."""
+    existentes = set(s.scalars(select(EscenarioGuardado.nombre)).all())
+    for a in json.loads(ARQUETIPOS.read_text(encoding="utf-8")):
+        if a["nombre"] not in existentes:
+            s.add(EscenarioGuardado(nombre=a["nombre"], datos=a["datos"]))
+    s.commit()
 
 ENGINE = motor_bd()
 
@@ -43,6 +55,7 @@ async def ciclo(_app: FastAPI):
     Base.metadata.create_all(ENGINE)
     with Session(ENGINE) as s:
         sembrar(s)  # idempotente: no toca lo de sondeo ni lo propio
+        sembrar_arquetipos(s)
     yield
 
 
@@ -474,6 +487,55 @@ def analisis_platos(igv: float = 10.5, formal: bool = True, s: Session = Depends
                   tuple((it.insumo_id, it.cantidad) for it in items.get(p.id, [])))
            for p in s.scalars(select(Plato)).all()]
     return analizar(ins, pls, igv, formal)
+
+
+# ---------- Comparar negocios ----------
+
+class CompararIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=20)
+
+
+def _metricas(datos: dict, s: Session) -> dict:
+    e = FlujoIn(**{**datos.get("escenario", {}), **datos.get("supuestos", {})})
+    local, esc, nacional = _armar(e, s)
+    m = modelo(local, e.q, esc, nacional)
+    mc = simular(local, esc, nacional, bloque(s, "riesgo"), q_ref=e.q)
+    sup = Supuestos(anio_inicio=2026, inversion=e.inversion, q=e.q, meses_arranque=e.meses_arranque,
+                    arranque_desde=e.arranque_desde, crecimiento_q=e.crecimiento_q, inflacion=e.inflacion,
+                    alza_precio=e.alza_precio, alza_rmv=e.alza_rmv, tasa_descuento=e.tasa_descuento,
+                    regimen=e.regimen)
+    fl = flujo_caja(local, esc, nacional, sup)
+    netas = m.ventas_netas or 1
+    insumos = (m.var_u * m.q_mes + (m.p_net_noche - m.contrib_noche) * m.q_mes_noche)
+    trabajadores = (sum(t.cantidad for t in esc.planilla) if esc.planilla else m.cocina + m.mozos)
+    sueldo = 1500 if e.sueldo_dueno else 0
+    return {
+        "ventas_mes": round(m.ventas), "utilidad_mes": round(m.util), "margen": round(m.margen, 4),
+        "ingreso_dueno_mes": round(m.util + sueldo),
+        "equilibrio": equilibrio(local, esc, nacional),
+        "precio_minimo": round(precio_minimo(local, e.q, esc, nacional), 2),
+        "prob_perdida": mc.prob_perdida, "anio_malo": round(mc.p10), "anio_tipico": round(mc.p50),
+        "personal_pct": round(m.personal / netas, 4), "insumos_pct": round(insumos / netas, 4),
+        "alquiler_pct": round(m.alquiler / netas, 4), "trabajadores": trabajadores,
+        "precio": local.precio, "menus_dia": e.q, "formal": e.formal, "noche": e.noche is not None,
+        "regimen": NOMBRE_REGIMEN[e.regimen], "inversion": e.inversion,
+        "van": fl.van, "tir": fl.tir, "recupero": fl.recupero, "alertas": fl.alertas,
+    }
+
+
+@api.post("/comparar", dependencies=PROTEGIDO)
+def comparar(c: CompararIn, s: Session = Depends(sesion)):
+    """Las mismas métricas para varios escenarios guardados, lado a lado."""
+    salida = []
+    for g in s.scalars(select(EscenarioGuardado).where(EscenarioGuardado.id.in_(c.ids))).all():
+        try:
+            metricas = _metricas(g.datos or {}, s)
+        except Exception as err:  # un escenario viejo o incompleto no tumba la comparación
+            salida.append({"id": g.id, "nombre": g.nombre, "error": str(err)[:200]})
+            continue
+        salida.append({"id": g.id, "nombre": g.nombre, "ficha": (g.datos or {}).get("ficha"), **metricas})
+    orden = {i: k for k, i in enumerate(c.ids)}
+    return sorted(salida, key=lambda x: orden.get(x["id"], 0))
 
 
 app.include_router(api)

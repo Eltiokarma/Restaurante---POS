@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     JSON, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, create_engine,
@@ -83,7 +83,7 @@ class EscenarioGuardado(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     nombre: Mapped[str] = mapped_column(String(120), unique=True)
     datos: Mapped[dict] = mapped_column(JSON)
-    creado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    creado: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 # ---------- Recetas (datos propios del local: nunca van al repo) ----------

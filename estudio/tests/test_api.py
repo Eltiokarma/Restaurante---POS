@@ -72,10 +72,10 @@ def test_escenarios_guardados(cliente):
     assert cliente.post("/api/escenarios", headers=H,
                         json={"nombre": "Candela hoy", "datos": {"precio": 11}}).status_code == 201
     cliente.post("/api/escenarios", headers=H, json={"nombre": "Candela hoy", "datos": {"precio": 12}})
-    lista = cliente.get("/api/escenarios", headers=H).json()
+    lista = [g for g in cliente.get("/api/escenarios", headers=H).json() if g["nombre"] == "Candela hoy"]
     assert len(lista) == 1 and lista[0]["datos"]["precio"] == 12
     assert cliente.delete(f"/api/escenarios/{lista[0]['id']}", headers=H).status_code == 204
-    assert cliente.get("/api/escenarios", headers=H).json() == []
+    assert all(g["nombre"] != "Candela hoy" for g in cliente.get("/api/escenarios", headers=H).json())
 
 
 def test_planilla_y_sensibilidad_por_api(cliente):
@@ -101,3 +101,18 @@ def test_recetas_por_api(cliente):
     assert editado["items"] == []
     assert cliente.delete(f"/api/insumos/{pollo['id']}", headers=H).status_code == 204
     assert cliente.delete(f"/api/platos/{plato['id']}", headers=H).status_code == 204
+
+
+def test_arquetipos_sembrados_y_comparables(cliente):
+    lista = cliente.get("/api/escenarios", headers=H).json()
+    nombres = {g["nombre"] for g in lista}
+    assert {"Dueña que cocina", "Familia sin sueldos", "Inversor (promedio)", "Dueño ausente (todo tercerizado)",
+            "Exitoso (referencia compuesta)", "Día y noche"} <= nombres
+    r = cliente.post("/api/comparar", headers=H, json={"ids": [g["id"] for g in lista]}).json()
+    assert len(r) == len(lista) and not any("error" in x for x in r)
+    por = {x["nombre"]: x for x in r}
+    # la familia que no cobra sueldo se lleva la utilidad entera
+    assert por["Familia sin sueldos"]["ingreso_dueno_mes"] == por["Familia sin sueldos"]["utilidad_mes"]
+    # el dueño ausente paga más gente que el inversor
+    assert por["Dueño ausente (todo tercerizado)"]["trabajadores"] > por["Inversor (promedio)"]["trabajadores"]
+    assert por["Día y noche"]["noche"] and por["Exitoso (referencia compuesta)"]["utilidad_mes"] > 0

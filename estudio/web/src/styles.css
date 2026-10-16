@@ -753,3 +753,101 @@ input[type='password'],
 .es-pie-trabajador .es-secundario {
   flex: none;
 }
+
+/* ---- Comparar ---- */
+.es-barras-h {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.es-bh-fila {
+  display: grid;
+  grid-template-columns: minmax(110px, 220px) minmax(0, 1fr) 96px;
+  gap: 10px;
+  align-items: center;
+}
+.es-bh-nombre {
+  font-size: 0.9rem;
+}
+.es-bh-pista {
+  position: relative;
+  height: 24px;
+}
+.es-bh-cero {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--texto-3);
+}
+.es-bh-barra {
+  position: absolute;
+  top: 2px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--serie-1);
+}
+.es-bh-neg {
+  background: var(--mal);
+}
+.es-bh-valor {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+@media (max-width: 560px) {
+  .es-bh-fila {
+    grid-template-columns: minmax(0, 1fr) 84px;
+  }
+  .es-bh-pista {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+.es-comparar thead th {
+  vertical-align: bottom;
+  white-space: normal;
+  min-width: 110px;
+}
+.es-abrir {
+  display: block;
+  margin: 6px 0 0 auto;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--acento);
+  border-radius: 8px;
+  background: var(--superficie);
+  color: var(--acento);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.es-grupo th {
+  background: var(--fondo);
+  color: var(--texto-3);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.es-mejor {
+  font-weight: 800;
+  color: var(--bien);
+}
+.es-fichas {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--texto-2);
+}
+.es-fichas li {
+  margin-bottom: 8px;
+}
+.es-comparar tbody th,
+.es-comparar thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--superficie);
+  min-width: 170px;
+}
+.es-comparar .es-grupo th {
+  background: var(--fondo);
+}
