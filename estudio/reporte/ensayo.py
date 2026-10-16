@@ -182,6 +182,18 @@ plato--- que coincide con las recetas originales: el exceso estaba en la carne y
 en el arroz. Solo se corrigió a la baja; los platos más baratos (cau cau, tallarines, locro de zapallo)
 quedaron como estaban.
 
+Después se reemplazaron los precios de referencia por los de las compras reales del dueño (octubre de 2026). El
+pollo entra entero a S/~20 y rinde ocho presas: S/~2.50 por presa, y las dos de pechuga van a la causa y al
+ají de gallina. La res para asado, estofado y seco cuesta S/~18 el kilo y rinde seis trozos, S/~3 por plato;
+el chancho, S/~15 el kilo, S/~2.50 por trozo. El lomo saltado usa la misma pulpa pero solo unos 80~g ---dos kilos
+alcanzan para 25 platos---, de modo que es el segundo de res que más deja. La carne picada y la molida se
+compran a S/~20, el arroz a S/~3.70 (cien kilos cada dos semanas) y el gas en cuatro balones de S/~50 por semana.
+Las cantidades semanales que declara el dueño ---unos 5~kg de carne para sopa, 4~kg de picada, 700~g de
+molida--- coinciden con lo que piden las recetas por lo vendido, lo que da confianza en la calibración. La
+verdura, en cambio, pesa poco: la nota semanal del mercado suma S/~237, alrededor de medio sol por menú. La
+palanca del costo está en la proteína, no en el mercado de verduras: cada segundo de res que se cambia por uno
+de pollo o de chancho ahorra entre S/~0.50 y S/~1.50.
+
 Con esa calibración, un menú promedio ---segundo ponderado por lo que se vende, más la entrada y el refresco
 promedio--- cuesta \textbf{{{s(pl['menu']['costo'], 2)}}}: {s(pl['menu']['costo'] - pl['costo_entrada_bebida_promedio'], 2)}
 el segundo y {s(pl['costo_entrada_bebida_promedio'], 2)} lo demás. Sobre un precio promedio de
@@ -241,8 +253,8 @@ Queda para el dueño, sin IGV & {s(pc['sin_igv'] + 1500)} & \\
 
 El cuadro~\ref{{tab:candela}} cuenta la situación sin adornos. Sin IGV, la venta alcanza justo para pagar
 insumos, sueldos y local: al dueño le quedan {s(pc['sin_igv'] + 1500)} al mes por hacer las compras y
-administrar, que es como trabajar gratis. Si el IGV se paga sobre toda la venta, el local pierde
-{s(-(cand['utilidad_mes'] + 1500))} al mes. Los insumos se llevan más de la mitad de la venta neta; la planilla,
+administrar, {"menos de lo que gana una de sus cocineras" if pc['sin_igv'] + 1500 < 1500 else "apenas lo que gana una de sus cocineras"}. Si el IGV se paga sobre toda la venta, el local
+{"pierde " + s(-(cand['utilidad_mes'] + 1500)) if cand['utilidad_mes'] + 1500 < 0 else "deja " + s(cand['utilidad_mes'] + 1500)} al mes. Los insumos se llevan más de la mitad de la venta neta; la planilla,
 un tercio. Esos dos renglones ---no el alquiler--- son los que deciden.
 
 Que el local siga abierto después de año y medio con estas cuentas es coherente: un negocio que cubre sus
@@ -931,14 +943,15 @@ Para Candela, en orden de impacto:
 \begin{{enumerate}}[leftmargin=1.4em]
 \item \textbf{{Bajar el costo del plato antes que tocar el precio.}} Los insumos se llevan más de la mitad de la
 venta neta. Pesar durante una semana las porciones de los cinco segundos más vendidos, comprar la proteína por
-volumen y servir más segundos de pollo o pasta que de res ataca el renglón más grande sin que la clientela lo
-note.
+volumen y servir más segundos de pollo, chancho o pasta que de res ataca el renglón más grande sin que la
+clientela lo note: cada segundo de res que se cambia ahorra entre S/~0.50 y S/~1.50.
 \item \textbf{{No volver a subir el precio, y probar S/~10.50.}} La historia del local muestra una clientela muy
 sensible. Un precio intermedio, con recargo solo en los segundos de res o en los platos más pedidos, puede
 recuperar clientes sin perder margen. Medir dos semanas antes de decidir.
 \item \textbf{{Aclarar el régimen y el IGV.}} Con ventas de unos S/~250 mil al año, Candela no cabe en el Nuevo RUS;
 como persona natural le corresponde el RER o el MYPE, y con ellos el IGV de 10.5\,\% (15\,\% en 2027). Es la
-diferencia entre estar en cero y perder S/~2\,000 al mes, así que conviene revisarlo con un contador.
+diferencia entre dejarle {s(pc['sin_igv'] + 1500)} al dueño y perder {s(-(cand['utilidad_mes'] + 1500))} al mes ---unos
+{s(pc['sin_igv'] - cand['utilidad_mes'])} de diferencia---, así que conviene revisarlo con un contador.
 \item \textbf{{Cuidar el alquiler de conocido.}} Vale S/~1\,000 al mes. Un contrato por escrito con plazo
 largo lo protege.
 \item \textbf{{Ponerle precio al trabajo del dueño.}} Hoy el dueño hace las compras y administra sin que el negocio
