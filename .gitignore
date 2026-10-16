@@ -28,3 +28,4 @@ estudio/*.db
 estudio/web/node_modules/
 estudio/web/dist/
 estudio/web/*.tsbuildinfo
+estudio/reporte/salida/
