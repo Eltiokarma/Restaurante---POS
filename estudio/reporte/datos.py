@@ -17,6 +17,7 @@ from pathlib import Path
 from motor import Escenario, cargar_dataset, equilibrio, local_de_ciudad, modelo, precio_minimo, simular
 from motor.flujo import NOMBRE_REGIMEN, REGIMENES, Supuestos, comparar_regimenes, flujo_caja
 from motor.igualdad import BASE as BASE_IGUAL, GRUPOS, igualar, personas_casa, shapley
+from motor.incertidumbre import RANGOS, perturbar
 from motor.modelo import Noche, Trabajador
 from motor.barrido import Factores, barrido, estres, mezcla_desde_analisis, resumen
 from motor.montecarlo import muestras
@@ -85,15 +86,26 @@ def caso(nombre: str, datos: dict) -> dict:
     }
 
 
-def corridas(nombre: str, datos: dict, mezcla=None) -> dict:
+# Sensibilidad de la clientela al precio medida en Juliaca (historia de
+# Candela: la que mejor ajusta sus tres precios es ~2.4), con un margen a cada
+# lado. Los restaurantes tipo se prueban con ella y con la supuesta de antes.
+ELASTICIDAD_JULIACA = [1.5, 2.4, 3.5]
+
+
+def corridas(nombre: str, datos: dict, mezcla=None, elasticidad: list[float] | None = None,
+             con_estres: bool = True) -> dict:
     """Barrido robusto y prueba de estrés de un caso (lo mismo que corre el
     servicio en la pestaña Corridas)."""
     local, esc, sup, q = armar(datos)
     f = Factores(mezcla=sorted({0.25, mezcla.parte_actual, 0.75}) if mezcla else [None])
-    if (datos.get("barrido") or {}).get("elasticidad"):
-        f.elasticidad = datos["barrido"]["elasticidad"]
-    if (datos.get("barrido") or {}).get("precio"):
-        f.precio = datos["barrido"]["precio"]
+    b = datos.get("barrido") or {}
+    if elasticidad:
+        f.elasticidad = elasticidad
+    elif b.get("elasticidad"):
+        f.elasticidad = b["elasticidad"]
+    if b.get("precio"):
+        f.precio = b["precio"]
+    f.capacidad = b.get("capacidad")
     r = barrido(local, esc, q, NAC, RIESGO, sup, f, mezcla)
     porciones = {}
     for d in r["decisiones"]:  # peor caso por precio y porción (mejor mezcla y turno)
@@ -102,7 +114,8 @@ def corridas(nombre: str, datos: dict, mezcla=None) -> dict:
             porciones[clave] = d
     return {"nombre": nombre, "precio0": local.precio, "q0": q, **resumen(r),
             "decisiones": r["decisiones"][:15], "por_precio_porcion": list(porciones.values()),
-            "estres": estres(local, esc, q, NAC, RIESGO)}
+            "elasticidad": f.elasticidad, "capacidad": f.capacidad,
+            "estres": estres(local, esc, q, NAC, RIESGO) if con_estres else None}
 
 
 HORAS_MES = 60 * 4.33  # supuesto: 60 horas a la semana de quien trabaja sin sueldo
@@ -221,7 +234,23 @@ def ciudades() -> list[dict]:
         fila["eq_con_sueldo"] = equilibrio(local, Escenario(), NAC)
         fila["eq_informal"] = equilibrio(local, Escenario(formal=False, sueldo_dueno=False), NAC)
         salida.append(fila)
+        if c["id"] == "juliaca":
+            # experimento: la misma Juliaca con el precio que se observa en Candela
+            obs = local.con(precio=PRECIO_JULIACA_OBSERVADO, precio_propio=True)
+            fila = {**fila, "id": "juliaca_obs", "nombre": "Juliaca (observado)", "precio": PRECIO_JULIACA_OBSERVADO,
+                    "precio_fuente": "local"}
+            for anio in (2026, 2027, 2028):
+                fila[f"eq_{anio}"] = equilibrio(obs, Escenario(anio=anio, sueldo_dueno=False), NAC)
+            fila["eq_con_sueldo"] = equilibrio(obs, Escenario(), NAC)
+            fila["eq_informal"] = equilibrio(obs, Escenario(formal=False, sueldo_dueno=False), NAC)
+            salida.append(fila)
     return sorted(salida, key=lambda f: f["eq_2026"])
+
+
+# Precio del menú que se observa en Juliaca: el de Candela (un solo local; el
+# dataset estima S/ 8 a partir del ingreso y lo deja tal cual por la paridad
+# con la calculadora original)
+PRECIO_JULIACA_OBSERVADO = 11.0
 
 
 def igualdad(arquetipos: list[dict], candela: dict | None) -> dict:
@@ -307,6 +336,88 @@ def costo_de_no_estar(arquetipos: list[dict]) -> list[dict] | None:
     return salida
 
 
+N_SORTEOS = 1000
+
+
+def robustez_supuestos(arquetipos: list[dict], candela: dict | None, n: int = N_SORTEOS, semilla: int = 7) -> dict:
+    """Cuántas veces se sostiene cada hallazgo si los números de cada caso se
+    mueven al azar dentro de rangos razonables (motor/incertidumbre.py)."""
+    import random
+    from dataclasses import replace as rep
+
+    casos = {a["nombre"]: a["datos"] for a in arquetipos}
+    if candela:
+        casos["Candela (datos del POS)"] = candela
+
+    def medir(datos: dict) -> dict:
+        local, esc, _sup, q = armar(datos)
+        m = modelo(local, q, esc, NAC)
+        sueldo = 1500 if esc.sueldo_dueno else 0
+        personas = personas_casa(datos["escenario"])
+        return {"util": m.util, "ingreso": m.util + sueldo,
+                "por_persona": (m.util + sueldo) / personas if personas else None,
+                "sin_igv": modelo(local, q, rep(esc, formal=False, laboral_formal=False), NAC).util + sueldo,
+                "sin_noche": modelo(local, q, rep(esc, noche=None), NAC).util if esc.noche else None}
+
+    def ingreso(escenario: dict) -> float:
+        local, esc, _sup, q = armar({"escenario": escenario})
+        return modelo(local, q, esc, NAC).util + (1500 if esc.sueldo_dueno else 0)
+
+    rng = random.Random(semilla)
+    sorteos = []
+    for _ in range(n):
+        datos = {k: perturbar(v, rng) for k, v in casos.items()}
+        r = {k: medir(v) for k, v in datos.items()}
+        ap = shapley(ingreso, datos["Dueña que cocina"]["escenario"], datos["Puesto de mercado informal"]["escenario"])
+        r["_puesto"] = ap
+        sorteos.append(r)
+
+    rmv_hora = 1230 / (48 * 4.33)
+    pruebas = [
+        ("La dueña que cocina se lleva más que el inversor",
+         lambda r: r["Dueña que cocina"]["ingreso"] > r["Inversor (promedio)"]["ingreso"]),
+        ("El dueño ausente pierde plata", lambda r: r["Dueño ausente (todo tercerizado)"]["util"] < 0),
+        ("Cada integrante de la familia se lleva menos que la dueña sola",
+         lambda r: r["Familia sin sueldos"]["por_persona"] < r["Dueña que cocina"]["por_persona"]),
+        ("La familia cobra por hora menos que el sueldo mínimo",
+         lambda r: r["Familia sin sueldos"]["por_persona"] / HORAS_MES < rmv_hora),
+        ("Abrir de noche mejora al local de día y noche",
+         lambda r: r["Día y noche"]["util"] > r["Día y noche"]["sin_noche"]),
+        ("El exitoso es el que más gana",
+         lambda r: max((k for k in r if not k.startswith("_")), key=lambda k: r[k]["ingreso"]).startswith("Exitoso")),
+        ("El puesto de mercado gana por su plato más que por su volumen",
+         lambda r: r["_puesto"]["insumos"] > r["_puesto"]["local"]),
+        ("La fonda en casa propia se lleva menos que la dueña con local alquilado",
+         lambda r: r["Fonda en casa propia"]["ingreso"] < r["Dueña que cocina"]["ingreso"]),
+    ]
+    if candela:
+        pruebas += [
+            ("Candela pierde si paga IGV sobre toda la venta (sin contar el sueldo del dueño)",
+             lambda r: r["Candela (datos del POS)"]["util"] + 1500 < 0),
+            ("Candela cubre sus costos sin IGV (sin contar el sueldo del dueño)",
+             lambda r: r["Candela (datos del POS)"]["sin_igv"] >= 0),
+        ]
+    hallazgos = [{"hallazgo": texto, "parte": sum(1 for r in sorteos if f(r)) / n} for texto, f in pruebas]
+
+    # Lugar de cada negocio por lo que se lleva la casa, en cada sorteo
+    nombres = list(casos)
+    lugares: dict[str, list[int]] = {k: [] for k in nombres}
+    for r in sorteos:
+        orden = sorted(nombres, key=lambda k: -r[k]["ingreso"])
+        for i, k in enumerate(orden, start=1):
+            lugares[k].append(i)
+    hoy = sorted(nombres, key=lambda k: -medir(casos[k])["ingreso"])
+
+    def cuantil(xs: list[int], q: float) -> int:
+        xs = sorted(xs)
+        return xs[min(len(xs) - 1, int(q * len(xs)))]
+
+    orden = [{"nombre": k, "hoy": hoy.index(k) + 1, "p05": cuantil(lugares[k], 0.05), "p95": cuantil(lugares[k], 0.95),
+              "mismo": sum(1 for x in lugares[k] if x == hoy.index(k) + 1) / n,
+              "gana": sum(1 for r in sorteos if r[k]["ingreso"] > 0) / n} for k in hoy]
+    return {"n": n, "rangos": RANGOS, "hallazgos": hallazgos, "orden": orden}
+
+
 def _api(ruta: str):
     url, token = os.getenv("ESTUDIO_URL"), os.getenv("ESTUDIO_TOKEN")
     if not url or not token:
@@ -330,13 +441,16 @@ def generar() -> dict:
                          if x["nombre"].startswith("Candela") and x["nombre"] != g["nombre"]]
             platos = _api("/platos/analisis?igv=10.5&formal=true")
     mezcla = mezcla_desde_analisis(platos) if platos else None
-    robustez = [corridas(a["nombre"], a["datos"]) for a in arquetipos]
+    robustez = [corridas(a["nombre"], a["datos"], elasticidad=ELASTICIDAD_JULIACA) for a in arquetipos]
+    # el mismo barrido con la clientela poco sensible que se suponía antes de medirla
+    robustez_supuesta = [corridas(a["nombre"], a["datos"], con_estres=False) for a in arquetipos]
     if candela:
         robustez.append(corridas(g["nombre"], g["datos"], mezcla))
     datos = {
         "hallazgos": hallazgos(arquetipos, g["datos"] if candela else None),
         "igualdad": igualdad(arquetipos, g["datos"] if candela else None),
-        "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez,
+        "supuestos_robustez": robustez_supuestos(arquetipos, g["datos"] if candela else None),
+        "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez, "robustez_supuesta": robustez_supuesta,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},
         "fuentes": DATA["fuentes"], "regimenes": list(REGIMENES),
     }

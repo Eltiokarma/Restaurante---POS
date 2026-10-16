@@ -586,6 +586,7 @@ class FactoresIn(BaseModel):
     mezcla: list[float] | None = Field(default=None, max_length=6)  # parte de segundos de res
     noche: list[bool] | None = None
     elasticidad: list[float] | None = Field(default=None, max_length=6)
+    capacidad: float | None = Field(default=None, gt=0, le=2000)  # techo de menús al día
 
 
 class CorridaIn(BaseModel):
@@ -628,6 +629,9 @@ def _correr(corrida_id: int) -> None:
                 precios = ((g.datos or {}).get("barrido") or {}).get("precio")
                 if precios and not (cfg.get("factores") or {}).get("precio"):
                     f.precio = precios
+                techo = ((g.datos or {}).get("barrido") or {}).get("capacidad")
+                if techo and not (cfg.get("factores") or {}).get("capacidad"):
+                    f.capacidad = techo
                 if mezcla and not (cfg.get("factores") or {}).get("mezcla"):
                     f.mezcla = sorted({0.25, mezcla.parte_actual, 0.75})
                 if not mezcla:
@@ -637,7 +641,8 @@ def _correr(corrida_id: int) -> None:
                 r = barrido(local, esc, e.q, nacional, riesgo, sup, f, mezcla, avance)
                 c.resultado = {"base_nombre": g.nombre, "q0": e.q, "precio0": local.precio,
                                "factores": {"precio": f.precio, "calidad": f.calidad, "mezcla": f.mezcla,
-                                            "noche": f.noche, "elasticidad": f.elasticidad},
+                                            "noche": f.noche, "elasticidad": f.elasticidad,
+                                            "capacidad": f.capacidad},
                                **r, "curvas": curvas_precio(r)}
             elif c.tipo == "decisiones_todos":
                 gs = s.scalars(select(EscenarioGuardado).order_by(EscenarioGuardado.nombre)).all()
@@ -660,6 +665,7 @@ def _correr(corrida_id: int) -> None:
                         precios = ((g.datos or {}).get("barrido") or {}).get("precio")
                         if precios:
                             f.precio = precios
+                        f.capacidad = ((g.datos or {}).get("barrido") or {}).get("capacidad")
                         r = barrido(local, esc, e.q, nacional, riesgo, sup, f, mz,
                                     lambda x, k=k: avance((k + x) / len(gs)))
                         negocios.append({"id": g.id, "nombre": g.nombre, "precio0": local.precio, "q0": e.q,
