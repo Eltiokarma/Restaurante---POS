@@ -1,10 +1,10 @@
 [
  {
-  "nombre": "Dueña que cocina",
+  "nombre": "Propietario que cocina",
   "datos": {
    "ficha": {
     "categoria": "Quién trabaja",
-    "descripcion": "La dueña es la cocinera: no hay sueldo de cocinero; ella se paga los S/ 1,500 del dueño. Ayudante y mozo por día. Informal.",
+    "descripcion": "El propietario es el cocinero: no hay sueldo de cocinero; se paga los S/ 1,500 del dueño. Ayudante y mozo por día. Informal.",
     "supuestos": [
      "precio S/ 10",
      "60 menús/día",
@@ -66,7 +66,7 @@
    },
    "casa": [
     {
-     "quien": "Dueña",
+     "quien": "Propietario",
      "rol": "cocinero",
      "horas_semana": 60
     }
@@ -74,11 +74,11 @@
   }
  },
  {
-  "nombre": "Familia sin sueldos",
+  "nombre": "Familiar sin sueldos",
   "datos": {
    "ficha": {
     "categoria": "Quién trabaja",
-    "descripcion": "Mamá cocina, hijo atiende, tía ayuda: nadie cobra sueldo. La utilidad es el ingreso de la familia. Un ayudante pagado por día. Mismo local, precio y venta que la dueña que cocina: solo cambia quién trabaja.",
+    "descripcion": "Mamá cocina, hijo atiende, tía ayuda: nadie cobra sueldo. La utilidad es el ingreso de la familia. Un ayudante pagado por día. Mismo local, precio y venta que el propietario que cocina: solo cambia quién trabaja.",
     "supuestos": [
      "precio S/ 10",
      "60 menús/día",
@@ -176,7 +176,7 @@
   }
  },
  {
-  "nombre": "Inversor (promedio)",
+  "nombre": "Inversor que supervisa",
   "datos": {
    "ficha": {
     "categoria": "Quién trabaja",
@@ -231,11 +231,11 @@
   }
  },
  {
-  "nombre": "Dueño ausente (todo tercerizado)",
+  "nombre": "Inversor ausente",
   "datos": {
    "ficha": {
     "categoria": "Quién trabaja",
-    "descripcion": "El dueño no está ni un minuto: administrador, cajero, encargado de compras y contador externo. Las compras sin el ojo del dueño cuestan ~6 % más (menos regateo, más merma).",
+    "descripcion": "El inversor no está ni un minuto: administrador, cajero, encargado de compras y contador externo. Las compras sin el ojo del dueño cuestan ~6 % más (menos regateo, más merma).",
     "supuestos": [
      "precio S/ 11",
      "100 menús/día",
@@ -340,7 +340,7 @@
   "datos": {
    "ficha": {
     "categoria": "Formalidad",
-    "descripcion": "Puesto en el mercado: alquiler bajo, precio bajo, mucho volumen. La dueña cocina; jornaleras por día. Sin RUC.",
+    "descripcion": "Puesto en el mercado: alquiler bajo, precio bajo, mucho volumen. El propietario cocina; jornaleras por día. Sin RUC.",
     "supuestos": [
      "precio S/ 7",
      "120 menús/día",
@@ -402,7 +402,7 @@
    },
    "casa": [
     {
-     "quien": "Dueña",
+     "quien": "Propietario",
      "rol": "cocinero",
      "horas_semana": 60
     }
@@ -410,11 +410,11 @@
   }
  },
  {
-  "nombre": "Chiquito en Nuevo RUS",
+  "nombre": "Pequeño en Nuevo RUS",
   "datos": {
    "ficha": {
     "categoria": "Formalidad",
-    "descripcion": "Formal pero chico, para no pasar el tope del Nuevo RUS (S/ 8 mil al mes). La dueña cocina y una ayudante.",
+    "descripcion": "Formal pero chico, para no pasar el tope del Nuevo RUS (S/ 8 mil al mes). El propietario cocina y una ayudante.",
     "supuestos": [
      "precio S/ 10",
      "30 menús/día",
@@ -466,7 +466,7 @@
    },
    "casa": [
     {
-     "quien": "Dueña",
+     "quien": "Propietario",
      "rol": "cocinero",
      "horas_semana": 60
     }
@@ -650,7 +650,7 @@
   "datos": {
    "ficha": {
     "categoria": "Local",
-    "descripcion": "La dueña cocina en su propia casa: no paga alquiler, pero la casa está fuera de la calle con más paso, así que vende menos. La luz y el agua se mezclan con las de la casa.",
+    "descripcion": "El propietario cocina en su propia casa: no paga alquiler, pero la casa está fuera de la calle con más paso, así que vende menos. La luz y el agua se mezclan con las de la casa.",
     "supuestos": [
      "precio S/ 9",
      "45 menús/día",
@@ -712,7 +712,7 @@
    },
    "casa": [
     {
-     "quien": "Dueña",
+     "quien": "Propietario",
      "rol": "cocinero",
      "horas_semana": 60
     }

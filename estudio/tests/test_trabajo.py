@@ -27,6 +27,6 @@ def test_sin_gente_de_la_casa_no_hay_pago_por_hora():
 
 
 def test_casa_desde_el_escenario_guardado():
-    datos = {"casa": [{"quien": "Dueña", "rol": "cocinero", "horas_semana": 60}]}
-    assert casa_desde(datos) == [Persona("Dueña", "cocinero", 60.0)]
+    datos = {"casa": [{"quien": "Propietario", "rol": "cocinero", "horas_semana": 60}]}
+    assert casa_desde(datos) == [Persona("Propietario", "cocinero", 60.0)]
     assert casa_desde({}) == []

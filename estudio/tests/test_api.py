@@ -106,35 +106,35 @@ def test_recetas_por_api(cliente):
 def test_arquetipos_sembrados_y_comparables(cliente):
     lista = cliente.get("/api/escenarios", headers=H).json()
     nombres = {g["nombre"] for g in lista}
-    assert {"Dueña que cocina", "Familia sin sueldos", "Inversor (promedio)", "Dueño ausente (todo tercerizado)",
+    assert {"Propietario que cocina", "Familiar sin sueldos", "Inversor que supervisa", "Inversor ausente",
             "Exitoso (referencia compuesta)", "Día y noche"} <= nombres
     r = cliente.post("/api/comparar", headers=H, json={"ids": [g["id"] for g in lista]}).json()
     assert len(r) == len(lista) and not any("error" in x for x in r)
     por = {x["nombre"]: x for x in r}
     # la familia que no cobra sueldo se lleva la utilidad entera
-    assert por["Familia sin sueldos"]["ingreso_dueno_mes"] == por["Familia sin sueldos"]["utilidad_mes"]
-    # el dueño ausente paga más gente que el inversor
-    assert por["Dueño ausente (todo tercerizado)"]["trabajadores"] > por["Inversor (promedio)"]["trabajadores"]
+    assert por["Familiar sin sueldos"]["ingreso_dueno_mes"] == por["Familiar sin sueldos"]["utilidad_mes"]
+    # el inversor ausente paga más gente que el inversor
+    assert por["Inversor ausente"]["trabajadores"] > por["Inversor que supervisa"]["trabajadores"]
     assert por["Día y noche"]["noche"] and por["Exitoso (referencia compuesta)"]["utilidad_mes"] > 0
 
 
 def test_comparar_trae_la_sensibilidad_de_cada_caso(cliente):
     lista = cliente.get("/api/escenarios", headers=H).json()
-    ids = [g["id"] for g in lista if g["nombre"] in ("Inversor (promedio)", "Exitoso (referencia compuesta)")]
+    ids = [g["id"] for g in lista if g["nombre"] in ("Inversor que supervisa", "Exitoso (referencia compuesta)")]
     r = {x["nombre"]: x for x in cliente.post("/api/comparar", headers=H, json={"ids": ids}).json()}
     exitoso = r["Exitoso (referencia compuesta)"]
     # gana: el precio puede bajar algo antes de perder; los insumos pueden subir
     assert exitoso["quiebres"]["precio"] < 0 < exitoso["quiebres"]["insumos"]
     assert exitoso["tornado"][0]["variable"] == "precio"
     # el inversor casi en cero aguanta mucho menos que el exitoso
-    assert abs(r["Inversor (promedio)"]["quiebres"]["precio"]) < abs(exitoso["quiebres"]["precio"])
+    assert abs(r["Inversor que supervisa"]["quiebres"]["precio"]) < abs(exitoso["quiebres"]["precio"])
 
 
 def test_familia_y_duena_solo_difieren_en_quien_trabaja(cliente):
     lista = cliente.get("/api/escenarios", headers=H).json()
-    ids = [g["id"] for g in lista if g["nombre"] in ("Dueña que cocina", "Familia sin sueldos")]
+    ids = [g["id"] for g in lista if g["nombre"] in ("Propietario que cocina", "Familiar sin sueldos")]
     r = {x["nombre"]: x for x in cliente.post("/api/comparar", headers=H, json={"ids": ids}).json()}
-    duena, familia = r["Dueña que cocina"], r["Familia sin sueldos"]
+    duena, familia = r["Propietario que cocina"], r["Familiar sin sueldos"]
     assert duena["ventas_mes"] == familia["ventas_mes"]
     assert (duena["personas_casa"], familia["personas_casa"]) == (1, 3)
     # la casa se lleva parecido, pero la familia lo reparte entre tres
@@ -143,7 +143,7 @@ def test_familia_y_duena_solo_difieren_en_quien_trabaja(cliente):
 
 def test_comparar_a_igualdad_de_condiciones(cliente):
     lista = cliente.get("/api/escenarios", headers=H).json()
-    ids = [g["id"] for g in lista if g["nombre"] in ("Inversor (promedio)", "Exitoso (referencia compuesta)",
+    ids = [g["id"] for g in lista if g["nombre"] in ("Inversor que supervisa", "Exitoso (referencia compuesta)",
                                                      "Fonda en casa propia")]
     propios = {x["nombre"]: x for x in cliente.post("/api/comparar", headers=H, json={"ids": ids}).json()}
     iguales = cliente.post("/api/comparar", headers=H, json={
@@ -155,7 +155,7 @@ def test_comparar_a_igualdad_de_condiciones(cliente):
     fonda = next(x for x in con_alquiler if x["nombre"] == "Fonda en casa propia")
     assert fonda["alquiler_pct"] > 0 and fonda["utilidad_mes"] < propios["Fonda en casa propia"]["utilidad_mes"]
     # sin dueño que trabaje no hay "por persona"
-    assert next(x for x in iguales if x["nombre"] == "Inversor (promedio)")["ingreso_por_persona"] is None
+    assert next(x for x in iguales if x["nombre"] == "Inversor que supervisa")["ingreso_por_persona"] is None
 
 
 def _esperar(cliente, id_):
@@ -169,7 +169,7 @@ def _esperar(cliente, id_):
 
 
 def test_corridas_en_segundo_plano(cliente):
-    inv = next(g for g in cliente.get("/api/escenarios", headers=H).json() if g["nombre"] == "Inversor (promedio)")
+    inv = next(g for g in cliente.get("/api/escenarios", headers=H).json() if g["nombre"] == "Inversor que supervisa")
     r = cliente.post("/api/corridas", headers=H, json={
         "tipo": "decisiones", "escenario_id": inv["id"],
         "factores": {"precio": [0, 1], "calidad": ["estandar"], "noche": [False], "elasticidad": [0.5, 1.5]}})

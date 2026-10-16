@@ -118,9 +118,9 @@ def fuentes(fs: list[dict]) -> str:
 
 def construir(d: dict) -> str:
     casos = {c["nombre"]: c for c in d["casos"]}
-    dc, fam, inv, aus = (casos["Dueña que cocina"], casos["Familia sin sueldos"], casos["Inversor (promedio)"],
-                         casos["Dueño ausente (todo tercerizado)"])
-    mer, rus, eje, dyn, exi = (casos["Puesto de mercado informal"], casos["Chiquito en Nuevo RUS"],
+    dc, fam, inv, aus = (casos["Propietario que cocina"], casos["Familiar sin sueldos"], casos["Inversor que supervisa"],
+                         casos["Inversor ausente"])
+    mer, rus, eje, dyn, exi = (casos["Puesto de mercado informal"], casos["Pequeño en Nuevo RUS"],
                                casos["Ejecutivo en el centro"], casos["Día y noche"],
                                casos["Exitoso (referencia compuesta)"])
     cand, pl = d.get("candela"), d.get("platos")
@@ -135,7 +135,7 @@ def construir(d: dict) -> str:
     NT = PALABRAS.get(len(d["casos"]), str(len(d["casos"])))
     rob = {r["nombre"]: r for r in d.get("robustez", [])}
     rc = next((r for r in d.get("robustez", []) if r["nombre"].startswith("Candela")), None)
-    r_inv, r_dc = rob["Inversor (promedio)"], rob["Dueña que cocina"]
+    r_inv, r_dc = rob["Inversor que supervisa"], rob["Propietario que cocina"]
     sobreviven = [corto(r["nombre"]) for r in d.get("robustez", []) if r["estres"][-1]["utilidad"] >= 0]
     al_tope = sum(1 for r in d.get("robustez", []) if r["mejor"]["precio"] >= r["precio0"] + 3 - 1e-9)
     # Experimento: el mismo barrido con la sensibilidad supuesta y con la medida en Juliaca
@@ -162,7 +162,7 @@ def construir(d: dict) -> str:
     pasos_aus = d.get("igualdad", {}).get("ausencia")
     dcp = d.get("igualdad", {}).get("descomposicion")
     fac = {f["nombre"]: f for f in (dcp or {}).get("filas", [])}
-    u_dc, u_fam = (noche_u.get(n, {}).get("umbral") for n in ("Dueña que cocina", "Familia sin sueldos"))
+    u_dc, u_fam = (noche_u.get(n, {}).get("umbral") for n in ("Propietario que cocina", "Familiar sin sueldos"))
     umbral_familiar = f"unos {u_dc}" if u_dc == u_fam else f"{u_dc} o {u_fam}"
 
     def ap(nombre, clave):
@@ -206,9 +206,9 @@ def construir(d: dict) -> str:
         if ig:
             filas.append((
                 "¿Decide quién trabaja?", "Todos los negocios en el mismo local",
-                f"Familia {s(ig_('Familia sin sueldos'))} (para tres), dueña {s(ig_('Dueña que cocina'))}, inversor "
-                f"{s(ig_('Inversor (promedio)'))}, ausente {s(ig_('Dueño ausente (todo tercerizado)'))}",
-                veredicto(parte_de("La dueña que cocina se lleva más")) if sr else "--"))
+                f"Familia {s(ig_('Familiar sin sueldos'))} (para tres), propietario {s(ig_('Propietario que cocina'))}, inversor "
+                f"{s(ig_('Inversor que supervisa'))}, ausente {s(ig_('Inversor ausente'))}",
+                veredicto(parte_de("El propietario que cocina se lleva más que el inversor")) if sr else "--"))
         if fac:
             filas.append((
                 "¿El exitoso y el puesto ganan por cómo se organizan?", "La diferencia repartida en cinco factores",
@@ -217,10 +217,10 @@ def construir(d: dict) -> str:
                 "no: escala y plato barato"))
         if pasos_aus:
             filas.append((
-                "¿Cuánto cuesta no estar?", "Del inversor al dueño ausente, un cambio a la vez",
+                "¿Cuánto cuesta no estar?", "Del inversor al inversor ausente, un cambio a la vez",
                 f"{s(-(pasos_aus[2]['cambio'] + pasos_aus[3]['cambio'] + pasos_aus[4]['cambio']))} al mes; la gerencia "
                 f"pagada, {s(-pasos_aus[2]['cambio'])}",
-                veredicto(parte_de("El dueño ausente pierde")) if sr else "--"))
+                veredicto(parte_de("El inversor ausente pierde")) if sr else "--"))
         if sup_:
             filas.append((
                 "¿Conviene subir el precio?", "Barrido con la sensibilidad supuesta y con la medida en Juliaca",
@@ -243,15 +243,15 @@ def construir(d: dict) -> str:
                 f"La venta no pasa de {n(rc['capacidad'])}; a S/~10 la cocina vuelve al colapso",
                 "la organización pone el techo"))
         filas.append((
-            "¿Casa propia o local alquilado?", "Fonda en casa propia frente a la dueña con local",
+            "¿Casa propia o local alquilado?", "Fonda en casa propia frente al propietario con local",
             f"{s(casos['Fonda en casa propia']['ingreso_dueno'])} contra {s(dc['ingreso_dueno'])} al mes",
             veredicto(parte_de("La fonda en casa propia")) if sr else "--"))
         if trab:
             filas.append((
                 "¿Es rentable la fonda familiar si se paga su trabajo?",
                 "Su trabajo y su capital a precio de mercado",
-                f"Utilidad económica {s(trab['Familia sin sueldos']['utilidad_economica'])}; cobran el "
-                f"{p(trab['Familia sin sueldos']['parte_cobrada'])} de lo que vale su trabajo",
+                f"Utilidad económica {s(trab['Familiar sin sueldos']['utilidad_economica'])}; cobran el "
+                f"{p(trab['Familiar sin sueldos']['parte_cobrada'])} de lo que vale su trabajo",
                 veredicto(parte_de("La familia recibe menos")) if parte_de("La familia recibe menos") is not None else "--"))
         filas.append((
             "¿Conviene abrir de noche?", "Barrido con una noche tipo de 30 platos",
@@ -559,12 +559,12 @@ quedan abiertas.
 
 \begin{{recuadro}}{{Hallazgos}}
 \begin{{itemize}}[leftmargin=1.2em]
-\item \textbf{{En una fonda de provincia gana el trabajo, no el capital.}} La dueña que cocina se lleva
+\item \textbf{{En una fonda de provincia gana el trabajo, no el capital.}} El propietario que cocina se lleva
 {s(dc['ingreso_dueno'])} al mes y la familia que no se cobra sueldos {s(fam['ingreso_dueno'])}; el inversor que
 contrata a todos apenas cubre costos ({s(inv['utilidad_mes'])}) y el dueño que terceriza hasta las compras
-pierde {s(-aus['utilidad_mes'])} al mes{sorteos_txt("La dueña que cocina se lleva más")}.
+pierde {s(-aus['utilidad_mes'])} al mes{sorteos_txt("El propietario que cocina se lleva más que el inversor")}.
 \item \textbf{{Ganar no siempre es mérito de la organización.}} {"" if not fac else rf"""Al repartir la diferencia
-de cada negocio con la dueña que cocina, el exitoso debe casi todo a su local y su venta
+de cada negocio con el propietario que cocina, el exitoso debe casi todo a su local y su venta
 ({s(ap('Exitoso (referencia compuesta)', 'local'))} al mes) y el puesto de mercado a un plato barato de hacer
 ({s(ap('Puesto de mercado informal', 'insumos'))}), no a su volumen ({s(ap('Puesto de mercado informal', 'local'))}). """}En
 el mismo local, el orden lo decide quién trabaja y cómo se le paga.
@@ -583,10 +583,10 @@ sensible, casi todos los negocios deberían subir S/~3; con la sensibilidad que 
 {s(max_sube_med, 2)}. La mejora tiene que venir del costo, la mezcla de platos o más horas de venta.
 \item \textbf{{Solo {len(sobreviven)} de {NN} negocios resisten todos los golpes juntos}} (clientela, insumos,
 IGV, sueldos, alquiler y competencia): {esc(', '.join(sobreviven))}.
-\item \textbf{{La fonda familiar gana porque su trabajo no se cobra.}} En el mismo local que la dueña que cocina,
-cada uno de sus tres integrantes se lleva menos de la mitad que ella sola{sorteos_txt("Cada integrante de la familia")}.
+\item \textbf{{La fonda familiar gana porque su trabajo no se cobra.}} En el mismo local que el propietario que cocina,
+cada uno de sus tres integrantes se lleva menos de la mitad que él solo{sorteos_txt("Cada integrante de la familia")}.
 Descontado su trabajo a precio de mercado, su utilidad económica queda cerca de cero
-({s(trab['Familia sin sueldos']['utilidad_economica']) if trab else ''}): lo que muestra la caja es, casi entero, su propio sueldo.
+({s(trab['Familiar sin sueldos']['utilidad_economica']) if trab else ''}): lo que muestra la caja es, casi entero, su propio sueldo.
 {"" if 'juliaca_obs' not in ciud else rf"""\item \textbf{{Juliaca no es la plaza más difícil del país.}} Con el precio estimado de la base (S/~8) lo parecía:
 {ciud['juliaca']['eq_2026']} menús diarios para no perder. Con el que se cobra en Candela (S/~11) el equilibrio baja a
 {ciud['juliaca_obs']['eq_2026']} y queda entre las mejores plazas del mapa; falta confirmarlo con más locales."""}
@@ -721,13 +721,12 @@ Para separar el efecto de la organización del efecto de la ciudad, los {NT} res
 Juliaca y comparten la misma base de costos; difieren en lo que define el modelo de negocio:
 
 \begin{{description}}[leftmargin=1em,style=nextline]
-\item[Quién trabaja] La \emph{{dueña que cocina}} reemplaza al cocinero y se paga los S/~1\,500 del dueño; la
-\emph{{familia sin sueldos}} cocina y atiende sin cobrar, en un local igual al de la dueña (mismo precio, venta y
+\item[Quién trabaja] El \emph{{propietario que cocina}} reemplaza al cocinero y se paga los S/~1\,500 del dueño; el \emph{{negocio familiar sin sueldos}} cocina y atiende sin cobrar, en un local igual al del propietario (mismo precio, venta y
 alquiler); el \emph{{inversor}} pone el capital y contrata a todo el
-personal sin cobrar sueldo; el \emph{{dueño ausente}} no pisa el local: paga administrador, cajero, encargado de
+personal sin cobrar sueldo; el \emph{{inversor ausente}} no pisa el local: paga administrador, cajero, encargado de
 compras y contador, y sus compras cuestan 6\,\% más sin el regateo y el control del dueño.
 \item[Formalidad] El \emph{{puesto de mercado}} vende barato y mucho, sin RUC y con alquiler mínimo; el
-\emph{{chiquito en Nuevo RUS}} se mantiene bajo S/~8\,000 de ventas al mes para no salir del régimen.
+\emph{{pequeño en Nuevo RUS}} se mantiene bajo S/~8\,000 de ventas al mes para no salir del régimen.
 \item[Precio y servicio] El \emph{{ejecutivo}} vende a S/~18 en un local caro; \emph{{día y noche}} es el inversor
 que además abre de noche con su propio equipo.
 \item[Local] La \emph{{fonda en casa propia}} no paga alquiler, pero está fuera de la calle con más paso:
@@ -756,11 +755,11 @@ Negocio & Precio & Menús & Pers. & Formal & Dueño/mes & Equil. & P(pérd.) & V
 
 La figura~\ref{{fig:ingreso}} ordena los negocios por lo que se lleva el dueño cada mes. El resultado más
 claro es el de las cuatro formas de organizar el trabajo. Con los mismos costos de insumos y la misma ciudad,
-la dueña que cocina gana {s(dc['ingreso_dueno'])} al mes, la familia {s(fam['ingreso_dueno'])}, el inversor
-{s(inv['ingreso_dueno'])} y el dueño ausente pierde {s(-aus['ingreso_dueno'])}. La diferencia no está en la
+el propietario que cocina gana {s(dc['ingreso_dueno'])} al mes, la familia {s(fam['ingreso_dueno'])}, el inversor
+{s(inv['ingreso_dueno'])} y el inversor ausente pierde {s(-aus['ingreso_dueno'])}. La diferencia no está en la
 eficiencia de la cocina sino en a quién se le paga por el trabajo. En la fonda familiar el trabajo no
 remunerado es, literalmente, la utilidad: lo que el estado de resultados muestra como ganancia es el sueldo
-que la familia no se cobra. El dueño ausente es el caso opuesto: compra con plata lo que los otros ponen
+que la familia no se cobra. El inversor ausente es el caso opuesto: compra con plata lo que los otros ponen
 con su tiempo, y a 100 menús diarios no le alcanza.
 
 \begin{{figure}}[t]
@@ -772,7 +771,7 @@ con su tiempo, y a 100 menús diarios no le alcanza.
 La estructura de costos (figura~\ref{{fig:estructura}}) explica el orden. En todos los casos los insumos se
 llevan entre 40 y 57 centavos de cada sol vendido sin IGV: esa parte es casi fija. Lo que separa a los
 ganadores de los perdedores es el personal, que va del {p(fam['estructura']['personal'])} de la venta en la
-fonda familiar al {p(aus['estructura']['personal'])} del dueño ausente, y el alquiler, que va del
+fonda familiar al {p(aus['estructura']['personal'])} del inversor ausente, y el alquiler, que va del
 {p(mer['estructura']['alquiler'])} en el mercado al {p(eje['estructura']['alquiler'])} del ejecutivo. El
 exitoso gana porque diluye ambos: con 220 menús, su personal es apenas el {p(exi['estructura']['personal'])} y
 sus compras por volumen bajan los insumos al {p(exi['estructura']['insumos'])}.
@@ -783,7 +782,7 @@ sus compras por volumen bajan los insumos al {p(exi['estructura']['insumos'])}.
 \caption{{A dónde va cada sol vendido (sin IGV). Más allá de la línea del 100\,\%, el negocio pierde.}}\label{{fig:estructura}}
 \end{{figure}}
 
-Dos casos merecen comentario. El \emph{{chiquito en Nuevo RUS}} muestra una trampa del régimen: para no pasar
+Dos casos merecen comentario. El \emph{{pequeño en Nuevo RUS}} muestra una trampa del régimen: para no pasar
 el tope de S/~96 mil al año tiene que vender poco, y con 30 menús diarios no alcanza a pagar una planilla
 formal ni el alquiler; si crece, sale del régimen. El Nuevo RUS sirve para formalizar a quien ya vende poco,
 no para construir un negocio que crezca. Y el turno noche funciona porque el alquiler, el local y buena parte
@@ -793,7 +792,7 @@ de la luz ya están pagados al mediodía: cada cena vendida aporta casi todo su 
 
 Los negocios del catálogo difieren en todo a la vez: precio, venta, alquiler y forma de organizarse. Para
 separar lo que se debe a la organización, la figura~\ref{{fig:igualdad}} los pone a todos en el mismo local:
-el de la dueña que cocina, con S/~10 por menú, 60 menús diarios, S/~1\,200 de alquiler y los mismos insumos, gas
+el del propietario que cocina, con S/~10 por menú, 60 menús diarios, S/~1\,200 de alquiler y los mismos insumos, gas
 y luz. Lo único que queda distinto es quién trabaja, cómo se le paga, si es formal y si abre de noche.
 
 \begin{{figure}}[t]
@@ -806,36 +805,36 @@ y luz. Lo único que queda distinto es quién trabaja, cómo se le paga, si es f
 La primera lección es que varios resultados no venían de la organización sino del lugar y del volumen. El
 \emph{{exitoso}} se lleva {s(ig_('Exitoso (referencia compuesta)', 'propio'))} con sus números y
 {s(ig_('Exitoso (referencia compuesta)'))} en el mismo local: casi lo mismo que el inversor
-({s(ig_('Inversor (promedio)'))}). Su éxito es la escala y el precio, y eso no se copia contratando igual. El
+({s(ig_('Inversor que supervisa'))}). Su éxito es la escala y el precio, y eso no se copia contratando igual. El
 \emph{{puesto de mercado}} baja de {s(ig_('Puesto de mercado informal', 'propio'))} a
 {s(ig_('Puesto de mercado informal'))}: su ventaja era un plato más barato de hacer, que la igualación le quita. En sentido contrario, la
 \emph{{fonda en casa propia}} sube de {s(ig_('Fonda en casa propia', 'propio'))} a
 {s(ig_('Fonda en casa propia'))} aun pagando alquiler: lo que la frenaba era vender poco y barato, no el local.
-El \emph{{chiquito en Nuevo RUS}} también mejora, pero a 60 menús ya no cabe en el régimen.
+El \emph{{pequeño en Nuevo RUS}} también mejora, pero a 60 menús ya no cabe en el régimen.
 
-La segunda es que, a igualdad de todo lo demás, el orden lo decide quién trabaja. La familia sin sueldos junta
-{s(ig_('Familia sin sueldos'))} al mes, más que la dueña que cocina ({s(ig_('Dueña que cocina'))}), pero lo
-reparte entre {ig_('Familia sin sueldos', campo='personas')} personas: {s(ig_('Familia sin sueldos', campo='por_persona'))}
-cada una, frente a los {s(ig_('Dueña que cocina', campo='por_persona'))} que se lleva la dueña sola. El inversor,
-que contrata todo, queda en {s(ig_('Inversor (promedio)'))}, y el dueño ausente pierde
-{s(-ig_('Dueño ausente (todo tercerizado)'))}. {"" if 'Candela (datos del POS)' not in ig else rf"""Candela, con su
+La segunda es que, a igualdad de todo lo demás, el orden lo decide quién trabaja. El negocio familiar sin sueldos junta
+{s(ig_('Familiar sin sueldos'))} al mes, más que el propietario que cocina ({s(ig_('Propietario que cocina'))}), pero lo
+reparte entre {ig_('Familiar sin sueldos', campo='personas')} personas: {s(ig_('Familiar sin sueldos', campo='por_persona'))}
+cada una, frente a los {s(ig_('Propietario que cocina', campo='por_persona'))} que se lleva el propietario solo. El inversor,
+que contrata todo, queda en {s(ig_('Inversor que supervisa'))}, y el inversor ausente pierde
+{s(-ig_('Inversor ausente'))}. {"" if 'Candela (datos del POS)' not in ig else rf"""Candela, con su
 planilla de seis personas, perdería {s(-ig_('Candela (datos del POS)'))} en ese local: necesita
 {ig_('Candela (datos del POS)', campo='equilibrio')} menús diarios para cubrirse, frente a los
-{ig_('Dueña que cocina', campo='equilibrio')} de la dueña que cocina. """}
+{ig_('Propietario que cocina', campo='equilibrio')} del propietario que cocina. """}
 
-{"" if not pasos_aus else rf"""El caso del dueño ausente merece separarse en partes, porque mezcla dos cosas: un equipo de
+{"" if not pasos_aus else rf"""El caso del inversor ausente merece separarse en partes, porque mezcla dos cosas: un equipo de
 cocina más grande y el costo de no estar. El cuadro~\ref{{tab:ausencia}} parte del inversor en el mismo local y le
-agrega, uno por uno, los cambios del dueño ausente. La gerencia pagada ---administrador, cajero y encargado de
+agrega, uno por uno, los cambios del inversor ausente. La gerencia pagada ---administrador, cajero y encargado de
 compras--- es el golpe más grande: {s(-pasos_aus[2]['cambio'])} al mes. El contador externo suma {s(-pasos_aus[3]['cambio'])} y
 las compras sin el control del dueño, {s(-pasos_aus[4]['cambio'])} más; ese último renglón crece con el volumen, porque
 el sobrecosto se paga en cada plato. En total, no estar le cuesta
-{s(-(pasos_aus[2]['cambio'] + pasos_aus[3]['cambio'] + pasos_aus[4]['cambio']))} al mes a un local de 60 menús: {n(-(pasos_aus[2]['cambio'] + pasos_aus[3]['cambio'] + pasos_aus[4]['cambio']) / ig_('Dueña que cocina'), 1)} veces
-lo que la dueña que cocina se lleva a su casa. El resto de la brecha, {s(-pasos_aus[1]['cambio'])}, no es ausencia sino
+{s(-(pasos_aus[2]['cambio'] + pasos_aus[3]['cambio'] + pasos_aus[4]['cambio']))} al mes a un local de 60 menús: {n(-(pasos_aus[2]['cambio'] + pasos_aus[3]['cambio'] + pasos_aus[4]['cambio']) / ig_('Propietario que cocina'), 1)} veces
+lo que el propietario que cocina se lleva a su casa. El resto de la brecha, {s(-pasos_aus[1]['cambio'])}, no es ausencia sino
 una cocina con más gente y mejor pagada.
 
 \begin{{table}}[h]
 \centering\small
-\caption{{Del inversor al dueño ausente, un cambio a la vez, en el mismo local (S/~10, 60 menús, S/~1\,200 de
+\caption{{Del inversor al inversor ausente, un cambio a la vez, en el mismo local (S/~10, 60 menús, S/~1\,200 de
 alquiler). Utilidad del mes, sin sueldo del dueño.}}\label{{tab:ausencia}}
 \begin{{tabularx}}{{\textwidth}}{{Xrr}}
 \toprule
@@ -852,10 +851,10 @@ del estudio tiene esta misma comparación en su pestaña \emph{{Comparar}}, con 
 insumos que se quieran poner.
 """}
 
-{"" if not dcp else rf"""\subsection{{Qué separa a cada negocio de la dueña que cocina}}
+{"" if not dcp else rf"""\subsection{{Qué separa a cada negocio del propietario que cocina}}
 
 La igualación responde qué pasaría si todos tuvieran el mismo local. La pregunta inversa es de dónde viene la
-diferencia de cada uno. El cuadro~\ref{{tab:factores}} y la figura~\ref{{fig:factores}} parten de la dueña que
+diferencia de cada uno. El cuadro~\ref{{tab:factores}} y la figura~\ref{{fig:factores}} parten del propietario que
 cocina ({s(dcp['base'])} al mes para su casa) y reparten la distancia a cada negocio entre cinco factores: el
 local y la venta (precio, menús, alquiler, gas y luz), los insumos por menú, quién trabaja y cuánto se le paga, la
 formalidad y el turno noche. Como los factores se potencian entre sí ---el IGV pesa más cuanto más se vende---, el
@@ -865,13 +864,13 @@ de Shapley de la teoría de juegos), y los cinco aportes suman exactamente la di
 \begin{{figure}}[t]
 \centering
 \includegraphics[width=\textwidth]{{fig/factores.pdf}}
-\caption{{De la dueña que cocina a cada negocio: cuánto suma o resta cada factor a lo que se lleva la casa al
+\caption{{Del propietario que cocina a cada negocio: cuánto suma o resta cada factor a lo que se lleva la casa al
 mes. El rombo es la diferencia total.}}\label{{fig:factores}}
 \end{{figure}}
 
 \begin{{table}}[h]
 \centering\footnotesize
-\caption{{Aporte de cada factor a la diferencia con la dueña que cocina, en soles al mes (valores de Shapley). La
+\caption{{Aporte de cada factor a la diferencia con el propietario que cocina, en soles al mes (valores de Shapley). La
 última columna es lo que se lleva la casa: utilidad más el sueldo del dueño, si trabaja.}}\label{{tab:factores}}
 \setlength{{\tabcolsep}}{{3pt}}
 \begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}Xrrrrrr}}
@@ -884,8 +883,8 @@ Negocio & Local y venta & Insumos & Personal & Formalidad & Noche & La casa \\
 \end{{table}}
 
 Cuatro patrones saltan a la vista. Primero, \emph{{quién trabaja}} es el factor que más resta: le quita
-{s(-ap('Inversor (promedio)', 'personal'))} al mes al inversor, {s(-ap('Candela (datos del POS)', 'personal'))} a
-Candela y {s(-ap('Dueño ausente (todo tercerizado)', 'personal'))} al dueño ausente. Solo suma en los negocios
+{s(-ap('Inversor que supervisa', 'personal'))} al mes al inversor, {s(-ap('Candela (datos del POS)', 'personal'))} a
+Candela y {s(-ap('Inversor ausente', 'personal'))} al inversor ausente. Solo suma en los negocios
 donde el trabajo se paga menos que en la referencia: {", ".join(f"{corto(f['nombre'])[:1].lower() + corto(f['nombre'])[1:]} ({s(f['aportes']['personal'])})" for f in sorted(dcp['filas'], key=lambda f: -f['aportes']['personal']) if f['aportes']['personal'] >= 1)}. Segundo, la \emph{{formalidad}} ---el IGV
 y la planilla en regla--- cuesta entre {s(-max(f['aportes']['formalidad'] for f in formales))} y
 {s(-min(f['aportes']['formalidad'] for f in formales))} al mes a los negocios formales, y cuesta más a quien más
@@ -897,7 +896,7 @@ Cuarto, el \emph{{puesto de mercado}} no gana por volumen ---su local y su venta
 {s(ap('Puesto de mercado informal', 'insumos'))} al mes. Y el turno noche es lo único que separa al local de
 \emph{{día y noche}} de un inversor: le suma {s(ap('Día y noche', 'noche'))}.
 
-{"" if 'Candela (datos del POS)' not in fac else rf"""Candela se explica con la misma tabla. Vende más y más caro que la dueña que cocina, y eso le suma
+{"" if 'Candela (datos del POS)' not in fac else rf"""Candela se explica con la misma tabla. Vende más y más caro que el propietario que cocina, y eso le suma
 {s(ap('Candela (datos del POS)', 'local'))}; pero su planilla de seis personas le resta
 {s(-ap('Candela (datos del POS)', 'personal'))}, sus insumos {s(-ap('Candela (datos del POS)', 'insumos'))} y la
 formalidad {s(-ap('Candela (datos del POS)', 'formalidad'))}. La palanca más grande no está en el precio ni en el
@@ -909,7 +908,7 @@ local, sino en cómo se reparte el trabajo de la cocina y del salón."""}
 Un promedio esconde la pregunta que quita el sueño: ¿qué pasa en un año malo? La figura~\ref{{fig:riesgo}}
 muestra la distribución de la utilidad anual en 2\,000 años simulados para cada negocio. Los locales con
 margen holgado ---el exitoso, día y noche, la familia--- casi nunca terminan el año en pérdida; el inversor
-lo hace la mitad de las veces y el dueño ausente casi siempre.
+lo hace la mitad de las veces y el inversor ausente casi siempre.
 
 \begin{{figure}}[t]
 \centering
@@ -920,7 +919,7 @@ en pérdida.}}\label{{fig:riesgo}}
 
 La forma de las cajas importa tanto como su posición. El ejecutivo tiene una utilidad media positiva pero
 una dispersión ancha: depende de una clientela de oficina más volátil y su margen se lo come el IGV. La
-dueña que cocina tiene una caja angosta y casi toda a la derecha del cero: su costo fijo es bajo y su
+propietario que cocina tiene una caja angosta y casi toda a la derecha del cero: su costo fijo es bajo y su
 principal costo laboral, ella misma, se ajusta solo cuando las ventas bajan. Esa es la razón económica de la
 resistencia de la fonda familiar: no es más rentable por plato, sino más flexible ante un mal año.
 
@@ -951,7 +950,7 @@ Negocio & Precio & Menús/día & Insumos & Sueldos & Alquiler \\
 \end{{table}}
 
 El patrón es consistente: \emph{{el precio es siempre la variable más sensible, y el volumen la segunda}}. En
-la dueña que cocina, el precio puede bajar {p(abs(dc['quiebres']['precio']))} y el volumen
+el propietario que cocina, el precio puede bajar {p(abs(dc['quiebres']['precio']))} y el volumen
 {p(abs(dc['quiebres']['q']))} antes de perder; en el inversor, apenas {p(abs(inv['quiebres']['precio']), 1)}
 y {p(abs(inv['quiebres']['q']), 1)}: cualquier competidor que baje cincuenta céntimos lo saca del negocio. En
 cambio, el alquiler y el gas casi nunca deciden: pueden duplicarse en la mayoría de los casos sin llevar al
@@ -963,7 +962,7 @@ proveedor de gas.
 \centering
 \includegraphics[width=\textwidth]{{fig/tornados.pdf}}
 \caption{{Utilidad del mes cuando cada variable baja (naranja) o sube (azul) 10\,\%: {fig_candela_tornado}la
-dueña que cocina y el exitoso. La línea vertical es la utilidad actual.}}\label{{fig:tornados}}
+propietario que cocina y el exitoso. La línea vertical es la utilidad actual.}}\label{{fig:tornados}}
 \end{{figure}}
 
 La figura~\ref{{fig:tornados}} muestra el mismo análisis en forma de tornado para tres casos. En todos, un
@@ -1033,7 +1032,7 @@ existiera esa demanda nocturna.
 La figura~\ref{{fig:decisiones}} resume el barrido de los {NN} negocios: la utilidad de hoy, la de la mejor
 decisión sin abrir de noche y la de la mejor decisión en general, siempre en el peor supuesto de demanda. En
 todos los casos existe una combinación que mejora la situación actual aun con la demanda más desfavorable. El
-inversor pasa de {s(r_inv['base']['utilidad_media'])} a {s(r_inv['mejor']['utilidad_peor'])} de utilidad al mes; la dueña que
+inversor pasa de {s(r_inv['base']['utilidad_media'])} a {s(r_inv['mejor']['utilidad_peor'])} de utilidad al mes; el propietario que
 cocina, de {s(r_dc['base']['utilidad_media'])} a {s(r_dc['mejor']['utilidad_peor'])}, ya descontado su propio sueldo de
 S/~1\,500.
 
@@ -1100,7 +1099,7 @@ Hallazgo & Se cumple & Veredicto \\
 \end{{tabularx}}
 \end{{table}}
 
-Los hallazgos centrales del ensayo resisten: quién trabaja decide el resultado, el dueño ausente pierde en todos
+Los hallazgos centrales del ensayo resisten: quién trabaja decide el resultado, el inversor ausente pierde en todos
 los sorteos y la noche mejora al local que la abre. Dos lecturas, en cambio, no son concluyentes y conviene
 citarlas con cuidado. Que la familia cobre menos que el mínimo por hora depende de supuestos que nadie ha medido
 ---cuánto vende, cuánto trabaja---: está cerca del límite y cae a uno u otro lado. Y que Candela cubra sus costos
@@ -1121,8 +1120,8 @@ Negocio & Hoy & Rango & Repite & No pierde \\
 \end{{table}}
 
 El orden tiene puntas firmes y un medio móvil (cuadro~\ref{{tab:lugares}}). El exitoso es siempre el primero y el
-dueño ausente casi siempre el último, pero los negocios del medio ---el puesto de mercado, día y noche, la familia y
-la dueña que cocina--- cambian de lugar entre sí con facilidad: la diferencia entre ellos es menor que el error de
+inversor ausente casi siempre el último, pero los negocios del medio ---el puesto de mercado, día y noche, la familia y
+el propietario que cocina--- cambian de lugar entre sí con facilidad: la diferencia entre ellos es menor que el error de
 los supuestos. Leído así, el catálogo no dice cuál de esas cuatro fondas es mejor; dice que las cuatro ganan y
 que ganan por razones distintas.
 """}
@@ -1174,14 +1173,14 @@ Negocio & Horas/semana & Se lleva & Su trabajo & Capital & Utilidad económica &
 \end{{tabularx}}
 \end{{table}}
 
-La figura~\ref{{fig:trabajo_hora}} muestra la primera lectura. La dueña que cocina, con 60 horas a la semana, se
-lleva {s(tr_('Dueña que cocina', 'por_hora'), 2)} por hora, cuando contratar a una cocinera para esas mismas horas
-costaría {s(tr_('Dueña que cocina', 'mercado_por_hora'), 2)}: cobra {n(tr_('Dueña que cocina', 'parte_cobrada'), 1)} veces su
-trabajo, porque además del sueldo se queda con el margen del negocio. La familia sin sueldos, en el mismo local,
-no: entre los tres reciben {s(tr_('Familia sin sueldos', 'por_hora'), 2)} por hora frente a
-{s(tr_('Familia sin sueldos', 'mercado_por_hora'), 2)} de mercado, el {p(tr_('Familia sin sueldos', 'parte_cobrada'))} de lo que
+La figura~\ref{{fig:trabajo_hora}} muestra la primera lectura. El propietario que cocina, con 60 horas a la semana, se
+lleva {s(tr_('Propietario que cocina', 'por_hora'), 2)} por hora, cuando contratar a una cocinera para esas mismas horas
+costaría {s(tr_('Propietario que cocina', 'mercado_por_hora'), 2)}: cobra {n(tr_('Propietario que cocina', 'parte_cobrada'), 1)} veces su
+trabajo, porque además del sueldo se queda con el margen del negocio. El negocio familiar sin sueldos, en el mismo local,
+no: entre los tres reciben {s(tr_('Familiar sin sueldos', 'por_hora'), 2)} por hora frente a
+{s(tr_('Familiar sin sueldos', 'mercado_por_hora'), 2)} de mercado, el {p(tr_('Familiar sin sueldos', 'parte_cobrada'))} de lo que
 valdría su trabajo, por debajo del sueldo mínimo por hora. La fonda en casa propia queda justo en el valor de su
-trabajo: su dueña gana lo que ganaría como empleada. Y en el inversor, el chiquito en Nuevo RUS y Candela, quien
+trabajo: su propietario gana lo que ganaría como empleado. Y en el inversor, el pequeño en Nuevo RUS y Candela, quien
 pone el trabajo de dueño casi no cobra nada por él{"" if 'Candela (datos del POS)' not in trab else rf""" ---en Candela, con las
 {n(trab['Candela (datos del POS)']['casa'][0]['horas_semana'] if trab['Candela (datos del POS)']['casa'] else 0)} horas semanales que se le suponen al dueño para compras, caja y
 administración, la cuenta es peor: si paga IGV sobre toda la venta, pone su trabajo y además pierde plata"""}.
@@ -1193,12 +1192,12 @@ administración, la cuenta es peor: si paga IGV sobre toda la venta, pone su tra
 y el del capital (color).}}\label{{fig:trabajo_economica}}
 \end{{figure}}
 
-La figura~\ref{{fig:trabajo_economica}} cambia el orden de los negocios. Por lo que se lleva la casa, la familia sin
-sueldos es de las que más ganan ({s(tr_('Familia sin sueldos', 'ingreso'))} al mes); por utilidad económica queda en
-{s(tr_('Familia sin sueldos', 'utilidad_economica'))}: lo que muestra la caja es, casi entero, su propio trabajo. Que quede
+La figura~\ref{{fig:trabajo_economica}} cambia el orden de los negocios. Por lo que se lleva la casa, el negocio familiar
+sin sueldos es de las que más ganan ({s(tr_('Familiar sin sueldos', 'ingreso'))} al mes); por utilidad económica queda en
+{s(tr_('Familiar sin sueldos', 'utilidad_economica'))}: lo que muestra la caja es, casi entero, su propio trabajo. Que quede
 por encima o por debajo del valor de mercado no es concluyente{"" if parte_de("La familia recibe menos") is None else " (queda por debajo en el " + p(parte_de("La familia recibe menos")) + " de los sorteos)"}; lo que sí se
-sostiene es que cada uno de sus integrantes se lleva menos de la mitad que la dueña que cocina sola. Con la
-utilidad económica como medida, solo {y_lista([("la " if corto(t['nombre']).startswith(("Dueña", "Familia", "Fonda")) else "el ") + corto(t['nombre'])[:1].lower() + corto(t['nombre'])[1:] for t in sorted(trab.values(), key=lambda t: -t['utilidad_economica']) if t['utilidad_economica'] > 100])}
+sostiene es que cada uno de sus integrantes se lleva menos de la mitad que el propietario que cocina solo. Con la
+utilidad económica como medida, solo {y_lista([("la " if corto(t['nombre']).startswith(("Fonda",)) else "el ") + corto(t['nombre'])[:1].lower() + corto(t['nombre'])[1:] for t in sorted(trab.values(), key=lambda t: -t['utilidad_economica']) if t['utilidad_economica'] > 100])}
 son negocios rentables en sentido estricto: pagan a su gente lo que vale y todavía les sobra. Ese es el indicador
 que debería mirar quien compara una fonda con un empleo: la pregunta no es si el negocio deja plata, sino si
 deja más que lo que la misma gente ganaría trabajando para otro.
@@ -1222,9 +1221,9 @@ La flecha es el salto al pasar el tope.}}\label{{fig:nrus}}
 \subsection{{Desde cuántas cenas conviene la noche}}
 
 El barrido mostró que la noche mejora a todos los negocios; la pregunta práctica es desde qué volumen. Si la
-noche exige un equipo propio, conviene desde unos {noche_u['Inversor (promedio)']['umbral']} platos por noche
+noche exige un equipo propio, conviene desde unos {noche_u['Inversor que supervisa']['umbral']} platos por noche
 en el local promedio{"" if not cand else f" (y {noche_u['Candela (datos del POS)']['umbral']} en Candela)"}. Si la
-atienden las mismas personas del día ---la dueña, la familia---, conviene desde
+atienden las mismas personas del día ---el propietario, la familia---, conviene desde
 {umbral_familiar} platos por noche: casi cualquier venta.
 Pero esa cuenta no cobra las horas extra de esas personas; es el mismo trabajo no pagado de la sección
 anterior, ahora de noche. La decisión honesta compara las cenas que se venderían con el costo de un equipo
@@ -1233,12 +1232,12 @@ nocturno, aunque al principio lo cubra la familia.
 \subsection{{¿Casa propia o local alquilado?}}
 
 Muchas fondas abren en la casa de la familia y no pagan alquiler. La pregunta es si eso las hace más rentables
-que un local alquilado. El modelo la responde traduciendo el alquiler a menús: el local de la dueña que cocina
-paga S/~1\,200, que equivalen a vender {n(next(a['menus'] for a in hz['alquiler'] if a['nombre'] == 'Dueña que cocina'))}
+que un local alquilado. El modelo la responde traduciendo el alquiler a menús: el local del propietario que cocina
+paga S/~1\,200, que equivalen a vender {n(next(a['menus'] for a in hz['alquiler'] if a['nombre'] == 'Propietario que cocina'))}
 menús diarios; el del inversor, S/~2\,200, equivale a {n(next(a['menus'] for a in hz['alquiler'] if a['nombre'].startswith('Inversor')))}.
 Abrir en casa conviene mientras la casa pierda menos clientes que esos menús. La fonda en casa propia del
-catálogo, con 45 menús a S/~9, deja {s(casos['Fonda en casa propia']['ingreso_dueno'])} al mes a su dueña, frente a
-{s(dc['ingreso_dueno'])} de la dueña que cocina en un local alquilado con 60 menús a S/~10: el paso de la calle vale
+catálogo, con 45 menús a S/~9, deja {s(casos['Fonda en casa propia']['ingreso_dueno'])} al mes a su propietario, frente a
+{s(dc['ingreso_dueno'])} del propietario que cocina en un local alquilado con 60 menús a S/~10: el paso de la calle vale
 más que el alquiler que se ahorra. Dos costos escondidos completan la cuenta. Primero, la casa tiene un costo
 de oportunidad: el espacio podría alquilarse. Segundo, la luz, el agua y el gas se mezclan con los del hogar, y
 el negocio parece más barato de lo que es.
@@ -1318,7 +1317,7 @@ distingue a un negocio de otro son tres decisiones:
 
 \begin{{enumerate}}[leftmargin=1.4em]
 \item \textbf{{Quién pone el trabajo.}} La fonda rentable en provincia es, en su forma más común, el empleo de
-su dueña o de su familia. Un local que contrata a todos necesita volúmenes de ciudad grande o precios que la
+su propietario o de su familia. Un local que contrata a todos necesita volúmenes de ciudad grande o precios que la
 clientela local no paga; uno que además terceriza la gestión necesita más del doble del volumen. Antes de
 abrir, la pregunta útil no es ``¿es rentable el menú?'' sino ``¿quién va a estar en la cocina y en la caja?''.
 \item \textbf{{Cuántos menús por cada sol de alquiler.}} El volumen diluye los costos fijos, y el turno noche
