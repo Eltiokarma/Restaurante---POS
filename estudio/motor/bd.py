@@ -93,7 +93,9 @@ def motor_bd(url: str | None = None):
         url = "postgresql+psycopg://" + url[len("postgres://"):]
     elif url.startswith("postgresql://"):
         url = "postgresql+psycopg://" + url[len("postgresql://"):]
-    return create_engine(url)
+    # pre_ping: Railway corta conexiones ociosas; sin esto la primera
+    # consulta tras un rato devuelve 500
+    return create_engine(url, pool_pre_ping=True)
 
 
 # ---------- Siembra desde dataset.json ----------
