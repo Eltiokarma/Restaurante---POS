@@ -520,6 +520,10 @@ def _metricas(datos: dict, s: Session) -> dict:
         "precio": local.precio, "menus_dia": e.q, "formal": e.formal, "noche": e.noche is not None,
         "regimen": NOMBRE_REGIMEN[e.regimen], "inversion": e.inversion,
         "van": fl.van, "tir": fl.tir, "recupero": fl.recupero, "alertas": fl.alertas,
+        # Sensibilidad del caso: cuánto aguanta cada número y qué lo mueve más
+        "quiebres": {q["variable"]: q["cambio"] for q in quiebres(local, esc, e.q, nacional)},
+        "tornado": [{"variable": t["variable"], "nombre": t["nombre"], "rango": t["rango"]}
+                    for t in tornado(local, esc, e.q, nacional, 0.10)],
     }
 
 

@@ -74,6 +74,16 @@ def simular(local: Local, esc: Escenario, nacional: dict, riesgo: dict, q_ref: f
     """Utilidad de un año: volumen lognormal, insumos normal, precio
     triangular en el rango (±4 % si es dato propio) y conflicto social que
     quita 2–8 semanas de contribución con la probabilidad anual de la ciudad."""
+    salida = muestras(local, esc, nacional, riesgo, q_ref, incluir_precio, n)
+    perdidas = sum(1 for x in salida if x < 0)
+    salida = sorted(salida)
+    return ResultadoMC(perdidas / n, salida[int(n * 0.1)], salida[int(n * 0.5)], salida[int(n * 0.9)])
+
+
+def muestras(local: Local, esc: Escenario, nacional: dict, riesgo: dict, q_ref: float,
+             incluir_precio: bool = True, n: int = N_CORRIDAS) -> list[float]:
+    """Las n utilidades anuales simuladas, en el orden en que salen (para
+    dibujar la distribución completa)."""
     formal = "1" if esc.formal else "0"
     seg = "pop" if esc.pop else "ejec"
     # Misma semilla que el prototipo: id + seg + year + formal + qref
@@ -81,7 +91,6 @@ def simular(local: Local, esc: Escenario, nacional: dict, riesgo: dict, q_ref: f
     r = mulberry32(fnv1a(f"{local.id}{seg}{esc.anio}{formal}{q_txt}"))
     sd_q, sd_i = riesgo["sd_volumen"], riesgo["sd_insumos_anual"]
     salida = []
-    perdidas = 0
     for _ in range(n):
         q = max(5, q_ref * math.exp(sd_q * normal(r) - sd_q * sd_q / 2))
         ins_mult = max(0.6, 1 + sd_i * normal(r))
@@ -97,10 +106,7 @@ def simular(local: Local, esc: Escenario, nacional: dict, riesgo: dict, q_ref: f
             perdida = (2 + r() * 6) / 52
         anual = 12 * ((m.contrib_u * m.q_mes + m.contrib_noche * m.q_mes_noche) * (1 - perdida)) - 12 * m.fijos
         salida.append(anual)
-        if anual < 0:
-            perdidas += 1
-    salida.sort()
-    return ResultadoMC(perdidas / n, salida[int(n * 0.1)], salida[int(n * 0.5)], salida[int(n * 0.9)])
+    return salida
 
 
 def _redondeo_js(x: float) -> int:

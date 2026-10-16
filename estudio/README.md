@@ -19,6 +19,7 @@ El encargo completo está en [`BRIEF.md`](BRIEF.md). Las cifras salen de
 | `motor/sensibilidad.py` | Tornado (qué número mueve más la utilidad), cuánto aguanta cada uno antes de perder y tabla precio × menús/día. |
 | `motor/recetas.py` | Costeo por receta con merma por insumo, margen por plato y del menú, ingeniería de menú (estrella, caballito, rompecabezas, perro) y peso de cada insumo en las compras. |
 | `data/arquetipos.json` | Catálogo de restaurantes tipo (dueña que cocina, familia sin sueldos, inversor, dueño ausente, puesto de mercado, Nuevo RUS, ejecutivo, día y noche, exitoso de referencia). Se cargan como escenarios al arrancar, sin pisar los editados. |
+| `reporte/` | Generador del ensayo en PDF (XeLaTeX + matplotlib): `datos.py` calcula y guarda `salida/datos.json`, `figuras.py` dibuja, `ensayo.py` arma y compila. La salida no se sube (incluye datos de Candela). |
 | `web/` | El panel (React + Vite): simulador del mes con barras, flujo a 10 años y escenarios guardados. |
 | `motor/bd.py` | Base de datos: `ciudades`, `zonas`, `parametros` (cada cifra con origen, fuente, fecha y confianza), `fuentes` y `escenarios`. |
 | `tests/` | Regresión: los 12 equilibrios del brief y 96 combinaciones contra el prototipo (`referencia_prototipo.json`, generado corriendo su JavaScript con Node). |
@@ -76,6 +77,16 @@ correcciones de insumos, alquiler, sueldos, gas y servicios),
 
 Panel en desarrollo: `uvicorn api:app --port 8001` en `estudio/` y
 `npm run dev` en `estudio/web/`.
+
+## Ensayo en PDF
+
+Requiere `xelatex` (texlive-xetex, texlive-lang-spanish, lmodern) y `pip install matplotlib`.
+
+```bash
+cd estudio
+ESTUDIO_URL=https://<servicio>.up.railway.app ESTUDIO_TOKEN=... python -m reporte.ensayo
+# → reporte/salida/ensayo.pdf (sin ESTUDIO_URL sale sin el caso Candela)
+```
 
 ## Origen de cada cifra
 
