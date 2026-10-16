@@ -25,3 +25,6 @@ voz-lab/resultados.csv
 
 # Estudio de rentabilidad: base local de pruebas
 estudio/*.db
+estudio/web/node_modules/
+estudio/web/dist/
+estudio/web/*.tsbuildinfo

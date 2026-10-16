@@ -14,6 +14,8 @@ El encargo completo está en [`BRIEF.md`](BRIEF.md). Las cifras salen de
 | `motor/modelo.py` | Estado de resultados de un local, punto de equilibrio y frontera de precio (portado del prototipo). |
 | `motor/montecarlo.py` | Monte Carlo de un año, con el **mismo generador aleatorio** que el HTML: da exactamente sus mismos números. |
 | `motor/central.py` | Cocina central con satélites (parámetros de confianza baja). |
+| `motor/flujo.py` | Flujo de caja a 10 años por régimen (informal, Nuevo RUS, RER, MYPE): IGV por año, sueldo mínimo, inflación, curva de arranque, VAN, TIR y recupero. |
+| `web/` | El panel (React + Vite): simulador del mes con barras, flujo a 10 años y escenarios guardados. |
 | `motor/bd.py` | Base de datos: `ciudades`, `zonas`, `parametros` (cada cifra con origen, fuente, fecha y confianza), `fuentes` y `escenarios`. |
 | `tests/` | Regresión: los 12 equilibrios del brief y 96 combinaciones contra el prototipo (`referencia_prototipo.json`, generado corriendo su JavaScript con Node). |
 | `prototipos/` | Las calculadoras HTML originales (referencia de cálculo y de diseño). |
@@ -23,7 +25,7 @@ El encargo completo está en [`BRIEF.md`](BRIEF.md). Las cifras salen de
 ```bash
 cd estudio
 pip install -r requirements.txt
-python -m pytest tests/ -q            # 118 tests
+python -m pytest tests/ -q            # 127 tests
 python -m motor.bd                    # crea y siembra la base (SQLite local: estudio.db)
 DATABASE_URL=postgres://... python -m motor.bd   # lo mismo en el Postgres de Railway
 ```
@@ -52,12 +54,22 @@ Configuración del servicio en Railway:
 - **Variables**: `DATABASE_URL` = `${{Postgres.DATABASE_URL}}` (referencia a
   la base) y `ESTUDIO_TOKEN` = una clave larga (la pide todo menos `/salud`,
   en el header `X-Token`).
-- **Networking**: generar un dominio público para la API (HTTPS).
+- **Networking**: generar un dominio público (HTTPS).
 
-Endpoints: `GET /salud` (sin token), `GET /ciudades`, `GET /parametros`,
-`POST /zonas`, `POST /parametros` (cargar cifras de sondeo o propias con su
-fuente) y `POST /calcular` (equilibrio, frontera de precio, mes a q y
-Monte Carlo para una ciudad o zona).
+En la raíz del dominio está **el panel**: se entra con el token y se mueven
+las barras. El `Dockerfile` lo compila (Node) y FastAPI lo sirve: no hace
+falta Vercel ni otro servicio.
+
+Endpoints (todos bajo `/api`): `GET /api/salud` (sin token), `GET /api/ciudades`,
+`GET /api/parametros`, `POST /api/zonas`, `POST /api/parametros` (cargar
+cifras de sondeo o propias con su fuente), `POST /api/calcular` (equilibrio,
+frontera de precio, mes a q, Monte Carlo y curva de utilidad; acepta
+correcciones de insumos, alquiler, sueldos, gas y servicios),
+`POST /api/flujo` (10 años del régimen elegido y comparación de los cuatro) y
+`GET/POST/DELETE /api/escenarios` (juegos de barras guardados con nombre).
+
+Panel en desarrollo: `uvicorn api:app --port 8001` en `estudio/` y
+`npm run dev` en `estudio/web/`.
 
 ## Origen de cada cifra
 
@@ -73,7 +85,7 @@ directo en la base del estudio (origen `propio`), que vive aparte.
 
 ## Pendiente (orden del brief)
 
-1. Flujo de caja a 10 años (VAN, TIR, payback descontado) con la trayectoria
-   regulatoria y la curva de arranque.
+1. Cargar los datos propios de Candela (origen `propio`) y una pestaña para
+   editarlos desde el panel.
 2. Precios observados por zona (formulario de sondeo, Fase 2).
-3. Tablero (Fase 3) con la ficha privada de Candela.
+3. Arrastre de pérdidas en el MYPE y valor residual del local en el flujo.

@@ -112,9 +112,19 @@ class Resultado:
 
 
 def modelo(local: Local, q: float, esc: Escenario, nacional: dict,
-           precio: float | None = None, ins_mult: float = 1.0) -> Resultado:
-    """Estado de resultados de UN mes para q menús por día."""
-    anio = ANIOS[esc.anio]
+           precio: float | None = None, ins_mult: float = 1.0, igv: float | None = None,
+           rmv: float | None = None, otros_fijos: float = OTROS_FIJOS,
+           sueldo_dueno: float = SUELDO_DUENO) -> Resultado:
+    """Estado de resultados de UN mes para q menús por día.
+
+    `igv` (en %) y `rmv` corrigen los del año: los usa el flujo a 10 años
+    (después de 2028, o en el Nuevo RUS, que no cobra IGV pero sí paga
+    planilla formal). `otros_fijos` y `sueldo_dueno` suben con la inflación."""
+    anio = dict(ANIOS[esc.anio]) if esc.anio in ANIOS else dict(ANIOS[max(ANIOS)])
+    if igv is not None:
+        anio["igv"] = igv
+    if rmv is not None:
+        anio["rmv"] = rmv
     pop = esc.pop
     t = anio["igv"] / 100 if esc.formal else 0.0
     precio = local.precio if precio is None else precio
@@ -130,10 +140,10 @@ def modelo(local: Local, q: float, esc: Escenario, nacional: dict,
     mult = nacional["mult_micro"] if esc.formal else 1.0
     cocinero = max(local.sueldo_cocinero, anio["rmv"] * 1.06) if esc.formal else local.sueldo_cocinero
     personal = mult * (cocinero + (cocina - 1) * w(local.sueldo_ayudante) + mozos * w(local.sueldo_mozo))
-    personal += SUELDO_DUENO if esc.sueldo_dueno else 0
+    personal += sueldo_dueno if esc.sueldo_dueno else 0
     alquiler = local.alquiler_mes * (1 if pop else 1.25)
     gas = local.gas_balon45 * esc.balones
-    fijos = personal + alquiler + gas + local.servicios_mes + OTROS_FIJOS
+    fijos = personal + alquiler + gas + local.servicios_mes + otros_fijos
     q_mes = q * DIAS_MES
     ventas = precio * q_mes
     util = contrib_u * q_mes - fijos

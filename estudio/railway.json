@@ -6,7 +6,7 @@
     "watchPatterns": ["/estudio/**"]
   },
   "deploy": {
-    "healthcheckPath": "/salud",
+    "healthcheckPath": "/api/salud",
     "healthcheckTimeout": 120
   }
 }
