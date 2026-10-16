@@ -851,3 +851,13 @@ input[type='password'],
 .es-comparar .es-grupo th {
   background: var(--fondo);
 }
+.es-holgado {
+  color: var(--bien);
+}
+.es-ajustado {
+  color: #b26b00;
+  font-weight: 700;
+}
+:root[data-theme='dark'] .es-ajustado {
+  color: #f0b54a;
+}

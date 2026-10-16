@@ -63,6 +63,75 @@ const FILAS: { grupo: string; filas: Fila[] }[] = [
   },
 ]
 
+const VARIABLES: { id: string; nombre: string }[] = [
+  { id: 'precio', nombre: 'Precio del menú' },
+  { id: 'q', nombre: 'Menús al día' },
+  { id: 'insumos', nombre: 'Insumos por menú' },
+  { id: 'sueldos', nombre: 'Sueldos' },
+  { id: 'alquiler_mes', nombre: 'Alquiler' },
+  { id: 'dias', nombre: 'Días que abre' },
+  { id: 'gas', nombre: 'Gas' },
+  { id: 'servicios_mes', nombre: 'Luz, agua e internet' },
+]
+
+/** Cuánto aguanta cada número antes de que el negocio pase a pérdida (o
+ *  cuánto le falta, si ya pierde). Mismo motor que la pestaña Sensibilidad. */
+function Aguante({ casos }: { casos: Comparado[] }) {
+  return (
+    <div className="es-tabla-caja">
+      <table className="es-tabla es-comparar">
+        <caption>Sensibilidad de cada caso: cuánto puede moverse cada número antes de perder</caption>
+        <thead>
+          <tr>
+            <th />
+            {casos.map((c) => (
+              <th key={c.id}>{c.nombre}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Lo que más lo mueve (±10 %)</th>
+            {casos.map((c) => (
+              <td key={c.id}>
+                {c.tornado[0]?.nombre ?? '—'}
+                <span className="es-nota-celda"> ±{soles(c.tornado[0]?.rango ?? 0)}</span>
+              </td>
+            ))}
+          </tr>
+          {VARIABLES.map((v) => (
+            <tr key={v.id}>
+              <th>{v.nombre}</th>
+              {casos.map((c) => {
+                const x = c.quiebres[v.id]
+                const pierde = c.utilidad_mes < 0
+                if (x === null || x === undefined)
+                  return (
+                    <td key={c.id} className="es-nota-celda">
+                      {pierde ? 'ni así alcanza' : 'aguanta de sobra'}
+                    </td>
+                  )
+                const flecha = x > 0 ? '↑' : '↓'
+                const ajustado = Math.abs(x) < 0.1
+                return (
+                  <td key={c.id} className={pierde ? 'es-mal' : ajustado ? 'es-ajustado' : 'es-holgado'}>
+                    {pierde ? 'falta ' : ''}
+                    {flecha} {pct(Math.abs(x), 0)}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="es-nota">
+        “↓ 8 %” en precio: si el precio baja 8 %, el negocio queda en cero. En rojo, los que ya pierden: cuánto tendría
+        que moverse ese número (solo) para no perder. Menos de 10 % (en ámbar) es poco margen de error.
+      </p>
+    </div>
+  )
+}
+
 /** Barras horizontales con el cero marcado: una sola métrica, un solo eje. */
 function Barras({ titulo, datos }: { titulo: string; datos: { nombre: string; v: number }[] }) {
   const max = Math.max(1, ...datos.map((d) => Math.abs(d.v)))
@@ -216,6 +285,8 @@ export function PanelComparar({ onAbrir, onError }: Props) {
               ))}
             </table>
           </div>
+
+          <Aguante casos={validos} />
 
           <section>
             <h2>Cómo es cada uno</h2>

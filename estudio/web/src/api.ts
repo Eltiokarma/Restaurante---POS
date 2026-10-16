@@ -274,6 +274,8 @@ export interface Comparado {
   tir: number | null
   recupero: number | null
   alertas: string[]
+  quiebres: Record<string, number | null>
+  tornado: { variable: string; nombre: string; rango: number }[]
 }
 
 export interface Guardado {

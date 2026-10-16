@@ -116,3 +116,15 @@ def test_arquetipos_sembrados_y_comparables(cliente):
     # el dueño ausente paga más gente que el inversor
     assert por["Dueño ausente (todo tercerizado)"]["trabajadores"] > por["Inversor (promedio)"]["trabajadores"]
     assert por["Día y noche"]["noche"] and por["Exitoso (referencia compuesta)"]["utilidad_mes"] > 0
+
+
+def test_comparar_trae_la_sensibilidad_de_cada_caso(cliente):
+    lista = cliente.get("/api/escenarios", headers=H).json()
+    ids = [g["id"] for g in lista if g["nombre"] in ("Inversor (promedio)", "Exitoso (referencia compuesta)")]
+    r = {x["nombre"]: x for x in cliente.post("/api/comparar", headers=H, json={"ids": ids}).json()}
+    exitoso = r["Exitoso (referencia compuesta)"]
+    # gana: el precio puede bajar algo antes de perder; los insumos pueden subir
+    assert exitoso["quiebres"]["precio"] < 0 < exitoso["quiebres"]["insumos"]
+    assert exitoso["tornado"][0]["variable"] == "precio"
+    # el inversor casi en cero aguanta mucho menos que el exitoso
+    assert abs(r["Inversor (promedio)"]["quiebres"]["precio"]) < abs(exitoso["quiebres"]["precio"])
