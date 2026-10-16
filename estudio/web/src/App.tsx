@@ -15,6 +15,7 @@ import {
 } from './api'
 import { Escenarios } from './Escenarios'
 import { PanelComparar } from './PanelComparar'
+import { PanelCorridas } from './PanelCorridas'
 import { PanelFlujo } from './PanelFlujo'
 import { PanelPlatos } from './PanelPlatos'
 import { PanelSensibilidad } from './PanelSensibilidad'
@@ -89,13 +90,14 @@ function Entrada({ onEntrar }: { onEntrar: (t: string) => void }) {
   )
 }
 
-type Pestana = 'simulador' | 'flujo' | 'sensibilidad' | 'platos' | 'comparar'
+type Pestana = 'simulador' | 'flujo' | 'sensibilidad' | 'platos' | 'comparar' | 'corridas'
 const PESTANAS: { id: Pestana; texto: string }[] = [
   { id: 'simulador', texto: 'Mes' },
   { id: 'flujo', texto: '10 años' },
   { id: 'sensibilidad', texto: 'Sensibilidad' },
   { id: 'platos', texto: 'Platos' },
   { id: 'comparar', texto: 'Comparar' },
+  { id: 'corridas', texto: 'Corridas' },
 ]
 
 type Tema = 'light' | 'dark'
@@ -234,6 +236,7 @@ export default function App() {
       )}
       {pestana === 'flujo' && <PanelFlujo esc={esc} setEsc={setEsc} sup={sup} setSup={setSup} flujo={flujo} />}
       {pestana === 'sensibilidad' && <PanelSensibilidad esc={esc} onError={manejar} />}
+      {pestana === 'corridas' && <PanelCorridas onError={manejar} />}
       {pestana === 'comparar' && (
         <PanelComparar
           onAbrir={(g) => {

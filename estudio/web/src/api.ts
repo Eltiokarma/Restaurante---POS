@@ -278,6 +278,68 @@ export interface Comparado {
   tornado: { variable: string; nombre: string; rango: number }[]
 }
 
+export interface DecisionCorrida {
+  delta_precio: number
+  precio: number
+  calidad: 'economica' | 'estandar' | 'generosa'
+  mezcla: number | null
+  noche: boolean
+  utilidad_media: number
+  utilidad_peor: number
+  utilidad_mejor: number
+  prob_perdida_max: number
+  van_medio: number
+  van_peor: number
+  q_min: number
+  q_max: number
+}
+
+export interface FilaCorrida {
+  delta_precio: number
+  calidad: string
+  mezcla: number | null
+  noche: boolean
+  elasticidad: number
+  q: number
+  precio: number
+  utilidad: number
+  prob_perdida: number
+  van: number
+}
+
+export interface Corrida {
+  id: number
+  nombre: string
+  tipo: 'decisiones' | 'estres'
+  estado: 'pendiente' | 'corriendo' | 'lista' | 'error' | 'interrumpida'
+  progreso: number
+  total: number
+  error: string | null
+  creado: string
+  terminado: string | null
+  resultado?: {
+    // decisiones
+    base_nombre?: string
+    q0?: number
+    precio0?: number
+    factores?: { precio: number[]; calidad: string[]; mezcla: (number | null)[]; noche: boolean[]; elasticidad: number[] }
+    filas?: FilaCorrida[]
+    decisiones?: DecisionCorrida[]
+    base?: DecisionCorrida | null
+    supuestos?: Record<string, string>
+    mezcla?: { costo_res: number; costo_otros: number; acompanamiento: number; parte_actual: number } | null
+    // estrés
+    golpes?: { clave: string; nombre: string }[]
+    negocios?: {
+      id: number
+      nombre: string
+      categoria?: string | null
+      error?: string
+      golpes?: { golpe: string; nombre: string; utilidad: number; ingreso_dueno: number; prob_perdida: number }[]
+    }[]
+  } | null
+}
+
 export interface Guardado {
   id: number
   nombre: string
@@ -302,6 +364,11 @@ export const api = {
   borrarPlato: (id: number) => pedir<void>(`/platos/${id}`, { method: 'DELETE' }),
   analisis: (igv: number, formal: boolean) => pedir<AnalisisPlatos>(`/platos/analisis?igv=${igv}&formal=${formal}`),
   comparar: (ids: number[]) => pedir<Comparado[]>('/comparar', { method: 'POST', body: JSON.stringify({ ids }) }),
+  corridas: () => pedir<Corrida[]>('/corridas'),
+  corrida: (id: number) => pedir<Corrida>(`/corridas/${id}`),
+  lanzarCorrida: (cuerpo: { tipo: 'decisiones' | 'estres'; escenario_id?: number; ids?: number[]; usar_recetas?: boolean }) =>
+    pedir<Corrida>('/corridas', { method: 'POST', body: JSON.stringify(cuerpo) }),
+  borrarCorrida: (id: number) => pedir<void>(`/corridas/${id}`, { method: 'DELETE' }),
   escenarios: () => pedir<Guardado[]>('/escenarios'),
   guardar: (nombre: string, datos: Guardado['datos']) =>
     pedir<{ id: number }>('/escenarios', { method: 'POST', body: JSON.stringify({ nombre, datos }) }),

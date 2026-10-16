@@ -861,3 +861,58 @@ input[type='password'],
 :root[data-theme='dark'] .es-ajustado {
   color: #f0b54a;
 }
+
+/* ---- Corridas ---- */
+.es-recomendacion {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 4px solid var(--acento);
+  background: var(--acento-suave);
+  border-radius: 8px;
+}
+.es-progreso {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 3px;
+  background: var(--grilla);
+  overflow: hidden;
+}
+.es-progreso i {
+  display: block;
+  height: 100%;
+  background: var(--acento);
+}
+.es-lista-on {
+  border-color: var(--acento);
+  background: var(--acento-suave);
+}
+.es-resultados-corrida {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.es-principal:disabled,
+.es-secundario:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.es-formulario .es-fila .es-principal {
+  padding: 0 18px;
+}
+.es-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  color: var(--texto-2);
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+.es-check input {
+  width: 24px;
+  height: 24px;
+  accent-color: var(--acento);
+  flex: none;
+}

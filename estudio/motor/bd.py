@@ -86,6 +86,23 @@ class EscenarioGuardado(Base):
     creado: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
+class Corrida(Base):
+    """Un cálculo largo que el servicio hace solo (barrido de decisiones o
+    prueba de estrés). El resultado se guarda entero en JSON."""
+    __tablename__ = "corridas"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(160))
+    tipo: Mapped[str] = mapped_column(String(20))  # decisiones | estres
+    config: Mapped[dict] = mapped_column(JSON)
+    estado: Mapped[str] = mapped_column(String(20), default="pendiente")  # pendiente|corriendo|lista|error|interrumpida
+    progreso: Mapped[float] = mapped_column(Float, default=0.0)
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    resultado: Mapped[dict | None] = mapped_column(JSON)
+    error: Mapped[str | None] = mapped_column(Text)
+    creado: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    terminado: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 # ---------- Recetas (datos propios del local: nunca van al repo) ----------
 
 class Insumo(Base):
