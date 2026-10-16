@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib import font_manager  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
-from matplotlib.ticker import FuncFormatter  # noqa: E402
+from matplotlib.ticker import FuncFormatter, MultipleLocator  # noqa: E402
 
 SALIDA = Path(__file__).resolve().parent / "salida"
 FIG = SALIDA / "fig"
@@ -477,11 +477,41 @@ def fig_historia(d):
     guardar(fig, "historia")
 
 
+def fig_igualdad(d):
+    """Cada negocio con sus números (gris) y en el local de referencia (azul)."""
+    ig = d.get("igualdad")
+    if not ig:
+        return
+    filas = sorted(ig["filas"], key=lambda f: f["igual"]["ingreso"])
+    tope = 9000  # el exitoso con sus números se sale de la escala: se marca con una flecha
+    fig, ax = plt.subplots(figsize=(ANCHO, 3.6))
+    for i, f in enumerate(filas):
+        a, b = f["propio"]["ingreso"], f["igual"]["ingreso"]
+        ax.plot([min(a, tope), b], [i, i], color=GRILLA, lw=2.4, zorder=1)
+        ax.scatter([min(a, tope)], [i], color="#9a988f", s=26, zorder=3)
+        ax.scatter([b], [i], color=PERDIDA if b < 0 else (NARANJA if f["nombre"].startswith("Candela") else AZUL),
+                   s=34, zorder=4)
+        if a > tope:
+            ax.annotate(f"{soles(a)} →", (tope, i), xytext=(-4, 5), textcoords="offset points", ha="right",
+                        fontsize=7.5, color=TINTA2)
+    ax.axvline(0, color=TINTA2, lw=0.8)
+    ax.set_yticks(range(len(filas)), [corto(f["nombre"]) for f in filas])
+    ax.xaxis.set_major_formatter(FuncFormatter(soles))
+    ax.set_xlim(None, tope * 1.04)
+    ax.set_xlabel("Lo que se lleva la casa al mes (utilidad + sueldo del dueño, si trabaja)")
+    ax.scatter([], [], color="#9a988f", s=26, label="con sus propios números")
+    ax.scatter([], [], color=AZUL, s=34, label="en el mismo local (S/ 10, 60 menús, S/ 1 200)")
+    ax.legend(fontsize=7.5, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2, frameon=False)
+    ax.xaxis.set_major_locator(MultipleLocator(5000))
+    grilla_x(ax)
+    guardar(fig, "igualdad")
+
+
 def generar(d: dict | None = None) -> None:
     d = d or json.loads((SALIDA / "datos.json").read_text(encoding="utf-8"))
     FIG.mkdir(parents=True, exist_ok=True)
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
-              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia):
+              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad):
         f(d)
 
 

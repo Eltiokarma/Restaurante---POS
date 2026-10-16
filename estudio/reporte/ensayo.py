@@ -145,6 +145,10 @@ def construir(d: dict) -> str:
     hora = {h["nombre"]: h for h in hz.get("hora", [])}
     medio = sorted(hz.get("medio_sol", []), key=lambda x: x["menus"])
     noche_u = {x["nombre"]: x for x in hz.get("noche", [])}
+    ig = {f["nombre"]: f for f in d.get("igualdad", {}).get("filas", [])}
+
+    def ig_(nombre, cual="igual", campo="ingreso"):
+        return ig[nombre][cual][campo]
 
     def menus_medio(prefijo):
         return next(x["menus"] for x in medio if x["nombre"].startswith(prefijo))
@@ -553,7 +557,8 @@ Juliaca y comparten la misma base de costos; difieren en lo que define el modelo
 
 \begin{{description}}[leftmargin=1em,style=nextline]
 \item[Quién trabaja] La \emph{{dueña que cocina}} reemplaza al cocinero y se paga los S/~1\,500 del dueño; la
-\emph{{familia sin sueldos}} cocina y atiende sin cobrar; el \emph{{inversor}} pone el capital y contrata a todo el
+\emph{{familia sin sueldos}} cocina y atiende sin cobrar, en un local igual al de la dueña (mismo precio, venta y
+alquiler); el \emph{{inversor}} pone el capital y contrata a todo el
 personal sin cobrar sueldo; el \emph{{dueño ausente}} no pisa el local: paga administrador, cajero, encargado de
 compras y contador, y sus compras cuestan 6\,\% más sin el regateo y el control del dueño.
 \item[Formalidad] El \emph{{puesto de mercado}} vende barato y mucho, sin RUC y con alquiler mínimo; el
@@ -618,6 +623,46 @@ el tope de S/~96 mil al año tiene que vender poco, y con 30 menús diarios no a
 formal ni el alquiler; si crece, sale del régimen. El Nuevo RUS sirve para formalizar a quien ya vende poco,
 no para construir un negocio que crezca. Y el turno noche funciona porque el alquiler, el local y buena parte
 de la luz ya están pagados al mediodía: cada cena vendida aporta casi todo su margen.
+
+{"" if not ig else rf"""\subsection{{A igualdad de condiciones}}
+
+Los negocios del catálogo difieren en todo a la vez: precio, venta, alquiler y forma de organizarse. Para
+separar lo que se debe a la organización, la figura~\ref{{fig:igualdad}} los pone a todos en el mismo local:
+el de la dueña que cocina, con S/~10 por menú, 60 menús diarios, S/~1\,200 de alquiler y los mismos insumos, gas
+y luz. Lo único que queda distinto es quién trabaja, cómo se le paga, si es formal y si abre de noche.
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/igualdad.pdf}}
+\caption{{Lo que se lleva la casa al mes, con los números de cada negocio (gris) y con todos en el mismo local
+(color). En rojo, los que pierden.}}\label{{fig:igualdad}}
+\end{{figure}}
+
+La primera lección es que varios resultados no venían de la organización sino del lugar y del volumen. El
+\emph{{exitoso}} se lleva {s(ig_('Exitoso (referencia compuesta)', 'propio'))} con sus números y
+{s(ig_('Exitoso (referencia compuesta)'))} en el mismo local: casi lo mismo que el inversor
+({s(ig_('Inversor (promedio)'))}). Su éxito es la escala y el precio, y eso no se copia contratando igual. El
+\emph{{puesto de mercado}} baja de {s(ig_('Puesto de mercado informal', 'propio'))} a
+{s(ig_('Puesto de mercado informal'))}: su ventaja eran los 120 menús diarios. En sentido contrario, la
+\emph{{fonda en casa propia}} sube de {s(ig_('Fonda en casa propia', 'propio'))} a
+{s(ig_('Fonda en casa propia'))} aun pagando alquiler: lo que la frenaba era vender poco y barato, no el local.
+El \emph{{chiquito en Nuevo RUS}} también mejora, pero a 60 menús ya no cabe en el régimen.
+
+La segunda es que, a igualdad de todo lo demás, el orden lo decide quién trabaja. La familia sin sueldos junta
+{s(ig_('Familia sin sueldos'))} al mes, más que la dueña que cocina ({s(ig_('Dueña que cocina'))}), pero lo
+reparte entre {ig_('Familia sin sueldos', campo='personas')} personas: {s(ig_('Familia sin sueldos', campo='por_persona'))}
+cada una, frente a los {s(ig_('Dueña que cocina', campo='por_persona'))} que se lleva la dueña sola. El inversor,
+que contrata todo, queda en {s(ig_('Inversor (promedio)'))}, y el dueño ausente pierde
+{s(-ig_('Dueño ausente (todo tercerizado)'))}. {"" if 'Candela (datos del POS)' not in ig else rf"""Candela, con su
+planilla de seis personas, perdería {s(-ig_('Candela (datos del POS)'))} en ese local: necesita
+{ig_('Candela (datos del POS)', campo='equilibrio')} menús diarios para cubrirse, frente a los
+{ig_('Dueña que cocina', campo='equilibrio')} de la dueña que cocina. """}
+
+La lección práctica sirve para cualquier caso: antes de copiar a un negocio que gana, conviene separar si gana
+por cómo se organiza o por dónde está y cuánto vende. Lo primero se puede imitar; lo segundo, casi nunca. El panel
+del estudio tiene esta misma comparación en su pestaña \emph{{Comparar}}, con el precio, la venta, el alquiler y los
+insumos que se quieran poner.
+"""}
 
 \section{{Riesgo}}
 
@@ -799,8 +844,7 @@ obliga a bajar un sol: ese golpe le quita casi toda la utilidad.
 
 Si la dueña que cocina trabaja 60 horas a la semana, lo que se lleva equivale a
 {s(hora['Dueña que cocina']['por_hora'], 2)} por hora. En la familia sin sueldos, repartida entre tres personas,
-la cifra cae a {s(hora['Familia sin sueldos']['por_hora'], 2)} por hora y por persona: \emph{{menos que el sueldo
-mínimo}}, que equivale a {s(hz['rmv_hora'], 2)} por hora. El puesto de mercado, con más volumen y menos
+la cifra cae a {s(hora['Familia sin sueldos']['por_hora'], 2)} por hora y por persona: \emph{{{"menos que el sueldo mínimo" if hora['Familia sin sueldos']['por_hora'] < hz['rmv_hora'] else "apenas el sueldo mínimo"}}}, que equivale a {s(hz['rmv_hora'], 2)} por hora. El puesto de mercado, con más volumen y menos
 alquiler, llega a {s(hora['Puesto de mercado informal']['por_hora'], 2)}. La fonda familiar es rentable como
 empresa porque sus integrantes cobran, en los hechos, por debajo del mínimo legal. Es la otra cara del hallazgo
 de que en provincia ``gana el trabajo'': gana porque el trabajo se paga barato, y la estabilidad del negocio
