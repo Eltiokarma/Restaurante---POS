@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, type Corrida, type DecisionCorrida, type Guardado } from './api'
+import { api, type Corrida, type Curvas, type DecisionCorrida, type Guardado } from './api'
 import { Dato } from './Controles'
 import { pct, soles } from './formato'
 
@@ -33,23 +33,14 @@ function describir(d: DecisionCorrida) {
 }
 
 /** Utilidad del mes según el precio, una línea por elasticidad (lo demás como está). */
-function CurvaPrecio({ c }: { c: Corrida }) {
-  const r = c.resultado!
-  const base = r.base
-  if (!r.filas || !base) return null
-  const els = r.factores!.elasticidad
-  const series = els.map((el) =>
-    r
-      .filas!.filter(
-        (f) => f.elasticidad === el && f.calidad === base.calidad && f.mezcla === base.mezcla && f.noche === base.noche,
-      )
-      .sort((a, b) => a.precio - b.precio),
-  )
+function CurvaPrecio({ curvas, precioHoy, titulo }: { curvas?: Curvas; precioHoy: number; titulo?: string }) {
+  const els = Object.keys(curvas ?? {}).sort((a, b) => Number(a) - Number(b))
+  const series = els.map((el) => curvas![el])
   const todos = series.flat()
   if (!todos.length) return null
   const AN = 640
   const AL = 240
-  const M = { i: 60, d: 16, a: 14, b: 34 }
+  const M = { i: 64, d: 16, a: 14, b: 34 }
   const xs = todos.map((f) => f.precio)
   const ys = todos.map((f) => f.utilidad)
   const x0 = Math.min(...xs)
@@ -61,12 +52,12 @@ function CurvaPrecio({ c }: { c: Corrida }) {
   const ticksY = [y0, (y0 + y1) / 2, y1]
   return (
     <figure className="es-grafico">
-      <figcaption>Utilidad del mes según el precio, si se pierden más o menos clientes al subirlo</figcaption>
+      <figcaption>{titulo ?? 'Utilidad del mes según el precio, si se pierden más o menos clientes al subirlo'}</figcaption>
       <div className="es-leyenda">
         {els.map((el, k) => (
           <span key={el}>
             <i className="es-muestra" style={{ width: 16, height: 3, background: COLORES[k % 3] }} /> elasticidad {el}
-            {el <= 0.5 ? ' (clientela fiel)' : el >= 1.5 ? ' (mucha competencia)' : ''}
+            {Number(el) <= 0.5 ? ' (clientela fiel)' : Number(el) >= 1.5 ? ' (mucha competencia)' : ''}
           </span>
         ))}
       </div>
@@ -86,16 +77,16 @@ function CurvaPrecio({ c }: { c: Corrida }) {
               {p.toFixed(1)}
             </text>
           ))}
-          <line x1={x(base.precio)} x2={x(base.precio)} y1={M.a} y2={AL - M.b} className="es-guia" />
-          {series.map((s, k) => (
+          <line x1={x(precioHoy)} x2={x(precioHoy)} y1={M.a} y2={AL - M.b} className="es-guia" />
+          {series.map((sr, k) => (
             <g key={k}>
               <path
-                d={s.map((f, i) => `${i ? 'L' : 'M'}${x(f.precio).toFixed(1)},${y(f.utilidad).toFixed(1)}`).join('')}
+                d={sr.map((f, i) => `${i ? 'L' : 'M'}${x(f.precio).toFixed(1)},${y(f.utilidad).toFixed(1)}`).join('')}
                 fill="none"
                 stroke={COLORES[k % 3]}
                 strokeWidth={2.2}
               />
-              {s.map((f) => (
+              {sr.map((f) => (
                 <circle key={f.precio} cx={x(f.precio)} cy={y(f.utilidad)} r={3.5} fill={COLORES[k % 3]}>
                   <title>
                     {soles(f.precio, 2)}: {Math.round(f.q)} menús/día, {soles(f.utilidad)} al mes
@@ -148,7 +139,7 @@ function VistaDecisiones({ c }: { c: Corrida }) {
         al día según cuántos clientes se pierdan con el precio.
       </p>
 
-      <CurvaPrecio c={c} />
+      <CurvaPrecio curvas={r.curvas} precioHoy={r.precio0 ?? 0} />
 
       <div className="es-tabla-caja">
         <table className="es-tabla es-matriz">
@@ -248,6 +239,85 @@ function VistaDecisiones({ c }: { c: Corrida }) {
           </li>
         </ul>
       </details>
+    </>
+  )
+}
+
+function VistaTodos({ c }: { c: Corrida }) {
+  const negocios = (c.resultado?.negocios ?? []).filter((n) => n.mejor && n.base)
+  const [abierto, setAbierto] = useState<number | null>(null)
+  const orden = [...negocios].sort((a, b) => b.mejor!.utilidad_peor - a.mejor!.utilidad_peor)
+  const det = negocios.find((n) => n.id === abierto)
+  const max = Math.max(1, ...negocios.flatMap((n) => [Math.abs(n.base!.utilidad_media), Math.abs(n.mejor!.utilidad_peor)]))
+  return (
+    <>
+      <p className="es-recomendacion">
+        Cada negocio pasó por {c.total ? Math.round(c.total / Math.max(1, negocios.length)) : ''} combinaciones de precio,
+        porción y turno, bajo tres supuestos de demanda. Abajo: cómo está hoy y cuánto deja su mejor decisión en el peor caso.
+      </p>
+      <figure className="es-grafico">
+        <figcaption>Hoy (gris) y la decisión más sólida en su peor caso (azul), utilidad del mes</figcaption>
+        <div className="es-barras-h">
+          {orden.map((n) => {
+            const hoy = n.base!.utilidad_media
+            const mejor = n.mejor!.utilidad_peor
+            const pos = (v: number) => 50 + (v / max) * 48
+            return (
+              <div key={n.id} className="es-bh-fila">
+                <span className="es-bh-nombre">{n.nombre}</span>
+                <div className="es-bh-pista">
+                  <span className="es-bh-cero" style={{ left: '50%' }} />
+                  <span
+                    className="es-pesa-linea"
+                    style={{ left: `${Math.min(pos(hoy), pos(mejor))}%`, width: `${Math.abs(pos(mejor) - pos(hoy))}%` }}
+                  />
+                  <span className="es-pesa es-pesa-hoy" style={{ left: `${pos(hoy)}%` }} title={`Hoy: ${soles(hoy)}`} />
+                  <span className="es-pesa es-pesa-mejor" style={{ left: `${pos(mejor)}%` }} title={`Mejor: ${soles(mejor)}`} />
+                </div>
+                <span className={mejor < 0 ? 'es-bh-valor es-mal' : 'es-bh-valor'}>{soles(mejor)}</span>
+              </div>
+            )
+          })}
+        </div>
+      </figure>
+      <div className="es-tabla-caja">
+        <table className="es-tabla es-comparar">
+          <caption>La decisión más sólida de cada negocio (toca uno para ver su curva de precio)</caption>
+          <thead>
+            <tr>
+              <th>Negocio</th>
+              <th>Hoy</th>
+              <th>Decisión más sólida</th>
+              <th>Peor caso</th>
+              <th>Promedio</th>
+              <th>P(pérdida)</th>
+              <th>Sin cambiar el turno</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orden.map((n) => {
+              const m = n.mejor!
+              const st = n.mejor_sin_cambiar_turno
+              return (
+                <tr key={n.id} onClick={() => setAbierto(n.id === abierto ? null : n.id)} className={n.id === abierto ? 'es-fila-sel' : undefined}>
+                  <th>{n.nombre}</th>
+                  <td className={n.base!.utilidad_media < 0 ? 'es-mal' : undefined}>{soles(n.base!.utilidad_media)}</td>
+                  <td className="es-izq">{describir(m)}</td>
+                  <td className={m.utilidad_peor < 0 ? 'es-mal' : 'es-mejor'}>{soles(m.utilidad_peor)}</td>
+                  <td>{soles(m.utilidad_media)}</td>
+                  <td>{pct(m.prob_perdida_max, 0)}</td>
+                  <td>{st ? `${soles(st.precio, 2)} · ${PORCION[st.calidad].toLowerCase()} → ${soles(st.utilidad_peor)}` : '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      {det && <CurvaPrecio curvas={det.curvas} precioHoy={det.precio0 ?? 0} titulo={`${det.nombre}: utilidad según el precio`} />}
+      <p className="es-nota">
+        “Sin cambiar el turno”: la mejor opción si el negocio no abre (o no deja) la noche. El peor caso es el de la elasticidad
+        que peor le cae a esa decisión.
+      </p>
     </>
   )
 }
@@ -401,6 +471,16 @@ export function PanelCorridas({ onError }: Props) {
           <input type="checkbox" checked={recetas} onChange={(e) => setRecetas(e.target.checked)} />
           <span>Probar la mezcla de segundos con mis recetas (solo para el negocio dueño de esas recetas)</span>
         </label>
+        <div className="es-fila">
+          <button
+            type="button"
+            className="es-secundario"
+            disabled={enMarcha}
+            onClick={() => lanzar({ tipo: 'decisiones_todos', usar_recetas: true })}
+          >
+            Barrido de decisiones para todos los negocios
+          </button>
+        </div>
         <h2>Prueba de estrés</h2>
         <div className="es-fila">
           <button type="button" className="es-secundario" disabled={enMarcha} onClick={() => lanzar({ tipo: 'estres' })}>
@@ -456,7 +536,9 @@ export function PanelCorridas({ onError }: Props) {
       {abierta?.estado === 'lista' && abierta.resultado && (
         <section className="es-resultados-corrida">
           <h2>{abierta.nombre}</h2>
-          {abierta.tipo === 'decisiones' ? <VistaDecisiones c={abierta} /> : <VistaEstres c={abierta} />}
+          {abierta.tipo === 'decisiones' && <VistaDecisiones c={abierta} />}
+          {abierta.tipo === 'decisiones_todos' && <VistaTodos c={abierta} />}
+          {abierta.tipo === 'estres' && <VistaEstres c={abierta} />}
         </section>
       )}
       {abierta?.estado === 'error' && <p className="es-error">La corrida falló: {abierta.error}</p>}

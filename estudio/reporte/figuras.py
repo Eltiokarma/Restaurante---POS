@@ -361,11 +361,76 @@ def fig_platos(d):
     guardar(fig, "platos")
 
 
+# ---------------------------------------------------------------- robustez
+
+def fig_precio_robusto(d):
+    r = next((x for x in d.get("robustez", []) if x["nombre"].startswith("Candela")), None) \
+        or next(x for x in d["robustez"] if x["nombre"].startswith("Inversor"))
+    fig, ax = plt.subplots(figsize=(ANCHO, 2.9))
+    etiquetas = {"0.5": "clientela fiel (0.5)", "1.0": "intermedia (1.0)", "1.5": "mucha competencia (1.5)"}
+    for (el, serie), col in zip(sorted(r["curvas"].items(), key=lambda x: float(x[0])), (AZUL, NARANJA, AGUA)):
+        xs = [x["precio"] for x in serie]
+        ys = [x["utilidad"] for x in serie]
+        ax.plot(xs, ys, color=col, lw=2, marker="o", ms=3.5, label=f"Elasticidad {etiquetas.get(el, el)}")
+    ax.axhline(0, color=TINTA2, lw=0.8)
+    ax.axvline(r["precio0"], color=TINTA2, lw=0.8, ls=(0, (3, 2)))
+    ax.text(r["precio0"] + 0.04, ax.get_ylim()[1], "precio de hoy", fontsize=7.5, color=TINTA2, va="top")
+    ax.yaxis.set_major_formatter(FuncFormatter(soles))
+    ax.set_xlabel("Precio del menú (S/)")
+    ax.set_ylabel("Utilidad del mes")
+    ax.yaxis.grid(True, color=GRILLA, lw=0.6)
+    ax.legend(fontsize=8, loc="lower right")
+    guardar(fig, "precio_robusto")
+
+
+def fig_decisiones(d):
+    rs = sorted(d.get("robustez", []), key=lambda r: r["mejor"]["utilidad_peor"])
+    fig, ax = plt.subplots(figsize=(ANCHO, 3.4))
+    for i, r in enumerate(rs):
+        hoy, sin, mejor = r["base"]["utilidad_media"], r["mejor_sin_cambiar_turno"]["utilidad_peor"], r["mejor"]["utilidad_peor"]
+        ax.plot([min(hoy, sin, mejor), max(hoy, sin, mejor)], [i, i], color=GRILLA, lw=2.2, zorder=1)
+        ax.scatter([hoy], [i], color="#8d8b84", s=34, zorder=3, label="Hoy" if i == 0 else None)
+        ax.scatter([sin], [i], color=AMARILLO, s=34, zorder=3, label="Mejor sin abrir de noche" if i == 0 else None)
+        ax.scatter([mejor], [i], color=AZUL, s=40, zorder=4, label="Mejor decisión (peor caso)" if i == 0 else None)
+    ax.axvline(0, color=TINTA2, lw=0.8)
+    ax.set_yticks(range(len(rs)), [corto(r["nombre"]) for r in rs])
+    ax.xaxis.set_major_formatter(FuncFormatter(soles))
+    ax.set_xlabel("Utilidad del mes en el peor de tres supuestos de demanda")
+    grilla_x(ax)
+    ax.legend(fontsize=8, loc="lower right")
+    guardar(fig, "decisiones")
+
+
+def fig_estres(d):
+    rs = d.get("robustez", [])
+    golpes = [(g["golpe"], g["nombre"]) for g in rs[0]["estres"]]
+    cortos = {"base": "Hoy", "demanda": "Clientela\n−15 %", "insumos": "Insumos\n+20 %", "igv": "IGV\n18 %",
+              "sueldos": "Sueldos\n+10 %", "alquiler": "Alquiler\n+25 %", "competidor": "Competidor\n−S/ 1",
+              "todo": "Todo\njunto"}
+    rs = sorted(rs, key=lambda r: -r["estres"][-1]["utilidad"])
+    m = [[g["utilidad"] for g in r["estres"]] for r in rs]
+    vmax = max(abs(v) for fila in m for v in fila if abs(v) < 15000) or 1
+    cmap = LinearSegmentedColormap.from_list("div", ["#c2372f", "#f4f2ec", "#1f8a4c"])
+    fig, ax = plt.subplots(figsize=(ANCHO, 3.6))
+    ax.imshow([[max(-vmax, min(vmax, v)) for v in fila] for fila in m], cmap=cmap, vmin=-vmax, vmax=vmax, aspect="auto")
+    for i, fila in enumerate(m):
+        for j, v in enumerate(fila):
+            ax.text(j, i, f"{v / 1000:+.1f}", ha="center", va="center", fontsize=7.2,
+                    color="white" if abs(v) > vmax * 0.7 else TINTA)
+    ax.set_xticks(range(len(golpes)), [cortos.get(k, n) for k, n in golpes], fontsize=7.6)
+    ax.xaxis.tick_top()
+    ax.set_yticks(range(len(rs)), [corto(r["nombre"]) for r in rs], fontsize=8)
+    for sp in ax.spines.values():
+        sp.set_visible(False)
+    ax.tick_params(length=0)
+    guardar(fig, "estres")
+
+
 def generar(d: dict | None = None) -> None:
     d = d or json.loads((SALIDA / "datos.json").read_text(encoding="utf-8"))
     FIG.mkdir(parents=True, exist_ok=True)
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
-              fig_regimenes, fig_matriz, fig_platos):
+              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres):
         f(d)
 
 

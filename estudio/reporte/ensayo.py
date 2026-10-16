@@ -53,6 +53,23 @@ def corto(nombre: str) -> str:
     return figuras.corto(nombre)
 
 
+PORCION = {"economica": "porción económica", "estandar": "porción estándar", "generosa": "porción generosa"}
+
+
+def combinaciones(r: dict) -> int:
+    """Precios × porciones × mezclas × turnos × elasticidades del barrido."""
+    precios = len(r["curvas"].get("0.5", []))
+    return precios * 3 * (3 if r.get("mezcla") else 1) * 2 * len(r["curvas"])
+
+
+def describir_decision(dd: dict) -> str:
+    partes = [f"menú a S/ {dd['precio']:.2f}", PORCION[dd["calidad"]]]
+    if dd.get("mezcla") is not None:
+        partes.append(f"{round(dd['mezcla'] * 100)} % de segundos de res")
+    partes.append("abriendo de noche" if dd["noche"] else "solo de día")
+    return ", ".join(partes)
+
+
 # ---------------------------------------------------------------- piezas
 
 def tabla_casos(cs: list[dict]) -> str:
@@ -112,6 +129,15 @@ def construir(d: dict) -> str:
     ciud = {c["id"]: c for c in d["ciudades"]}
     hoy = date.today()
     fecha = f"{MESES[hoy.month - 1]} de {hoy.year}"
+
+    rob = {r["nombre"]: r for r in d.get("robustez", [])}
+    rc = next((r for r in d.get("robustez", []) if r["nombre"].startswith("Candela")), None)
+    r_inv, r_dc = rob["Inversor (promedio)"], rob["Dueña que cocina"]
+    sobreviven = [corto(r["nombre"]) for r in d.get("robustez", []) if r["estres"][-1]["utilidad"] >= 0]
+    al_tope = sum(1 for r in d.get("robustez", []) if r["mejor"]["precio"] >= r["precio0"] + 3 - 1e-9)
+
+    def golpe(r, clave):
+        return next(g for g in r["estres"] if g["golpe"] == clave)["utilidad"]
 
     def reg(c, clave):
         return next(x for x in c["regimenes"] if x["regimen"] == clave)
@@ -294,6 +320,11 @@ de los restaurantes pasa de 10.5\,\% a 18\,\%: el equilibrio de Lima sube de {ci
 \item \textbf{{El precio es la palanca más sensible en todos los casos.}} Un 10\,\% de precio mueve la
 utilidad más que cualquier otra variable; en el inversor promedio, basta que el precio baje
 {p(abs(inv['quiebres']['precio']), 1)} para que pierda.
+\item \textbf{{Con demanda incierta, sigue conviniendo subir el precio.}} Aun suponiendo que la clientela es muy
+sensible, en todos los negocios hay una combinación de precio, porción y turno mejor que la actual; en {al_tope}
+de diez está en el tope de precio probado (S/~3 más).
+\item \textbf{{Solo {len(sobreviven)} de diez negocios resisten todos los golpes juntos}} (clientela, insumos,
+IGV, sueldos, alquiler y competencia): {esc(', '.join(sobreviven))}.
 {candela_resumen}
 \end{{itemize}}
 \end{{recuadro}}
@@ -545,6 +576,103 @@ La figura~\ref{{fig:tornados}} muestra el mismo análisis en forma de tornado pa
 casos chicos: como el personal crece por escalones, una baja del volumen puede, en un rango corto, mejorar la
 utilidad, porque permite prescindir de un mozo. Los negocios pequeños viven en esos escalones.
 
+\section{{Decisiones robustas}}\label{{sec:robustez}}
+
+La sensibilidad mueve una variable a la vez. Las decisiones reales se toman juntas ---subir el precio y a la
+vez cambiar la porción, o abrir de noche--- y, sobre todo, se toman sin saber cómo va a reaccionar la
+clientela. El análisis anterior tenía un supuesto optimista escondido: si el precio sube, la clientela no
+cambia. Esta sección lo quita.
+
+\subsection{{Método: un barrido con demanda incierta}}
+
+Para cada negocio se calcularon todas las combinaciones de cuatro decisiones: el precio (de S/~1 menos a
+S/~3 más que hoy, en pasos de 50 céntimos), la porción (económica, con 10\,\% menos de insumos y 6\,\% menos
+de clientela; estándar; o generosa, con 12\,\% más de insumos y 6\,\% más de clientela), la mezcla de
+segundos (en Candela, la parte que es de res, con el costo de sus propias recetas) y abrir o no un turno
+noche tipo. La clientela responde al precio según
+\begin{{equation}}
+q \;=\; q_0\,\Bigl(\frac{{p}}{{p_0}}\Bigr)^{{-\varepsilon}} f_{{\text{{porción}}}},
+\end{{equation}}
+donde $\varepsilon$ es la elasticidad: cuántos clientes se pierden por cada 1\,\% de alza. Nadie la ha medido
+para el menú de Juliaca, así que cada combinación se calculó con tres valores ---0.5 (clientela fiel), 1.0 y
+1.5 (mucha competencia)--- y se le asignó su \emph{{peor}} resultado. La decisión robusta es la que tiene el
+mejor peor caso: la que conviene aunque la demanda resulte ser la menos favorable. En total, el servicio del
+estudio calculó {n(sum(combinaciones(r) for r in d.get('robustez', [])))} combinaciones
+para los diez negocios, cada una con su simulación de riesgo y su flujo a diez años.
+
+{"" if not rc else rf"""\subsection{{Candela}}
+
+La figura~\ref{{fig:precio_robusto}} muestra el resultado central para Candela: la utilidad del mes según el
+precio, con todo lo demás como hoy, bajo cada supuesto de demanda. Las tres curvas cruzan el cero entre S/~12 y
+S/~13.50 y siguen subiendo después: incluso si la clientela es muy sensible al precio, subir no hace perder
+plata, porque los clientes que se van dejan poco margen y los que se quedan pagan más. Con clientela fiel, el
+menú a S/~13 deja {s(next(x['utilidad'] for x in rc['curvas']['0.5'] if abs(x['precio'] - 13) < 1e-9))} al mes;
+con mucha competencia, apenas {s(next(x['utilidad'] for x in rc['curvas']['1.5'] if abs(x['precio'] - 13) < 1e-9))}.
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/precio_robusto.pdf}}
+\caption{{Candela: utilidad del mes según el precio, bajo tres supuestos de cuántos clientes se pierden al
+subirlo (porción, mezcla y turno de hoy).}}\label{{fig:precio_robusto}}
+\end{{figure}}
+
+Entre las {n(combinaciones(rc))} combinaciones, la más sólida es
+\textbf{{{esc(describir_decision(rc['mejor']))}}}: deja al menos {s(rc['mejor']['utilidad_peor'])} al mes en el
+peor supuesto y {s(rc['mejor']['utilidad_media'])} en promedio, con {p(rc['mejor']['prob_perdida_max'])} de
+probabilidad de cerrar el año en pérdida. Sin abrir de noche, lo mejor que se logra es
+{s(rc['mejor_sin_cambiar_turno']['utilidad_peor'])} en el peor caso: la noche es la palanca más grande, el
+precio la segunda y la mezcla de segundos la tercera. La porción casi no cambia el resultado: achicar el plato
+no compensa la clientela que se pierde.
+
+Dos advertencias acotan esta lectura. Primera: parte de la ganancia de subir el precio viene de que, con menos
+clientes, la planilla automática necesita un mozo menos; con la planilla real de Candela ese escalón puede no
+existir. Segunda: el barrido llegó al límite que probó (S/~3 más). Más allá no hay datos sobre la reacción de
+la clientela, así que la conclusión prudente es subir \emph{{hasta}} S/~13.50--14, de a medio sol, midiendo las
+ventas en cada paso.
+"""}
+
+\subsection{{Todos los negocios}}
+
+La figura~\ref{{fig:decisiones}} resume el barrido de los diez negocios: la utilidad de hoy, la de la mejor
+decisión sin abrir de noche y la de la mejor decisión en general, siempre en el peor supuesto de demanda. En
+todos los casos existe una combinación que mejora la situación actual aun con la demanda más desfavorable. El
+inversor pasa de {s(r_inv['base']['utilidad_media'])} a {s(r_inv['mejor']['utilidad_peor'])}; la dueña que cocina, de
+{s(r_dc['base']['utilidad_media'])} a {s(r_dc['mejor']['utilidad_peor'])}. En {al_tope} de los diez negocios la
+mejor decisión está en el tope de precio probado, lo que confirma que el menú de Juliaca se está vendiendo
+barato respecto de lo que su clientela aguantaría; el puesto de mercado, que hoy vende a S/~7, es el caso más
+claro.
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/decisiones.pdf}}
+\caption{{Utilidad del mes hoy y con la mejor decisión, en el peor de tres supuestos de demanda. En amarillo, lo
+mejor que se logra sin abrir de noche.}}\label{{fig:decisiones}}
+\end{{figure}}
+
+El turno noche aparece en la mejor decisión de todos los negocios. Hay que tomarlo con cuidado: el modelo usa
+una noche tipo ---30 platos a S/~12--- igual para todos, y la demanda nocturna de cada local es justamente lo
+que menos se conoce. Lo que el barrido sí establece es que, si esa demanda existe, la noche rinde mucho porque
+el alquiler ya está pagado. La distancia entre el punto amarillo y el azul es el valor de averiguarlo con un
+piloto.
+
+\section{{Prueba de estrés}}
+
+La última pregunta es la del año malo deliberado: ¿qué pasa si llega un golpe? Cada negocio se sometió a seis
+golpes por separado ---clientela $-$15\,\%, insumos $+$20\,\%, IGV de 18\,\%, sueldos $+$10\,\%, alquiler
+$+$25\,\% y un competidor que obliga a bajar S/~1--- y a todos juntos (figura~\ref{{fig:estres}}).
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/estres.pdf}}
+\caption{{Utilidad del mes (miles de soles) de cada negocio frente a cada golpe; la última columna los suma
+todos.}}\label{{fig:estres}}
+\end{{figure}}
+
+Solo {len(sobreviven)} de los diez negocios siguen ganando con todos los golpes juntos: {esc(', '.join(sobreviven))}.
+Los golpes que más daño hacen son los de insumos y el del competidor que obliga a bajar el precio; el alza de
+sueldos y la del alquiler, en cambio, se absorben. La fonda familiar resiste por la misma razón que en la
+simulación de riesgo: no tiene planilla que pagar cuando las ventas caen. {"" if not rc else f"Candela, con los datos actuales, ya pierde antes del golpe; el de insumos le quita otros {s(rc['base']['utilidad_media'] - golpe(rc, 'insumos'))} al mes y el del competidor {s(rc['base']['utilidad_media'] - golpe(rc, 'competidor'))}: son los dos frentes que más le conviene vigilar."}
+
 \section{{El largo plazo: diez años y cuatro regímenes}}
 
 La figura~\ref{{fig:flujo}} sigue la caja acumulada de siete negocios desde la inversión inicial hasta 2035.
@@ -612,13 +740,15 @@ Para Candela, en orden de impacto según la sensibilidad:
 \item \textbf{{Completar los datos que deciden el diagnóstico.}} El alquiler real y la planilla persona por
 persona ---con su forma de pago y su turno--- pueden mover la utilidad en miles de soles. El estudio ya está
 preparado para recibirlos.
-\item \textbf{{Cuidar el precio y probar medio sol.}} La pizarra es la variable más sensible. Medio sol más en
-los segundos de mayor demanda equivale a diez menús adicionales al día. Los segundos con recargo (como el
-camote rebosado) son la forma de subir el precio promedio sin tocar el precio base.
+\item \textbf{{Subir el precio de a medio sol, hasta S/~13.50--14.}} El barrido robusto muestra que subir conviene
+aun con una clientela sensible. Hacerlo por pasos permite medir cuántos clientes se van en cada uno y
+detenerse donde la venta caiga más de lo previsto. Los segundos con recargo son la forma de empezar sin tocar
+el precio base.
 \item \textbf{{Ajustar la mezcla de segundos.}} Un plato de pollo o de pasta en lugar de uno de res, cuando el
 menú del día lleve dos de res, mejora el margen promedio sin que el cliente lo perciba como una alza.
-\item \textbf{{Evaluar el turno noche con un piloto.}} Es la palanca que más mejora a un local con el alquiler ya
-pagado. Un piloto de dos o tres noches por semana mide la demanda antes de contratar un equipo completo.
+\item \textbf{{Evaluar el turno noche con un piloto.}} En el barrido es la palanca más grande para todos los
+negocios, pero descansa en una demanda nocturna supuesta. Un piloto de dos o tres noches por semana la mide
+antes de contratar un equipo completo.
 \item \textbf{{Planificar el 2027 y el 2028.}} El IGV de 15\,\% y luego, probablemente, 18\,\% exige llegar a esos
 años con un precio o un volumen mayores. Es mejor subir el precio de a medio sol que de golpe.
 \end{{enumerate}}
@@ -628,7 +758,8 @@ años con un precio o un volumen mayores. Es mejor subir el precio de a medio so
 El modelo es tan bueno como sus datos, y varios son todavía supuestos. Los precios de menú fuera de Lima,
 Cusco y Puno son estimados; los restaurantes tipo son construcciones razonadas, no locales observados; el
 exitoso es una referencia compuesta; la simulación supone que las variables se mueven de forma
-independiente; el flujo no arrastra pérdidas tributarias ni asigna valor residual al local al décimo año. En
+independiente; el flujo no arrastra pérdidas tributarias ni asigna valor residual al local al décimo año; las
+elasticidades de demanda, el efecto de la porción y la noche tipo del barrido son supuestos. En
 Candela, las recetas se calibraron con la estimación del dueño y no con un pesaje sistemático, y el alquiler
 y la planilla son promedios.
 

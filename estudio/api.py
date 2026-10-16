@@ -25,7 +25,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from motor import Escenario, equilibrio, precio_minimo, simular
-from motor.barrido import GOLPES, NOMBRE_CALIDAD, Factores, barrido, estres, mezcla_desde_analisis
+from motor.barrido import (
+    GOLPES, NOMBRE_CALIDAD, SUPUESTOS as SUPUESTOS_BARRIDO, Factores, barrido, curvas_precio, estres,
+    mezcla_desde_analisis, resumen,
+)
 from motor.bd import (
     Corrida, ORIGENES, TIPOS_ZONA, Base, Ciudad, EscenarioGuardado, Insumo, Parametro, Plato, RecetaItem, Zona, bloque,
     local_desde_bd, motor_bd, sembrar,
@@ -566,7 +569,7 @@ class FactoresIn(BaseModel):
 
 
 class CorridaIn(BaseModel):
-    tipo: str = Field(pattern="^(decisiones|estres)$")
+    tipo: str = Field(pattern="^(decisiones|decisiones_todos|estres)$")
     escenario_id: int | None = None  # decisiones
     ids: list[int] | None = None  # estrés (vacío: todos)
     factores: FactoresIn | None = None
@@ -605,10 +608,37 @@ def _correr(corrida_id: int) -> None:
                     f.mezcla = [None]
                 c.total = f.total()
                 s.commit()
+                r = barrido(local, esc, e.q, nacional, riesgo, sup, f, mezcla, avance)
                 c.resultado = {"base_nombre": g.nombre, "q0": e.q, "precio0": local.precio,
                                "factores": {"precio": f.precio, "calidad": f.calidad, "mezcla": f.mezcla,
                                             "noche": f.noche, "elasticidad": f.elasticidad},
-                               **barrido(local, esc, e.q, nacional, riesgo, sup, f, mezcla, avance)}
+                               **r, "curvas": curvas_precio(r)}
+            elif c.tipo == "decisiones_todos":
+                gs = s.scalars(select(EscenarioGuardado).order_by(EscenarioGuardado.nombre)).all()
+                if cfg.get("ids"):
+                    gs = [g for g in gs if g.id in cfg["ids"]]
+                mezcla_propia = mezcla_desde_analisis(analisis_platos(10.5, True, s)) if cfg.get("usar_recetas") else None
+                f0 = Factores()
+                c.total = len(gs) * f0.total() * 3
+                s.commit()
+                negocios = []
+                for k, g in enumerate(gs):
+                    try:
+                        local, esc, nacional, sup, e = _desde_guardado(g.datos or {}, s)
+                        # las recetas cargadas son de Candela: solo a ella se le prueba la mezcla
+                        mz = mezcla_propia if (mezcla_propia and g.nombre.startswith("Candela")) else None
+                        f = Factores(mezcla=sorted({0.25, mz.parte_actual, 0.75}) if mz else [None])
+                        r = barrido(local, esc, e.q, nacional, riesgo, sup, f, mz,
+                                    lambda x, k=k: avance((k + x) / len(gs)))
+                        negocios.append({"id": g.id, "nombre": g.nombre, "precio0": local.precio, "q0": e.q,
+                                         "categoria": ((g.datos or {}).get("ficha") or {}).get("categoria"),
+                                         **resumen(r)})
+                    except Exception as err:
+                        negocios.append({"id": g.id, "nombre": g.nombre, "error": str(err)[:200]})
+                f0d = Factores()
+                c.resultado = {"negocios": negocios, "supuestos": SUPUESTOS_BARRIDO,
+                               "factores": {"precio": f0d.precio, "calidad": f0d.calidad, "noche": f0d.noche,
+                                            "elasticidad": f0d.elasticidad}}
             else:
                 q = select(EscenarioGuardado).order_by(EscenarioGuardado.nombre)
                 if cfg.get("ids"):
@@ -658,6 +688,8 @@ def crear_corrida(ci: CorridaIn, s: Session = Depends(sesion)):
         if f.total() * 3 > TOPE_COMBINACIONES:
             raise HTTPException(status_code=422, detail="Demasiadas combinaciones: reduce los niveles")
         nombre = f"Decisiones · {g.nombre}"
+    elif ci.tipo == "decisiones_todos":
+        nombre = "Decisiones · todos los negocios"
     else:
         nombre = "Prueba de estrés · " + ("todos los negocios" if not ci.ids else f"{len(ci.ids)} negocios")
     c = Corrida(nombre=nombre, tipo=ci.tipo, config=ci.model_dump(), estado="pendiente")
