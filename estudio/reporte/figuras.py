@@ -10,6 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib import font_manager  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 from matplotlib.ticker import FuncFormatter, MultipleLocator  # noqa: E402
 
@@ -507,11 +508,49 @@ def fig_igualdad(d):
     guardar(fig, "igualdad")
 
 
+def fig_factores(d):
+    """De la dueña que cocina a cada negocio: el aporte de cada factor."""
+    dc = (d.get("igualdad") or {}).get("descomposicion")
+    if not dc:
+        return
+    colores = {"local": AZUL, "insumos": AMARILLO, "personal": VIOLETA, "formalidad": NARANJA, "noche": AGUA}
+    filas = sorted(dc["filas"], key=lambda f: f["propio"])
+    lo, hi = -16000, 12000  # el exitoso se sale por la derecha: se rotula su barra
+    fig, ax = plt.subplots(figsize=(ANCHO, 3.9))
+    for i, f in enumerate(filas):
+        pos = neg = 0.0
+        for clave, _texto in dc["grupos"]:
+            v = f["aportes"][clave]
+            if abs(v) < 1:
+                continue
+            ini = pos if v > 0 else neg
+            fin = ini + v
+            a_, b_ = max(min(ini, fin), lo), min(max(ini, fin), hi)
+            if b_ > a_:
+                ax.barh(i, b_ - a_, left=a_, color=colores[clave], height=0.62, lw=0)
+            if fin > hi:
+                ax.text(hi - 200, i, f"{soles(v)} →", va="center", ha="right", fontsize=7.5, color="white")
+            pos, neg = (fin, neg) if v > 0 else (pos, fin)
+        total = f["propio"] - dc["base"]
+        ax.scatter([min(total, hi)], [i], marker="D", color=TINTA, s=18, zorder=5)
+    ax.axvline(0, color=TINTA2, lw=0.8)
+    ax.set_yticks(range(len(filas)), [corto(f["nombre"]) for f in filas])
+    ax.set_xlim(lo, hi)
+    ax.xaxis.set_major_locator(MultipleLocator(8000))
+    ax.xaxis.set_major_formatter(FuncFormatter(soles))
+    ax.set_xlabel(f"Diferencia con la dueña que cocina en lo que se lleva la casa al mes ({soles(dc['base'])})")
+    marcas = [Patch(color=colores[c], label=t) for c, t in dc["grupos"]]
+    marcas.append(Line2D([], [], marker="D", color=TINTA, ls="", markersize=4, label="diferencia total"))
+    ax.legend(handles=marcas, fontsize=7, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=3, frameon=False)
+    grilla_x(ax)
+    guardar(fig, "factores")
+
+
 def generar(d: dict | None = None) -> None:
     d = d or json.loads((SALIDA / "datos.json").read_text(encoding="utf-8"))
     FIG.mkdir(parents=True, exist_ok=True)
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
-              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad):
+              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad, fig_factores):
         f(d)
 
 

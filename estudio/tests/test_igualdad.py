@@ -20,3 +20,22 @@ def test_personas_de_la_casa():
     assert personas_casa(familia) == 3
     assert personas_casa({"planilla": [], "sueldo_dueno": True}) == 1
     assert personas_casa({"sueldo_dueno": False}) == 0
+
+
+def test_shapley_reparte_toda_la_diferencia():
+    from motor.igualdad import GRUPOS, mezclar, shapley
+
+    desde = {"precio": 10, "q": 60, "formal": False, "planilla": [], "noche": None, "anio": 2026}
+    hasta = {"precio": 12, "q": 80, "formal": True, "planilla": [{"monto": 0}], "noche": {"q": 20}, "anio": 2027}
+
+    # un "modelo" con interacción: el IGV pesa sobre la venta
+    def valor(e):
+        venta = e["precio"] * e["q"] + (100 if e.get("noche") else 0)
+        return venta * (0.9 if e["formal"] else 1.0) - 50 * len(e["planilla"])
+
+    aportes = shapley(valor, desde, hasta)
+    assert set(aportes) == {c for c, _, _ in GRUPOS}
+    assert abs(sum(aportes.values()) - (valor(hasta) - valor(desde))) < 1e-9
+    assert aportes["insumos"] == 0 and abs(aportes["personal"] + 50) < 1e-9
+    # lo que ningún grupo cubre viene siempre del destino
+    assert mezclar(desde, hasta, set())["anio"] == 2027
