@@ -65,6 +65,9 @@ class Factores:
     mezcla: list[float | None] = field(default_factory=lambda: [None])  # parte de res; None = la actual
     noche: list[bool] = field(default_factory=lambda: [False, True])
     elasticidad: list[float] = field(default_factory=lambda: [0.5, 1.0, 1.5])
+    # Techo de la cocina: más menús al día de los que puede sacar no se venden
+    # (en Candela, a S/ 10 la cocina colapsaba con ~90). None = sin techo.
+    capacidad: float | None = None
 
     def total(self) -> int:
         return (len(self.precio) * len(self.calidad) * len(self.mezcla) * len(self.noche)
@@ -72,12 +75,15 @@ class Factores:
 
 
 def _aplicar(local: Local, esc: Escenario, q0: float, delta_precio: float, calidad: str,
-             parte_res: float | None, noche: bool, elasticidad: float, mezcla: Mezcla | None):
+             parte_res: float | None, noche: bool, elasticidad: float, mezcla: Mezcla | None,
+             capacidad: float | None = None):
     p0 = local.precio
     precio = max(1.0, p0 + delta_precio)
     mult_ins, mult_dem = CALIDAD[calidad]
     insumos = mezcla.insumos(parte_res) if (mezcla and parte_res is not None) else local.insumos
     q = q0 * (precio / p0) ** (-elasticidad) * mult_dem
+    if capacidad:
+        q = min(q, capacidad)
     local2 = local.con(precio=precio, insumos=insumos * mult_ins, precio_propio=True)
     if noche:
         n = esc.noche or NOCHE_TIPO
@@ -109,7 +115,7 @@ def barrido(local: Local, esc: Escenario, q0: float, nacional: dict, riesgo: dic
     total = f.total()
     for k, (dp, cal, mz, noche, el) in enumerate(itertools.product(f.precio, f.calidad, f.mezcla, f.noche,
                                                                    f.elasticidad)):
-        l2, e2, q = _aplicar(local, esc, q0, dp, cal, mz, noche, el, mezcla)
+        l2, e2, q = _aplicar(local, esc, q0, dp, cal, mz, noche, el, mezcla, f.capacidad)
         fila = {"delta_precio": dp, "calidad": cal, "mezcla": mz, "noche": noche, "elasticidad": el}
         fila.update(evaluar(l2, e2, q, nacional, riesgo, sup))
         filas.append(fila)

@@ -36,3 +36,15 @@ def test_estres_el_golpe_combinado_es_el_peor():
     assert g["insumos"]["utilidad"] < g["base"]["utilidad"]
     assert g["igv"]["utilidad"] < g["base"]["utilidad"]
     assert g["todo"]["utilidad"] == min(x["utilidad"] for x in g.values())
+
+
+def test_techo_de_cocina_corta_la_venta():
+    local = local_de_ciudad(DATA["ciudades"][0])
+    esc = Escenario()
+    # bajar el precio con clientela sensible promete más menús de los que la cocina saca
+    _l, _e, q_libre = _aplicar(local, esc, 80, -2.0, "estandar", None, False, 2.5, None)
+    _l, _e, q_techo = _aplicar(local, esc, 80, -2.0, "estandar", None, False, 2.5, None, capacidad=90)
+    assert q_libre > 90 and q_techo == 90
+    # si la venta no llega al techo, no cambia nada
+    _l, _e, q_bajo = _aplicar(local, esc, 80, 1.0, "estandar", None, False, 2.5, None, capacidad=90)
+    assert q_bajo < 80

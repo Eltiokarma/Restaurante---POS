@@ -85,15 +85,26 @@ def caso(nombre: str, datos: dict) -> dict:
     }
 
 
-def corridas(nombre: str, datos: dict, mezcla=None) -> dict:
+# Sensibilidad de la clientela al precio medida en Juliaca (historia de
+# Candela: la que mejor ajusta sus tres precios es ~2.4), con un margen a cada
+# lado. Los restaurantes tipo se prueban con ella y con la supuesta de antes.
+ELASTICIDAD_JULIACA = [1.5, 2.4, 3.5]
+
+
+def corridas(nombre: str, datos: dict, mezcla=None, elasticidad: list[float] | None = None,
+             con_estres: bool = True) -> dict:
     """Barrido robusto y prueba de estrés de un caso (lo mismo que corre el
     servicio en la pestaña Corridas)."""
     local, esc, sup, q = armar(datos)
     f = Factores(mezcla=sorted({0.25, mezcla.parte_actual, 0.75}) if mezcla else [None])
-    if (datos.get("barrido") or {}).get("elasticidad"):
-        f.elasticidad = datos["barrido"]["elasticidad"]
-    if (datos.get("barrido") or {}).get("precio"):
-        f.precio = datos["barrido"]["precio"]
+    b = datos.get("barrido") or {}
+    if elasticidad:
+        f.elasticidad = elasticidad
+    elif b.get("elasticidad"):
+        f.elasticidad = b["elasticidad"]
+    if b.get("precio"):
+        f.precio = b["precio"]
+    f.capacidad = b.get("capacidad")
     r = barrido(local, esc, q, NAC, RIESGO, sup, f, mezcla)
     porciones = {}
     for d in r["decisiones"]:  # peor caso por precio y porción (mejor mezcla y turno)
@@ -102,7 +113,8 @@ def corridas(nombre: str, datos: dict, mezcla=None) -> dict:
             porciones[clave] = d
     return {"nombre": nombre, "precio0": local.precio, "q0": q, **resumen(r),
             "decisiones": r["decisiones"][:15], "por_precio_porcion": list(porciones.values()),
-            "estres": estres(local, esc, q, NAC, RIESGO)}
+            "elasticidad": f.elasticidad, "capacidad": f.capacidad,
+            "estres": estres(local, esc, q, NAC, RIESGO) if con_estres else None}
 
 
 HORAS_MES = 60 * 4.33  # supuesto: 60 horas a la semana de quien trabaja sin sueldo
@@ -221,7 +233,23 @@ def ciudades() -> list[dict]:
         fila["eq_con_sueldo"] = equilibrio(local, Escenario(), NAC)
         fila["eq_informal"] = equilibrio(local, Escenario(formal=False, sueldo_dueno=False), NAC)
         salida.append(fila)
+        if c["id"] == "juliaca":
+            # experimento: la misma Juliaca con el precio que se observa en Candela
+            obs = local.con(precio=PRECIO_JULIACA_OBSERVADO, precio_propio=True)
+            fila = {**fila, "id": "juliaca_obs", "nombre": "Juliaca (observado)", "precio": PRECIO_JULIACA_OBSERVADO,
+                    "precio_fuente": "local"}
+            for anio in (2026, 2027, 2028):
+                fila[f"eq_{anio}"] = equilibrio(obs, Escenario(anio=anio, sueldo_dueno=False), NAC)
+            fila["eq_con_sueldo"] = equilibrio(obs, Escenario(), NAC)
+            fila["eq_informal"] = equilibrio(obs, Escenario(formal=False, sueldo_dueno=False), NAC)
+            salida.append(fila)
     return sorted(salida, key=lambda f: f["eq_2026"])
+
+
+# Precio del menú que se observa en Juliaca: el de Candela (un solo local; el
+# dataset estima S/ 8 a partir del ingreso y lo deja tal cual por la paridad
+# con la calculadora original)
+PRECIO_JULIACA_OBSERVADO = 11.0
 
 
 def igualdad(arquetipos: list[dict], candela: dict | None) -> dict:
@@ -330,13 +358,15 @@ def generar() -> dict:
                          if x["nombre"].startswith("Candela") and x["nombre"] != g["nombre"]]
             platos = _api("/platos/analisis?igv=10.5&formal=true")
     mezcla = mezcla_desde_analisis(platos) if platos else None
-    robustez = [corridas(a["nombre"], a["datos"]) for a in arquetipos]
+    robustez = [corridas(a["nombre"], a["datos"], elasticidad=ELASTICIDAD_JULIACA) for a in arquetipos]
+    # el mismo barrido con la clientela poco sensible que se suponía antes de medirla
+    robustez_supuesta = [corridas(a["nombre"], a["datos"], con_estres=False) for a in arquetipos]
     if candela:
         robustez.append(corridas(g["nombre"], g["datos"], mezcla))
     datos = {
         "hallazgos": hallazgos(arquetipos, g["datos"] if candela else None),
         "igualdad": igualdad(arquetipos, g["datos"] if candela else None),
-        "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez,
+        "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez, "robustez_supuesta": robustez_supuesta,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},
         "fuentes": DATA["fuentes"], "regimenes": list(REGIMENES),
     }
