@@ -15,7 +15,7 @@ El encargo completo está en [`BRIEF.md`](BRIEF.md). Las cifras salen de
 | `motor/montecarlo.py` | Monte Carlo de un año, con el **mismo generador aleatorio** que el HTML: da exactamente sus mismos números. |
 | `motor/central.py` | Cocina central con satélites (parámetros de confianza baja). |
 | `motor/flujo.py` | Flujo de caja a 10 años por régimen (informal, Nuevo RUS, RER, MYPE): IGV por año, sueldo mínimo, inflación, curva de arranque, VAN, TIR y recupero. |
-| `motor/personal.py` | Planilla propia por puesto con pago mensual, quincenal o por día (jornal × días trabajados) y cuándo sale la plata en el mes. |
+| `motor/personal.py` | Planilla propia, una fila por persona (cada una con su sueldo o jornal), pago mensual, quincenal o por día, turno día/noche, y cuándo sale la plata en el mes. |
 | `motor/sensibilidad.py` | Tornado (qué número mueve más la utilidad), cuánto aguanta cada uno antes de perder y tabla precio × menús/día. |
 | `motor/recetas.py` | Costeo por receta con merma por insumo, margen por plato y del menú, ingeniería de menú (estrella, caballito, rompecabezas, perro) y peso de cada insumo en las compras. |
 | `web/` | El panel (React + Vite): simulador del mes con barras, flujo a 10 años y escenarios guardados. |
@@ -28,7 +28,7 @@ El encargo completo está en [`BRIEF.md`](BRIEF.md). Las cifras salen de
 ```bash
 cd estudio
 pip install -r requirements.txt
-python -m pytest tests/ -q            # 136 tests
+python -m pytest tests/ -q            # 138 tests
 python -m motor.bd                    # crea y siembra la base (SQLite local: estudio.db)
 DATABASE_URL=postgres://... python -m motor.bd   # lo mismo en el Postgres de Railway
 ```
@@ -91,7 +91,9 @@ directo en la base del estudio (origen `propio`), que vive aparte.
 ## Pendiente (orden del brief)
 
 1. Cargar los datos propios de Candela (origen `propio`) y sus recetas.
-2. Traer del POS las ventas por plato (popularidad real para la ingeniería de
+2. Recetas e insumos de Candela: se copiaron una vez del POS (receta por
+   porción, costo de referencia y ventas de 60 días). Falta sincronizarlo solo
+   y traer del POS las ventas por plato (popularidad real para la ingeniería de
    menú) en vez de escribirlas a mano.
 3. Precios observados por zona (formulario de sondeo, Fase 2).
 4. Arrastre de pérdidas en el MYPE y valor residual del local en el flujo.

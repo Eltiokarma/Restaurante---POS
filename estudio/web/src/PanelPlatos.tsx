@@ -475,6 +475,11 @@ function Analisis({
         />
         <Dato titulo="Compras de la semana" valor={soles(analisis.gasto_semana)} nota="según lo que se vende" />
       </div>
+      {analisis.sin_receta.length > 0 && (
+        <p className="es-alerta">
+          ⚠ Sin receta (no entran en promedios ni clases): {analisis.sin_receta.join(', ')}. Ármalas en la pestaña Platos.
+        </p>
+      )}
       {menu.costo > 0 && (
         <button type="button" className="es-secundario" onClick={() => onUsarCosto(Math.round((menu.costo / 1.05) * 100) / 100)}>
           Usar este costo en el simulador (insumos por menú: {soles(menu.costo / 1.05, 2)})
@@ -507,7 +512,7 @@ function Analisis({
                   {f.nombre}
                   <span className="es-nota-celda"> · {NOMBRE_TIPO[f.tipo]}</span>
                 </th>
-                <td>{soles(f.costo_porcion, 2)}</td>
+                <td>{f.sin_receta ? <span className="es-mal">sin receta</span> : soles(f.costo_porcion, 2)}</td>
                 <td>{f.es_menu ? soles(f.costo_venta, 2) : '—'}</td>
                 <td>{f.precio ? soles(f.precio, 2) : '—'}</td>
                 <td className={f.margen !== null && f.margen < 0 ? 'es-mal' : undefined}>

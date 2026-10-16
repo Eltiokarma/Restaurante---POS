@@ -34,6 +34,7 @@ def cargar_dataset(ruta: Path = RUTA_DATASET) -> dict:
 
 MODALIDADES = ("mensual", "quincenal", "diario")
 AREAS = ("cocina", "salon", "otro")
+TURNOS = ("dia", "noche", "ambos")
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ class Trabajador:
     cantidad: int = 1
     area: str = "cocina"
     dias: float | None = None  # solo diario; por defecto los días que abre el local
+    turno: str = "dia"  # dia | noche | ambos (para ver cuánto cuesta cada turno)
 
     def con(self, **cambios) -> "Trabajador":
         return replace(self, **cambios)
@@ -64,6 +66,22 @@ def costo_trabajador(t: Trabajador, formal: bool, rmv: float, mult: float, dias_
 
 
 @dataclass(frozen=True)
+class Noche:
+    """Segundo servicio del día (cena): sus propios platos/día, precio e
+    insumos. Comparte alquiler y local; suma su gas, su luz y, si la
+    planilla es automática, su propio equipo (pagado por los días que abre)."""
+    q: float = 30
+    precio: float = 12.0
+    insumos: float = 4.5
+    dias: float | None = None  # por defecto los mismos días que el día
+    balones: float = 2  # balones extra al mes
+    servicios: float = 150  # luz extra al mes
+
+    def con(self, **cambios) -> "Noche":
+        return replace(self, **cambios)
+
+
+@dataclass(frozen=True)
 class Escenario:
     """Cómo se mira el negocio (los botones del prototipo)."""
     segmento: str = "popular"  # popular | ejecutivo
@@ -75,6 +93,7 @@ class Escenario:
     # Planilla propia: si está vacía, el personal sale de los menús/día
     # como en el prototipo (cocina cada 80 menús, un mozo cada 70)
     planilla: tuple[Trabajador, ...] = ()
+    noche: Noche | None = None
 
     @property
     def pop(self) -> bool:
@@ -140,10 +159,20 @@ class Resultado:
     q_mes: float
     ventas: float
     util: float
+    # Turno noche (cero si no abre de noche)
+    q_mes_noche: float = 0.0
+    ventas_noche: float = 0.0
+    contrib_noche: float = 0.0  # por plato, sin IGV
+    p_net_noche: float = 0.0
 
     @property
     def margen(self) -> float:
         return self.util / self.ventas if self.ventas > 0 else 0.0
+
+    @property
+    def ventas_netas(self) -> float:
+        """Ventas sin IGV de los dos turnos."""
+        return self.p_net * self.q_mes + self.p_net_noche * self.q_mes_noche
 
 
 def modelo(local: Local, q: float, esc: Escenario, nacional: dict,
@@ -183,12 +212,32 @@ def modelo(local: Local, q: float, esc: Escenario, nacional: dict,
     personal += sueldo_dueno if esc.sueldo_dueno else 0
     alquiler = local.alquiler_mes * (1 if pop else 1.25)
     gas = local.gas_balon45 * esc.balones
-    fijos = personal + alquiler + gas + local.servicios_mes + otros_fijos
+    q_mes_n = ventas_n = contrib_n = p_net_n = extra_n = 0.0
+    if esc.noche is not None and esc.noche.q > 0:
+        n = esc.noche
+        dias_n = n.dias if n.dias is not None else esc.dias
+        p_net_n = n.precio / (1 + t)
+        contrib_n = p_net_n - (n.insumos * ins_mult * (1 + MERMA) + DESCARTABLES[esc.segmento])
+        q_mes_n = n.q * dias_n
+        ventas_n = n.precio * q_mes_n
+        gas += local.gas_balon45 * n.balones
+        extra_n = n.servicios
+        if not esc.planilla:
+            # Equipo propio de noche, pagado por la parte del mes que trabaja
+            cocina_n = max(1, math.ceil(n.q / (80 if pop else 55)))
+            mozos_n = max(1, math.ceil(n.q / (70 if pop else 40)))
+            cocinero_n = max(local.sueldo_cocinero, anio["rmv"] * 1.06) if esc.formal else local.sueldo_cocinero
+            parte = min(1.0, dias_n / esc.dias) if esc.dias else 1.0
+            personal += parte * mult * (cocinero_n + (cocina_n - 1) * w(local.sueldo_ayudante)
+                                        + mozos_n * w(local.sueldo_mozo))
+            cocina += cocina_n
+            mozos += mozos_n
+    fijos = personal + alquiler + gas + local.servicios_mes + otros_fijos + extra_n
     q_mes = q * esc.dias
-    ventas = precio * q_mes
-    util = contrib_u * q_mes - fijos
+    ventas = precio * q_mes + ventas_n
+    util = contrib_u * q_mes + contrib_n * q_mes_n - fijos
     return Resultado(t, var_u, p_net, contrib_u, cocina, mozos, personal, alquiler, gas, fijos,
-                     q_mes, ventas, util)
+                     q_mes, ventas, util, q_mes_n, ventas_n, contrib_n, p_net_n)
 
 
 def equilibrio(local: Local, esc: Escenario, nacional: dict) -> int | None:
@@ -202,4 +251,5 @@ def equilibrio(local: Local, esc: Escenario, nacional: dict) -> int | None:
 def precio_minimo(local: Local, q: float, esc: Escenario, nacional: dict) -> float:
     """Frontera de precio: el precio (con IGV) que deja utilidad 0 a q menús/día."""
     m = modelo(local, q, esc, nacional)
-    return (1 + m.t) * (m.var_u + m.fijos / m.q_mes)
+    # lo que deja la noche ayuda a cubrir los fijos
+    return (1 + m.t) * (m.var_u + (m.fijos - m.contrib_noche * m.q_mes_noche) / m.q_mes)

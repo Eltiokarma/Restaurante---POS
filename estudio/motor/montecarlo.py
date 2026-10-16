@@ -95,7 +95,7 @@ def simular(local: Local, esc: Escenario, nacional: dict, riesgo: dict, q_ref: f
         perdida = 0.0
         if r() < local.riesgo_conflicto_anual:
             perdida = (2 + r() * 6) / 52
-        anual = 12 * (m.contrib_u * m.q_mes * (1 - perdida)) - 12 * m.fijos
+        anual = 12 * ((m.contrib_u * m.q_mes + m.contrib_noche * m.q_mes_noche) * (1 - perdida)) - 12 * m.fijos
         salida.append(anual)
         if anual < 0:
             perdidas += 1

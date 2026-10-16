@@ -30,6 +30,7 @@ const ESCENARIO_INICIAL: Escenario = {
   q: 80,
   dias: 26,
   planilla: [],
+  noche: null,
 }
 
 export const SUPUESTOS_INICIALES: SupuestosFlujo = {

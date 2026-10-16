@@ -81,8 +81,9 @@ def analizar(insumos: list[InsumoR], platos: list[PlatoR], igv: float, formal: b
     por_id = {i.id: i for i in insumos}
     t = igv / 100 if formal else 0.0
     desg = {p.id: _desglose(p, por_id) for p in platos}
-    entradas = [p for p in platos if p.tipo == "entrada"]
-    bebidas = [p for p in platos if p.tipo == "bebida"]
+    # Un plato sin receta costaría cero y bajaría los promedios: fuera
+    entradas = [p for p in platos if p.tipo == "entrada" and p.items]
+    bebidas = [p for p in platos if p.tipo == "bebida" and p.items]
     acomp = {}
     for d in (_promedio(entradas, desg), _promedio(bebidas, desg)):
         for iid, c in d.items():
@@ -106,6 +107,7 @@ def analizar(insumos: list[InsumoR], platos: list[PlatoR], igv: float, formal: b
                  for iid, c in desg[p.id].items()], key=lambda x: -x["costo"]),
             "precio_sin_igv": None, "margen": None, "costo_pct": None, "clase": None, "consejo": None,
             "popularidad": None,
+            "sin_receta": not p.items,
         }
         if p.precio:
             neto = p.precio / (1 + t)
@@ -116,7 +118,8 @@ def analizar(insumos: list[InsumoR], platos: list[PlatoR], igv: float, formal: b
 
     # Ingeniería de menú dentro de cada tipo (solo los que tienen precio y ventas)
     for tipo in TIPOS:
-        grupo = [f for f in filas if f["tipo"] == tipo and f["margen"] is not None and (f["vendidos"] or 0) > 0]
+        grupo = [f for f in filas if f["tipo"] == tipo and f["margen"] is not None and (f["vendidos"] or 0) > 0
+                 and not f["sin_receta"]]
         if len(grupo) < 2:
             continue
         total = sum(f["vendidos"] for f in grupo)
@@ -132,7 +135,7 @@ def analizar(insumos: list[InsumoR], platos: list[PlatoR], igv: float, formal: b
             f["margen_promedio"] = round(margen_prom, 4)
 
     # Menú promedio (segundos ponderados por lo vendido) y peso de cada insumo en él
-    segundos = [p for p in platos if p.tipo == "segundo"]
+    segundos = [p for p in platos if p.tipo == "segundo" and p.items]
     pesos = [p.vendidos or 0 for p in segundos]
     if segundos and sum(pesos) <= 0:
         pesos = [1.0] * len(segundos)
@@ -178,5 +181,6 @@ def analizar(insumos: list[InsumoR], platos: list[PlatoR], igv: float, formal: b
                                   for iid, c in contrib.items()], key=lambda x: -x["costo"]),
         },
         "gasto_semana": round(gasto_total, 2),
+        "sin_receta": [p.nombre for p in platos if not p.items],
         "pareto": pareto,
     }
