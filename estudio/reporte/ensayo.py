@@ -246,6 +246,13 @@ def construir(d: dict) -> str:
             "¿Casa propia o local alquilado?", "Fonda en casa propia frente a la dueña con local",
             f"{s(casos['Fonda en casa propia']['ingreso_dueno'])} contra {s(dc['ingreso_dueno'])} al mes",
             veredicto(parte_de("La fonda en casa propia")) if sr else "--"))
+        if trab:
+            filas.append((
+                "¿Es rentable la fonda familiar si se paga su trabajo?",
+                "Su trabajo y su capital a precio de mercado",
+                f"Utilidad económica {s(trab['Familia sin sueldos']['utilidad_economica'])}; cobran el "
+                f"{p(trab['Familia sin sueldos']['parte_cobrada'])} de lo que vale su trabajo",
+                veredicto(parte_de("La familia recibe menos")) if parte_de("La familia recibe menos") is not None else "--"))
         filas.append((
             "¿Conviene abrir de noche?", "Barrido con una noche tipo de 30 platos",
             "Mejora a todos los negocios", "sí, si existe esa demanda (no medida)"))
@@ -259,6 +266,26 @@ def construir(d: dict) -> str:
         # las celdas ya vienen en LaTeX (cifras con s(), p() y n()): no se escapan
         return "\n".join(f"{k} & {a} & {b} & {c} & {v} \\\\ \\addlinespace[2pt]"
                          for k, (a, b, c, v) in enumerate(filas, start=1))
+
+    trab = {t["nombre"]: t for t in d.get("trabajo", [])}
+
+    def y_lista(xs):
+        return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " y " + xs[-1]
+
+    def tr_(nombre, campo):
+        return trab[nombre][campo]
+
+    def tabla_trabajo():
+        filas = []
+        for t in sorted(trab.values(), key=lambda t: -t["utilidad_economica"]):
+            horas = [c["horas_semana"] for c in t["casa"]]
+            gente = ("nadie" if not horas else f"{len(horas)} × {n(horas[0])}~h" if len(set(horas)) == 1 and len(horas) > 1
+                     else " + ".join(f"{n(h)}~h" for h in horas))
+            cobra = ("--" if t["parte_cobrada"] is None else "nada" if t["parte_cobrada"] <= 0
+                     else p(t["parte_cobrada"]))
+            filas.append(f"{esc(corto(t['nombre']))} & {gente} & {s(t['ingreso'])} & {s(t['valor_mercado'])} & "
+                         f"{s(t['costo_capital'])} & {s(t['utilidad_economica'])} & {cobra} \\\\")
+        return "\n".join(filas)
 
     def tabla_ausencia():
         return "\n".join(f"{esc(x['paso'])} & {s(x['utilidad'])} & {'' if x['cambio'] is None else s(x['cambio'])} \\\\"
@@ -557,10 +584,9 @@ sensible, casi todos los negocios deberían subir S/~3; con la sensibilidad que 
 \item \textbf{{Solo {len(sobreviven)} de {NN} negocios resisten todos los golpes juntos}} (clientela, insumos,
 IGV, sueldos, alquiler y competencia): {esc(', '.join(sobreviven))}.
 \item \textbf{{La fonda familiar gana porque su trabajo no se cobra.}} En el mismo local que la dueña que cocina,
-la familia junta más, pero cada uno de sus tres integrantes se lleva menos de la mitad que ella sola
-{sorteos_txt("Cada integrante de la familia")}. Si eso queda por debajo del sueldo mínimo por hora
-({s(hora['Familia sin sueldos']['por_hora'], 2)} frente a {s(hz['rmv_hora'], 2)}) no es concluyente: depende de cuánto
-venda y cuánto trabaje.
+cada uno de sus tres integrantes se lleva menos de la mitad que ella sola{sorteos_txt("Cada integrante de la familia")}.
+Descontado su trabajo a precio de mercado, su utilidad económica queda cerca de cero
+({s(trab['Familia sin sueldos']['utilidad_economica']) if trab else ''}): lo que muestra la caja es, casi entero, su propio sueldo.
 {"" if 'juliaca_obs' not in ciud else rf"""\item \textbf{{Juliaca no es la plaza más difícil del país.}} Con el precio estimado de la base (S/~8) lo parecía:
 {ciud['juliaca']['eq_2026']} menús diarios para no perder. Con el que se cobra en Candela (S/~11) el equilibrio baja a
 {ciud['juliaca_obs']['eq_2026']} y queda entre las mejores plazas del mapa; falta confirmarlo con más locales."""}
@@ -1116,15 +1142,66 @@ margen por plato, más vale cada centavo del precio, y más caro resulta competi
 aritmética por la que el puesto de mercado, que vende a S/~7, es el que más pierde con el competidor que lo
 obliga a bajar un sol: ese golpe le quita casi toda la utilidad.
 
-\subsection{{El trabajo que no se cobra}}
+\subsection{{El trabajo que no se cobra}}\label{{sec:trabajo}}
 
-Si la dueña que cocina trabaja 60 horas a la semana, lo que se lleva equivale a
-{s(hora['Dueña que cocina']['por_hora'], 2)} por hora. En la familia sin sueldos, repartida entre tres personas,
-la cifra cae a {s(hora['Familia sin sueldos']['por_hora'], 2)} por hora y por persona: \emph{{{"menos que el sueldo mínimo" if hora['Familia sin sueldos']['por_hora'] < hz['rmv_hora'] else "apenas el sueldo mínimo"}}}, que equivale a {s(hz['rmv_hora'], 2)} por hora. El puesto de mercado, con un plato más barato de hacer,
-llega a {s(hora['Puesto de mercado informal']['por_hora'], 2)}. La fonda familiar es rentable como
-empresa porque sus integrantes cobran, en los hechos, por debajo del mínimo legal. Es la otra cara del hallazgo
-de que en provincia ``gana el trabajo'': gana porque el trabajo se paga barato, y la estabilidad del negocio
-descansa en que la familia acepte esa tarifa.
+La utilidad de una fonda familiar se calcula sin descontar el trabajo de quienes no tienen sueldo, o se pagan
+menos de lo que costaría contratarlos. Para que ese trabajo se vea, el estudio usa un segundo indicador de
+rentabilidad: la \emph{{utilidad económica}}. Le resta a lo que se lleva la casa lo que valdría su trabajo a precio
+de mercado ---el sueldo de una cocinera, un ayudante, un mozo o un administrador de Juliaca por las horas que de
+verdad trabajan, con el recargo de ley por las horas extra--- y lo que rendiría la inversión en otro lado, al
+15\,\% anual del flujo. Si la utilidad económica es negativa, el negocio no gana: vive de un subsidio de la familia
+que lo atiende. Las horas son supuestos razonados (60 por semana para quien cocina, de 20 a 40 para quien solo
+administra) y están en el cuadro~\ref{{tab:trabajo}}.
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/trabajo_hora.pdf}}
+\caption{{Lo que cobra por hora la gente de la casa (barra) frente a lo que valdría esa hora si se contratara a
+alguien (raya) y al sueldo mínimo por hora.}}\label{{fig:trabajo_hora}}
+\end{{figure}}
+
+\begin{{table}}[h]
+\centering\footnotesize
+\caption{{El trabajo de la casa a precio de mercado, en soles al mes. ``Cobra'': parte del valor de su trabajo que
+la casa de verdad se lleva.}}\label{{tab:trabajo}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}Xrrrrrr}}
+\toprule
+Negocio & Horas/semana & Se lleva & Su trabajo & Capital & Utilidad económica & Cobra \\
+\midrule
+{tabla_trabajo()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+La figura~\ref{{fig:trabajo_hora}} muestra la primera lectura. La dueña que cocina, con 60 horas a la semana, se
+lleva {s(tr_('Dueña que cocina', 'por_hora'), 2)} por hora, cuando contratar a una cocinera para esas mismas horas
+costaría {s(tr_('Dueña que cocina', 'mercado_por_hora'), 2)}: cobra {n(tr_('Dueña que cocina', 'parte_cobrada'), 1)} veces su
+trabajo, porque además del sueldo se queda con el margen del negocio. La familia sin sueldos, en el mismo local,
+no: entre los tres reciben {s(tr_('Familia sin sueldos', 'por_hora'), 2)} por hora frente a
+{s(tr_('Familia sin sueldos', 'mercado_por_hora'), 2)} de mercado, el {p(tr_('Familia sin sueldos', 'parte_cobrada'))} de lo que
+valdría su trabajo, por debajo del sueldo mínimo por hora. La fonda en casa propia queda justo en el valor de su
+trabajo: su dueña gana lo que ganaría como empleada. Y en el inversor, el chiquito en Nuevo RUS y Candela, quien
+pone el trabajo de dueño casi no cobra nada por él{"" if 'Candela (datos del POS)' not in trab else rf""" ---en Candela, con las
+{n(trab['Candela (datos del POS)']['casa'][0]['horas_semana'] if trab['Candela (datos del POS)']['casa'] else 0)} horas semanales que se le suponen al dueño para compras, caja y
+administración, la cuenta es peor: si paga IGV sobre toda la venta, pone su trabajo y además pierde plata"""}.
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/trabajo_economica.pdf}}
+\caption{{Lo que se lleva la casa (gris) y la utilidad económica, ya descontado el valor de mercado de su trabajo
+y el del capital (color).}}\label{{fig:trabajo_economica}}
+\end{{figure}}
+
+La figura~\ref{{fig:trabajo_economica}} cambia el orden de los negocios. Por lo que se lleva la casa, la familia sin
+sueldos es de las que más ganan ({s(tr_('Familia sin sueldos', 'ingreso'))} al mes); por utilidad económica queda en
+{s(tr_('Familia sin sueldos', 'utilidad_economica'))}: lo que muestra la caja es, casi entero, su propio trabajo. Que quede
+por encima o por debajo del valor de mercado no es concluyente{"" if parte_de("La familia recibe menos") is None else " (queda por debajo en el " + p(parte_de("La familia recibe menos")) + " de los sorteos)"}; lo que sí se
+sostiene es que cada uno de sus integrantes se lleva menos de la mitad que la dueña que cocina sola. Con la
+utilidad económica como medida, solo {y_lista([("la " if corto(t['nombre']).startswith(("Dueña", "Familia", "Fonda")) else "el ") + corto(t['nombre'])[:1].lower() + corto(t['nombre'])[1:] for t in sorted(trab.values(), key=lambda t: -t['utilidad_economica']) if t['utilidad_economica'] > 100])}
+son negocios rentables en sentido estricto: pagan a su gente lo que vale y todavía les sobra. Ese es el indicador
+que debería mirar quien compara una fonda con un empleo: la pregunta no es si el negocio deja plata, sino si
+deja más que lo que la misma gente ganaría trabajando para otro.
 
 \subsection{{La trampa del Nuevo RUS}}
 

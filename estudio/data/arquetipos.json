@@ -63,7 +63,14 @@
     "alza_rmv": 0.037,
     "tasa_descuento": 0.15,
     "regimen": "informal"
-   }
+   },
+   "casa": [
+    {
+     "quien": "Dueña",
+     "rol": "cocinero",
+     "horas_semana": 60
+    }
+   ]
   }
  },
  {
@@ -148,7 +155,24 @@
     "alza_rmv": 0.037,
     "tasa_descuento": 0.15,
     "regimen": "informal"
-   }
+   },
+   "casa": [
+    {
+     "quien": "Mamá",
+     "rol": "cocinero",
+     "horas_semana": 60
+    },
+    {
+     "quien": "Tía",
+     "rol": "ayudante",
+     "horas_semana": 60
+    },
+    {
+     "quien": "Hijo",
+     "rol": "mozo",
+     "horas_semana": 60
+    }
+   ]
   }
  },
  {
@@ -196,7 +220,14 @@
     "alza_rmv": 0.037,
     "tasa_descuento": 0.15,
     "regimen": "mype"
-   }
+   },
+   "casa": [
+    {
+     "quien": "Dueño (supervisa, compra y cobra)",
+     "rol": "administrador",
+     "horas_semana": 20
+    }
+   ]
   }
  },
  {
@@ -300,7 +331,8 @@
     "alza_rmv": 0.037,
     "tasa_descuento": 0.15,
     "regimen": "mype"
-   }
+   },
+   "casa": []
   }
  },
  {
@@ -367,7 +399,14 @@
     "alza_rmv": 0.037,
     "tasa_descuento": 0.15,
     "regimen": "informal"
-   }
+   },
+   "casa": [
+    {
+     "quien": "Dueña",
+     "rol": "cocinero",
+     "horas_semana": 60
+    }
+   ]
   }
  },
  {
@@ -424,7 +463,14 @@
     "alza_rmv": 0.037,
     "tasa_descuento": 0.15,
     "regimen": "nuevo_rus"
-   }
+   },
+   "casa": [
+    {
+     "quien": "Dueña",
+     "rol": "cocinero",
+     "horas_semana": 60
+    }
+   ]
   }
  },
  {
@@ -472,7 +518,14 @@
     "alza_rmv": 0.037,
     "tasa_descuento": 0.15,
     "regimen": "mype"
-   }
+   },
+   "casa": [
+    {
+     "quien": "Dueño (supervisa)",
+     "rol": "administrador",
+     "horas_semana": 20
+    }
+   ]
   }
  },
  {
@@ -526,7 +579,14 @@
     "alza_rmv": 0.037,
     "tasa_descuento": 0.15,
     "regimen": "mype"
-   }
+   },
+   "casa": [
+    {
+     "quien": "Dueño (supervisa los dos turnos)",
+     "rol": "administrador",
+     "horas_semana": 30
+    }
+   ]
   }
  },
  {
@@ -575,7 +635,14 @@
     "alza_rmv": 0.037,
     "tasa_descuento": 0.15,
     "regimen": "mype"
-   }
+   },
+   "casa": [
+    {
+     "quien": "Dueño (gerente)",
+     "rol": "administrador",
+     "horas_semana": 60
+    }
+   ]
   }
  },
  {
@@ -642,7 +709,14 @@
     "alza_rmv": 0.037,
     "tasa_descuento": 0.15,
     "regimen": "informal"
-   }
+   },
+   "casa": [
+    {
+     "quien": "Dueña",
+     "rol": "cocinero",
+     "horas_semana": 60
+    }
+   ]
   }
  }
 ]
