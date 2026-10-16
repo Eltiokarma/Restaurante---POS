@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from .modelo import ANIOS, DESCARTABLES, DIAS_MES, MERMA, OTROS_FIJOS, SUELDO_DUENO, Escenario, Local, modelo
+from .modelo import ANIOS, DESCARTABLES, MERMA, OTROS_FIJOS, SUELDO_DUENO, Escenario, Local, modelo
 
 
 @dataclass(frozen=True)
@@ -46,6 +46,6 @@ def modelo_central(local: Local, esc: Escenario, nacional: dict, cc: dict,
              + local.servicios_mes * (1 + 0.6 * n_satelites) + OTROS_FIJOS
              + cc["costo_transporte_mes"] * math.ceil(n_satelites / 4)
              + cc["overhead_por_local_mes"] * n_satelites)
-    util = contrib_u * total_q * DIAS_MES - fijos
+    util = contrib_u * total_q * esc.dias - fijos
     capex = (25000 if n_satelites <= 2 else cc["capex_cocina_central"]) + cc["capex_satelite"] * n_satelites
     return ResultadoCentral(util, capex, cocina)

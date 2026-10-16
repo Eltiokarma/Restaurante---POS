@@ -86,6 +86,38 @@ class EscenarioGuardado(Base):
     creado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+# ---------- Recetas (datos propios del local: nunca van al repo) ----------
+
+class Insumo(Base):
+    __tablename__ = "insumos"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(80), unique=True)
+    unidad: Mapped[str] = mapped_column(String(20), default="kg")
+    precio: Mapped[float] = mapped_column(Float)  # por unidad
+    merma: Mapped[float] = mapped_column(Float, default=0.0)
+    categoria: Mapped[str | None] = mapped_column(String(30))
+    actualizado: Mapped[date | None] = mapped_column(Date)
+
+
+class Plato(Base):
+    __tablename__ = "platos"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(120), unique=True)
+    tipo: Mapped[str] = mapped_column(String(20), default="segundo")
+    porciones: Mapped[float] = mapped_column(Float, default=1)
+    precio: Mapped[float | None] = mapped_column(Float)  # del menú si es segundo
+    vendidos: Mapped[float | None] = mapped_column(Float)  # por semana
+    notas: Mapped[str | None] = mapped_column(Text)
+
+
+class RecetaItem(Base):
+    __tablename__ = "receta_items"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plato_id: Mapped[int] = mapped_column(ForeignKey("platos.id", ondelete="CASCADE"))
+    insumo_id: Mapped[int] = mapped_column(ForeignKey("insumos.id", ondelete="CASCADE"))
+    cantidad: Mapped[float] = mapped_column(Float)  # en la unidad del insumo, para toda la receta
+
+
 def motor_bd(url: str | None = None):
     url = url or os.getenv("DATABASE_URL") or "sqlite:///estudio.db"
     # Railway entrega postgres://…; SQLAlchemy 2 quiere postgresql+psycopg://

@@ -11,7 +11,7 @@ sueldo mínimo después de 2028, la tasa de descuento, la inflación.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from .modelo import OTROS_FIJOS, SUELDO_DUENO, Escenario, Local, modelo
 
@@ -123,8 +123,7 @@ def flujo_caja(local: Local, esc: Escenario, nacional: dict, sup: Supuestos) -> 
     # Informal: sin IGV y planilla a lo que se pague en la calle. Nuevo RUS:
     # sin IGV pero con planilla formal. RER y MYPE: IGV de restaurantes.
     formal = regimen != "informal"
-    esc = Escenario(segmento=esc.segmento, anio=esc.anio, formal=formal, balones=esc.balones,
-                    sueldo_dueno=esc.sueldo_dueno)
+    esc = replace(esc, formal=formal)
     uit0 = nacional.get("uit_2026", 5500)
     r = sup.tasa_descuento
     depreciacion = sup.inversion / VIDA_UTIL
@@ -143,6 +142,7 @@ def flujo_caja(local: Local, esc: Escenario, nacional: dict, sup: Supuestos) -> 
             sueldo_cocinero=local.sueldo_cocinero * f, sueldo_ayudante=local.sueldo_ayudante * f,
             sueldo_mozo=local.sueldo_mozo * f,
         )
+        esc_y = replace(esc, planilla=tuple(t.con(monto=t.monto * f) for t in esc.planilla))
         ventas = igv_pagado = utilidad = menus = 0.0
         ventas_mes: list[float] = []
         for m in range(12):
@@ -151,7 +151,7 @@ def flujo_caja(local: Local, esc: Escenario, nacional: dict, sup: Supuestos) -> 
             if sup.meses_arranque > 0 and k < sup.meses_arranque:
                 rampa = sup.arranque_desde + (1 - sup.arranque_desde) * k / sup.meses_arranque
             q = max(1.0, sup.q * rampa * (1 + sup.crecimiento_q) ** y)
-            res = modelo(local_y, q, esc, nacional, igv=igv, rmv=rmv, otros_fijos=OTROS_FIJOS * f,
+            res = modelo(local_y, q, esc_y, nacional, igv=igv, rmv=rmv, otros_fijos=OTROS_FIJOS * f,
                          sueldo_dueno=SUELDO_DUENO * f)
             ventas += res.ventas
             ventas_mes.append(res.ventas)
@@ -222,7 +222,6 @@ def recupero(flujos: list[float], r: float = 0.0) -> float | None:
 
 
 def comparar_regimenes(local: Local, esc: Escenario, nacional: dict, sup: Supuestos) -> list[dict]:
-    from dataclasses import replace
     salida = []
     for reg in REGIMENES:
         fl = flujo_caja(local, esc, nacional, replace(sup, regimen=reg))

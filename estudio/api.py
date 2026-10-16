@@ -24,11 +24,14 @@ from sqlalchemy.orm import Session
 
 from motor import Escenario, equilibrio, precio_minimo, simular
 from motor.bd import (
-    ORIGENES, TIPOS_ZONA, Base, Ciudad, EscenarioGuardado, Parametro, Zona, bloque, local_desde_bd,
-    motor_bd, sembrar,
+    ORIGENES, TIPOS_ZONA, Base, Ciudad, EscenarioGuardado, Insumo, Parametro, Plato, RecetaItem, Zona, bloque,
+    local_desde_bd, motor_bd, sembrar,
 )
 from motor.flujo import NOMBRE_REGIMEN, REGIMENES, SUPUESTOS, Supuestos, comparar_regimenes, flujo_caja
-from motor.modelo import modelo
+from motor.modelo import AREAS, MODALIDADES, Trabajador, modelo
+from motor.personal import calendario_pagos
+from motor.recetas import TIPOS, InsumoR, PlatoR, analizar
+from motor.sensibilidad import matriz, quiebres, tornado
 
 WEB = Path(__file__).resolve().parent / "web" / "dist"
 
@@ -155,6 +158,15 @@ CORREGIBLES = ("insumos", "alquiler_mes", "sueldo_cocinero", "sueldo_ayudante", 
                "gas_balon45", "servicios_mes")
 
 
+class TrabajadorIn(BaseModel):
+    puesto: str = Field(min_length=1, max_length=60)
+    monto: float = Field(ge=0)  # sueldo del mes o jornal del día
+    modalidad: str = Field(default="mensual", pattern="^(" + "|".join(MODALIDADES) + ")$")
+    cantidad: int = Field(default=1, ge=0, le=50)
+    area: str = Field(default="cocina", pattern="^(" + "|".join(AREAS) + ")$")
+    dias: float | None = Field(default=None, ge=0, le=31)
+
+
 class EscenarioIn(BaseModel):
     ciudad_id: str
     zona_id: int | None = None
@@ -173,6 +185,8 @@ class EscenarioIn(BaseModel):
     sueldo_mozo: float | None = Field(default=None, ge=0)
     gas_balon45: float | None = Field(default=None, ge=0)
     servicios_mes: float | None = Field(default=None, ge=0)
+    dias: float = Field(default=26, ge=1, le=31)  # días que abre al mes
+    planilla: list[TrabajadorIn] = Field(default_factory=list, max_length=40)  # vacía: automática
 
 
 def _armar(e: EscenarioIn, s: Session):
@@ -185,7 +199,8 @@ def _armar(e: EscenarioIn, s: Session):
     if cambios:
         local = local.con(**cambios)
     esc = Escenario(segmento=e.segmento, anio=e.anio, formal=e.formal, balones=e.balones,
-                    sueldo_dueno=e.sueldo_dueno)
+                    sueldo_dueno=e.sueldo_dueno, dias=e.dias,
+                    planilla=tuple(Trabajador(**t.model_dump()) for t in e.planilla))
     return local, esc, bloque(s, "nacional")
 
 
@@ -213,6 +228,23 @@ def calcular(e: EscenarioIn, s: Session = Depends(sesion)):
         "anio_montecarlo": {"prob_perdida": mc.prob_perdida, "p10": round(mc.p10), "p50": round(mc.p50),
                             "p90": round(mc.p90)},
         "curva": curva,
+        "pagos": calendario_pagos(local, esc, nacional, m.cocina, m.mozos),
+    }
+
+
+class SensibilidadIn(EscenarioIn):
+    delta: float = Field(default=0.10, gt=0, le=0.5)
+
+
+@api.post("/sensibilidad", dependencies=PROTEGIDO)
+def sensibilidad(e: SensibilidadIn, s: Session = Depends(sesion)):
+    """Qué mueve más la utilidad, cuánto aguanta cada número antes de perder
+    y la tabla precio × menús/día."""
+    local, esc, nacional = _armar(e, s)
+    return {
+        "tornado": tornado(local, esc, e.q, nacional, e.delta),
+        "quiebres": quiebres(local, esc, e.q, nacional),
+        "matriz": matriz(local, esc, e.q, nacional),
     }
 
 
@@ -276,6 +308,152 @@ def borrar_escenario(id_: int, s: Session = Depends(sesion)):
     if g is not None:
         s.delete(g)
         s.commit()
+
+
+# ---------- Recetas: insumos, platos y análisis ----------
+
+class InsumoIn(BaseModel):
+    nombre: str = Field(min_length=1, max_length=80)
+    unidad: str = Field(default="kg", min_length=1, max_length=20)
+    precio: float = Field(ge=0)
+    merma: float = Field(default=0, ge=0, lt=0.95)
+    categoria: str | None = Field(default=None, max_length=30)
+
+
+def _insumo_dict(i: Insumo) -> dict:
+    return {"id": i.id, "nombre": i.nombre, "unidad": i.unidad, "precio": i.precio, "merma": i.merma,
+            "categoria": i.categoria, "actualizado": i.actualizado.isoformat() if i.actualizado else None}
+
+
+@api.get("/insumos", dependencies=PROTEGIDO)
+def insumos(s: Session = Depends(sesion)):
+    return [_insumo_dict(i) for i in s.scalars(select(Insumo).order_by(Insumo.nombre)).all()]
+
+
+def _nombre_libre(s: Session, modelo_bd, nombre: str, propio: int | None = None):
+    otro = s.scalar(select(modelo_bd).where(func.lower(modelo_bd.nombre) == nombre.strip().lower()))
+    if otro is not None and otro.id != propio:
+        raise HTTPException(status_code=409, detail=f"Ya existe “{otro.nombre}”")
+
+
+@api.post("/insumos", dependencies=PROTEGIDO, status_code=201)
+def crear_insumo(i: InsumoIn, s: Session = Depends(sesion)):
+    _nombre_libre(s, Insumo, i.nombre)
+    ins = Insumo(**{**i.model_dump(), "nombre": i.nombre.strip()}, actualizado=date.today())
+    s.add(ins)
+    s.commit()
+    return _insumo_dict(ins)
+
+
+@api.put("/insumos/{id_}", dependencies=PROTEGIDO)
+def editar_insumo(id_: int, i: InsumoIn, s: Session = Depends(sesion)):
+    ins = s.get(Insumo, id_)
+    if ins is None:
+        raise HTTPException(status_code=404, detail="Insumo no encontrado")
+    _nombre_libre(s, Insumo, i.nombre, id_)
+    for k, v in i.model_dump().items():
+        setattr(ins, k, v.strip() if k == "nombre" else v)
+    ins.actualizado = date.today()
+    s.commit()
+    return _insumo_dict(ins)
+
+
+@api.delete("/insumos/{id_}", dependencies=PROTEGIDO, status_code=204)
+def borrar_insumo(id_: int, s: Session = Depends(sesion)):
+    usado = s.scalar(select(func.count()).select_from(RecetaItem).where(RecetaItem.insumo_id == id_))
+    if usado:
+        raise HTTPException(status_code=409, detail=f"Lo usan {usado} receta(s): quítalo de ellas primero")
+    ins = s.get(Insumo, id_)
+    if ins is not None:
+        s.delete(ins)
+        s.commit()
+
+
+class ItemIn(BaseModel):
+    insumo_id: int
+    cantidad: float = Field(gt=0)
+
+
+class PlatoIn(BaseModel):
+    nombre: str = Field(min_length=1, max_length=120)
+    tipo: str = Field(default="segundo", pattern="^(" + "|".join(TIPOS) + ")$")
+    porciones: float = Field(default=1, gt=0)
+    precio: float | None = Field(default=None, gt=0)
+    vendidos: float | None = Field(default=None, ge=0)
+    notas: str | None = None
+    items: list[ItemIn] = Field(default_factory=list, max_length=60)
+
+
+def _plato_dict(p: Plato, items: list[RecetaItem]) -> dict:
+    return {"id": p.id, "nombre": p.nombre, "tipo": p.tipo, "porciones": p.porciones, "precio": p.precio,
+            "vendidos": p.vendidos, "notas": p.notas,
+            "items": [{"insumo_id": it.insumo_id, "cantidad": it.cantidad} for it in items]}
+
+
+def _items_por_plato(s: Session) -> dict[int, list[RecetaItem]]:
+    salida: dict[int, list[RecetaItem]] = {}
+    for it in s.scalars(select(RecetaItem).order_by(RecetaItem.id)).all():
+        salida.setdefault(it.plato_id, []).append(it)
+    return salida
+
+
+@api.get("/platos", dependencies=PROTEGIDO)
+def platos(s: Session = Depends(sesion)):
+    items = _items_por_plato(s)
+    return [_plato_dict(p, items.get(p.id, [])) for p in s.scalars(select(Plato).order_by(Plato.tipo, Plato.nombre)).all()]
+
+
+def _guardar_plato(s: Session, plato: Plato, p: PlatoIn) -> dict:
+    ids = {it.insumo_id for it in p.items}
+    if ids and len(s.scalars(select(Insumo.id).where(Insumo.id.in_(ids))).all()) != len(ids):
+        raise HTTPException(status_code=422, detail="La receta usa un insumo que no existe")
+    for k, v in p.model_dump(exclude={"items"}).items():
+        setattr(plato, k, v.strip() if k == "nombre" else v)
+    s.add(plato)
+    s.flush()
+    for viejo in s.scalars(select(RecetaItem).where(RecetaItem.plato_id == plato.id)).all():
+        s.delete(viejo)
+    nuevos = [RecetaItem(plato_id=plato.id, insumo_id=it.insumo_id, cantidad=it.cantidad) for it in p.items]
+    s.add_all(nuevos)
+    s.commit()
+    return _plato_dict(plato, nuevos)
+
+
+@api.post("/platos", dependencies=PROTEGIDO, status_code=201)
+def crear_plato(p: PlatoIn, s: Session = Depends(sesion)):
+    _nombre_libre(s, Plato, p.nombre)
+    return _guardar_plato(s, Plato(), p)
+
+
+@api.put("/platos/{id_}", dependencies=PROTEGIDO)
+def editar_plato(id_: int, p: PlatoIn, s: Session = Depends(sesion)):
+    plato = s.get(Plato, id_)
+    if plato is None:
+        raise HTTPException(status_code=404, detail="Plato no encontrado")
+    _nombre_libre(s, Plato, p.nombre, id_)
+    return _guardar_plato(s, plato, p)
+
+
+@api.delete("/platos/{id_}", dependencies=PROTEGIDO, status_code=204)
+def borrar_plato(id_: int, s: Session = Depends(sesion)):
+    for it in s.scalars(select(RecetaItem).where(RecetaItem.plato_id == id_)).all():
+        s.delete(it)
+    plato = s.get(Plato, id_)
+    if plato is not None:
+        s.delete(plato)
+    s.commit()
+
+
+@api.get("/platos/analisis", dependencies=PROTEGIDO)
+def analisis_platos(igv: float = 10.5, formal: bool = True, s: Session = Depends(sesion)):
+    """Costo por porción, costo del menú, margen, % de costo, clase de
+    ingeniería de menú y peso de cada insumo."""
+    ins = [InsumoR(i.id, i.nombre, i.unidad, i.precio, i.merma) for i in s.scalars(select(Insumo)).all()]
+    items = _items_por_plato(s)
+    pls = [PlatoR(p.id, p.nombre, p.tipo, p.porciones, p.precio, p.vendidos,
+                  tuple((it.insumo_id, it.cantidad) for it in items.get(p.id, [])))
+           for p in s.scalars(select(Plato)).all()]
+    return analizar(ins, pls, igv, formal)
 
 
 app.include_router(api)

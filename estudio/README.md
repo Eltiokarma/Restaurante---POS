@@ -15,6 +15,9 @@ El encargo completo está en [`BRIEF.md`](BRIEF.md). Las cifras salen de
 | `motor/montecarlo.py` | Monte Carlo de un año, con el **mismo generador aleatorio** que el HTML: da exactamente sus mismos números. |
 | `motor/central.py` | Cocina central con satélites (parámetros de confianza baja). |
 | `motor/flujo.py` | Flujo de caja a 10 años por régimen (informal, Nuevo RUS, RER, MYPE): IGV por año, sueldo mínimo, inflación, curva de arranque, VAN, TIR y recupero. |
+| `motor/personal.py` | Planilla propia por puesto con pago mensual, quincenal o por día (jornal × días trabajados) y cuándo sale la plata en el mes. |
+| `motor/sensibilidad.py` | Tornado (qué número mueve más la utilidad), cuánto aguanta cada uno antes de perder y tabla precio × menús/día. |
+| `motor/recetas.py` | Costeo por receta con merma por insumo, margen por plato y del menú, ingeniería de menú (estrella, caballito, rompecabezas, perro) y peso de cada insumo en las compras. |
 | `web/` | El panel (React + Vite): simulador del mes con barras, flujo a 10 años y escenarios guardados. |
 | `motor/bd.py` | Base de datos: `ciudades`, `zonas`, `parametros` (cada cifra con origen, fuente, fecha y confianza), `fuentes` y `escenarios`. |
 | `tests/` | Regresión: los 12 equilibrios del brief y 96 combinaciones contra el prototipo (`referencia_prototipo.json`, generado corriendo su JavaScript con Node). |
@@ -25,7 +28,7 @@ El encargo completo está en [`BRIEF.md`](BRIEF.md). Las cifras salen de
 ```bash
 cd estudio
 pip install -r requirements.txt
-python -m pytest tests/ -q            # 127 tests
+python -m pytest tests/ -q            # 136 tests
 python -m motor.bd                    # crea y siembra la base (SQLite local: estudio.db)
 DATABASE_URL=postgres://... python -m motor.bd   # lo mismo en el Postgres de Railway
 ```
@@ -65,7 +68,9 @@ Endpoints (todos bajo `/api`): `GET /api/salud` (sin token), `GET /api/ciudades`
 cifras de sondeo o propias con su fuente), `POST /api/calcular` (equilibrio,
 frontera de precio, mes a q, Monte Carlo y curva de utilidad; acepta
 correcciones de insumos, alquiler, sueldos, gas y servicios),
-`POST /api/flujo` (10 años del régimen elegido y comparación de los cuatro) y
+`POST /api/flujo` (10 años del régimen elegido y comparación de los cuatro),
+`POST /api/sensibilidad`, `/api/insumos` y `/api/platos` (CRUD de recetas),
+`GET /api/platos/analisis` y
 `GET/POST/DELETE /api/escenarios` (juegos de barras guardados con nombre).
 
 Panel en desarrollo: `uvicorn api:app --port 8001` en `estudio/` y
@@ -85,7 +90,8 @@ directo en la base del estudio (origen `propio`), que vive aparte.
 
 ## Pendiente (orden del brief)
 
-1. Cargar los datos propios de Candela (origen `propio`) y una pestaña para
-   editarlos desde el panel.
-2. Precios observados por zona (formulario de sondeo, Fase 2).
-3. Arrastre de pérdidas en el MYPE y valor residual del local en el flujo.
+1. Cargar los datos propios de Candela (origen `propio`) y sus recetas.
+2. Traer del POS las ventas por plato (popularidad real para la ingeniería de
+   menú) en vez de escribirlas a mano.
+3. Precios observados por zona (formulario de sondeo, Fase 2).
+4. Arrastre de pérdidas en el MYPE y valor residual del local en el flujo.
