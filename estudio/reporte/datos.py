@@ -95,6 +95,81 @@ def corridas(nombre: str, datos: dict, mezcla=None) -> dict:
             "estres": estres(local, esc, q, NAC, RIESGO)}
 
 
+HORAS_MES = 60 * 4.33  # supuesto: 60 horas a la semana de quien trabaja sin sueldo
+
+
+def hallazgos(arquetipos: list[dict], candela_datos: dict | None) -> dict:
+    """Cálculos puntuales para la discusión del ensayo."""
+    from dataclasses import replace as rep
+
+    from motor.flujo import TOPE_NRUS
+    from motor.modelo import Noche, Trabajador
+
+    casos = {a["nombre"]: a["datos"] for a in arquetipos}
+    if candela_datos:
+        casos["Candela (datos del POS)"] = candela_datos
+    salida: dict = {"noche": [], "medio_sol": [], "hora": [], "rmv_hora": 1230 / (48 * 4.33)}
+    for nombre, datos in casos.items():
+        local, esc, _sup, q = armar(datos)
+        e0 = rep(esc, noche=None)
+        u0 = modelo(local, q, e0, NAC).util
+        umbral = next((qn for qn in range(1, 151) if modelo(
+            local, q, rep(e0, noche=Noche(q=qn, precio=local.precio + 1, insumos=local.insumos * 1.05)), NAC).util > u0),
+            None)
+        salida["noche"].append({"nombre": nombre, "umbral": umbral, "planilla_propia": bool(esc.planilla)})
+        m = modelo(local, q, esc, NAC)
+        du = modelo(local.con(precio=local.precio + 0.5), q, esc, NAC).util - m.util
+        salida["medio_sol"].append({"nombre": nombre, "soles": du, "menus": du / (m.contrib_u * esc.dias)})
+    for nombre, personas in (("Dueña que cocina", 1), ("Familia sin sueldos", 3), ("Puesto de mercado informal", 1)):
+        local, esc, _sup, q = armar(casos[nombre])
+        m = modelo(local, q, esc, NAC)
+        ingreso = m.util + (1500 if esc.sueldo_dueno else 0)
+        salida["hora"].append({"nombre": nombre, "personas": personas, "ingreso": ingreso,
+                               "por_hora": ingreso / personas / HORAS_MES})
+    # Trampa del Nuevo RUS: el chiquito creciendo
+    local, esc, _sup, _q = armar(casos["Chiquito en Nuevo RUS"])
+    curva = []
+    for qq in range(20, 61, 2):
+        ventas = local.precio * qq * esc.dias
+        nrus = modelo(local, qq, esc, NAC, igv=0).util - (20 if ventas <= 5000 else 50)
+        mr = modelo(local, qq, esc, NAC)
+        curva.append({"q": qq, "ventas_anio": ventas * 12, "cabe_nrus": ventas * 12 <= TOPE_NRUS, "nrus": nrus,
+                      "rer": mr.util - 0.015 * mr.ventas_netas})
+    ultimo = max((c for c in curva if c["cabe_nrus"]), key=lambda c: c["q"])
+    recupera = next((c for c in curva if not c["cabe_nrus"] and c["rer"] >= ultimo["nrus"]), None)
+    salida["nrus"] = {"curva": curva, "q_tope": ultimo["q"], "nrus_tope": ultimo["nrus"],
+                      "rer_justo_despues": next(c["rer"] for c in curva if not c["cabe_nrus"]),
+                      "q_recupera": recupera["q"] if recupera else None}
+    # Precio de Candela con la planilla fija (sin el escalón del mozo)
+    if candela_datos:
+        local, esc, _sup, q = armar(candela_datos)
+        m = modelo(local, q, esc, NAC)
+        fijo = rep(esc, planilla=(Trabajador("Cocinero", max(local.sueldo_cocinero, 1230 * 1.06)),
+                                  Trabajador("Ayudante", local.sueldo_ayudante),
+                                  Trabajador("Mozo", local.sueldo_mozo, area="salon", cantidad=m.mozos)))
+        deltas = [0, 0.5, 1, 1.5, 2, 2.5, 3]
+        tabla = {}
+        for modo, e_ in (("automatica", esc), ("fija", fijo)):
+            tabla[modo] = {}
+            for el in (0.5, 1.0, 1.5, 2.0):
+                tabla[modo][str(el)] = [
+                    {"precio": local.precio + dp,
+                     "utilidad": modelo(local.con(precio=local.precio + dp),
+                                        q * ((local.precio + dp) / local.precio) ** (-el), e_, NAC).util}
+                    for dp in deltas]
+
+        def u(el, dp):
+            pr = local.precio + dp
+            return modelo(local.con(precio=pr), q * (pr / local.precio) ** (-el), fijo, NAC).util
+
+        lo, hi = 0.0, 10.0
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if u(mid, 1) > u(0, 0) else (lo, mid)
+        salida["precio_candela"] = {"tabla": tabla, "umbral_elasticidad_mas1": lo, "base": m.util}
+    return salida
+
+
 def ciudades() -> list[dict]:
     """Equilibrio de referencia del brief (popular, formal, 100 menús, 5
     balones, sin sueldo del dueño) y sus variantes."""
@@ -123,7 +198,7 @@ def _api(ruta: str):
 def generar() -> dict:
     arquetipos = json.loads((RAIZ.parent / "data" / "arquetipos.json").read_text(encoding="utf-8"))
     casos = [caso(a["nombre"], a["datos"]) for a in arquetipos]
-    candela = platos = None
+    candela = platos = g = None
     guardados = _api("/escenarios")
     if guardados:
         g = next((x for x in guardados if x["nombre"].startswith("Candela")), None)
@@ -135,6 +210,7 @@ def generar() -> dict:
     if candela:
         robustez.append(corridas(g["nombre"], g["datos"], mezcla))
     datos = {
+        "hallazgos": hallazgos(arquetipos, g["datos"] if candela else None),
         "ciudades": ciudades(), "casos": casos, "candela": candela, "platos": platos, "robustez": robustez,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},
         "fuentes": DATA["fuentes"], "regimenes": list(REGIMENES),
