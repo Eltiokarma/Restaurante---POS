@@ -16,7 +16,7 @@ from pathlib import Path
 
 from motor import Escenario, cargar_dataset, equilibrio, local_de_ciudad, modelo, precio_minimo, simular
 from motor.flujo import NOMBRE_REGIMEN, REGIMENES, Supuestos, comparar_regimenes, flujo_caja
-from motor.igualdad import BASE as BASE_IGUAL, igualar, personas_casa
+from motor.igualdad import BASE as BASE_IGUAL, GRUPOS, igualar, personas_casa, shapley
 from motor.modelo import Noche, Trabajador
 from motor.barrido import Factores, barrido, estres, mezcla_desde_analisis, resumen
 from motor.montecarlo import muestras
@@ -242,7 +242,33 @@ def igualdad(arquetipos: list[dict], candela: dict | None) -> dict:
                 "personal": m.personal, "equilibrio": equilibrio(local, esc, NAC)}
 
     filas = [{"nombre": n, "propio": medir(d), "igual": medir(igualar(d))} for n, d in pares]
-    return {"base": BASE_IGUAL, "filas": filas, "ausencia": costo_de_no_estar(arquetipos)}
+    return {"base": BASE_IGUAL, "filas": filas, "ausencia": costo_de_no_estar(arquetipos),
+            "descomposicion": descomponer(pares)}
+
+
+REFERENCIA = "Dueña que cocina"
+
+
+def descomponer(pares: list[tuple[str, dict]]) -> dict | None:
+    """De la dueña que cocina a cada negocio, un factor a la vez: cuánto de la
+    diferencia en lo que se lleva la casa viene del local y la venta, de los
+    insumos, de quién trabaja, de la formalidad y de la noche."""
+    ref = dict(pares).get(REFERENCIA)
+    if not ref:
+        return None
+
+    def ingreso(escenario: dict) -> float:
+        local, esc, _sup, q = armar({"escenario": escenario})
+        return modelo(local, q, esc, NAC).util + (1500 if esc.sueldo_dueno else 0)
+
+    base = ingreso(ref["escenario"])
+    filas = []
+    for nombre, datos in pares:
+        if nombre == REFERENCIA:
+            continue
+        aportes = shapley(ingreso, ref["escenario"], datos["escenario"])
+        filas.append({"nombre": nombre, "aportes": aportes, "propio": ingreso(datos["escenario"])})
+    return {"referencia": REFERENCIA, "base": base, "grupos": [(c, t) for c, t, _ in GRUPOS], "filas": filas}
 
 
 def costo_de_no_estar(arquetipos: list[dict]) -> list[dict] | None:

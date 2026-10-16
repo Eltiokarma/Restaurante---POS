@@ -151,6 +151,21 @@ def construir(d: dict) -> str:
         return ig[nombre][cual][campo]
 
     pasos_aus = d.get("igualdad", {}).get("ausencia")
+    dcp = d.get("igualdad", {}).get("descomposicion")
+    fac = {f["nombre"]: f for f in (dcp or {}).get("filas", [])}
+
+    def ap(nombre, clave):
+        return fac[nombre]["aportes"][clave]
+
+    def tabla_factores():
+        filas = sorted(dcp["filas"], key=lambda f: -f["propio"])
+        celda = lambda v: "" if abs(v) < 1 else s(v)  # noqa: E731
+        lineas = [f"{esc(corto(dcp['referencia']))} (referencia) & & & & & & {s(dcp['base'])} \\\\ \\midrule"]
+        lineas += [f"{esc(corto(f['nombre']))} & " + " & ".join(celda(f['aportes'][c]) for c, _ in dcp['grupos'])
+                   + f" & {s(f['propio'])} \\\\" for f in filas]
+        return "\n".join(lineas)
+
+    formales = [f for f in (dcp or {}).get("filas", []) if abs(f["aportes"]["formalidad"]) >= 1]
 
     def tabla_ausencia():
         return "\n".join(f"{esc(x['paso'])} & {s(x['utilidad'])} & {'' if x['cambio'] is None else s(x['cambio'])} \\\\"
@@ -649,7 +664,7 @@ La primera lección es que varios resultados no venían de la organización sino
 {s(ig_('Exitoso (referencia compuesta)'))} en el mismo local: casi lo mismo que el inversor
 ({s(ig_('Inversor (promedio)'))}). Su éxito es la escala y el precio, y eso no se copia contratando igual. El
 \emph{{puesto de mercado}} baja de {s(ig_('Puesto de mercado informal', 'propio'))} a
-{s(ig_('Puesto de mercado informal'))}: su ventaja eran los 120 menús diarios. En sentido contrario, la
+{s(ig_('Puesto de mercado informal'))}: su ventaja era un plato más barato de hacer, que la igualación le quita. En sentido contrario, la
 \emph{{fonda en casa propia}} sube de {s(ig_('Fonda en casa propia', 'propio'))} a
 {s(ig_('Fonda en casa propia'))} aun pagando alquiler: lo que la frenaba era vender poco y barato, no el local.
 El \emph{{chiquito en Nuevo RUS}} también mejora, pero a 60 menús ya no cabe en el régimen.
@@ -691,6 +706,58 @@ alquiler). Utilidad del mes, sin sueldo del dueño.}}\label{{tab:ausencia}}
 por cómo se organiza o por dónde está y cuánto vende. Lo primero se puede imitar; lo segundo, casi nunca. El panel
 del estudio tiene esta misma comparación en su pestaña \emph{{Comparar}}, con el precio, la venta, el alquiler y los
 insumos que se quieran poner.
+"""}
+
+{"" if not dcp else rf"""\subsection{{Qué separa a cada negocio de la dueña que cocina}}
+
+La igualación responde qué pasaría si todos tuvieran el mismo local. La pregunta inversa es de dónde viene la
+diferencia de cada uno. El cuadro~\ref{{tab:factores}} y la figura~\ref{{fig:factores}} parten de la dueña que
+cocina ({s(dcp['base'])} al mes para su casa) y reparten la distancia a cada negocio entre cinco factores: el
+local y la venta (precio, menús, alquiler, gas y luz), los insumos por menú, quién trabaja y cuánto se le paga, la
+formalidad y el turno noche. Como los factores se potencian entre sí ---el IGV pesa más cuanto más se vende---, el
+aporte de cada uno es el promedio de su efecto sobre todos los órdenes posibles en que podrían agregarse (el valor
+de Shapley de la teoría de juegos), y los cinco aportes suman exactamente la diferencia.
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/factores.pdf}}
+\caption{{De la dueña que cocina a cada negocio: cuánto suma o resta cada factor a lo que se lleva la casa al
+mes. El rombo es la diferencia total.}}\label{{fig:factores}}
+\end{{figure}}
+
+\begin{{table}}[h]
+\centering\footnotesize
+\caption{{Aporte de cada factor a la diferencia con la dueña que cocina, en soles al mes (valores de Shapley). La
+última columna es lo que se lleva la casa: utilidad más el sueldo del dueño, si trabaja.}}\label{{tab:factores}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}Xrrrrrr}}
+\toprule
+Negocio & Local y venta & Insumos & Personal & Formalidad & Noche & La casa \\
+\midrule
+{tabla_factores()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+Cuatro patrones saltan a la vista. Primero, \emph{{quién trabaja}} es el factor que más resta: le quita
+{s(-ap('Inversor (promedio)', 'personal'))} al mes al inversor, {s(-ap('Candela (datos del POS)', 'personal'))} a
+Candela y {s(-ap('Dueño ausente (todo tercerizado)', 'personal'))} al dueño ausente. Solo suma en los negocios
+donde el trabajo se paga menos que en la referencia: {", ".join(f"{corto(f['nombre'])[:1].lower() + corto(f['nombre'])[1:]} ({s(f['aportes']['personal'])})" for f in sorted(dcp['filas'], key=lambda f: -f['aportes']['personal']) if f['aportes']['personal'] >= 1)}. Segundo, la \emph{{formalidad}} ---el IGV
+y la planilla en regla--- cuesta entre {s(-max(f['aportes']['formalidad'] for f in formales))} y
+{s(-min(f['aportes']['formalidad'] for f in formales))} al mes a los negocios formales, y cuesta más a quien más
+vende. Tercero, \emph{{el local y la venta}} es lo que separa a los que ganan mucho: le da
+{s(ap('Exitoso (referencia compuesta)', 'local'))} al exitoso y {s(ap('Ejecutivo en el centro', 'local'))} al
+ejecutivo, aunque este último devuelve {s(-ap('Ejecutivo en el centro', 'insumos'))} en un plato más caro de hacer.
+Cuarto, el \emph{{puesto de mercado}} no gana por volumen ---su local y su venta aportan
+{s(ap('Puesto de mercado informal', 'local'))}--- sino por un plato barato: sus insumos le suman
+{s(ap('Puesto de mercado informal', 'insumos'))} al mes. Y el turno noche es lo único que separa al local de
+\emph{{día y noche}} de un inversor: le suma {s(ap('Día y noche', 'noche'))}.
+
+{"" if 'Candela (datos del POS)' not in fac else rf"""Candela se explica con la misma tabla. Vende más y más caro que la dueña que cocina, y eso le suma
+{s(ap('Candela (datos del POS)', 'local'))}; pero su planilla de seis personas le resta
+{s(-ap('Candela (datos del POS)', 'personal'))}, sus insumos {s(-ap('Candela (datos del POS)', 'insumos'))} y la
+formalidad {s(-ap('Candela (datos del POS)', 'formalidad'))}. La palanca más grande no está en el precio ni en el
+local, sino en cómo se reparte el trabajo de la cocina y del salón."""}
 """}
 
 \section{{Riesgo}}
