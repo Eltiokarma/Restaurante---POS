@@ -8,6 +8,7 @@ sube al repositorio.
 from __future__ import annotations
 
 import json
+import math
 import os
 import urllib.request
 from dataclasses import asdict
@@ -66,6 +67,9 @@ def caso(nombre: str, datos: dict) -> dict:
         "ventas_mes": m.ventas, "ventas_netas": netas, "utilidad_mes": m.util, "margen": m.margen,
         "ingreso_dueno": m.util + sueldo, "equilibrio": equilibrio(local, esc, NAC),
         "precio_minimo": precio_minimo(local, q, esc, NAC),
+        "montos": {"ventas": m.ventas, "netas": netas, "igv": m.ventas - netas, "insumos": insumos,
+                   "personal": m.personal, "alquiler": m.alquiler, "gas": m.gas, "otros": otros,
+                   "contrib_u": m.contrib_u, "dias": esc.dias},
         "estructura": {"insumos": insumos / netas, "personal": m.personal / netas, "alquiler": m.alquiler / netas,
                        "gas": m.gas / netas, "otros": otros / netas, "utilidad": m.util / netas},
         "mc": {"prob_perdida": mc.prob_perdida, "p10": mc.p10, "p50": mc.p50, "p90": mc.p90,
@@ -87,6 +91,8 @@ def corridas(nombre: str, datos: dict, mezcla=None) -> dict:
     f = Factores(mezcla=sorted({0.25, mezcla.parte_actual, 0.75}) if mezcla else [None])
     if (datos.get("barrido") or {}).get("elasticidad"):
         f.elasticidad = datos["barrido"]["elasticidad"]
+    if (datos.get("barrido") or {}).get("precio"):
+        f.precio = datos["barrido"]["precio"]
     r = barrido(local, esc, q, NAC, RIESGO, sup, f, mezcla)
     porciones = {}
     for d in r["decisiones"]:  # peor caso por precio y porción (mejor mezcla y turno)
@@ -143,33 +149,37 @@ def hallazgos(arquetipos: list[dict], candela_datos: dict | None) -> dict:
     salida["nrus"] = {"curva": curva, "q_tope": ultimo["q"], "nrus_tope": ultimo["nrus"],
                       "rer_justo_despues": next(c["rer"] for c in curva if not c["cabe_nrus"]),
                       "q_recupera": recupera["q"] if recupera else None}
-    # Precio de Candela con la planilla fija (sin el escalón del mozo)
+    # Alquiler expresado en menús diarios que hay que vender para pagarlo
+    salida["alquiler"] = []
+    for nombre, datos in casos.items():
+        local, esc, _sup, q = armar(datos)
+        m = modelo(local, q, esc, NAC)
+        salida["alquiler"].append({"nombre": nombre, "alquiler": m.alquiler,
+                                   "menus": m.alquiler / (m.contrib_u * esc.dias) if m.contrib_u > 0 else None})
     if candela_datos:
         local, esc, _sup, q = armar(candela_datos)
         m = modelo(local, q, esc, NAC)
-        fijo = rep(esc, planilla=(Trabajador("Cocinero", max(local.sueldo_cocinero, 1230 * 1.06)),
-                                  Trabajador("Ayudante", local.sueldo_ayudante),
-                                  Trabajador("Mozo", local.sueldo_mozo, area="salon", cantidad=m.mozos)))
-        deltas = [0, 0.5, 1, 1.5, 2, 2.5, 3]
-        tabla = {}
-        for modo, e_ in (("automatica", esc), ("fija", fijo)):
-            tabla[modo] = {}
-            for el in (0.5, 1.0, 1.5, 2.0):
-                tabla[modo][str(el)] = [
-                    {"precio": local.precio + dp,
-                     "utilidad": modelo(local.con(precio=local.precio + dp),
-                                        q * ((local.precio + dp) / local.precio) ** (-el), e_, NAC).util}
-                    for dp in deltas]
 
-        def u(el, dp):
+        def u(el, dp, e_=esc):
             pr = local.precio + dp
-            return modelo(local.con(precio=pr), q * (pr / local.precio) ** (-el), fijo, NAC).util
+            return modelo(local.con(precio=pr), q * (pr / local.precio) ** (-el), e_, NAC).util
 
         lo, hi = 0.0, 10.0
         for _ in range(60):
             mid = (lo + hi) / 2
             lo, hi = (mid, hi) if u(mid, 1) > u(0, 0) else (lo, mid)
-        salida["precio_candela"] = {"tabla": tabla, "umbral_elasticidad_mas1": lo, "base": m.util}
+        sin_igv = rep(esc, formal=False, laboral_formal=False)
+        salida["precio_candela"] = {
+            "umbral_elasticidad_mas1": lo, "base": m.util,
+            "sin_igv": modelo(local, q, sin_igv, NAC).util,
+            # historia: S/ 10 con ~S/ 1,000 diarios; S/ 11 con S/ 750–800
+            "historia": {"p0": 10.0, "q0": 100.0, "p1": 11.0, "q1_bajo": 750 / 11, "q1_alto": 800 / 11},
+            "elasticidad_arco": [math.log(100 / (800 / 11)) / math.log(1.1), math.log(100 / (750 / 11)) / math.log(1.1)],
+            "a_10_con_100": modelo(local.con(precio=10.0), 100, esc, NAC).util,
+            "a_10_con_100_sin_igv": modelo(local.con(precio=10.0), 100, sin_igv, NAC).util,
+            "curvas_demanda": {str(el): [{"precio": 9 + 0.5 * k, "q": q * ((9 + 0.5 * k) / local.precio) ** (-el)}
+                                         for k in range(9)] for el in (1.0, 2.0, 3.0, 4.0)},
+        }
     return salida
 
 
@@ -202,11 +212,14 @@ def generar() -> dict:
     arquetipos = json.loads((RAIZ.parent / "data" / "arquetipos.json").read_text(encoding="utf-8"))
     casos = [caso(a["nombre"], a["datos"]) for a in arquetipos]
     candela = platos = g = None
+    variantes: list = []
     guardados = _api("/escenarios")
     if guardados:
-        g = next((x for x in guardados if x["nombre"].startswith("Candela")), None)
+        g = next((x for x in guardados if x["nombre"] == "Candela (datos del POS)"), None)
         if g:
             candela = caso(g["nombre"], g["datos"])
+            variantes = [caso(x["nombre"], x["datos"]) for x in guardados
+                         if x["nombre"].startswith("Candela") and x["nombre"] != g["nombre"]]
             platos = _api("/platos/analisis?igv=10.5&formal=true")
     mezcla = mezcla_desde_analisis(platos) if platos else None
     robustez = [corridas(a["nombre"], a["datos"]) for a in arquetipos]
@@ -214,7 +227,7 @@ def generar() -> dict:
         robustez.append(corridas(g["nombre"], g["datos"], mezcla))
     datos = {
         "hallazgos": hallazgos(arquetipos, g["datos"] if candela else None),
-        "ciudades": ciudades(), "casos": casos, "candela": candela, "platos": platos, "robustez": robustez,
+        "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},
         "fuentes": DATA["fuentes"], "regimenes": list(REGIMENES),
     }

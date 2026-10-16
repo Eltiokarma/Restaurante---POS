@@ -367,8 +367,9 @@ def fig_precio_robusto(d):
     r = next((x for x in d.get("robustez", []) if x["nombre"].startswith("Candela")), None) \
         or next(x for x in d["robustez"] if x["nombre"].startswith("Inversor"))
     fig, ax = plt.subplots(figsize=(ANCHO, 2.9))
-    etiquetas = {"0.5": "clientela fiel (0.5)", "1.0": "intermedia (1.0)", "1.5": "mucha competencia (1.5)"}
-    for (el, serie), col in zip(sorted(r["curvas"].items(), key=lambda x: float(x[0])), (AZUL, NARANJA, AGUA)):
+    etiquetas = {"0.5": "clientela fiel (0.5)", "1.0": "intermedia (1.0)", "1.5": "mucha competencia (1.5)",
+                 "2.0": "2", "3.0": "3 (la medida en Candela)", "4.0": "4"}
+    for (el, serie), col in zip(sorted(r["curvas"].items(), key=lambda x: float(x[0])), (AGUA, NARANJA, PERDIDA)):
         xs = [x["precio"] for x in serie]
         ys = [x["utilidad"] for x in serie]
         ax.plot(xs, ys, color=col, lw=2, marker="o", ms=3.5, label=f"Elasticidad {etiquetas.get(el, el)}")
@@ -379,7 +380,7 @@ def fig_precio_robusto(d):
     ax.set_xlabel("Precio del menú (S/)")
     ax.set_ylabel("Utilidad del mes")
     ax.yaxis.grid(True, color=GRILLA, lw=0.6)
-    ax.legend(fontsize=8, loc="lower right")
+    ax.legend(fontsize=8, loc="lower center", bbox_to_anchor=(0.5, 1.02), ncol=3, frameon=False)
     guardar(fig, "precio_robusto")
 
 
@@ -449,34 +450,34 @@ def fig_nrus(d):
     guardar(fig, "nrus")
 
 
-def fig_precio_fijo(d):
+def fig_historia(d):
     pc = d["hallazgos"].get("precio_candela")
     if not pc:
         return
-    fig, axs = plt.subplots(1, 2, figsize=(ANCHO, 2.7), sharey=True)
-    colores = {"0.5": AZUL, "1.0": NARANJA, "1.5": AGUA, "2.0": VIOLETA}
-    for ax, (modo, titulo) in zip(axs, (("automatica", "Planilla automática (con escalón)"),
-                                        ("fija", "Planilla fija (sin escalón)"))):
-        for el, serie in pc["tabla"][modo].items():
-            ax.plot([x["precio"] for x in serie], [x["utilidad"] for x in serie], color=colores[el], lw=1.9,
-                    marker="o", ms=3, label=f"$\\varepsilon$ = {el}")
-        ax.axhline(0, color=TINTA2, lw=0.7)
-        ax.axhline(pc["base"], color=TINTA2, lw=0.7, ls=(0, (3, 2)))
-        ax.set_title(titulo, fontsize=9)
-        ax.set_xlabel("Precio (S/)")
-        ax.yaxis.grid(True, color=GRILLA, lw=0.6)
-        ax.yaxis.set_major_formatter(FuncFormatter(soles))
-    axs[0].set_ylabel("Utilidad del mes")
-    axs[1].legend(fontsize=7.5, loc="upper left")
-    fig.tight_layout(w_pad=1.2)
-    guardar(fig, "precio_fijo")
+    h = pc["historia"]
+    fig, ax = plt.subplots(figsize=(ANCHO * 0.72, 2.9))
+    colores = {"1.0": "#9a988f", "2.0": AGUA, "3.0": NARANJA, "4.0": PERDIDA}
+    for el, serie in pc["curvas_demanda"].items():
+        ax.plot([x["precio"] for x in serie], [x["q"] for x in serie], color=colores[el], lw=1.6,
+                label=f"$\\varepsilon$ = {float(el):g}")
+    ax.scatter([h["p0"]], [h["q0"]], color=AZUL, s=46, zorder=5)
+    ax.annotate("antes: S/ 10,\n~S/ 1 000 al día", (h["p0"], h["q0"]), xytext=(8, 4), textcoords="offset points",
+                fontsize=7.5)
+    ax.plot([h["p1"], h["p1"]], [h["q1_bajo"], h["q1_alto"]], color=AZUL, lw=4, solid_capstyle="round", zorder=5)
+    ax.annotate("hoy: S/ 11,\nS/ 750–800 al día", (h["p1"], h["q1_bajo"]), xytext=(-70, -34), textcoords="offset points",
+                fontsize=7.5, arrowprops={"arrowstyle": "-", "color": TINTA2, "lw": 0.5})
+    ax.set_xlabel("Precio del menú (S/)")
+    ax.set_ylabel("Menús al día")
+    ax.yaxis.grid(True, color=GRILLA, lw=0.6)
+    ax.legend(fontsize=7.5, loc="upper right", title="Sensibilidad", title_fontsize=7.5)
+    guardar(fig, "historia")
 
 
 def generar(d: dict | None = None) -> None:
     d = d or json.loads((SALIDA / "datos.json").read_text(encoding="utf-8"))
     FIG.mkdir(parents=True, exist_ok=True)
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
-              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_precio_fijo):
+              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia):
         f(d)
 
 
