@@ -608,6 +608,9 @@ def _correr(corrida_id: int) -> None:
                 propias = ((g.datos or {}).get("barrido") or {}).get("elasticidad")
                 if propias and not (cfg.get("factores") or {}).get("elasticidad"):
                     f.elasticidad = propias  # medidas en el propio negocio
+                precios = ((g.datos or {}).get("barrido") or {}).get("precio")
+                if precios and not (cfg.get("factores") or {}).get("precio"):
+                    f.precio = precios
                 if mezcla and not (cfg.get("factores") or {}).get("mezcla"):
                     f.mezcla = sorted({0.25, mezcla.parte_actual, 0.75})
                 if not mezcla:
@@ -637,6 +640,9 @@ def _correr(corrida_id: int) -> None:
                         propias = ((g.datos or {}).get("barrido") or {}).get("elasticidad")
                         if propias:
                             f.elasticidad = propias
+                        precios = ((g.datos or {}).get("barrido") or {}).get("precio")
+                        if precios:
+                            f.precio = precios
                         r = barrido(local, esc, e.q, nacional, riesgo, sup, f, mz,
                                     lambda x, k=k: avance((k + x) / len(gs)))
                         negocios.append({"id": g.id, "nombre": g.nombre, "precio0": local.precio, "q0": e.q,

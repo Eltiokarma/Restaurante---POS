@@ -58,7 +58,7 @@ PORCION = {"economica": "porción económica", "estandar": "porción estándar",
 
 def combinaciones(r: dict) -> int:
     """Precios × porciones × mezclas × turnos × elasticidades del barrido."""
-    precios = len(r["curvas"].get("0.5", []))
+    precios = len(next(iter(r["curvas"].values()), []))
     return precios * 3 * (3 if r.get("mezcla") else 1) * 2 * len(r["curvas"])
 
 
@@ -130,6 +130,9 @@ def construir(d: dict) -> str:
     hoy = date.today()
     fecha = f"{MESES[hoy.month - 1]} de {hoy.year}"
 
+    PALABRAS = {9: "nueve", 10: "diez", 11: "once", 12: "doce"}
+    NN = PALABRAS.get(len(todos), str(len(todos)))
+    NT = PALABRAS.get(len(d["casos"]), str(len(d["casos"])))
     rob = {r["nombre"]: r for r in d.get("robustez", [])}
     rc = next((r for r in d.get("robustez", []) if r["nombre"].startswith("Candela")), None)
     r_inv, r_dc = rob["Inversor (promedio)"], rob["Dueña que cocina"]
@@ -142,10 +145,6 @@ def construir(d: dict) -> str:
     hora = {h["nombre"]: h for h in hz.get("hora", [])}
     medio = sorted(hz.get("medio_sol", []), key=lambda x: x["menus"])
     noche_u = {x["nombre"]: x for x in hz.get("noche", [])}
-
-    def u_fija(el, dp):
-        serie = pc["tabla"]["fija"][el]
-        return next(x["utilidad"] for x in serie if abs(x["precio"] - serie[0]["precio"] - dp) < 1e-9)
 
     def menus_medio(prefijo):
         return next(x["menus"] for x in medio if x["nombre"].startswith(prefijo))
@@ -163,11 +162,11 @@ def construir(d: dict) -> str:
         top3 = ", ".join(f"{esc(x['insumo'].lower())} ({p(x['parte'])})" for x in par[:3])
         prec_neto = pl["menu"]["precio_promedio"] / 1.105
         candela_resumen = (
-            f"\\item \\textbf{{Candela, con los promedios de Juliaca en alquiler y planilla, opera por debajo de su "
-            f"equilibrio.}} A {n(cand['q'])} menús diarios y {s(cand['precio'])} le faltan unos "
-            f"{cand['equilibrio'] - cand['q']} menús al día, o un precio de {s(cand['precio_minimo'], 2)}; sus "
-            f"recetas calibradas cuestan {s(pl['menu']['costo'], 2)} por menú ({p(pl['menu']['costo'] / prec_neto)} "
-            f"del precio sin IGV). Falta reemplazar los promedios por su alquiler y su planilla reales.")
+            f"\\item \\textbf{{Candela está en su punto de equilibrio antes de impuestos y su clientela es muy sensible "
+            f"al precio.}} Con su alquiler y su planilla reales, la venta cubre insumos, sueldos y local, pero no el "
+            f"trabajo del dueño; si paga IGV sobre todo lo vendido, pierde {s(-cand['utilidad_mes'] - 1500)} al mes sin "
+            f"contar su sueldo. Al subir de S/~10 a S/~11 perdió cerca de 3 clientes de cada 10: en su caso, subir el "
+            f"precio no paga.")
         candela_seccion = rf"""
 \section{{El caso Candela}}\label{{sec:candela}}
 
@@ -210,28 +209,93 @@ sola, el insumo más caro del local. La consecuencia práctica es de mezcla, no 
 ofrece dos segundos de res y uno de pollo, el margen promedio baja; un segundo de pollo o de pasta más por
 semana sube la utilidad sin tocar la pizarra.
 
+\subsection{{Los números del local}}
+
+La entrevista con el dueño completó lo que el sistema de ventas no tiene. El local paga S/~2\,000 de alquiler
+---un precio de conocido; el de mercado para ese tamaño y esa calle es S/~3\,000---. En cocina trabajan tres
+personas a tiempo completo (S/~1\,500, S/~1\,500 y S/~1\,300) y en el salón tres mozos a medio tiempo (S/~700 cada
+uno); las compras las hace el dueño. Opera con RUC de persona natural. La inversión inicial fue de S/~20 mil y
+el local tardó unos seis meses en llenarse.
+
+\begin{{table}}[h]
+\centering\small
+\caption{{Candela: el mes con los datos reales (74 menús diarios a S/~11, 26 días). El IGV se muestra aparte
+porque depende de si se emite comprobante por toda la venta.}}\label{{tab:candela}}
+\begin{{tabular}}{{lrr}}
+\toprule
+& Soles al mes & De la venta sin IGV \\
+\midrule
+Venta (lo que entra a caja) & {s(cand['montos']['ventas'])} & \\
+\quad IGV de restaurantes (10.5\,\%) & {s(cand['montos']['igv'])} & \\
+Venta sin IGV & {s(cand['montos']['netas'])} & 100\,\% \\
+\quad Insumos (con merma y descartables) & {s(cand['montos']['insumos'])} & {p(cand['montos']['insumos'] / cand['montos']['netas'])} \\
+\quad Planilla (sin el dueño) & {s(cand['montos']['personal'] - 1500)} & {p((cand['montos']['personal'] - 1500) / cand['montos']['netas'])} \\
+\quad Alquiler & {s(cand['montos']['alquiler'])} & {p(cand['montos']['alquiler'] / cand['montos']['netas'])} \\
+\quad Gas, luz, agua y otros & {s(cand['montos']['gas'] + cand['montos']['otros'])} & {p((cand['montos']['gas'] + cand['montos']['otros']) / cand['montos']['netas'])} \\
+\midrule
+Queda para el dueño, pagando IGV & {s(cand['utilidad_mes'] + 1500)} & \\
+Queda para el dueño, sin IGV & {s(pc['sin_igv'] + 1500)} & \\
+\bottomrule
+\end{{tabular}}
+\end{{table}}
+
+El cuadro~\ref{{tab:candela}} cuenta la situación sin adornos. Sin IGV, la venta alcanza justo para pagar
+insumos, sueldos y local: al dueño le quedan {s(pc['sin_igv'] + 1500)} al mes por hacer las compras y
+administrar, que es como trabajar gratis. Si el IGV se paga sobre toda la venta, el local pierde
+{s(-(cand['utilidad_mes'] + 1500))} al mes. Los insumos se llevan más de la mitad de la venta neta; la planilla,
+un tercio. Esos dos renglones ---no el alquiler--- son los que deciden.
+
+Que el local siga abierto después de año y medio con estas cuentas es coherente: un negocio que cubre sus
+costos de caja puede durar mucho tiempo si el dueño no se cobra. Pero no es una situación estable: cualquier
+golpe ---una subida de insumos, un competidor, el IGV de 15\,\% en 2027--- la empuja a pérdida, y el trabajo del
+dueño no tiene recompensa.
+
+\subsection{{La lección del precio}}
+
+Candela tiene algo que ningún estudio de mercado ofrece: un experimento propio. Abrió a S/~15 por tres meses,
+bajó a S/~10 durante un año y subió a S/~11 por el alza de los insumos y para mejorar la comida. A S/~10 vendía
+cerca de S/~1\,000 diarios (unos 100 menús); a S/~11 vende S/~750--800 (unos 70). Un alza de 10\,\% en el precio
+se llevó cerca de 30\,\% de la clientela: una elasticidad de {n(pc['elasticidad_arco'][0], 1)} a
+{n(pc['elasticidad_arco'][1], 1)} (figura~\ref{{fig:historia}}).
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=0.74\textwidth]{{fig/historia.pdf}}
+\caption{{Candela: la venta a S/~10 y a S/~11 frente a curvas de demanda con distinta sensibilidad. Los puntos
+observados caen entre $\varepsilon=3$ y $\varepsilon=4$.}}\label{{fig:historia}}
+\end{{figure}}
+
+Es una sensibilidad muy alta, y cambia la recomendación. El modelo calcula que subir un sol deja de convenir
+cuando se pierde más de {n(pc['umbral_elasticidad_mas1'], 1)}\,\% de clientes por cada 1\,\% de alza; la historia
+de Candela muestra entre {n(pc['elasticidad_arco'][0], 1)} y {n(pc['elasticidad_arco'][1], 1)}. Con los costos de
+hoy, volver a S/~10 con 100 menús dejaría {s(pc['a_10_con_100'] - cand['utilidad_mes'])} más al mes que la
+situación actual. La cifra hay que tomarla con cuidado: el alza coincidió con un cambio en la comida y con
+otros factores de la época, y no toda la caída de la clientela tiene por qué venir del precio. Pero la
+dirección es clara: en Candela, el precio ya está en el límite de lo que su clientela acepta.
+
 \subsection{{Dónde está Candela}}
 
-Con los datos que hoy tiene el estudio ---{n(cand['q'])} menús diarios a {s(cand['precio'])}, insumos
-calibrados y, a falta de los reales, el alquiler y la planilla promedio de Juliaca---, Candela perdería
-{s(-cand['utilidad_mes'])} al mes contando el sueldo del dueño ({s(-cand['ingreso_dueno'])} sin contarlo). Su
-equilibrio está en {cand['equilibrio']} menús diarios, y el precio que la deja en cero a su volumen actual es
-{s(cand['precio_minimo'], 2)}. La figura~\ref{{fig:matriz}} muestra el mapa completo: cada celda es la
-utilidad mensual para una combinación de precio y volumen; el recuadro marca la situación actual. La diagonal
-de cero cruza cerca de (S/~11.5, 85 menús) y (S/~12, 75 menús): medio sol en la pizarra vale lo mismo que
-diez menús más al día.
+La figura~\ref{{fig:matriz}} muestra el mapa completo: cada celda es la utilidad mensual para una combinación
+de precio y volumen, con los costos reales y pagando IGV; el recuadro marca la situación actual. Su
+equilibrio está en {cand['equilibrio']} menús diarios a S/~11. Leído junto con la lección del precio, el mapa dice
+que la salida no está en moverse hacia la derecha (más precio, menos clientes) sino hacia abajo en el costo:
+el margen por plato es el que no alcanza.
 
 \begin{{figure}}[t]
 \centering
 \includegraphics[width=0.92\textwidth]{{fig/matriz.pdf}}
-\caption{{Candela: utilidad del mes (miles de soles) por precio y menús al día, con la estructura de costos
-actual. El recuadro es la situación de hoy.}}\label{{fig:matriz}}
+\caption{{Candela: utilidad del mes (miles de soles) por precio y menús al día, con los costos reales y pagando
+IGV. El recuadro es la situación de hoy.}}\label{{fig:matriz}}
 \end{{figure}}
 
-Este resultado debe leerse con cuidado. El alquiler y la planilla son los dos números que más pueden cambiar el
-diagnóstico, y ambos son todavía promedios de ciudad. El estudio está armado para recibirlos: con el
-alquiler real y una fila por persona en la planilla ---cada una con su sueldo o jornal y su turno---, la
-cifra de esta sección se recalcula sola.
+\subsection{{El alquiler del conocido}}
+
+El alquiler de Candela equivale a vender {n(next(a['menus'] for a in hz['alquiler'] if a['nombre'].startswith('Candela')))}
+menús diarios solo para pagarlo. El descuento de conocido vale S/~1\,000 al mes: con el alquiler de mercado, el
+local perdería {s(-next(v['utilidad_mes'] for v in d['candela_variantes'] if 'mercado' in v['nombre']))} al mes; en
+un local propio, {s(next(v['utilidad_mes'] for v in d['candela_variantes'] if 'propio' in v['nombre']))}. El
+descuento es, en los hechos, un subsidio del dueño del local, y como todo subsidio de una relación personal,
+puede terminarse. Conviene tratarlo como lo que es: una ventaja temporal, no un costo seguro.
 """
 
     fig_candela_tornado = ("Candela, " if cand else "")
@@ -311,8 +375,8 @@ procedencia: observado, estimado, supuesto, de sondeo o propio del local. Las ci
 
 En el Perú el menú cuesta casi lo mismo en todas partes, pero se vende a precios muy distintos. Este ensayo
 toma esa observación del estudio de ciudades y la lleva a la pregunta que importa a quien tiene o quiere
-abrir una fonda: \emph{{¿quién gana con un menú, y por qué?}} Para responderla se modelan diez negocios con el
-mismo motor ---nueve restaurantes tipo y el caso real de Candela, en Juliaca--- que difieren en quién trabaja,
+abrir una fonda: \emph{{¿quién gana con un menú, y por qué?}} Para responderla se modelan {NN} negocios con el
+mismo motor ---{NT} restaurantes tipo y el caso real de Candela, en Juliaca--- que difieren en quién trabaja,
 qué tan formales son, a qué precio venden y cuántas horas abren. Para cada uno se calcula el estado de
 resultados del mes, el punto de equilibrio, la probabilidad de terminar el año en pérdida (2\,000 años
 simulados), el flujo de caja a diez años en cuatro regímenes tributarios y cuánto puede moverse cada variable
@@ -335,10 +399,10 @@ de los restaurantes pasa de 10.5\,\% a 18\,\%: el equilibrio de Lima sube de {ci
 \item \textbf{{El precio es la palanca más sensible en todos los casos.}} Un 10\,\% de precio mueve la
 utilidad más que cualquier otra variable; en el inversor promedio, basta que el precio baje
 {p(abs(inv['quiebres']['precio']), 1)} para que pierda.
-\item \textbf{{Con demanda incierta, sigue conviniendo subir el precio.}} Aun suponiendo que la clientela es muy
-sensible, en todos los negocios hay una combinación de precio, porción y turno mejor que la actual; en {al_tope}
-de diez está en el tope de precio probado (S/~3 más).
-\item \textbf{{Solo {len(sobreviven)} de diez negocios resisten todos los golpes juntos}} (clientela, insumos,
+\item \textbf{{Subir el precio conviene solo si la clientela lo tolera.}} Con sensibilidades de 0.5 a 1.5, en
+todos los restaurantes tipo la mejor decisión sube el precio; en Candela, cuya historia muestra una sensibilidad
+de 3 a 4, cada sol de alza resta utilidad.
+\item \textbf{{Solo {len(sobreviven)} de {NN} negocios resisten todos los golpes juntos}} (clientela, insumos,
 IGV, sueldos, alquiler y competencia): {esc(', '.join(sobreviven))}.
 \item \textbf{{La fonda familiar es rentable porque su trabajo se paga por debajo del mínimo.}} Repartida entre
 tres personas que trabajan 60 horas a la semana, su utilidad equivale a {s(hora['Familia sin sueldos']['por_hora'], 2)}
@@ -456,11 +520,11 @@ El calendario tributario empeora el mapa de manera desigual (figura~\ref{{fig:ig
 amplio, como en Lima, el equilibrio apenas se mueve; donde es fino, el mismo cambio dispara el volumen
 necesario. El efecto es convexo: castiga más a quien menos margen tiene.
 
-\section{{Diez negocios}}
+\section{{{NN.capitalize()} negocios}}
 
 \subsection{{Un catálogo de restaurantes tipo}}
 
-Para separar el efecto de la organización del efecto de la ciudad, los nueve restaurantes tipo están en
+Para separar el efecto de la organización del efecto de la ciudad, los {NT} restaurantes tipo están en
 Juliaca y comparten la misma base de costos; difieren en lo que define el modelo de negocio:
 
 \begin{{description}}[leftmargin=1em,style=nextline]
@@ -472,6 +536,8 @@ compras y contador, y sus compras cuestan 6\,\% más sin el regateo y el control
 \emph{{chiquito en Nuevo RUS}} se mantiene bajo S/~8\,000 de ventas al mes para no salir del régimen.
 \item[Precio y servicio] El \emph{{ejecutivo}} vende a S/~18 en un local caro; \emph{{día y noche}} es el inversor
 que además abre de noche con su propio equipo.
+\item[Local] La \emph{{fonda en casa propia}} no paga alquiler, pero está fuera de la calle con más paso:
+vende a S/~9 y unos 45 menús diarios.
 \item[Referencia] El \emph{{exitoso}} es una referencia compuesta, no un local real: 220 menús a S/~13 con
 compras por volumen. Ningún local de menú publica sus números; la referencia combina el dato del MINCETUR de
 que la mitad de los restaurantes recupera su inversión en 19 a 24 meses y las ventas de franquicias chicas,
@@ -480,7 +546,7 @@ cercanas a S/~50 mil al mes.
 
 \begin{{table}}[h]
 \centering\footnotesize
-\caption{{Los diez negocios. ``Dueño'': utilidad del mes más el sueldo del dueño si se paga uno. VAN al
+\caption{{Los {NN} negocios. ``Dueño'': utilidad del mes más el sueldo del dueño si se paga uno. VAN al
 15\,\% a diez años; $+$n: abre también de noche.}}\label{{tab:casos}}
 \setlength{{\tabcolsep}}{{3.2pt}}
 \begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}Xrrrcrrrrr}}
@@ -618,62 +684,39 @@ para el menú de Juliaca, así que cada combinación se calculó con tres valore
 1.5 (mucha competencia)--- y se le asignó su \emph{{peor}} resultado. La decisión robusta es la que tiene el
 mejor peor caso: la que conviene aunque la demanda resulte ser la menos favorable. En total, el servicio del
 estudio calculó {n(sum(combinaciones(r) for r in d.get('robustez', [])))} combinaciones
-para los diez negocios, cada una con su simulación de riesgo y su flujo a diez años.
+para los {NN} negocios, cada una con su simulación de riesgo y su flujo a diez años.
 
-{"" if not rc else rf"""\subsection{{Candela}}
+{"" if not rc else rf"""\subsection{{Candela, con su propia elasticidad}}
 
-La figura~\ref{{fig:precio_robusto}} muestra el resultado central para Candela: la utilidad del mes según el
-precio, con todo lo demás como hoy, bajo cada supuesto de demanda. Las tres curvas cruzan el cero entre S/~12 y
-S/~13.50 y siguen subiendo después: incluso si la clientela es muy sensible al precio, subir no hace perder
-plata, porque los clientes que se van dejan poco margen y los que se quedan pagan más. Con clientela fiel, el
-menú a S/~13 deja {s(next(x['utilidad'] for x in rc['curvas']['0.5'] if abs(x['precio'] - 13) < 1e-9))} al mes;
-con mucha competencia, apenas {s(next(x['utilidad'] for x in rc['curvas']['1.5'] if abs(x['precio'] - 13) < 1e-9))}.
+Para Candela no hace falta suponer cómo reacciona la clientela: su historia lo mide. El barrido usó tres
+sensibilidades alrededor de la observada (2, 3 y 4) y precios entre S/~9 y S/~13. La figura~\ref{{fig:precio_robusto}}
+muestra el resultado: con la sensibilidad medida, cada sol de alza resta utilidad, y bajar el precio la
+mejora. Solo con la sensibilidad más baja (2) el precio es indiferente.
 
 \begin{{figure}}[t]
 \centering
 \includegraphics[width=\textwidth]{{fig/precio_robusto.pdf}}
-\caption{{Candela: utilidad del mes según el precio, bajo tres supuestos de cuántos clientes se pierden al
-subirlo (porción, mezcla y turno de hoy).}}\label{{fig:precio_robusto}}
+\caption{{Candela: utilidad del mes según el precio con la sensibilidad medida en su propia historia y dos
+valores vecinos (porción, mezcla y turno de hoy).}}\label{{fig:precio_robusto}}
 \end{{figure}}
 
-Entre las {n(combinaciones(rc))} combinaciones, la más sólida es
-\textbf{{{esc(describir_decision(rc['mejor']))}}}: deja al menos {s(rc['mejor']['utilidad_peor'])} al mes en el
-peor supuesto y {s(rc['mejor']['utilidad_media'])} en promedio, con {p(rc['mejor']['prob_perdida_max'])} de
-probabilidad de cerrar el año en pérdida. Sin abrir de noche, lo mejor que se logra es
-{s(rc['mejor_sin_cambiar_turno']['utilidad_peor'])} en el peor caso: la noche es la palanca más grande, el
-precio la segunda y la mezcla de segundos la tercera. La porción casi no cambia el resultado: achicar el plato
-no compensa la clientela que se pierde.
+El dueño ya decidió no abrir de noche, así que la decisión que importa es la mejor sin turno noche:
+\textbf{{{esc(describir_decision(rc['mejor_sin_cambiar_turno']))}}}, que en el peor supuesto deja
+{s(rc['mejor_sin_cambiar_turno']['utilidad_peor'])} al mes frente a {s(rc['base']['utilidad_media'])} de hoy. Todas
+las combinaciones sin noche siguen en pérdida si se paga IGV sobre toda la venta: precio, porción y mezcla
+mejoran la situación, pero no la cambian de signo. Con noche ---que el barrido sigue señalando como la palanca
+más grande--- la mejor combinación llegaría a {s(rc['mejor']['utilidad_peor'])} en el peor caso, siempre que
+existiera esa demanda nocturna.
 
-Dos advertencias acotan esta lectura. Primera: parte de la ganancia de subir el precio viene de que, con menos
-clientes, la planilla automática necesita un mozo menos; con la planilla real de Candela ese escalón puede no
-existir. Segunda: el barrido llegó al límite que probó (S/~3 más). Más allá no hay datos sobre la reacción de
-la clientela, así que la conclusión prudente es subir \emph{{hasta}} S/~13.50--14, de a medio sol, midiendo las
-ventas en cada paso.
-""" + ("" if not pc else rf"""
-La primera advertencia se puede medir. La figura~\ref{{fig:precio_fijo}} repite la curva de precio dejando
-fija la planilla de hoy ---un cocinero, un ayudante y los mozos actuales--- para que ningún escalón de personal
-ayude. El resultado cambia de tono. Subir el precio sigue conviniendo mientras la clientela no sea muy
-sensible: el alza de S/~1 deja de pagar recién si se pierde más de {n(pc['umbral_elasticidad_mas1'], 1)}\,\% de
-los clientes por cada 1\,\% de alza, una sensibilidad alta para un almuerzo. Pero la ganancia es mucho menor:
-con clientela intermedia, S/~3 más mejoran la utilidad en {s(u_fija('1.0', 3) - pc['base'])} al mes, apenas
-lo justo para llegar a {s(u_fija('1.0', 3))}. El precio, por sí solo, ordena la casa; no la hace rentable. Lo
-que falta tiene que venir del volumen, de la noche o de los costos fijos reales.
-
-\begin{{figure}}[t]
-\centering
-\includegraphics[width=\textwidth]{{fig/precio_fijo.pdf}}
-\caption{{Candela: utilidad según el precio con la planilla automática (izquierda) y con la planilla fija
-de hoy (derecha), para cuatro sensibilidades de la clientela. La línea punteada es la utilidad actual.}}\label{{fig:precio_fijo}}
-\end{{figure}}
-""")}
+"""}
 
 \subsection{{Todos los negocios}}
 
-La figura~\ref{{fig:decisiones}} resume el barrido de los diez negocios: la utilidad de hoy, la de la mejor
+La figura~\ref{{fig:decisiones}} resume el barrido de los {NN} negocios: la utilidad de hoy, la de la mejor
 decisión sin abrir de noche y la de la mejor decisión en general, siempre en el peor supuesto de demanda. En
 todos los casos existe una combinación que mejora la situación actual aun con la demanda más desfavorable. El
 inversor pasa de {s(r_inv['base']['utilidad_media'])} a {s(r_inv['mejor']['utilidad_peor'])}; la dueña que cocina, de
-{s(r_dc['base']['utilidad_media'])} a {s(r_dc['mejor']['utilidad_peor'])}. En {al_tope} de los diez negocios la
+{s(r_dc['base']['utilidad_media'])} a {s(r_dc['mejor']['utilidad_peor'])}. En {al_tope} de los {NN} negocios la
 mejor decisión está en el tope de precio probado, lo que confirma que el menú de Juliaca se está vendiendo
 barato respecto de lo que su clientela aguantaría; el puesto de mercado, que hoy vende a S/~7, es el caso más
 claro.
@@ -704,7 +747,7 @@ $+$25\,\% y un competidor que obliga a bajar S/~1--- y a todos juntos (figura~\r
 todos.}}\label{{fig:estres}}
 \end{{figure}}
 
-Solo {len(sobreviven)} de los diez negocios siguen ganando con todos los golpes juntos: {esc(', '.join(sobreviven))}.
+Solo {len(sobreviven)} de los {NN} negocios siguen ganando con todos los golpes juntos: {esc(', '.join(sobreviven))}.
 Los golpes que más daño hacen son los de insumos y el del competidor que obliga a bajar el precio; el alza de
 sueldos y la del alquiler, en cambio, se absorben. La fonda familiar resiste por la misma razón que en la
 simulación de riesgo: no tiene planilla que pagar cuando las ventas caen. {"" if not rc else f"Candela, con los datos actuales, ya pierde antes del golpe; el de insumos le quita otros {s(rc['base']['utilidad_media'] - golpe(rc, 'insumos'))} al mes y el del competidor {s(rc['base']['utilidad_media'] - golpe(rc, 'competidor'))}: son los dos frentes que más le conviene vigilar."}
@@ -762,6 +805,19 @@ Pero esa cuenta no cobra las horas extra de esas personas; es el mismo trabajo n
 anterior, ahora de noche. La decisión honesta compara las cenas que se venderían con el costo de un equipo
 nocturno, aunque al principio lo cubra la familia.
 
+\subsection{{¿Casa propia o local alquilado?}}
+
+Muchas fondas abren en la casa de la familia y no pagan alquiler. La pregunta es si eso las hace más rentables
+que un local alquilado. El modelo la responde traduciendo el alquiler a menús: el local de la dueña que cocina
+paga S/~1\,200, que equivalen a vender {n(next(a['menus'] for a in hz['alquiler'] if a['nombre'] == 'Dueña que cocina'))}
+menús diarios; el del inversor, S/~2\,200, equivale a {n(next(a['menus'] for a in hz['alquiler'] if a['nombre'].startswith('Inversor')))}.
+Abrir en casa conviene mientras la casa pierda menos clientes que esos menús. La fonda en casa propia del
+catálogo, con 45 menús a S/~9, deja {s(casos['Fonda en casa propia']['ingreso_dueno'])} al mes a su dueña, frente a
+{s(dc['ingreso_dueno'])} de la dueña que cocina en un local alquilado con 60 menús a S/~10: el paso de la calle vale
+más que el alquiler que se ahorra. Dos costos escondidos completan la cuenta. Primero, la casa tiene un costo
+de oportunidad: el espacio podría alquilarse. Segundo, la luz, el agua y el gas se mezclan con los del hogar, y
+el negocio parece más barato de lo que es.
+
 \subsection{{Los escalones de personal}}
 
 El personal no crece de a poco: crece por personas. Un local que vende 71 menús necesita dos mozos y uno que
@@ -808,7 +864,7 @@ de impuestos; es la forma jurídica de un acuerdo familiar que la ley laboral no
 
 \section{{Discusión}}
 
-Los diez negocios cuentan una sola historia desde ángulos distintos. El costo del plato es casi un dato: en
+Los {NN} negocios cuentan una sola historia desde ángulos distintos. El costo del plato es casi un dato: en
 todos los casos los insumos se llevan alrededor de la mitad de la venta neta, y ninguna estrategia de
 compras cambia eso más de unos puntos. Lo que distingue a un negocio de otro son tres decisiones:
 
@@ -870,23 +926,25 @@ Antes de invertir en cualquier cambio grande, conviene invertir en esas tres med
 
 \section{{Recomendaciones}}
 
-Para Candela, en orden de impacto según la sensibilidad:
+Para Candela, en orden de impacto:
 
 \begin{{enumerate}}[leftmargin=1.4em]
-\item \textbf{{Completar los datos que deciden el diagnóstico.}} El alquiler real y la planilla persona por
-persona ---con su forma de pago y su turno--- pueden mover la utilidad en miles de soles. El estudio ya está
-preparado para recibirlos.
-\item \textbf{{Subir el precio de a medio sol, hasta S/~13.50--14.}} El barrido robusto muestra que subir conviene
-aun con una clientela sensible. Hacerlo por pasos permite medir cuántos clientes se van en cada uno y
-detenerse donde la venta caiga más de lo previsto. Los segundos con recargo son la forma de empezar sin tocar
-el precio base.
-\item \textbf{{Ajustar la mezcla de segundos.}} Un plato de pollo o de pasta en lugar de uno de res, cuando el
-menú del día lleve dos de res, mejora el margen promedio sin que el cliente lo perciba como una alza.
-\item \textbf{{Evaluar el turno noche con un piloto.}} En el barrido es la palanca más grande para todos los
-negocios, pero descansa en una demanda nocturna supuesta. Un piloto de dos o tres noches por semana la mide
-antes de contratar un equipo completo.
-\item \textbf{{Planificar el 2027 y el 2028.}} El IGV de 15\,\% y luego, probablemente, 18\,\% exige llegar a esos
-años con un precio o un volumen mayores. Es mejor subir el precio de a medio sol que de golpe.
+\item \textbf{{Bajar el costo del plato antes que tocar el precio.}} Los insumos se llevan más de la mitad de la
+venta neta. Pesar durante una semana las porciones de los cinco segundos más vendidos, comprar la proteína por
+volumen y servir más segundos de pollo o pasta que de res ataca el renglón más grande sin que la clientela lo
+note.
+\item \textbf{{No volver a subir el precio, y probar S/~10.50.}} La historia del local muestra una clientela muy
+sensible. Un precio intermedio, con recargo solo en los segundos de res o en los platos más pedidos, puede
+recuperar clientes sin perder margen. Medir dos semanas antes de decidir.
+\item \textbf{{Aclarar el régimen y el IGV.}} Con ventas de unos S/~250 mil al año, Candela no cabe en el Nuevo RUS;
+como persona natural le corresponde el RER o el MYPE, y con ellos el IGV de 10.5\,\% (15\,\% en 2027). Es la
+diferencia entre estar en cero y perder S/~2\,000 al mes, así que conviene revisarlo con un contador.
+\item \textbf{{Cuidar el alquiler de conocido.}} Vale S/~1\,000 al mes. Un contrato por escrito con plazo
+largo lo protege.
+\item \textbf{{Ponerle precio al trabajo del dueño.}} Hoy el dueño hace las compras y administra sin que el negocio
+le pague. Cualquier mejora debería medirse por cuánto le deja a él, no solo por si el local cubre sus costos.
+\item \textbf{{Prepararse para el IGV de 2027.}} El paso a 15\,\% le quita unos S/~0.40 por menú. Llegar a ese año
+con el costo del plato ya ajustado es la forma de absorberlo sin subir el precio.
 \end{{enumerate}}
 
 \section{{Limitaciones y próximos pasos}}
@@ -895,7 +953,9 @@ El modelo es tan bueno como sus datos, y varios son todavía supuestos. Los prec
 Cusco y Puno son estimados; los restaurantes tipo son construcciones razonadas, no locales observados; el
 exitoso es una referencia compuesta; la simulación supone que las variables se mueven de forma
 independiente; el flujo no arrastra pérdidas tributarias ni asigna valor residual al local al décimo año; las
-elasticidades de demanda, el efecto de la porción y la noche tipo del barrido son supuestos. En
+elasticidades de demanda de los restaurantes tipo, el efecto de la porción y la noche tipo del barrido son
+supuestos. La sensibilidad de Candela sale de un solo cambio de precio que coincidió con otros cambios, y debería
+confirmarse con una prueba controlada. En
 Candela, las recetas se calibraron con la estimación del dueño y no con un pesaje sistemático, y el alquiler
 y la planilla son promedios.
 
