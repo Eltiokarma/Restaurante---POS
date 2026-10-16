@@ -11,7 +11,7 @@ from copy import deepcopy
 from itertools import combinations
 from math import factorial
 
-# El local de referencia: el de la dueña que cocina (menú popular de Juliaca)
+# El local de referencia: el del propietario que cocina (menú popular de Juliaca)
 BASE = {"precio": 10.0, "q": 60, "alquiler_mes": 1200.0, "insumos": 4.3, "balones": 4, "servicios_mes": 350.0}
 CAMPOS = tuple(BASE)
 

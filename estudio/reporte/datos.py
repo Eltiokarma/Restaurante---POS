@@ -144,14 +144,14 @@ def hallazgos(arquetipos: list[dict], candela_datos: dict | None) -> dict:
         m = modelo(local, q, esc, NAC)
         du = modelo(local.con(precio=local.precio + 0.5), q, esc, NAC).util - m.util
         salida["medio_sol"].append({"nombre": nombre, "soles": du, "menus": du / (m.contrib_u * esc.dias)})
-    for nombre, personas in (("Dueña que cocina", 1), ("Familia sin sueldos", 3), ("Puesto de mercado informal", 1)):
+    for nombre, personas in (("Propietario que cocina", 1), ("Familiar sin sueldos", 3), ("Puesto de mercado informal", 1)):
         local, esc, _sup, q = armar(casos[nombre])
         m = modelo(local, q, esc, NAC)
         ingreso = m.util + (1500 if esc.sueldo_dueno else 0)
         salida["hora"].append({"nombre": nombre, "personas": personas, "ingreso": ingreso,
                                "por_hora": ingreso / personas / HORAS_MES})
-    # Trampa del Nuevo RUS: el chiquito creciendo
-    local, esc, _sup, _q = armar(casos["Chiquito en Nuevo RUS"])
+    # Trampa del Nuevo RUS: el pequeño creciendo
+    local, esc, _sup, _q = armar(casos["Pequeño en Nuevo RUS"])
     curva = []
     for qq in range(20, 61, 2):
         ventas = local.precio * qq * esc.dias
@@ -276,11 +276,11 @@ def igualdad(arquetipos: list[dict], candela: dict | None) -> dict:
             "descomposicion": descomponer(pares)}
 
 
-REFERENCIA = "Dueña que cocina"
+REFERENCIA = "Propietario que cocina"
 
 
 def descomponer(pares: list[tuple[str, dict]]) -> dict | None:
-    """De la dueña que cocina a cada negocio, un factor a la vez: cuánto de la
+    """Del propietario que cocina a cada negocio, un factor a la vez: cuánto de la
     diferencia en lo que se lleva la casa viene del local y la venta, de los
     insumos, de quién trabaja, de la formalidad y de la noche."""
     ref = dict(pares).get(REFERENCIA)
@@ -302,11 +302,11 @@ def descomponer(pares: list[tuple[str, dict]]) -> dict | None:
 
 
 def costo_de_no_estar(arquetipos: list[dict]) -> list[dict] | None:
-    """Del inversor al dueño ausente, en el local de referencia y un cambio a la
+    """Del inversor al inversor ausente, en el local de referencia y un cambio a la
     vez: su cocina y salón, la gerencia pagada (administrador, cajero, compras),
     el contador externo y las compras más caras sin el ojo del dueño."""
     por_nombre = {a["nombre"]: a["datos"] for a in arquetipos}
-    inv, aus = por_nombre.get("Inversor (promedio)"), por_nombre.get("Dueño ausente (todo tercerizado)")
+    inv, aus = por_nombre.get("Inversor que supervisa"), por_nombre.get("Inversor ausente")
     if not inv or not aus:
         return None
     e_inv, e_aus = inv["escenario"], aus["escenario"]
@@ -322,7 +322,7 @@ def costo_de_no_estar(arquetipos: list[dict]) -> list[dict] | None:
     base = igualar(inv)["escenario"]
     pasos = [("El inversor, que supervisa, compra y cobra sin sueldo", base)]
     e = {**base, "planilla": operativa}
-    pasos.append(("Cocina y salón del dueño ausente (más gente y mejor pagada)", e))
+    pasos.append(("Cocina y salón del inversor ausente (más gente y mejor pagada)", e))
     e = {**e, "planilla": planilla}
     pasos.append(("Gerencia pagada: administrador, cajero y encargado de compras", e))
     e = {**e, "servicios_mes": e["servicios_mes"] + contador}
@@ -388,31 +388,31 @@ def robustez_supuestos(arquetipos: list[dict], candela: dict | None, n: int = N_
     for _ in range(n):
         datos = {k: perturbar(v, rng) for k, v in casos.items()}
         r = {k: medir(v) for k, v in datos.items()}
-        ap = shapley(ingreso, datos["Dueña que cocina"]["escenario"], datos["Puesto de mercado informal"]["escenario"])
+        ap = shapley(ingreso, datos["Propietario que cocina"]["escenario"], datos["Puesto de mercado informal"]["escenario"])
         r["_puesto"] = ap
         sorteos.append(r)
 
     rmv_hora = 1230 / (48 * 4.33)
     pruebas = [
-        ("La dueña que cocina se lleva más que el inversor",
-         lambda r: r["Dueña que cocina"]["ingreso"] > r["Inversor (promedio)"]["ingreso"]),
-        ("El dueño ausente pierde plata", lambda r: r["Dueño ausente (todo tercerizado)"]["util"] < 0),
-        ("Cada integrante de la familia se lleva menos que la dueña sola",
-         lambda r: r["Familia sin sueldos"]["por_persona"] < r["Dueña que cocina"]["por_persona"]),
+        ("El propietario que cocina se lleva más que el inversor",
+         lambda r: r["Propietario que cocina"]["ingreso"] > r["Inversor que supervisa"]["ingreso"]),
+        ("El inversor ausente pierde plata", lambda r: r["Inversor ausente"]["util"] < 0),
+        ("Cada integrante de la familia se lleva menos que el propietario solo",
+         lambda r: r["Familiar sin sueldos"]["por_persona"] < r["Propietario que cocina"]["por_persona"]),
         ("La familia recibe menos de lo que valdría su trabajo a precio de mercado",
-         lambda r: r["Familia sin sueldos"]["ingreso"] < r["Familia sin sueldos"]["valor_trabajo"]),
-        ("La dueña que cocina se lleva más de lo que valdría su trabajo",
-         lambda r: r["Dueña que cocina"]["ingreso"] > r["Dueña que cocina"]["valor_trabajo"]),
+         lambda r: r["Familiar sin sueldos"]["ingreso"] < r["Familiar sin sueldos"]["valor_trabajo"]),
+        ("El propietario que cocina se lleva más de lo que valdría su trabajo",
+         lambda r: r["Propietario que cocina"]["ingreso"] > r["Propietario que cocina"]["valor_trabajo"]),
         ("La familia cobra por hora menos que el sueldo mínimo",
-         lambda r: r["Familia sin sueldos"]["por_persona"] / HORAS_MES < rmv_hora),
+         lambda r: r["Familiar sin sueldos"]["por_persona"] / HORAS_MES < rmv_hora),
         ("Abrir de noche mejora al local de día y noche",
          lambda r: r["Día y noche"]["util"] > r["Día y noche"]["sin_noche"]),
         ("El exitoso es el que más gana",
          lambda r: max((k for k in r if not k.startswith("_")), key=lambda k: r[k]["ingreso"]).startswith("Exitoso")),
         ("El puesto de mercado gana por su plato más que por su volumen",
          lambda r: r["_puesto"]["insumos"] > r["_puesto"]["local"]),
-        ("La fonda en casa propia se lleva menos que la dueña con local alquilado",
-         lambda r: r["Fonda en casa propia"]["ingreso"] < r["Dueña que cocina"]["ingreso"]),
+        ("La fonda en casa propia se lleva menos que el propietario con local alquilado",
+         lambda r: r["Fonda en casa propia"]["ingreso"] < r["Propietario que cocina"]["ingreso"]),
     ]
     if candela:
         pruebas += [

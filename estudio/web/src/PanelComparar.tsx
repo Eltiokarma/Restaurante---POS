@@ -174,7 +174,7 @@ function Barras({ titulo, datos }: { titulo: string; datos: { nombre: string; v:
   )
 }
 
-// El local de la dueña que cocina: menú popular de Juliaca
+// El local del propietario que cocina: menú popular de Juliaca
 // (el gas y la luz también se igualan, aunque no se editan aquí)
 const BASE_IGUAL: Igualar = { precio: 10, q: 60, alquiler_mes: 1200, insumos: 4.3, balones: 4, servicios_mes: 350 }
 
@@ -270,7 +270,7 @@ export function PanelComparar({ onAbrir, onError }: Props) {
               ))}
             </div>
             <button type="button" className="es-secundario" onClick={() => setBase(BASE_IGUAL)}>
-              Volver al local de la dueña que cocina
+              Volver al local del propietario que cocina
             </button>
           </>
         )}

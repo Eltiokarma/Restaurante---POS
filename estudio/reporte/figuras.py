@@ -216,7 +216,7 @@ def fig_quiebres(d):
 
 
 def fig_tornados(d):
-    elegidos = [c for c in todos(d) if c["nombre"].startswith(("Candela", "Dueña", "Exitoso"))]
+    elegidos = [c for c in todos(d) if c["nombre"].startswith(("Candela", "Propietario", "Exitoso"))]
     fig, axs = plt.subplots(1, len(elegidos), figsize=(ANCHO, 2.6), sharey=False)
     for ax, c in zip(axs, elegidos):
         filas = c["tornado"][:6][::-1]
@@ -240,7 +240,7 @@ def fig_tornados(d):
 
 
 def fig_flujo(d):
-    nombres = ("Dueña que cocina", "Familia sin sueldos", "Inversor (promedio)", "Puesto de mercado informal",
+    nombres = ("Propietario que cocina", "Familiar sin sueldos", "Inversor que supervisa", "Puesto de mercado informal",
                "Día y noche", "Ejecutivo en el centro")
     cs = [c for c in d["casos"] if c["nombre"] in nombres] + ([d["candela"]] if d.get("candela") else [])
     colores = [AZUL, AGUA, VIOLETA, AMARILLO, VERDE, MAGENTA, NARANJA]
@@ -273,7 +273,7 @@ def fig_flujo(d):
 
 
 def fig_regimenes(d):
-    cs = [c for c in todos(d) if c["nombre"].startswith(("Dueña", "Inversor", "Exitoso", "Candela", "Día y noche"))]
+    cs = [c for c in todos(d) if c["nombre"].startswith(("Propietario", "Inversor que", "Exitoso", "Candela", "Día y noche"))]
     regs = [("informal", "Informal", NARANJA), ("nuevo_rus", "Nuevo RUS", AMARILLO), ("rer", "RER", AGUA),
             ("mype", "MYPE", AZUL)]
     fig, ax = plt.subplots(figsize=(ANCHO, 2.9))
@@ -509,7 +509,7 @@ def fig_igualdad(d):
 
 
 def fig_factores(d):
-    """De la dueña que cocina a cada negocio: el aporte de cada factor."""
+    """Del propietario que cocina a cada negocio: el aporte de cada factor."""
     dc = (d.get("igualdad") or {}).get("descomposicion")
     if not dc:
         return
@@ -538,7 +538,7 @@ def fig_factores(d):
     ax.set_xlim(lo, hi)
     ax.xaxis.set_major_locator(MultipleLocator(8000))
     ax.xaxis.set_major_formatter(FuncFormatter(soles))
-    ax.set_xlabel(f"Diferencia con la dueña que cocina en lo que se lleva la casa al mes ({soles(dc['base'])})")
+    ax.set_xlabel(f"Diferencia con el propietario que cocina en lo que se lleva la casa al mes ({soles(dc['base'])})")
     marcas = [Patch(color=colores[c], label=t) for c, t in dc["grupos"]]
     marcas.append(Line2D([], [], marker="D", color=TINTA, ls="", markersize=4, label="diferencia total"))
     ax.legend(handles=marcas, fontsize=7, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=3, frameon=False)

@@ -16,7 +16,7 @@ RECARGO_EXTRA = 0.25  # sobretiempo: la ley paga 25 % las dos primeras horas y 3
 
 # Sueldo de mercado al mes por puesto, a jornada completa. Los de cocina y
 # salón salen del local (ciudad o escenario); el de administración, de lo que
-# paga el dueño ausente por un administrador.
+# paga el inversor ausente por un administrador.
 SUELDO_ADMINISTRADOR = 2200.0
 
 
