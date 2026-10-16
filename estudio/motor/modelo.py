@@ -49,6 +49,7 @@ class Trabajador:
     area: str = "cocina"
     dias: float | None = None  # solo diario; por defecto los días que abre el local
     turno: str = "dia"  # dia | noche | ambos (para ver cuánto cuesta cada turno)
+    jornada: float = 1.0  # 1 tiempo completo; 0.5 medio tiempo (el mínimo se prorratea)
 
     def con(self, **cambios) -> "Trabajador":
         return replace(self, **cambios)
@@ -57,11 +58,12 @@ class Trabajador:
 def costo_trabajador(t: Trabajador, formal: bool, rmv: float, mult: float, dias_local: float) -> float:
     """Costo del mes para el empleador. Formal: nunca bajo el sueldo mínimo
     (el jornal, bajo la RMV/30) y con las cargas de la micro empresa."""
+    minimo = rmv * t.jornada
     if t.modalidad == "diario":
-        jornal = max(t.monto, rmv / 30) if formal else t.monto
+        jornal = max(t.monto, minimo / 30) if formal else t.monto
         base = jornal * (t.dias if t.dias is not None else dias_local)
     else:
-        base = max(t.monto, rmv) if formal else t.monto
+        base = max(t.monto, minimo) if formal else t.monto
     return base * t.cantidad * (mult if formal else 1.0)
 
 
@@ -94,6 +96,13 @@ class Escenario:
     # como en el prototipo (cocina cada 80 menús, un mozo cada 70)
     planilla: tuple[Trabajador, ...] = ()
     noche: Noche | None = None
+    # La planilla puede ir en regla (sueldo mínimo, cargas) aunque el local no
+    # cobre IGV, o al revés (con RUC y pago directo al personal). None: igual que `formal`.
+    laboral_formal: bool | None = None
+
+    @property
+    def laboral(self) -> bool:
+        return self.formal if self.laboral_formal is None else self.laboral_formal
 
     @property
     def pop(self) -> bool:
@@ -199,15 +208,15 @@ def modelo(local: Local, q: float, esc: Escenario, nacional: dict,
     mozos = max(1, math.ceil(q / (70 if pop else 40)))
 
     def w(x: float) -> float:
-        return max(x, anio["rmv"]) if esc.formal else x
+        return max(x, anio["rmv"]) if esc.laboral else x
 
-    mult = nacional["mult_micro"] if esc.formal else 1.0
+    mult = nacional["mult_micro"] if esc.laboral else 1.0
     if esc.planilla:
-        personal = sum(costo_trabajador(tr, esc.formal, anio["rmv"], mult, esc.dias) for tr in esc.planilla)
+        personal = sum(costo_trabajador(tr, esc.laboral, anio["rmv"], mult, esc.dias) for tr in esc.planilla)
         cocina = sum(tr.cantidad for tr in esc.planilla if tr.area == "cocina")
         mozos = sum(tr.cantidad for tr in esc.planilla if tr.area == "salon")
     else:
-        cocinero = max(local.sueldo_cocinero, anio["rmv"] * 1.06) if esc.formal else local.sueldo_cocinero
+        cocinero = max(local.sueldo_cocinero, anio["rmv"] * 1.06) if esc.laboral else local.sueldo_cocinero
         personal = mult * (cocinero + (cocina - 1) * w(local.sueldo_ayudante) + mozos * w(local.sueldo_mozo))
     personal += sueldo_dueno if esc.sueldo_dueno else 0
     alquiler = local.alquiler_mes * (1 if pop else 1.25)
@@ -226,7 +235,7 @@ def modelo(local: Local, q: float, esc: Escenario, nacional: dict,
             # Equipo propio de noche, pagado por la parte del mes que trabaja
             cocina_n = max(1, math.ceil(n.q / (80 if pop else 55)))
             mozos_n = max(1, math.ceil(n.q / (70 if pop else 40)))
-            cocinero_n = max(local.sueldo_cocinero, anio["rmv"] * 1.06) if esc.formal else local.sueldo_cocinero
+            cocinero_n = max(local.sueldo_cocinero, anio["rmv"] * 1.06) if esc.laboral else local.sueldo_cocinero
             parte = min(1.0, dias_n / esc.dias) if esc.dias else 1.0
             personal += parte * mult * (cocinero_n + (cocina_n - 1) * w(local.sueldo_ayudante)
                                         + mozos_n * w(local.sueldo_mozo))

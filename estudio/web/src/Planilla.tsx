@@ -35,6 +35,7 @@ const NUEVO: Trabajador = {
   area: 'cocina',
   dias: null,
   turno: 'dia',
+  jornada: 1,
 }
 
 /** Cuánto le cuesta esta persona al mes (sin cargas de planilla). */
@@ -122,6 +123,14 @@ export function Planilla({ planilla, dias, conNoche, onChange }: Props) {
             )}
           </div>
           <Chips valor={t.area} onChange={(a) => cambiar(i, { area: a })} opciones={AREAS} />
+          <Chips
+            valor={(t.jornada ?? 1) < 1}
+            onChange={(medio) => cambiar(i, { jornada: medio ? 0.5 : 1 })}
+            opciones={[
+              { valor: false, texto: 'Tiempo completo' },
+              { valor: true, texto: 'Medio tiempo' },
+            ]}
+          />
           {conNoche && <Chips valor={t.turno} onChange={(tu) => cambiar(i, { turno: tu })} opciones={TURNOS} />}
           <div className="es-fila es-pie-trabajador">
             <span className="es-nota">
@@ -155,6 +164,7 @@ export function planillaDesde(calculo: Calculo | null): Trabajador[] {
     area,
     dias: null,
     turno,
+    jornada: 1,
   })
   if (!calculo) return [fila('Cocinero', 1300, 'cocina')]
   const l = calculo.local

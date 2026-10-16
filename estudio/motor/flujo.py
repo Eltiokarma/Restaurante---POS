@@ -123,7 +123,8 @@ def flujo_caja(local: Local, esc: Escenario, nacional: dict, sup: Supuestos) -> 
     # Informal: sin IGV y planilla a lo que se pague en la calle. Nuevo RUS:
     # sin IGV pero con planilla formal. RER y MYPE: IGV de restaurantes.
     formal = regimen != "informal"
-    esc = replace(esc, formal=formal)
+    # Informal: tampoco hay planilla en regla. Con RUC, la planilla sigue como se eligió.
+    esc = replace(esc, formal=formal, laboral_formal=esc.laboral_formal if formal else False)
     uit0 = nacional.get("uit_2026", 5500)
     r = sup.tasa_descuento
     depreciacion = sup.inversion / VIDA_UTIL

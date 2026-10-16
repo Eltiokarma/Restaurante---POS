@@ -75,6 +75,16 @@ export function PanelSimulador({ ciudades, esc, setEsc, base, calculo }: Props) 
             { valor: false, texto: 'Informal' },
           ]}
         />
+        {esc.formal && (
+          <Chips
+            valor={esc.laboral_formal !== false}
+            onChange={(enRegla) => setEsc((e) => ({ ...e, laboral_formal: enRegla ? null : false }))}
+            opciones={[
+              { valor: true, texto: 'Planilla en regla' },
+              { valor: false, texto: 'Pago directo' },
+            ]}
+          />
+        )}
         <Chips
           valor={esc.sueldo_dueno}
           onChange={cambiar('sueldo_dueno')}

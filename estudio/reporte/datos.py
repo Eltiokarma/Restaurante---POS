@@ -40,7 +40,8 @@ def armar(datos: dict):
     esc = Escenario(segmento=e.get("segmento", "popular"), anio=e.get("anio", 2026), formal=e.get("formal", True),
                     balones=e.get("balones", 5), sueldo_dueno=e.get("sueldo_dueno", True), dias=e.get("dias", 26),
                     planilla=tuple(Trabajador(**t) for t in e.get("planilla") or []),
-                    noche=Noche(**e["noche"]) if e.get("noche") else None)
+                    noche=Noche(**e["noche"]) if e.get("noche") else None,
+                    laboral_formal=e.get("laboral_formal"))
     s = datos.get("supuestos", {})
     q = e.get("q", 100)
     sup = Supuestos(q=q, **{k: s[k] for k in CAMPOS_SUP if k in s})
@@ -84,6 +85,8 @@ def corridas(nombre: str, datos: dict, mezcla=None) -> dict:
     servicio en la pestaña Corridas)."""
     local, esc, sup, q = armar(datos)
     f = Factores(mezcla=sorted({0.25, mezcla.parte_actual, 0.75}) if mezcla else [None])
+    if (datos.get("barrido") or {}).get("elasticidad"):
+        f.elasticidad = datos["barrido"]["elasticidad"]
     r = barrido(local, esc, q, NAC, RIESGO, sup, f, mezcla)
     porciones = {}
     for d in r["decisiones"]:  # peor caso por precio y porción (mejor mezcla y turno)

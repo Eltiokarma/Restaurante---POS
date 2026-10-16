@@ -70,6 +70,7 @@ export interface Trabajador {
   area: Area
   dias: number | null
   turno: Turno
+  jornada: number
 }
 
 export interface Noche {
@@ -93,6 +94,7 @@ export interface Escenario extends Partial<ValoresLocal> {
   dias: number
   planilla: Trabajador[]
   noche: Noche | null
+  laboral_formal?: boolean | null
 }
 
 export interface Calculo {

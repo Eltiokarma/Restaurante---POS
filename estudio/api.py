@@ -188,6 +188,7 @@ class TrabajadorIn(BaseModel):
     area: str = Field(default="cocina", pattern="^(" + "|".join(AREAS) + ")$")
     dias: float | None = Field(default=None, ge=0, le=31)
     turno: str = Field(default="dia", pattern="^(" + "|".join(TURNOS) + ")$")
+    jornada: float = Field(default=1.0, gt=0, le=1)
 
 
 class NocheIn(BaseModel):
@@ -220,6 +221,7 @@ class EscenarioIn(BaseModel):
     dias: float = Field(default=26, ge=1, le=31)  # días que abre al mes
     planilla: list[TrabajadorIn] = Field(default_factory=list, max_length=40)  # vacía: automática
     noche: NocheIn | None = None  # turno noche; None: solo de día
+    laboral_formal: bool | None = None  # planilla en regla; None: igual que `formal`
 
 
 def _armar(e: EscenarioIn, s: Session):
@@ -234,7 +236,8 @@ def _armar(e: EscenarioIn, s: Session):
     esc = Escenario(segmento=e.segmento, anio=e.anio, formal=e.formal, balones=e.balones,
                     sueldo_dueno=e.sueldo_dueno, dias=e.dias,
                     planilla=tuple(Trabajador(**t.model_dump()) for t in e.planilla),
-                    noche=Noche(**e.noche.model_dump()) if e.noche else None)
+                    noche=Noche(**e.noche.model_dump()) if e.noche else None,
+                    laboral_formal=e.laboral_formal)
     return local, esc, bloque(s, "nacional")
 
 
@@ -602,6 +605,9 @@ def _correr(corrida_id: int) -> None:
                 if cfg.get("usar_recetas"):
                     mezcla = mezcla_desde_analisis(analisis_platos(10.5, True, s))
                 f = Factores(**{k: v for k, v in (cfg.get("factores") or {}).items() if v})
+                propias = ((g.datos or {}).get("barrido") or {}).get("elasticidad")
+                if propias and not (cfg.get("factores") or {}).get("elasticidad"):
+                    f.elasticidad = propias  # medidas en el propio negocio
                 if mezcla and not (cfg.get("factores") or {}).get("mezcla"):
                     f.mezcla = sorted({0.25, mezcla.parte_actual, 0.75})
                 if not mezcla:
@@ -628,6 +634,9 @@ def _correr(corrida_id: int) -> None:
                         # las recetas cargadas son de Candela: solo a ella se le prueba la mezcla
                         mz = mezcla_propia if (mezcla_propia and g.nombre.startswith("Candela")) else None
                         f = Factores(mezcla=sorted({0.25, mz.parte_actual, 0.75}) if mz else [None])
+                        propias = ((g.datos or {}).get("barrido") or {}).get("elasticidad")
+                        if propias:
+                            f.elasticidad = propias
                         r = barrido(local, esc, e.q, nacional, riesgo, sup, f, mz,
                                     lambda x, k=k: avance((k + x) / len(gs)))
                         negocios.append({"id": g.id, "nombre": g.nombre, "precio0": local.precio, "q0": e.q,

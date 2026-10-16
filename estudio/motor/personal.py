@@ -12,13 +12,13 @@ def calendario_pagos(local: Local, esc: Escenario, nacional: dict, cocina: int, 
     """`cocina` y `mozos`: el equipo del DÍA (el de noche se arma aquí)."""
     anio = ANIOS.get(esc.anio, ANIOS[max(ANIOS)])
     rmv = anio["rmv"]
-    mult = nacional["mult_micro"] if esc.formal else 1.0
+    mult = nacional["mult_micro"] if esc.laboral else 1.0
     por_dia = dia_15 = fin_mes = aportes = 0.0
     por_turno = {"dia": 0.0, "noche": 0.0, "ambos": 0.0}
     filas = []
     if esc.planilla:
         for t in esc.planilla:
-            total = costo_trabajador(t, esc.formal, rmv, 1.0, esc.dias)  # lo que recibe el trabajador
+            total = costo_trabajador(t, esc.laboral, rmv, 1.0, esc.dias)  # lo que recibe el trabajador
             aportes += total * (mult - 1)
             if t.modalidad == "diario":
                 dias = t.dias if t.dias is not None else esc.dias
@@ -28,14 +28,14 @@ def calendario_pagos(local: Local, esc: Escenario, nacional: dict, cocina: int, 
                 fin_mes += total / 2
             else:
                 fin_mes += total
-            costo = total * (mult if esc.formal else 1)
+            costo = total * (mult if esc.laboral else 1)
             por_turno[t.turno] = por_turno.get(t.turno, 0.0) + costo
             filas.append({"puesto": t.puesto, "cantidad": t.cantidad, "modalidad": t.modalidad,
                           "area": t.area, "turno": t.turno, "costo_mes": round(costo, 2)})
     else:
         def w(x: float) -> float:
-            return max(x, rmv) if esc.formal else x
-        cocinero = max(local.sueldo_cocinero, rmv * 1.06) if esc.formal else local.sueldo_cocinero
+            return max(x, rmv) if esc.laboral else x
+        cocinero = max(local.sueldo_cocinero, rmv * 1.06) if esc.laboral else local.sueldo_cocinero
         partes = [("Cocinero", 1, cocinero, "cocina", "dia"),
                   ("Ayudante de cocina", cocina - 1, w(local.sueldo_ayudante), "cocina", "dia"),
                   ("Mozo", mozos, w(local.sueldo_mozo), "salon", "dia")]
