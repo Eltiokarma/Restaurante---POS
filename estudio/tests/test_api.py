@@ -76,3 +76,28 @@ def test_escenarios_guardados(cliente):
     assert len(lista) == 1 and lista[0]["datos"]["precio"] == 12
     assert cliente.delete(f"/api/escenarios/{lista[0]['id']}", headers=H).status_code == 204
     assert cliente.get("/api/escenarios", headers=H).json() == []
+
+
+def test_planilla_y_sensibilidad_por_api(cliente):
+    base = {"ciudad_id": "juliaca", "precio": 11, "q": 80, "formal": False, "dias": 30,
+            "planilla": [{"puesto": "Ayudante", "monto": 45, "modalidad": "diario", "dias": 30}]}
+    r = cliente.post("/api/calcular", headers=H, json=base).json()
+    assert r["pagos"]["jornales_por_dia"] == 45 and r["mes_a_q"]["cocina"] == 1
+    sens = cliente.post("/api/sensibilidad", headers=H, json=base).json()
+    assert sens["tornado"] and sens["quiebres"] and sens["matriz"]["utilidad"]
+
+
+def test_recetas_por_api(cliente):
+    pollo = cliente.post("/api/insumos", headers=H, json={"nombre": "Pollo", "precio": 10, "merma": 0.2}).json()
+    assert cliente.post("/api/insumos", headers=H, json={"nombre": "pollo", "precio": 9}).status_code == 409
+    plato = cliente.post("/api/platos", headers=H, json={
+        "nombre": "Arroz con pollo", "tipo": "segundo", "porciones": 10, "precio": 11, "vendidos": 60,
+        "items": [{"insumo_id": pollo["id"], "cantidad": 2}]}).json()
+    an = cliente.get("/api/platos/analisis", headers=H).json()
+    assert an["platos"][0]["costo_porcion"] == 2.5
+    # no se borra un insumo que usa una receta
+    assert cliente.delete(f"/api/insumos/{pollo['id']}", headers=H).status_code == 409
+    editado = cliente.put(f"/api/platos/{plato['id']}", headers=H, json={**plato, "items": []}).json()
+    assert editado["items"] == []
+    assert cliente.delete(f"/api/insumos/{pollo['id']}", headers=H).status_code == 204
+    assert cliente.delete(f"/api/platos/{plato['id']}", headers=H).status_code == 204

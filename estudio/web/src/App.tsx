@@ -15,6 +15,8 @@ import {
 } from './api'
 import { Escenarios } from './Escenarios'
 import { PanelFlujo } from './PanelFlujo'
+import { PanelPlatos } from './PanelPlatos'
+import { PanelSensibilidad } from './PanelSensibilidad'
 import { PanelSimulador } from './PanelSimulador'
 
 const ESCENARIO_INICIAL: Escenario = {
@@ -26,6 +28,8 @@ const ESCENARIO_INICIAL: Escenario = {
   balones: 5,
   sueldo_dueno: true,
   q: 80,
+  dias: 26,
+  planilla: [],
 }
 
 export const SUPUESTOS_INICIALES: SupuestosFlujo = {
@@ -83,6 +87,14 @@ function Entrada({ onEntrar }: { onEntrar: (t: string) => void }) {
   )
 }
 
+type Pestana = 'simulador' | 'flujo' | 'sensibilidad' | 'platos'
+const PESTANAS: { id: Pestana; texto: string }[] = [
+  { id: 'simulador', texto: 'Mes' },
+  { id: 'flujo', texto: '10 años' },
+  { id: 'sensibilidad', texto: 'Sensibilidad' },
+  { id: 'platos', texto: 'Platos' },
+]
+
 export default function App() {
   const [token, setToken] = useState(tokenGuardado())
   const [ciudades, setCiudades] = useState<Ciudad[]>([])
@@ -91,7 +103,7 @@ export default function App() {
   const [sup, setSup] = useState<SupuestosFlujo>(SUPUESTOS_INICIALES)
   const [calculo, setCalculo] = useState<Calculo | null>(null)
   const [flujo, setFlujo] = useState<Flujo | null>(null)
-  const [pestana, setPestana] = useState<'simulador' | 'flujo'>('simulador')
+  const [pestana, setPestana] = useState<Pestana>('simulador')
   const [error, setError] = useState('')
   // Al cargar un escenario guardado no hay que pisar sus barras con las de la ciudad
   const conservarBarras = useRef(false)
@@ -165,20 +177,16 @@ export default function App() {
       <header className="es-cabecera">
         <h1>Estudio del menú</h1>
         <nav className="es-pestanas">
-          <button
-            type="button"
-            className={pestana === 'simulador' ? 'es-pestana es-pestana-on' : 'es-pestana'}
-            onClick={() => setPestana('simulador')}
-          >
-            Simulador del mes
-          </button>
-          <button
-            type="button"
-            className={pestana === 'flujo' ? 'es-pestana es-pestana-on' : 'es-pestana'}
-            onClick={() => setPestana('flujo')}
-          >
-            Flujo a 10 años
-          </button>
+          {PESTANAS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={pestana === p.id ? 'es-pestana es-pestana-on' : 'es-pestana'}
+              onClick={() => setPestana(p.id)}
+            >
+              {p.texto}
+            </button>
+          ))}
         </nav>
         <button type="button" className="es-salir" onClick={salir}>
           Salir
@@ -188,10 +196,20 @@ export default function App() {
       <Escenarios esc={esc} sup={sup} onCargar={cargar} onError={manejar} />
       {error && <p className="es-error">{error}</p>}
 
-      {pestana === 'simulador' ? (
+      {pestana === 'simulador' && (
         <PanelSimulador ciudades={ciudades} esc={esc} setEsc={setEsc} base={base} calculo={calculo} />
-      ) : (
-        <PanelFlujo esc={esc} setEsc={setEsc} sup={sup} setSup={setSup} flujo={flujo} />
+      )}
+      {pestana === 'flujo' && <PanelFlujo esc={esc} setEsc={setEsc} sup={sup} setSup={setSup} flujo={flujo} />}
+      {pestana === 'sensibilidad' && <PanelSensibilidad esc={esc} onError={manejar} />}
+      {pestana === 'platos' && (
+        <PanelPlatos
+          esc={esc}
+          onUsarCosto={(insumos) => {
+            setEsc((e) => ({ ...e, insumos }))
+            setPestana('simulador')
+          }}
+          onError={manejar}
+        />
       )}
     </div>
   )

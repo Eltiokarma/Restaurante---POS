@@ -57,6 +57,18 @@ export interface ValoresLocal {
   servicios_mes: number
 }
 
+export type Modalidad = 'mensual' | 'quincenal' | 'diario'
+export type Area = 'cocina' | 'salon' | 'otro'
+
+export interface Trabajador {
+  puesto: string
+  monto: number
+  modalidad: Modalidad
+  cantidad: number
+  area: Area
+  dias: number | null
+}
+
 export interface Escenario extends Partial<ValoresLocal> {
   ciudad_id: string
   zona_id: number | null
@@ -66,6 +78,8 @@ export interface Escenario extends Partial<ValoresLocal> {
   balones: number
   sueldo_dueno: boolean
   q: number
+  dias: number
+  planilla: Trabajador[]
 }
 
 export interface Calculo {
@@ -87,6 +101,70 @@ export interface Calculo {
   }
   anio_montecarlo: { prob_perdida: number; p10: number; p50: number; p90: number }
   curva: { q: number; utilidad: number }[]
+  pagos: {
+    jornales_por_dia: number
+    quincena_15: number
+    fin_de_mes: number
+    aportes_fin_de_mes: number
+    filas: { puesto: string; cantidad: number; modalidad: Modalidad; area: Area; costo_mes: number }[]
+  }
+}
+
+export interface Sensibilidad {
+  tornado: { variable: string; nombre: string; base: number; abajo: number; arriba: number; rango: number }[]
+  quiebres: { variable: string; nombre: string; cambio: number | null }[]
+  matriz: { precios: number[]; volumenes: number[]; utilidad: number[][] }
+}
+
+export type TipoPlato = 'entrada' | 'segundo' | 'sopa' | 'bebida' | 'postre' | 'extra'
+
+export interface Insumo {
+  id: number
+  nombre: string
+  unidad: string
+  precio: number
+  merma: number
+  categoria: string | null
+  actualizado: string | null
+}
+
+export interface Plato {
+  id: number
+  nombre: string
+  tipo: TipoPlato
+  porciones: number
+  precio: number | null
+  vendidos: number | null
+  notas: string | null
+  items: { insumo_id: number; cantidad: number }[]
+}
+
+export type ClasePlato = 'estrella' | 'caballo' | 'rompecabezas' | 'perro'
+
+export interface AnalisisPlatos {
+  platos: {
+    id: number
+    nombre: string
+    tipo: TipoPlato
+    precio: number | null
+    vendidos: number | null
+    costo_porcion: number
+    costo_venta: number
+    es_menu: boolean
+    desglose: { insumo_id: number; insumo: string; costo: number; parte: number }[]
+    precio_sin_igv: number | null
+    margen: number | null
+    costo_pct: number | null
+    clase: ClasePlato | null
+    consejo: string | null
+    popularidad: number | null
+    umbral_popularidad?: number
+    margen_promedio?: number
+  }[]
+  costo_entrada_bebida_promedio: number
+  menu: { costo: number; precio_promedio: number | null; por_insumo: { insumo_id: number; insumo: string; costo: number }[] }
+  gasto_semana: number
+  pareto: { insumo_id: number; insumo: string; gasto_semana: number; parte: number; acumulado: number; menu_mas_10pct: number }[]
 }
 
 export type Regimen = 'informal' | 'nuevo_rus' | 'rer' | 'mype'
@@ -152,6 +230,17 @@ export const api = {
   calcular: (e: Escenario) => pedir<Calculo>('/calcular', { method: 'POST', body: JSON.stringify(e) }),
   flujo: (e: Escenario, s: SupuestosFlujo) =>
     pedir<Flujo>('/flujo', { method: 'POST', body: JSON.stringify({ ...e, ...s }) }),
+  sensibilidad: (e: Escenario, delta: number) =>
+    pedir<Sensibilidad>('/sensibilidad', { method: 'POST', body: JSON.stringify({ ...e, delta }) }),
+  insumos: () => pedir<Insumo[]>('/insumos'),
+  guardarInsumo: (i: Omit<Insumo, 'id' | 'actualizado'>, id?: number) =>
+    pedir<Insumo>(id ? `/insumos/${id}` : '/insumos', { method: id ? 'PUT' : 'POST', body: JSON.stringify(i) }),
+  borrarInsumo: (id: number) => pedir<void>(`/insumos/${id}`, { method: 'DELETE' }),
+  platos: () => pedir<Plato[]>('/platos'),
+  guardarPlato: (p: Omit<Plato, 'id'>, id?: number) =>
+    pedir<Plato>(id ? `/platos/${id}` : '/platos', { method: id ? 'PUT' : 'POST', body: JSON.stringify(p) }),
+  borrarPlato: (id: number) => pedir<void>(`/platos/${id}`, { method: 'DELETE' }),
+  analisis: (igv: number, formal: boolean) => pedir<AnalisisPlatos>(`/platos/analisis?igv=${igv}&formal=${formal}`),
   escenarios: () => pedir<Guardado[]>('/escenarios'),
   guardar: (nombre: string, datos: Guardado['datos']) =>
     pedir<{ id: number }>('/escenarios', { method: 'POST', body: JSON.stringify({ nombre, datos }) }),

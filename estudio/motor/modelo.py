@@ -32,6 +32,37 @@ def cargar_dataset(ruta: Path = RUTA_DATASET) -> dict:
         return json.load(f)
 
 
+MODALIDADES = ("mensual", "quincenal", "diario")
+AREAS = ("cocina", "salon", "otro")
+
+
+@dataclass(frozen=True)
+class Trabajador:
+    """Una fila de la planilla propia. `monto` es el sueldo del mes
+    (mensual o quincenal: cuesta lo mismo, cambia cuándo sale la plata) o el
+    jornal del día (diario: se paga solo lo que trabaja, `dias` al mes)."""
+    puesto: str
+    monto: float
+    modalidad: str = "mensual"
+    cantidad: int = 1
+    area: str = "cocina"
+    dias: float | None = None  # solo diario; por defecto los días que abre el local
+
+    def con(self, **cambios) -> "Trabajador":
+        return replace(self, **cambios)
+
+
+def costo_trabajador(t: Trabajador, formal: bool, rmv: float, mult: float, dias_local: float) -> float:
+    """Costo del mes para el empleador. Formal: nunca bajo el sueldo mínimo
+    (el jornal, bajo la RMV/30) y con las cargas de la micro empresa."""
+    if t.modalidad == "diario":
+        jornal = max(t.monto, rmv / 30) if formal else t.monto
+        base = jornal * (t.dias if t.dias is not None else dias_local)
+    else:
+        base = max(t.monto, rmv) if formal else t.monto
+    return base * t.cantidad * (mult if formal else 1.0)
+
+
 @dataclass(frozen=True)
 class Escenario:
     """Cómo se mira el negocio (los botones del prototipo)."""
@@ -40,6 +71,10 @@ class Escenario:
     formal: bool = True
     balones: float = 5  # balones de gas de 45 kg al mes (gasto fijo)
     sueldo_dueno: bool = True
+    dias: float = DIAS_MES  # días que abre el local al mes
+    # Planilla propia: si está vacía, el personal sale de los menús/día
+    # como en el prototipo (cocina cada 80 menús, un mozo cada 70)
+    planilla: tuple[Trabajador, ...] = ()
 
     @property
     def pop(self) -> bool:
@@ -138,13 +173,18 @@ def modelo(local: Local, q: float, esc: Escenario, nacional: dict,
         return max(x, anio["rmv"]) if esc.formal else x
 
     mult = nacional["mult_micro"] if esc.formal else 1.0
-    cocinero = max(local.sueldo_cocinero, anio["rmv"] * 1.06) if esc.formal else local.sueldo_cocinero
-    personal = mult * (cocinero + (cocina - 1) * w(local.sueldo_ayudante) + mozos * w(local.sueldo_mozo))
+    if esc.planilla:
+        personal = sum(costo_trabajador(tr, esc.formal, anio["rmv"], mult, esc.dias) for tr in esc.planilla)
+        cocina = sum(tr.cantidad for tr in esc.planilla if tr.area == "cocina")
+        mozos = sum(tr.cantidad for tr in esc.planilla if tr.area == "salon")
+    else:
+        cocinero = max(local.sueldo_cocinero, anio["rmv"] * 1.06) if esc.formal else local.sueldo_cocinero
+        personal = mult * (cocinero + (cocina - 1) * w(local.sueldo_ayudante) + mozos * w(local.sueldo_mozo))
     personal += sueldo_dueno if esc.sueldo_dueno else 0
     alquiler = local.alquiler_mes * (1 if pop else 1.25)
     gas = local.gas_balon45 * esc.balones
     fijos = personal + alquiler + gas + local.servicios_mes + otros_fijos
-    q_mes = q * DIAS_MES
+    q_mes = q * esc.dias
     ventas = precio * q_mes
     util = contrib_u * q_mes - fijos
     return Resultado(t, var_u, p_net, contrib_u, cocina, mozos, personal, alquiler, gas, fijos,

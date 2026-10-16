@@ -2,6 +2,7 @@ import type { Calculo, Ciudad, Escenario, ValoresLocal } from './api'
 import { Barra, Chips, Dato } from './Controles'
 import { soles, pct } from './formato'
 import { CurvaUtilidad } from './Graficos'
+import { CalendarioPagos, Planilla, planillaDesde } from './Planilla'
 
 interface Props {
   ciudades: Ciudad[]
@@ -93,6 +94,54 @@ export function PanelSimulador({ ciudades, esc, setEsc, base, calculo }: Props) 
           formato={s2}
           base={base?.precio}
         />
+        <Barra etiqueta="Días que abre al mes" valor={esc.dias} min={15} max={31} paso={1} onChange={cambiar('dias')} base={26} />
+
+        <h2>Personal</h2>
+        <Chips
+          valor={esc.planilla.length > 0}
+          onChange={(propia) => setEsc((e) => ({ ...e, planilla: propia ? planillaDesde(calculo) : [] }))}
+          opciones={[
+            { valor: false, texto: 'Según los menús' },
+            { valor: true, texto: 'Mi planilla' },
+          ]}
+        />
+        {esc.planilla.length > 0 ? (
+          <Planilla planilla={esc.planilla} dias={esc.dias} onChange={cambiar('planilla')} />
+        ) : (
+          <>
+            <p className="es-nota">Un cocinero, un ayudante más cada 80 menús y un mozo cada 70, con sueldo mensual.</p>
+            <Barra
+              etiqueta="Sueldo del cocinero"
+              valor={esc.sueldo_cocinero ?? 0}
+              min={0}
+              max={5000}
+              paso={10}
+              onChange={cambiar('sueldo_cocinero')}
+              formato={s0}
+              base={base?.sueldo_cocinero}
+            />
+            <Barra
+              etiqueta="Sueldo del ayudante de cocina"
+              valor={esc.sueldo_ayudante ?? 0}
+              min={0}
+              max={4000}
+              paso={10}
+              onChange={cambiar('sueldo_ayudante')}
+              formato={s0}
+              base={base?.sueldo_ayudante}
+            />
+            <Barra
+              etiqueta="Sueldo del mozo"
+              valor={esc.sueldo_mozo ?? 0}
+              min={0}
+              max={4000}
+              paso={10}
+              onChange={cambiar('sueldo_mozo')}
+              formato={s0}
+              base={base?.sueldo_mozo}
+            />
+          </>
+        )}
 
         <h2>Costos</h2>
         <Barra
@@ -114,36 +163,6 @@ export function PanelSimulador({ ciudades, esc, setEsc, base, calculo }: Props) 
           onChange={cambiar('alquiler_mes')}
           formato={s0}
           base={base?.alquiler_mes}
-        />
-        <Barra
-          etiqueta="Sueldo del cocinero"
-          valor={esc.sueldo_cocinero ?? 0}
-          min={0}
-          max={5000}
-          paso={10}
-          onChange={cambiar('sueldo_cocinero')}
-          formato={s0}
-          base={base?.sueldo_cocinero}
-        />
-        <Barra
-          etiqueta="Sueldo del ayudante de cocina"
-          valor={esc.sueldo_ayudante ?? 0}
-          min={0}
-          max={4000}
-          paso={10}
-          onChange={cambiar('sueldo_ayudante')}
-          formato={s0}
-          base={base?.sueldo_ayudante}
-        />
-        <Barra
-          etiqueta="Sueldo del mozo"
-          valor={esc.sueldo_mozo ?? 0}
-          min={0}
-          max={4000}
-          paso={10}
-          onChange={cambiar('sueldo_mozo')}
-          formato={s0}
-          base={base?.sueldo_mozo}
         />
         <Barra etiqueta="Balones de gas al mes" valor={esc.balones} min={0} max={20} paso={1} onChange={cambiar('balones')} />
         <Barra
@@ -207,7 +226,9 @@ export function PanelSimulador({ ciudades, esc, setEsc, base, calculo }: Props) 
 
             <div className="es-tabla-caja">
               <table className="es-tabla">
-                <caption>El mes a {esc.q} menús al día (26 días)</caption>
+                <caption>
+                  El mes a {esc.q} menús al día ({esc.dias} días)
+                </caption>
                 <tbody>
                   <tr>
                     <th>Ventas (con IGV)</th>
@@ -223,7 +244,7 @@ export function PanelSimulador({ ciudades, esc, setEsc, base, calculo }: Props) 
                   </tr>
                   <tr>
                     <th>
-                      Personal ({m.cocina} en cocina, {m.mozos} {m.mozos === 1 ? 'mozo' : 'mozos'}
+                      Personal ({m.cocina} en cocina, {m.mozos} en salón
                       {esc.sueldo_dueno ? ', y tu sueldo' : ''})
                     </th>
                     <td>{soles(m.personal)}</td>
@@ -247,6 +268,8 @@ export function PanelSimulador({ ciudades, esc, setEsc, base, calculo }: Props) 
                 </tbody>
               </table>
             </div>
+
+            <CalendarioPagos calculo={calculo} dias={esc.dias} />
 
             <div className="es-datos es-datos-3">
               <Dato titulo="Año malo (1 de cada 10)" valor={soles(mc.p10)} tono={mc.p10 >= 0 ? 'bien' : 'mal'} />
