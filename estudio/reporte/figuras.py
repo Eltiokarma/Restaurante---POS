@@ -546,11 +546,68 @@ def fig_factores(d):
     guardar(fig, "factores")
 
 
+def fig_trabajo(d):
+    """El trabajo que no se cobra: pago por hora de la gente de la casa frente
+    a lo que valdría ese trabajo, y utilidad contable frente a económica."""
+    tr = d.get("trabajo")
+    if not tr:
+        return
+    rmv_hora = d["hallazgos"]["rmv_hora"]
+    # 1) pago por hora, solo los negocios con gente de la casa trabajando
+    con = sorted([t for t in tr if t["horas_mes"]], key=lambda t: t["por_hora"])
+    lo, hi = -12, 36
+    fig, ax = plt.subplots(figsize=(ANCHO, 3.2))
+    for i, t in enumerate(con):
+        v = t["por_hora"]
+        ax.barh(i, max(min(v, hi), lo), color=PERDIDA if v < t["mercado_por_hora"] else AZUL, height=0.6)
+        ax.scatter([t["mercado_por_hora"]], [i], marker="|", s=170, color=TINTA, zorder=5, lw=1.8)
+        etiqueta = f"{'−' if v < 0 else ''}S/ {abs(v):.2f}"
+        if v > hi:
+            ax.text(hi - 0.5, i, f"{etiqueta} →", va="center", ha="right", fontsize=7.5, color="white")
+        else:
+            ax.text(max(v, 0) + 0.6, i, etiqueta, va="center", ha="left", fontsize=7.5, color=TINTA2)
+    ax.axvline(rmv_hora, color=NARANJA, lw=1.1, ls=(0, (3, 2)))
+    ax.axvline(0, color=TINTA2, lw=0.8)
+    ax.set_xlim(lo, hi)
+    ax.set_yticks(range(len(con)), [corto(t["nombre"]) for t in con])
+    ax.set_xlabel("Soles por hora de trabajo de la gente de la casa")
+    marcas = [Patch(color=AZUL, label="cobra más que el mercado"), Patch(color=PERDIDA, label="cobra menos que el mercado"),
+              Line2D([], [], marker="|", color=TINTA, ls="", markersize=9, label="lo que valdría su hora"),
+              Line2D([], [], color=NARANJA, ls=(0, (3, 2)), label=f"sueldo mínimo por hora (S/ {rmv_hora:.2f})")]
+    ax.legend(handles=marcas, fontsize=7, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2, frameon=False)
+    grilla_x(ax)
+    guardar(fig, "trabajo_hora")
+    # 2) utilidad contable (lo que se lleva la casa) y utilidad económica
+    filas = sorted(tr, key=lambda t: t["utilidad_economica"])
+    lim_lo, lim_hi = -8000, 8000
+    fig, ax = plt.subplots(figsize=(ANCHO, 3.4))
+    for i, t in enumerate(filas):
+        a_, b_ = t["ingreso"], t["utilidad_economica"]
+        xa, xb = max(min(a_, lim_hi), lim_lo), max(min(b_, lim_hi), lim_lo)
+        ax.plot([xa, xb], [i, i], color=GRILLA, lw=2.6, zorder=1)
+        ax.scatter([xa], [i], color="#9a988f", s=26, zorder=3)
+        ax.scatter([xb], [i], color=PERDIDA if b_ < 0 else AZUL, s=34, zorder=4)
+        if a_ > lim_hi:
+            ax.text(lim_hi - 150, i, f"{soles(a_)} → {soles(b_)}", va="center", ha="right", fontsize=7.5, color=TINTA2,
+                    bbox={"boxstyle": "round,pad=0.15", "fc": "white", "ec": "none"})
+    ax.axvline(0, color=TINTA2, lw=0.8)
+    ax.set_xlim(lim_lo, lim_hi)
+    ax.xaxis.set_major_locator(MultipleLocator(4000))
+    ax.xaxis.set_major_formatter(FuncFormatter(soles))
+    ax.set_yticks(range(len(filas)), [corto(t["nombre"]) for t in filas])
+    ax.set_xlabel("Soles al mes")
+    marcas = [Line2D([], [], marker="o", color="#9a988f", ls="", label="lo que se lleva la casa (contable)"),
+              Line2D([], [], marker="o", color=AZUL, ls="", label="utilidad económica (descontado su trabajo y el capital)")]
+    ax.legend(handles=marcas, fontsize=7, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2, frameon=False)
+    grilla_x(ax)
+    guardar(fig, "trabajo_economica")
+
+
 def generar(d: dict | None = None) -> None:
     d = d or json.loads((SALIDA / "datos.json").read_text(encoding="utf-8"))
     FIG.mkdir(parents=True, exist_ok=True)
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
-              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad, fig_factores):
+              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad, fig_factores, fig_trabajo):
         f(d)
 
 

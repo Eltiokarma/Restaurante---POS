@@ -18,6 +18,7 @@ from motor import Escenario, cargar_dataset, equilibrio, local_de_ciudad, modelo
 from motor.flujo import NOMBRE_REGIMEN, REGIMENES, Supuestos, comparar_regimenes, flujo_caja
 from motor.igualdad import BASE as BASE_IGUAL, GRUPOS, igualar, personas_casa, shapley
 from motor.incertidumbre import RANGOS, perturbar
+from motor.trabajo import casa_desde, trabajo_de_la_casa
 from motor.modelo import Noche, Trabajador
 from motor.barrido import Factores, barrido, estres, mezcla_desde_analisis, resumen
 from motor.montecarlo import muestras
@@ -336,6 +337,24 @@ def costo_de_no_estar(arquetipos: list[dict]) -> list[dict] | None:
     return salida
 
 
+def trabajo(arquetipos: list[dict], candela: dict | None) -> list[dict]:
+    """El trabajo que no se cobra, caso por caso: horas de la casa, lo que
+    valdría ese trabajo a precio de mercado y la utilidad económica."""
+    pares = [(a["nombre"], a["datos"]) for a in arquetipos]
+    if candela:
+        pares.append(("Candela (datos del POS)", candela))
+    salida = []
+    for nombre, datos in pares:
+        local, esc, sup, q = armar(datos)
+        m = modelo(local, q, esc, NAC)
+        ingreso = m.util + (1500 if esc.sueldo_dueno else 0)
+        casa = casa_desde(datos)
+        salida.append({"nombre": nombre, "utilidad": m.util, "ingreso": ingreso,
+                       "casa": [{"quien": c.quien, "rol": c.rol, "horas_semana": c.horas_semana} for c in casa],
+                       **trabajo_de_la_casa(casa, ingreso, local, sup.inversion, sup.tasa_descuento)})
+    return salida
+
+
 N_SORTEOS = 1000
 
 
@@ -354,7 +373,8 @@ def robustez_supuestos(arquetipos: list[dict], candela: dict | None, n: int = N_
         m = modelo(local, q, esc, NAC)
         sueldo = 1500 if esc.sueldo_dueno else 0
         personas = personas_casa(datos["escenario"])
-        return {"util": m.util, "ingreso": m.util + sueldo,
+        valor = trabajo_de_la_casa(casa_desde(datos), m.util + sueldo, local)["valor_mercado"]
+        return {"util": m.util, "ingreso": m.util + sueldo, "valor_trabajo": valor,
                 "por_persona": (m.util + sueldo) / personas if personas else None,
                 "sin_igv": modelo(local, q, rep(esc, formal=False, laboral_formal=False), NAC).util + sueldo,
                 "sin_noche": modelo(local, q, rep(esc, noche=None), NAC).util if esc.noche else None}
@@ -379,6 +399,10 @@ def robustez_supuestos(arquetipos: list[dict], candela: dict | None, n: int = N_
         ("El dueño ausente pierde plata", lambda r: r["Dueño ausente (todo tercerizado)"]["util"] < 0),
         ("Cada integrante de la familia se lleva menos que la dueña sola",
          lambda r: r["Familia sin sueldos"]["por_persona"] < r["Dueña que cocina"]["por_persona"]),
+        ("La familia recibe menos de lo que valdría su trabajo a precio de mercado",
+         lambda r: r["Familia sin sueldos"]["ingreso"] < r["Familia sin sueldos"]["valor_trabajo"]),
+        ("La dueña que cocina se lleva más de lo que valdría su trabajo",
+         lambda r: r["Dueña que cocina"]["ingreso"] > r["Dueña que cocina"]["valor_trabajo"]),
         ("La familia cobra por hora menos que el sueldo mínimo",
          lambda r: r["Familia sin sueldos"]["por_persona"] / HORAS_MES < rmv_hora),
         ("Abrir de noche mejora al local de día y noche",
@@ -449,6 +473,7 @@ def generar() -> dict:
     datos = {
         "hallazgos": hallazgos(arquetipos, g["datos"] if candela else None),
         "igualdad": igualdad(arquetipos, g["datos"] if candela else None),
+        "trabajo": trabajo(arquetipos, g["datos"] if candela else None),
         "supuestos_robustez": robustez_supuestos(arquetipos, g["datos"] if candela else None),
         "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez, "robustez_supuesta": robustez_supuesta,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},
