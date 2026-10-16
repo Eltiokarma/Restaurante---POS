@@ -2,3 +2,6 @@ __pycache__
 *.db
 .pytest_cache
 tests
+web/node_modules
+web/dist
+web/*.tsbuildinfo
