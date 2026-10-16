@@ -150,6 +150,12 @@ def construir(d: dict) -> str:
     def ig_(nombre, cual="igual", campo="ingreso"):
         return ig[nombre][cual][campo]
 
+    pasos_aus = d.get("igualdad", {}).get("ausencia")
+
+    def tabla_ausencia():
+        return "\n".join(f"{esc(x['paso'])} & {s(x['utilidad'])} & {'' if x['cambio'] is None else s(x['cambio'])} \\\\"
+                         for x in pasos_aus)
+
     def menus_medio(prefijo):
         return next(x["menus"] for x in medio if x["nombre"].startswith(prefijo))
 
@@ -658,7 +664,30 @@ planilla de seis personas, perdería {s(-ig_('Candela (datos del POS)'))} en ese
 {ig_('Candela (datos del POS)', campo='equilibrio')} menús diarios para cubrirse, frente a los
 {ig_('Dueña que cocina', campo='equilibrio')} de la dueña que cocina. """}
 
-La lección práctica sirve para cualquier caso: antes de copiar a un negocio que gana, conviene separar si gana
+{"" if not pasos_aus else rf"""El caso del dueño ausente merece separarse en partes, porque mezcla dos cosas: un equipo de
+cocina más grande y el costo de no estar. El cuadro~\ref{{tab:ausencia}} parte del inversor en el mismo local y le
+agrega, uno por uno, los cambios del dueño ausente. La gerencia pagada ---administrador, cajero y encargado de
+compras--- es el golpe más grande: {s(-pasos_aus[2]['cambio'])} al mes. El contador externo suma {s(-pasos_aus[3]['cambio'])} y
+las compras sin el control del dueño, {s(-pasos_aus[4]['cambio'])} más; ese último renglón crece con el volumen, porque
+el sobrecosto se paga en cada plato. En total, no estar le cuesta
+{s(-(pasos_aus[2]['cambio'] + pasos_aus[3]['cambio'] + pasos_aus[4]['cambio']))} al mes a un local de 60 menús: {n(-(pasos_aus[2]['cambio'] + pasos_aus[3]['cambio'] + pasos_aus[4]['cambio']) / ig_('Dueña que cocina'), 1)} veces
+lo que la dueña que cocina se lleva a su casa. El resto de la brecha, {s(-pasos_aus[1]['cambio'])}, no es ausencia sino
+una cocina con más gente y mejor pagada.
+
+\begin{{table}}[h]
+\centering\small
+\caption{{Del inversor al dueño ausente, un cambio a la vez, en el mismo local (S/~10, 60 menús, S/~1\,200 de
+alquiler). Utilidad del mes, sin sueldo del dueño.}}\label{{tab:ausencia}}
+\begin{{tabularx}}{{\textwidth}}{{Xrr}}
+\toprule
+ & Utilidad & Cambio \\
+\midrule
+{tabla_ausencia()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+"""}La lección práctica sirve para cualquier caso: antes de copiar a un negocio que gana, conviene separar si gana
 por cómo se organiza o por dónde está y cuánto vende. Lo primero se puede imitar; lo segundo, casi nunca. El panel
 del estudio tiene esta misma comparación en su pestaña \emph{{Comparar}}, con el precio, la venta, el alquiler y los
 insumos que se quieran poner.

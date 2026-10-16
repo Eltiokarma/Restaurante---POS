@@ -242,7 +242,43 @@ def igualdad(arquetipos: list[dict], candela: dict | None) -> dict:
                 "personal": m.personal, "equilibrio": equilibrio(local, esc, NAC)}
 
     filas = [{"nombre": n, "propio": medir(d), "igual": medir(igualar(d))} for n, d in pares]
-    return {"base": BASE_IGUAL, "filas": filas}
+    return {"base": BASE_IGUAL, "filas": filas, "ausencia": costo_de_no_estar(arquetipos)}
+
+
+def costo_de_no_estar(arquetipos: list[dict]) -> list[dict] | None:
+    """Del inversor al dueño ausente, en el local de referencia y un cambio a la
+    vez: su cocina y salón, la gerencia pagada (administrador, cajero, compras),
+    el contador externo y las compras más caras sin el ojo del dueño."""
+    por_nombre = {a["nombre"]: a["datos"] for a in arquetipos}
+    inv, aus = por_nombre.get("Inversor (promedio)"), por_nombre.get("Dueño ausente (todo tercerizado)")
+    if not inv or not aus:
+        return None
+    e_inv, e_aus = inv["escenario"], aus["escenario"]
+    planilla = e_aus.get("planilla") or []
+    operativa = [t for t in planilla if t.get("area") != "otro"]
+    sobrecosto = e_aus["insumos"] / e_inv["insumos"]  # 6 % más caro sin el regateo del dueño
+    contador = e_aus["servicios_mes"] - e_inv["servicios_mes"]
+
+    def util(escenario: dict) -> float:
+        local, esc, _sup, q = armar({"escenario": escenario})
+        return modelo(local, q, esc, NAC).util
+
+    base = igualar(inv)["escenario"]
+    pasos = [("El inversor, que supervisa, compra y cobra sin sueldo", base)]
+    e = {**base, "planilla": operativa}
+    pasos.append(("Cocina y salón del dueño ausente (más gente y mejor pagada)", e))
+    e = {**e, "planilla": planilla}
+    pasos.append(("Gerencia pagada: administrador, cajero y encargado de compras", e))
+    e = {**e, "servicios_mes": e["servicios_mes"] + contador}
+    pasos.append(("Contador externo", e))
+    e = {**e, "insumos": round(e["insumos"] * sobrecosto, 4)}
+    pasos.append((f"Compras {round((sobrecosto - 1) * 100)} % más caras sin el control del dueño", e))
+    salida, previo = [], None
+    for texto, esc_ in pasos:
+        u = util(esc_)
+        salida.append({"paso": texto, "utilidad": u, "cambio": None if previo is None else u - previo})
+        previo = u
+    return salida
 
 
 def _api(ruta: str):
