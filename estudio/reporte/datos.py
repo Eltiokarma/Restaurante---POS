@@ -17,6 +17,7 @@ from pathlib import Path
 from motor import Escenario, cargar_dataset, equilibrio, local_de_ciudad, modelo, precio_minimo, simular
 from motor.flujo import NOMBRE_REGIMEN, REGIMENES, Supuestos, comparar_regimenes, flujo_caja
 from motor.igualdad import BASE as BASE_IGUAL, GRUPOS, igualar, personas_casa, shapley
+from motor.incertidumbre import RANGOS, perturbar
 from motor.modelo import Noche, Trabajador
 from motor.barrido import Factores, barrido, estres, mezcla_desde_analisis, resumen
 from motor.montecarlo import muestras
@@ -335,6 +336,88 @@ def costo_de_no_estar(arquetipos: list[dict]) -> list[dict] | None:
     return salida
 
 
+N_SORTEOS = 1000
+
+
+def robustez_supuestos(arquetipos: list[dict], candela: dict | None, n: int = N_SORTEOS, semilla: int = 7) -> dict:
+    """Cuántas veces se sostiene cada hallazgo si los números de cada caso se
+    mueven al azar dentro de rangos razonables (motor/incertidumbre.py)."""
+    import random
+    from dataclasses import replace as rep
+
+    casos = {a["nombre"]: a["datos"] for a in arquetipos}
+    if candela:
+        casos["Candela (datos del POS)"] = candela
+
+    def medir(datos: dict) -> dict:
+        local, esc, _sup, q = armar(datos)
+        m = modelo(local, q, esc, NAC)
+        sueldo = 1500 if esc.sueldo_dueno else 0
+        personas = personas_casa(datos["escenario"])
+        return {"util": m.util, "ingreso": m.util + sueldo,
+                "por_persona": (m.util + sueldo) / personas if personas else None,
+                "sin_igv": modelo(local, q, rep(esc, formal=False, laboral_formal=False), NAC).util + sueldo,
+                "sin_noche": modelo(local, q, rep(esc, noche=None), NAC).util if esc.noche else None}
+
+    def ingreso(escenario: dict) -> float:
+        local, esc, _sup, q = armar({"escenario": escenario})
+        return modelo(local, q, esc, NAC).util + (1500 if esc.sueldo_dueno else 0)
+
+    rng = random.Random(semilla)
+    sorteos = []
+    for _ in range(n):
+        datos = {k: perturbar(v, rng) for k, v in casos.items()}
+        r = {k: medir(v) for k, v in datos.items()}
+        ap = shapley(ingreso, datos["Dueña que cocina"]["escenario"], datos["Puesto de mercado informal"]["escenario"])
+        r["_puesto"] = ap
+        sorteos.append(r)
+
+    rmv_hora = 1230 / (48 * 4.33)
+    pruebas = [
+        ("La dueña que cocina se lleva más que el inversor",
+         lambda r: r["Dueña que cocina"]["ingreso"] > r["Inversor (promedio)"]["ingreso"]),
+        ("El dueño ausente pierde plata", lambda r: r["Dueño ausente (todo tercerizado)"]["util"] < 0),
+        ("Cada integrante de la familia se lleva menos que la dueña sola",
+         lambda r: r["Familia sin sueldos"]["por_persona"] < r["Dueña que cocina"]["por_persona"]),
+        ("La familia cobra por hora menos que el sueldo mínimo",
+         lambda r: r["Familia sin sueldos"]["por_persona"] / HORAS_MES < rmv_hora),
+        ("Abrir de noche mejora al local de día y noche",
+         lambda r: r["Día y noche"]["util"] > r["Día y noche"]["sin_noche"]),
+        ("El exitoso es el que más gana",
+         lambda r: max((k for k in r if not k.startswith("_")), key=lambda k: r[k]["ingreso"]).startswith("Exitoso")),
+        ("El puesto de mercado gana por su plato más que por su volumen",
+         lambda r: r["_puesto"]["insumos"] > r["_puesto"]["local"]),
+        ("La fonda en casa propia se lleva menos que la dueña con local alquilado",
+         lambda r: r["Fonda en casa propia"]["ingreso"] < r["Dueña que cocina"]["ingreso"]),
+    ]
+    if candela:
+        pruebas += [
+            ("Candela pierde si paga IGV sobre toda la venta (sin contar el sueldo del dueño)",
+             lambda r: r["Candela (datos del POS)"]["util"] + 1500 < 0),
+            ("Candela cubre sus costos sin IGV (sin contar el sueldo del dueño)",
+             lambda r: r["Candela (datos del POS)"]["sin_igv"] >= 0),
+        ]
+    hallazgos = [{"hallazgo": texto, "parte": sum(1 for r in sorteos if f(r)) / n} for texto, f in pruebas]
+
+    # Lugar de cada negocio por lo que se lleva la casa, en cada sorteo
+    nombres = list(casos)
+    lugares: dict[str, list[int]] = {k: [] for k in nombres}
+    for r in sorteos:
+        orden = sorted(nombres, key=lambda k: -r[k]["ingreso"])
+        for i, k in enumerate(orden, start=1):
+            lugares[k].append(i)
+    hoy = sorted(nombres, key=lambda k: -medir(casos[k])["ingreso"])
+
+    def cuantil(xs: list[int], q: float) -> int:
+        xs = sorted(xs)
+        return xs[min(len(xs) - 1, int(q * len(xs)))]
+
+    orden = [{"nombre": k, "hoy": hoy.index(k) + 1, "p05": cuantil(lugares[k], 0.05), "p95": cuantil(lugares[k], 0.95),
+              "mismo": sum(1 for x in lugares[k] if x == hoy.index(k) + 1) / n,
+              "gana": sum(1 for r in sorteos if r[k]["ingreso"] > 0) / n} for k in hoy]
+    return {"n": n, "rangos": RANGOS, "hallazgos": hallazgos, "orden": orden}
+
+
 def _api(ruta: str):
     url, token = os.getenv("ESTUDIO_URL"), os.getenv("ESTUDIO_TOKEN")
     if not url or not token:
@@ -366,6 +449,7 @@ def generar() -> dict:
     datos = {
         "hallazgos": hallazgos(arquetipos, g["datos"] if candela else None),
         "igualdad": igualdad(arquetipos, g["datos"] if candela else None),
+        "supuestos_robustez": robustez_supuestos(arquetipos, g["datos"] if candela else None),
         "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez, "robustez_supuesta": robustez_supuesta,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},
         "fuentes": DATA["fuentes"], "regimenes": list(REGIMENES),

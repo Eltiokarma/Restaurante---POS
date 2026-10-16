@@ -178,6 +178,88 @@ def construir(d: dict) -> str:
 
     formales = [f for f in (dcp or {}).get("filas", []) if abs(f["aportes"]["formalidad"]) >= 1]
 
+    sr = d.get("supuestos_robustez")
+
+    def veredicto(parte):
+        parte = round(parte, 2)  # el mismo número que se muestra en la tabla
+        return "se sostiene" if parte >= 0.9 else ("probable" if parte >= 0.7 else "no concluyente")
+
+    def tabla_supuestos():
+        return "\n".join(f"{esc(h['hallazgo'])} & {p(h['parte'])} & {veredicto(h['parte'])} \\\\"
+                         for h in sorted(sr["hallazgos"], key=lambda h: -h["parte"]))
+
+    def tabla_lugares():
+        return "\n".join(f"{esc(corto(o['nombre']))} & {o['hoy']} & "
+                         f"{o['p05'] if o['p05'] == o['p95'] else str(o['p05']) + '--' + str(o['p95'])} & "
+                         f"{p(o['mismo'])} & {p(o['gana'])} \\\\" for o in sr["orden"])
+
+    def parte_de(inicio):
+        h = next((h for h in (sr or {}).get("hallazgos", []) if h["hallazgo"].startswith(inicio)), None)
+        return h["parte"] if h else None
+
+    def sorteos_txt(inicio):
+        x = parte_de(inicio)
+        return "" if x is None else f" ({veredicto(x)} en el {p(x)} de los sorteos)"
+
+    def tabla_experimentos():
+        filas = []
+        if ig:
+            filas.append((
+                "¿Decide quién trabaja?", "Todos los negocios en el mismo local",
+                f"Familia {s(ig_('Familia sin sueldos'))} (para tres), dueña {s(ig_('Dueña que cocina'))}, inversor "
+                f"{s(ig_('Inversor (promedio)'))}, ausente {s(ig_('Dueño ausente (todo tercerizado)'))}",
+                veredicto(parte_de("La dueña que cocina se lleva más")) if sr else "--"))
+        if fac:
+            filas.append((
+                "¿El exitoso y el puesto ganan por cómo se organizan?", "La diferencia repartida en cinco factores",
+                f"Exitoso: local y venta {s(ap('Exitoso (referencia compuesta)', 'local'))}. Puesto: plato "
+                f"{s(ap('Puesto de mercado informal', 'insumos'))}, volumen {s(ap('Puesto de mercado informal', 'local'))}",
+                "no: escala y plato barato"))
+        if pasos_aus:
+            filas.append((
+                "¿Cuánto cuesta no estar?", "Del inversor al dueño ausente, un cambio a la vez",
+                f"{s(-(pasos_aus[2]['cambio'] + pasos_aus[3]['cambio'] + pasos_aus[4]['cambio']))} al mes; la gerencia "
+                f"pagada, {s(-pasos_aus[2]['cambio'])}",
+                veredicto(parte_de("El dueño ausente pierde")) if sr else "--"))
+        if sup_:
+            filas.append((
+                "¿Conviene subir el precio?", "Barrido con la sensibilidad supuesta y con la medida en Juliaca",
+                f"Supuesta: {al_tope_sup} de {len(sup_)} suben S/~3. Medida: {quietos_med} de {len(tipo)} no lo mueven",
+                "no, con la medida"))
+        if "juliaca_obs" in ciud:
+            filas.append((
+                "¿Es Juliaca la plaza más difícil?", "Precio observado (S/~11) en vez del estimado (S/~8)",
+                f"Equilibrio de {ciud['juliaca']['eq_2026']} a {ciud['juliaca_obs']['eq_2026']} menús diarios",
+                "no; dependía del supuesto"))
+        if pc:
+            filas.append((
+                "¿Qué dejó a Candela subir de S/~10 a S/~11?", "Sus tres precios de la historia",
+                f"Sensibilidad {n(pc['elasticidad_ajuste'], 1)}; S/~10 con {n(pc['q0'])} menús deja "
+                f"{s(abs(pc['a_10'] - cand['utilidad_mes']))} {'más' if pc['a_10'] > cand['utilidad_mes'] else 'menos'} al mes",
+                "casi neutro; sacó a la cocina del colapso"))
+        if rc and rc.get("capacidad"):
+            filas.append((
+                "¿Bajar el precio llena el local?", f"Techo de cocina de {n(rc['capacidad'])} menús",
+                f"La venta no pasa de {n(rc['capacidad'])}; a S/~10 la cocina vuelve al colapso",
+                "la organización pone el techo"))
+        filas.append((
+            "¿Casa propia o local alquilado?", "Fonda en casa propia frente a la dueña con local",
+            f"{s(casos['Fonda en casa propia']['ingreso_dueno'])} contra {s(dc['ingreso_dueno'])} al mes",
+            veredicto(parte_de("La fonda en casa propia")) if sr else "--"))
+        filas.append((
+            "¿Conviene abrir de noche?", "Barrido con una noche tipo de 30 platos",
+            "Mejora a todos los negocios", "sí, si existe esa demanda (no medida)"))
+        if sr and parte_de("Candela cubre") is not None:
+            filas.append((
+                "¿Cubre Candela sus costos sin IGV?", f"{n(sr['n'])} sorteos de sus números",
+                f"Sí en el {p(parte_de('Candela cubre'))} de los sorteos", veredicto(parte_de("Candela cubre"))))
+        filas.append((
+            "¿Quién resiste un año malo?", "Seis golpes a la vez",
+            f"{len(sobreviven)} de {NN}: {', '.join(sobreviven)}", "--"))
+        # las celdas ya vienen en LaTeX (cifras con s(), p() y n()): no se escapan
+        return "\n".join(f"{k} & {a} & {b} & {c} & {v} \\\\ \\addlinespace[2pt]"
+                         for k, (a, b, c, v) in enumerate(filas, start=1))
+
     def tabla_ausencia():
         return "\n".join(f"{esc(x['paso'])} & {s(x['utilidad'])} & {'' if x['cambio'] is None else s(x['cambio'])} \\\\"
                          for x in pasos_aus)
@@ -199,11 +281,12 @@ def construir(d: dict) -> str:
         prec_neto = pl["menu"]["precio_promedio"] / 1.105
         candela_resumen = (
             f"\\item \\textbf{{Candela está en su punto de equilibrio antes de impuestos y su clientela es sensible "
-            f"al precio.}} Con su alquiler y su planilla reales, la venta cubre insumos, sueldos y local, pero no el "
-            f"trabajo del dueño; si paga IGV sobre todo lo vendido, pierde {s(-cand['utilidad_mes'] - 1500)} al mes sin "
-            f"contar su sueldo. Al subir de S/~10 a S/~11 perdió cerca de "
+            f"al precio.}} Si paga IGV sobre todo lo vendido, pierde {s(-cand['utilidad_mes'] - 1500)} al mes sin "
+            f"contar el sueldo del dueño. Al subir de S/~10 a S/~11 perdió cerca de "
             f"{round(10 * (1 - pc['historia']['q1'] / pc['historia']['q0']))} clientes de cada 10, lo justo para que el "
-            f"alza no ganara ni perdiera dinero: el precio ya está en su punto y la mejora tiene que venir del costo.")
+            f"alza no ganara ni perdiera: la mejora tiene que venir del costo. Sin IGV, cubrir o no sus costos es una "
+            f"moneda al aire"
+            f"{'' if parte_de('Candela cubre') is None else ' (sale que sí en el ' + p(parte_de('Candela cubre')) + ' de los sorteos)'}.")
         candela_seccion = rf"""
 \section{{El caso Candela}}\label{{sec:candela}}
 
@@ -443,14 +526,16 @@ mismo motor ---{NT} restaurantes tipo y el caso real de Candela, en Juliaca--- q
 qué tan formales son, a qué precio venden y cuántas horas abren. Para cada uno se calcula el estado de
 resultados del mes, el punto de equilibrio, la probabilidad de terminar el año en pérdida (2\,000 años
 simulados), el flujo de caja a diez años en cuatro regímenes tributarios y cuánto puede moverse cada variable
-antes de que el negocio pierda.
+antes de que el negocio pierda. Cada variación se trata como un experimento: el registro de la
+sección~\ref{{sec:experimentos}} dice cuáles conclusiones se sostienen aunque los supuestos se equivoquen y cuáles
+quedan abiertas.
 
 \begin{{recuadro}}{{Hallazgos}}
 \begin{{itemize}}[leftmargin=1.2em]
 \item \textbf{{En una fonda de provincia gana el trabajo, no el capital.}} La dueña que cocina se lleva
 {s(dc['ingreso_dueno'])} al mes y la familia que no se cobra sueldos {s(fam['ingreso_dueno'])}; el inversor que
 contrata a todos apenas cubre costos ({s(inv['utilidad_mes'])}) y el dueño que terceriza hasta las compras
-pierde {s(-aus['utilidad_mes'])} al mes.
+pierde {s(-aus['utilidad_mes'])} al mes{sorteos_txt("La dueña que cocina se lleva más")}.
 \item \textbf{{Ganar no siempre es mérito de la organización.}} {"" if not fac else rf"""Al repartir la diferencia
 de cada negocio con la dueña que cocina, el exitoso debe casi todo a su local y su venta
 ({s(ap('Exitoso (referencia compuesta)', 'local'))} al mes) y el puesto de mercado a un plato barato de hacer
@@ -471,9 +556,14 @@ sensible, casi todos los negocios deberían subir S/~3; con la sensibilidad que 
 {s(max_sube_med, 2)}. La mejora tiene que venir del costo, la mezcla de platos o más horas de venta.
 \item \textbf{{Solo {len(sobreviven)} de {NN} negocios resisten todos los golpes juntos}} (clientela, insumos,
 IGV, sueldos, alquiler y competencia): {esc(', '.join(sobreviven))}.
-\item \textbf{{La fonda familiar es rentable porque su trabajo se paga por debajo del mínimo.}} Repartida entre
-tres personas que trabajan 60 horas a la semana, su utilidad equivale a {s(hora['Familia sin sueldos']['por_hora'], 2)}
-por hora, frente a {s(hz['rmv_hora'], 2)} del sueldo mínimo.
+\item \textbf{{La fonda familiar gana porque su trabajo no se cobra.}} En el mismo local que la dueña que cocina,
+la familia junta más, pero cada uno de sus tres integrantes se lleva menos de la mitad que ella sola
+{sorteos_txt("Cada integrante de la familia")}. Si eso queda por debajo del sueldo mínimo por hora
+({s(hora['Familia sin sueldos']['por_hora'], 2)} frente a {s(hz['rmv_hora'], 2)}) no es concluyente: depende de cuánto
+venda y cuánto trabaje.
+{"" if 'juliaca_obs' not in ciud else rf"""\item \textbf{{Juliaca no es la plaza más difícil del país.}} Con el precio estimado de la base (S/~8) lo parecía:
+{ciud['juliaca']['eq_2026']} menús diarios para no perder. Con el que se cobra en Candela (S/~11) el equilibrio baja a
+{ciud['juliaca_obs']['eq_2026']} y queda entre las mejores plazas del mapa; falta confirmarlo con más locales."""}
 \item \textbf{{El Nuevo RUS castiga crecer.}} Al pasar su tope, un local chico pierde {s(nr['nrus_tope'] - nr['rer_justo_despues'])}
 al mes de golpe y necesita llegar a unos {nr['q_recupera']} menús diarios para recuperarse.
 {candela_resumen}
@@ -960,6 +1050,57 @@ Los golpes que más daño hacen son los de insumos y el del competidor que oblig
 sueldos y la del alquiler, en cambio, se absorben. La fonda familiar resiste por la misma razón que en la
 simulación de riesgo: no tiene planilla que pagar cuando las ventas caen. {"" if not rc else f"Candela, con los datos actuales, ya pierde antes del golpe; el de insumos le quita otros {s(rc['base']['utilidad_media'] - golpe(rc, 'insumos'))} al mes y el del competidor {s(rc['base']['utilidad_media'] - golpe(rc, 'competidor'))}: son los dos frentes que más le conviene vigilar."}
 
+{"" if not sr else rf"""\section{{¿Cuánto dependen las conclusiones de los supuestos?}}\label{{sec:supuestos}}
+
+Los restaurantes tipo son números razonados, no observados: nadie midió el plato del puesto de mercado ni la
+venta del exitoso. Un hallazgo que solo vale con esos números exactos es una opinión; uno que vale aunque los
+números se equivoquen es una conclusión. Para separarlos, el cálculo se repitió {n(sr['n'])} veces moviendo al
+azar, y por separado para cada negocio, todos sus números dentro de rangos razonables: el precio
+±{p(sr['rangos']['precio'], 0)}, la venta ±{p(sr['rangos']['q'], 0)}, los insumos ±{p(sr['rangos']['insumos'], 0)},
+el alquiler ±{p(sr['rangos']['alquiler_mes'], 0)}, los sueldos ±{p(sr['rangos']['sueldos'], 0)} y el gas y la luz
+±{p(sr['rangos']['balones'], 0)}. El cuadro~\ref{{tab:supuestos}} cuenta en qué parte de esos sorteos se cumple cada
+hallazgo: se sostiene si se cumple en nueve de cada diez o más, es probable entre siete y nueve, y no es
+concluyente por debajo.
+
+\begin{{table}}[h]
+\centering\small
+\caption{{Parte de los {n(sr['n'])} sorteos en que se cumple cada hallazgo.}}\label{{tab:supuestos}}
+\begin{{tabularx}}{{\textwidth}}{{Xrl}}
+\toprule
+Hallazgo & Se cumple & Veredicto \\
+\midrule
+{tabla_supuestos()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+Los hallazgos centrales del ensayo resisten: quién trabaja decide el resultado, el dueño ausente pierde en todos
+los sorteos y la noche mejora al local que la abre. Dos lecturas, en cambio, no son concluyentes y conviene
+citarlas con cuidado. Que la familia cobre menos que el mínimo por hora depende de supuestos que nadie ha medido
+---cuánto vende, cuánto trabaja---: está cerca del límite y cae a uno u otro lado. Y que Candela cubra sus costos
+sin IGV es una moneda al aire: el local está tan cerca del equilibrio que un error pequeño en cualquiera de sus
+números lo cambia, lo cual es en sí mismo un dato sobre su fragilidad.
+
+\begin{{table}}[h]
+\centering\small
+\caption{{Lugar de cada negocio por lo que se lleva la casa al mes: hoy, el rango en nueve de cada diez sorteos,
+cuántas veces repite su lugar y cuántas veces no pierde.}}\label{{tab:lugares}}
+\begin{{tabularx}}{{\textwidth}}{{Xrrrr}}
+\toprule
+Negocio & Hoy & Rango & Repite & No pierde \\
+\midrule
+{tabla_lugares()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+El orden tiene puntas firmes y un medio móvil (cuadro~\ref{{tab:lugares}}). El exitoso es siempre el primero y el
+dueño ausente casi siempre el último, pero los negocios del medio ---el puesto de mercado, día y noche, la familia y
+la dueña que cocina--- cambian de lugar entre sí con facilidad: la diferencia entre ellos es menor que el error de
+los supuestos. Leído así, el catálogo no dice cuál de esas cuatro fondas es mejor; dice que las cuatro ganan y
+que ganan por razones distintas.
+"""}
+
 \section{{Lo que el modelo deja ver}}
 
 Más allá de los números de cada caso, el modelo permite hacer preguntas que en la operación diaria no se
@@ -1068,6 +1209,27 @@ sueldo mínimo a quienes antes trabajaban sin cobrar. La informalidad de la fond
 de impuestos; es la forma jurídica de un acuerdo familiar que la ley laboral no reconoce.
 
 {candela_seccion}
+
+\section{{Registro de experimentos}}\label{{sec:experimentos}}
+
+Cada variación de este estudio es un experimento: se fija todo, se cambia una cosa y se mira qué pasa. El
+cuadro~\ref{{tab:experimentos}} los reúne con la pregunta que contestan, lo que se varió, el resultado y un
+veredicto. Donde el resultado depende de los números supuestos de los restaurantes tipo, el veredicto sale de
+los sorteos de la sección~\ref{{sec:supuestos}}. Las conclusiones del ensayo son las filas que se sostienen; las
+demás quedan como preguntas abiertas.
+
+\begin{{table}}[h]
+\centering\footnotesize
+\caption{{Registro de experimentos: pregunta, qué se varió, resultado y veredicto.}}\label{{tab:experimentos}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{r>{{\raggedright\arraybackslash}}p{{0.2\textwidth}}>{{\raggedright\arraybackslash}}p{{0.2\textwidth}}>{{\raggedright\arraybackslash}}X>{{\raggedright\arraybackslash}}p{{0.15\textwidth}}}}
+\toprule
+& Pregunta & Qué se varió & Resultado & Veredicto \\
+\midrule
+{tabla_experimentos()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
 
 \section{{Discusión}}
 
