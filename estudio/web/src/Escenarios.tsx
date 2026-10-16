@@ -59,10 +59,16 @@ export function Escenarios({ esc, sup, onCargar, onError }: Props) {
           }}
         >
           <option value="">{lista.length ? 'Abrir escenario guardado…' : 'Aún no hay escenarios guardados'}</option>
-          {lista.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.nombre}
-            </option>
+          {[...new Set(lista.map((g) => g.datos.ficha?.categoria ?? 'Mis escenarios'))].map((cat) => (
+            <optgroup key={cat} label={cat}>
+              {lista
+                .filter((g) => (g.datos.ficha?.categoria ?? 'Mis escenarios') === cat)
+                .map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.nombre}
+                  </option>
+                ))}
+            </optgroup>
           ))}
         </select>
         {elegido !== '' && (

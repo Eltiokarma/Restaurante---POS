@@ -239,10 +239,47 @@ export interface Flujo {
   supuestos: Record<string, string>
 }
 
+export interface Ficha {
+  categoria: string
+  descripcion: string
+  supuestos: string[]
+  fuente: string
+}
+
+export interface Comparado {
+  id: number
+  nombre: string
+  error?: string
+  ficha?: Ficha | null
+  ventas_mes: number
+  utilidad_mes: number
+  margen: number
+  ingreso_dueno_mes: number
+  equilibrio: number | null
+  precio_minimo: number
+  prob_perdida: number
+  anio_malo: number
+  anio_tipico: number
+  personal_pct: number
+  insumos_pct: number
+  alquiler_pct: number
+  trabajadores: number
+  precio: number
+  menus_dia: number
+  formal: boolean
+  noche: boolean
+  regimen: string
+  inversion: number
+  van: number
+  tir: number | null
+  recupero: number | null
+  alertas: string[]
+}
+
 export interface Guardado {
   id: number
   nombre: string
-  datos: { escenario: Escenario; supuestos: SupuestosFlujo }
+  datos: { escenario: Escenario; supuestos: SupuestosFlujo; ficha?: Ficha }
   creado: string
 }
 
@@ -262,6 +299,7 @@ export const api = {
     pedir<Plato>(id ? `/platos/${id}` : '/platos', { method: id ? 'PUT' : 'POST', body: JSON.stringify(p) }),
   borrarPlato: (id: number) => pedir<void>(`/platos/${id}`, { method: 'DELETE' }),
   analisis: (igv: number, formal: boolean) => pedir<AnalisisPlatos>(`/platos/analisis?igv=${igv}&formal=${formal}`),
+  comparar: (ids: number[]) => pedir<Comparado[]>('/comparar', { method: 'POST', body: JSON.stringify({ ids }) }),
   escenarios: () => pedir<Guardado[]>('/escenarios'),
   guardar: (nombre: string, datos: Guardado['datos']) =>
     pedir<{ id: number }>('/escenarios', { method: 'POST', body: JSON.stringify({ nombre, datos }) }),

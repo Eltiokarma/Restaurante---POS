@@ -18,6 +18,7 @@ El encargo completo está en [`BRIEF.md`](BRIEF.md). Las cifras salen de
 | `motor/personal.py` | Planilla propia, una fila por persona (cada una con su sueldo o jornal), pago mensual, quincenal o por día, turno día/noche, y cuándo sale la plata en el mes. |
 | `motor/sensibilidad.py` | Tornado (qué número mueve más la utilidad), cuánto aguanta cada uno antes de perder y tabla precio × menús/día. |
 | `motor/recetas.py` | Costeo por receta con merma por insumo, margen por plato y del menú, ingeniería de menú (estrella, caballito, rompecabezas, perro) y peso de cada insumo en las compras. |
+| `data/arquetipos.json` | Catálogo de restaurantes tipo (dueña que cocina, familia sin sueldos, inversor, dueño ausente, puesto de mercado, Nuevo RUS, ejecutivo, día y noche, exitoso de referencia). Se cargan como escenarios al arrancar, sin pisar los editados. |
 | `web/` | El panel (React + Vite): simulador del mes con barras, flujo a 10 años y escenarios guardados. |
 | `motor/bd.py` | Base de datos: `ciudades`, `zonas`, `parametros` (cada cifra con origen, fuente, fecha y confianza), `fuentes` y `escenarios`. |
 | `tests/` | Regresión: los 12 equilibrios del brief y 96 combinaciones contra el prototipo (`referencia_prototipo.json`, generado corriendo su JavaScript con Node). |
@@ -28,7 +29,7 @@ El encargo completo está en [`BRIEF.md`](BRIEF.md). Las cifras salen de
 ```bash
 cd estudio
 pip install -r requirements.txt
-python -m pytest tests/ -q            # 138 tests
+python -m pytest tests/ -q            # 139 tests
 python -m motor.bd                    # crea y siembra la base (SQLite local: estudio.db)
 DATABASE_URL=postgres://... python -m motor.bd   # lo mismo en el Postgres de Railway
 ```
@@ -70,7 +71,7 @@ frontera de precio, mes a q, Monte Carlo y curva de utilidad; acepta
 correcciones de insumos, alquiler, sueldos, gas y servicios),
 `POST /api/flujo` (10 años del régimen elegido y comparación de los cuatro),
 `POST /api/sensibilidad`, `/api/insumos` y `/api/platos` (CRUD de recetas),
-`GET /api/platos/analisis` y
+`GET /api/platos/analisis`, `POST /api/comparar` (métricas de varios escenarios lado a lado) y
 `GET/POST/DELETE /api/escenarios` (juegos de barras guardados con nombre).
 
 Panel en desarrollo: `uvicorn api:app --port 8001` en `estudio/` y

@@ -14,6 +14,7 @@ import {
   type ValoresLocal,
 } from './api'
 import { Escenarios } from './Escenarios'
+import { PanelComparar } from './PanelComparar'
 import { PanelFlujo } from './PanelFlujo'
 import { PanelPlatos } from './PanelPlatos'
 import { PanelSensibilidad } from './PanelSensibilidad'
@@ -88,15 +89,38 @@ function Entrada({ onEntrar }: { onEntrar: (t: string) => void }) {
   )
 }
 
-type Pestana = 'simulador' | 'flujo' | 'sensibilidad' | 'platos'
+type Pestana = 'simulador' | 'flujo' | 'sensibilidad' | 'platos' | 'comparar'
 const PESTANAS: { id: Pestana; texto: string }[] = [
   { id: 'simulador', texto: 'Mes' },
   { id: 'flujo', texto: '10 años' },
   { id: 'sensibilidad', texto: 'Sensibilidad' },
   { id: 'platos', texto: 'Platos' },
+  { id: 'comparar', texto: 'Comparar' },
 ]
 
+type Tema = 'light' | 'dark'
+
+function temaInicial(): Tema {
+  try {
+    const t = localStorage.getItem('estudio-tema')
+    if (t === 'light' || t === 'dark') return t
+  } catch {
+    /* sin almacenamiento: se sigue al sistema */
+  }
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
 export default function App() {
+  const [tema, setTema] = useState<Tema>(temaInicial)
+  useEffect(() => {
+    document.documentElement.dataset.theme = tema
+    try {
+      localStorage.setItem('estudio-tema', tema)
+    } catch {
+      /* no pasa nada */
+    }
+  }, [tema])
+
   const [token, setToken] = useState(tokenGuardado())
   const [ciudades, setCiudades] = useState<Ciudad[]>([])
   const [esc, setEsc] = useState<Escenario>(ESCENARIO_INICIAL)
@@ -189,6 +213,14 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <button
+          type="button"
+          className="es-salir"
+          aria-label={tema === 'dark' ? 'Pasar a modo día' : 'Pasar a modo noche'}
+          onClick={() => setTema((t) => (t === 'dark' ? 'light' : 'dark'))}
+        >
+          {tema === 'dark' ? '☀️ Día' : '🌙 Noche'}
+        </button>
         <button type="button" className="es-salir" onClick={salir}>
           Salir
         </button>
@@ -202,6 +234,15 @@ export default function App() {
       )}
       {pestana === 'flujo' && <PanelFlujo esc={esc} setEsc={setEsc} sup={sup} setSup={setSup} flujo={flujo} />}
       {pestana === 'sensibilidad' && <PanelSensibilidad esc={esc} onError={manejar} />}
+      {pestana === 'comparar' && (
+        <PanelComparar
+          onAbrir={(g) => {
+            cargar(g)
+            setPestana('simulador')
+          }}
+          onError={manejar}
+        />
+      )}
       {pestana === 'platos' && (
         <PanelPlatos
           esc={esc}
