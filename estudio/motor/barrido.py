@@ -141,6 +141,33 @@ def barrido(local: Local, esc: Escenario, q0: float, nacional: dict, riesgo: dic
                                                    "parte_actual": mezcla.parte_actual}}
 
 
+def curvas_precio(r: dict) -> dict:
+    """Utilidad según el precio para cada elasticidad, con lo demás como en
+    la situación de hoy (porción estándar, mezcla y turno actuales)."""
+    base = r["base"]
+    if not base:
+        return {}
+    salida = {}
+    for f in r["filas"]:
+        if f["calidad"] == base["calidad"] and f["mezcla"] == base["mezcla"] and f["noche"] == base["noche"]:
+            salida.setdefault(str(f["elasticidad"]), []).append(
+                {"precio": f["precio"], "q": f["q"], "utilidad": f["utilidad"]})
+    for v in salida.values():
+        v.sort(key=lambda x: x["precio"])
+    return salida
+
+
+def resumen(r: dict) -> dict:
+    """Lo que hace falta para comparar negocios sin cargar las 500 filas."""
+    ds = r["decisiones"]
+    sin_noche = [d for d in ds if not d["noche"]]
+    misma_noche = [d for d in ds if d["noche"] == (r["base"] or {}).get("noche")]
+    return {"base": r["base"], "mejor": ds[0] if ds else None, "top": ds[:5],
+            "mejor_sin_noche": sin_noche[0] if sin_noche else None,
+            "mejor_sin_cambiar_turno": misma_noche[0] if misma_noche else None,
+            "curvas": curvas_precio(r), "mezcla": r.get("mezcla")}
+
+
 # ---------------------------------------------------------------- estrés
 
 def _sueldos(local: Local, esc: Escenario, x: float):
@@ -224,5 +251,5 @@ def mezcla_desde_analisis(analisis: dict) -> Mezcla | None:
                   parte_actual=round(v_res / (v_res + v_otros), 2))
 
 
-__all__ = ["CALIDAD", "Factores", "GOLPES", "Mezcla", "NOMBRE_CALIDAD", "SUPUESTOS", "barrido", "estres",
-           "mezcla_desde_analisis"]
+__all__ = ["CALIDAD", "Factores", "GOLPES", "Mezcla", "NOMBRE_CALIDAD", "SUPUESTOS", "barrido", "curvas_precio",
+           "estres", "mezcla_desde_analisis", "resumen"]

@@ -307,10 +307,12 @@ export interface FilaCorrida {
   van: number
 }
 
+export type Curvas = Record<string, { precio: number; q: number; utilidad: number }[]>
+
 export interface Corrida {
   id: number
   nombre: string
-  tipo: 'decisiones' | 'estres'
+  tipo: 'decisiones' | 'decisiones_todos' | 'estres'
   estado: 'pendiente' | 'corriendo' | 'lista' | 'error' | 'interrumpida'
   progreso: number
   total: number
@@ -328,6 +330,7 @@ export interface Corrida {
     base?: DecisionCorrida | null
     supuestos?: Record<string, string>
     mezcla?: { costo_res: number; costo_otros: number; acompanamiento: number; parte_actual: number } | null
+    curvas?: Curvas
     // estrés
     golpes?: { clave: string; nombre: string }[]
     negocios?: {
@@ -335,6 +338,16 @@ export interface Corrida {
       nombre: string
       categoria?: string | null
       error?: string
+      // decisiones de todos
+      precio0?: number
+      q0?: number
+      base?: DecisionCorrida | null
+      mejor?: DecisionCorrida | null
+      top?: DecisionCorrida[]
+      mejor_sin_noche?: DecisionCorrida | null
+      mejor_sin_cambiar_turno?: DecisionCorrida | null
+      curvas?: Curvas
+      // estrés
       golpes?: { golpe: string; nombre: string; utilidad: number; ingreso_dueno: number; prob_perdida: number }[]
     }[]
   } | null
@@ -366,7 +379,7 @@ export const api = {
   comparar: (ids: number[]) => pedir<Comparado[]>('/comparar', { method: 'POST', body: JSON.stringify({ ids }) }),
   corridas: () => pedir<Corrida[]>('/corridas'),
   corrida: (id: number) => pedir<Corrida>(`/corridas/${id}`),
-  lanzarCorrida: (cuerpo: { tipo: 'decisiones' | 'estres'; escenario_id?: number; ids?: number[]; usar_recetas?: boolean }) =>
+  lanzarCorrida: (cuerpo: { tipo: 'decisiones' | 'decisiones_todos' | 'estres'; escenario_id?: number; ids?: number[]; usar_recetas?: boolean }) =>
     pedir<Corrida>('/corridas', { method: 'POST', body: JSON.stringify(cuerpo) }),
   borrarCorrida: (id: number) => pedir<void>(`/corridas/${id}`, { method: 'DELETE' }),
   escenarios: () => pedir<Guardado[]>('/escenarios'),

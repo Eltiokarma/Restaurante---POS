@@ -916,3 +916,28 @@ input[type='password'],
   accent-color: var(--acento);
   flex: none;
 }
+.es-pesa-linea {
+  position: absolute;
+  top: 11px;
+  height: 2px;
+  background: var(--texto-3);
+}
+.es-pesa {
+  position: absolute;
+  top: 5px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 50%;
+  border: 2px solid var(--superficie);
+}
+.es-pesa-hoy {
+  background: var(--texto-3);
+}
+.es-pesa-mejor {
+  background: var(--serie-1);
+}
+.es-tabla td.es-izq {
+  white-space: normal;
+  min-width: 220px;
+}
