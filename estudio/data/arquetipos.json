@@ -71,11 +71,11 @@
   "datos": {
    "ficha": {
     "categoria": "Quién trabaja",
-    "descripcion": "Mamá cocina, hijo atiende, tía ayuda: nadie cobra sueldo. La utilidad es el ingreso de la familia. Un ayudante pagado por día.",
+    "descripcion": "Mamá cocina, hijo atiende, tía ayuda: nadie cobra sueldo. La utilidad es el ingreso de la familia. Un ayudante pagado por día. Mismo local, precio y venta que la dueña que cocina: solo cambia quién trabaja.",
     "supuestos": [
-     "precio S/ 9",
-     "50 menús/día",
-     "local barato S/ 800",
+     "precio S/ 10",
+     "60 menús/día",
+     "alquiler S/ 1,200",
      "3 familiares a S/ 0"
     ],
     "fuente": "Supuesto del estudio, a contrastar con datos reales"
@@ -86,9 +86,9 @@
     "segmento": "popular",
     "anio": 2026,
     "formal": false,
-    "balones": 3,
+    "balones": 4,
     "sueldo_dueno": false,
-    "q": 50,
+    "q": 60,
     "dias": 26,
     "planilla": [
      {
@@ -129,17 +129,17 @@
      }
     ],
     "noche": null,
-    "precio": 9,
-    "insumos": 4.0,
-    "alquiler_mes": 800,
+    "precio": 10,
+    "insumos": 4.3,
+    "alquiler_mes": 1200,
     "sueldo_cocinero": 1300,
     "sueldo_ayudante": 1230,
     "sueldo_mozo": 1230,
     "gas_balon45": 220,
-    "servicios_mes": 300
+    "servicios_mes": 350
    },
    "supuestos": {
-    "inversion": 10000,
+    "inversion": 15000,
     "meses_arranque": 6,
     "arranque_desde": 0.4,
     "crecimiento_q": 0,

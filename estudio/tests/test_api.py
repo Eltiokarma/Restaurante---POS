@@ -130,6 +130,34 @@ def test_comparar_trae_la_sensibilidad_de_cada_caso(cliente):
     assert abs(r["Inversor (promedio)"]["quiebres"]["precio"]) < abs(exitoso["quiebres"]["precio"])
 
 
+def test_familia_y_duena_solo_difieren_en_quien_trabaja(cliente):
+    lista = cliente.get("/api/escenarios", headers=H).json()
+    ids = [g["id"] for g in lista if g["nombre"] in ("Dueña que cocina", "Familia sin sueldos")]
+    r = {x["nombre"]: x for x in cliente.post("/api/comparar", headers=H, json={"ids": ids}).json()}
+    duena, familia = r["Dueña que cocina"], r["Familia sin sueldos"]
+    assert duena["ventas_mes"] == familia["ventas_mes"]
+    assert (duena["personas_casa"], familia["personas_casa"]) == (1, 3)
+    # la casa se lleva parecido, pero la familia lo reparte entre tres
+    assert familia["ingreso_por_persona"] < duena["ingreso_por_persona"] / 2
+
+
+def test_comparar_a_igualdad_de_condiciones(cliente):
+    lista = cliente.get("/api/escenarios", headers=H).json()
+    ids = [g["id"] for g in lista if g["nombre"] in ("Inversor (promedio)", "Exitoso (referencia compuesta)",
+                                                     "Fonda en casa propia")]
+    propios = {x["nombre"]: x for x in cliente.post("/api/comparar", headers=H, json={"ids": ids}).json()}
+    iguales = cliente.post("/api/comparar", headers=H, json={
+        "ids": ids, "igualar": {"precio": 10, "q": 60, "alquiler_mes": 1200}}).json()
+    assert {(x["precio"], x["menus_dia"]) for x in iguales} == {(10, 60)}
+    assert len({x["ventas_mes"] for x in iguales}) == 1
+    # solo con el alquiler igualado, la fonda pierde su casa gratis y gana menos
+    con_alquiler = cliente.post("/api/comparar", headers=H, json={"ids": ids, "igualar": {"alquiler_mes": 1200}}).json()
+    fonda = next(x for x in con_alquiler if x["nombre"] == "Fonda en casa propia")
+    assert fonda["alquiler_pct"] > 0 and fonda["utilidad_mes"] < propios["Fonda en casa propia"]["utilidad_mes"]
+    # sin dueño que trabaje no hay "por persona"
+    assert next(x for x in iguales if x["nombre"] == "Inversor (promedio)")["ingreso_por_persona"] is None
+
+
 def _esperar(cliente, id_):
     import time
     for _ in range(300):

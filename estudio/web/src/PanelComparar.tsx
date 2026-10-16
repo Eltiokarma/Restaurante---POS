@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { api, type Comparado, type Guardado } from './api'
+import { api, type Comparado, type Guardado, type Igualar } from './api'
+import { Chips } from './Controles'
 import { anios, pct, soles } from './formato'
 
 interface Props {
@@ -36,6 +37,16 @@ const FILAS: { grupo: string; filas: Fila[] }[] = [
         titulo: 'Lo que se lleva el dueño (utilidad + su sueldo)',
         valor: (c) => soles(c.ingreso_dueno_mes),
         num: (c) => c.ingreso_dueno_mes,
+        mejor: 'alto',
+      },
+      {
+        titulo: 'Personas de la casa que viven de eso',
+        valor: (c) => (c.personas_casa ? String(c.personas_casa) : 'ninguna (no trabaja ahí)'),
+      },
+      {
+        titulo: 'Por persona de la casa',
+        valor: (c) => (c.ingreso_por_persona === null ? '—' : soles(c.ingreso_por_persona)),
+        num: (c) => c.ingreso_por_persona,
         mejor: 'alto',
       },
       { titulo: 'Margen', valor: (c) => pct(c.margen), num: (c) => c.margen, mejor: 'alto' },
@@ -163,10 +174,23 @@ function Barras({ titulo, datos }: { titulo: string; datos: { nombre: string; v:
   )
 }
 
+// El local de la dueña que cocina: menú popular de Juliaca
+// (el gas y la luz también se igualan, aunque no se editan aquí)
+const BASE_IGUAL: Igualar = { precio: 10, q: 60, alquiler_mes: 1200, insumos: 4.3, balones: 4, servicios_mes: 350 }
+
+const CAMPOS_IGUAL: { id: 'precio' | 'q' | 'alquiler_mes' | 'insumos'; texto: string; paso: number }[] = [
+  { id: 'precio', texto: 'Precio del menú (S/)', paso: 0.5 },
+  { id: 'q', texto: 'Menús al día', paso: 5 },
+  { id: 'alquiler_mes', texto: 'Alquiler al mes (S/)', paso: 100 },
+  { id: 'insumos', texto: 'Insumos por menú (S/)', paso: 0.1 },
+]
+
 export function PanelComparar({ onAbrir, onError }: Props) {
   const [lista, setLista] = useState<Guardado[]>([])
   const [elegidos, setElegidos] = useState<number[]>([])
   const [datos, setDatos] = useState<Comparado[]>([])
+  const [igual, setIgual] = useState(false)
+  const [base, setBase] = useState<Igualar>(BASE_IGUAL)
 
   useEffect(() => {
     api
@@ -180,9 +204,9 @@ export function PanelComparar({ onAbrir, onError }: Props) {
 
   useEffect(() => {
     if (!elegidos.length) return setDatos([])
-    const t = setTimeout(() => api.comparar(elegidos).then(setDatos).catch(onError), 200)
+    const t = setTimeout(() => api.comparar(elegidos, igual ? base : null).then(setDatos).catch(onError), 300)
     return () => clearTimeout(t)
-  }, [elegidos, onError])
+  }, [elegidos, igual, base, onError])
 
   const grupos = useMemo(() => {
     const g = new Map<string, Guardado[]>()
@@ -210,6 +234,47 @@ export function PanelComparar({ onAbrir, onError }: Props) {
         Elige qué negocios comparar. Todos usan el mismo motor; cada uno con sus números (abre uno en el simulador para
         moverlos y guárdalo con otro nombre para tener una variante).
       </p>
+      <section>
+        <h2>Cómo compararlos</h2>
+        <Chips
+          valor={igual}
+          onChange={setIgual}
+          opciones={[
+            { valor: false, texto: 'Cada uno con sus números' },
+            { valor: true, texto: 'A igualdad de condiciones' },
+          ]}
+        />
+        {igual && (
+          <>
+            <p className="es-nota">
+              Todos con el mismo precio, venta, alquiler e insumos (y el mismo gas y luz). Lo que queda distinto es cómo se
+              organiza cada uno: quién trabaja, cómo se le paga, si es formal y si abre de noche.
+            </p>
+            <div className="es-campos">
+              {CAMPOS_IGUAL.map((f) => (
+                <label key={f.id}>
+                  <span>{f.texto}</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step={f.paso}
+                    value={base[f.id]}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      // precio y venta en cero no tienen sentido (y el servicio los rechaza)
+                      if (Number.isFinite(v) && (v > 0 || (v === 0 && f.id !== 'precio' && f.id !== 'q'))) setBase((b) => ({ ...b, [f.id]: v }))
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+            <button type="button" className="es-secundario" onClick={() => setBase(BASE_IGUAL)}>
+              Volver al local de la dueña que cocina
+            </button>
+          </>
+        )}
+      </section>
       {grupos.map(([cat, gs]) => (
         <section key={cat}>
           <h2>{cat}</h2>

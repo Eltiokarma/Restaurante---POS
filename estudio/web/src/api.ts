@@ -248,6 +248,16 @@ export interface Ficha {
   fuente: string
 }
 
+/** Números que se ponen iguales para todos al comparar. */
+export interface Igualar {
+  precio: number
+  q: number
+  alquiler_mes: number
+  insumos: number
+  balones: number
+  servicios_mes: number
+}
+
 export interface Comparado {
   id: number
   nombre: string
@@ -257,6 +267,8 @@ export interface Comparado {
   utilidad_mes: number
   margen: number
   ingreso_dueno_mes: number
+  personas_casa: number
+  ingreso_por_persona: number | null
   equilibrio: number | null
   precio_minimo: number
   prob_perdida: number
@@ -378,7 +390,8 @@ export const api = {
     pedir<Plato>(id ? `/platos/${id}` : '/platos', { method: id ? 'PUT' : 'POST', body: JSON.stringify(p) }),
   borrarPlato: (id: number) => pedir<void>(`/platos/${id}`, { method: 'DELETE' }),
   analisis: (igv: number, formal: boolean) => pedir<AnalisisPlatos>(`/platos/analisis?igv=${igv}&formal=${formal}`),
-  comparar: (ids: number[]) => pedir<Comparado[]>('/comparar', { method: 'POST', body: JSON.stringify({ ids }) }),
+  comparar: (ids: number[], igualar?: Igualar | null) =>
+    pedir<Comparado[]>('/comparar', { method: 'POST', body: JSON.stringify({ ids, igualar: igualar ?? null }) }),
   corridas: () => pedir<Corrida[]>('/corridas'),
   corrida: (id: number) => pedir<Corrida>(`/corridas/${id}`),
   lanzarCorrida: (cuerpo: { tipo: 'decisiones' | 'decisiones_todos' | 'estres'; escenario_id?: number; ids?: number[]; usar_recetas?: boolean }) =>

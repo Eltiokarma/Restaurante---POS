@@ -34,6 +34,7 @@ from motor.bd import (
     local_desde_bd, motor_bd, sembrar,
 )
 from motor.flujo import NOMBRE_REGIMEN, REGIMENES, SUPUESTOS, Supuestos, comparar_regimenes, flujo_caja
+from motor.igualdad import igualar, personas_casa
 from motor.modelo import AREAS, MODALIDADES, TURNOS, Noche, Trabajador, modelo
 from motor.personal import calendario_pagos
 from motor.recetas import TIPOS, InsumoR, PlatoR, analizar
@@ -503,8 +504,20 @@ def analisis_platos(igv: float = 10.5, formal: bool = True, s: Session = Depends
 
 # ---------- Comparar negocios ----------
 
+class IgualarIn(BaseModel):
+    """Números que se ponen iguales para todos al comparar (None = no se toca)."""
+    precio: float | None = Field(default=None, gt=0, le=200)
+    q: float | None = Field(default=None, gt=0, le=1500)
+    alquiler_mes: float | None = Field(default=None, ge=0, le=100_000)
+    insumos: float | None = Field(default=None, ge=0, le=100)
+    balones: float | None = Field(default=None, ge=0, le=100)
+    servicios_mes: float | None = Field(default=None, ge=0, le=20_000)
+
+
 class CompararIn(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=20)
+    # Con esto, todos se calculan con el mismo precio, volumen, alquiler…
+    igualar: IgualarIn | None = None
 
 
 def _desde_guardado(datos: dict, s: Session):
@@ -528,9 +541,12 @@ def _metricas(datos: dict, s: Session) -> dict:
     insumos = (m.var_u * m.q_mes + (m.p_net_noche - m.contrib_noche) * m.q_mes_noche)
     trabajadores = (sum(t.cantidad for t in esc.planilla) if esc.planilla else m.cocina + m.mozos)
     sueldo = 1500 if e.sueldo_dueno else 0
+    personas = personas_casa(datos.get("escenario", {}))
     return {
         "ventas_mes": round(m.ventas), "utilidad_mes": round(m.util), "margen": round(m.margen, 4),
         "ingreso_dueno_mes": round(m.util + sueldo),
+        "personas_casa": personas,
+        "ingreso_por_persona": round((m.util + sueldo) / personas) if personas else None,
         "equilibrio": equilibrio(local, esc, nacional),
         "precio_minimo": round(precio_minimo(local, e.q, esc, nacional), 2),
         "prob_perdida": mc.prob_perdida, "anio_malo": round(mc.p10), "anio_tipico": round(mc.p50),
@@ -550,9 +566,10 @@ def _metricas(datos: dict, s: Session) -> dict:
 def comparar(c: CompararIn, s: Session = Depends(sesion)):
     """Las mismas métricas para varios escenarios guardados, lado a lado."""
     salida = []
+    base = c.igualar.model_dump() if c.igualar else None
     for g in s.scalars(select(EscenarioGuardado).where(EscenarioGuardado.id.in_(c.ids))).all():
         try:
-            metricas = _metricas(g.datos or {}, s)
+            metricas = _metricas(igualar(g.datos or {}, base) if base else (g.datos or {}), s)
         except Exception as err:  # un escenario viejo o incompleto no tumba la comparación
             salida.append({"id": g.id, "nombre": g.nombre, "error": str(err)[:200]})
             continue

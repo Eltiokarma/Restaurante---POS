@@ -16,6 +16,7 @@ from pathlib import Path
 
 from motor import Escenario, cargar_dataset, equilibrio, local_de_ciudad, modelo, precio_minimo, simular
 from motor.flujo import NOMBRE_REGIMEN, REGIMENES, Supuestos, comparar_regimenes, flujo_caja
+from motor.igualdad import BASE as BASE_IGUAL, igualar, personas_casa
 from motor.modelo import Noche, Trabajador
 from motor.barrido import Factores, barrido, estres, mezcla_desde_analisis, resumen
 from motor.montecarlo import muestras
@@ -223,6 +224,27 @@ def ciudades() -> list[dict]:
     return sorted(salida, key=lambda f: f["eq_2026"])
 
 
+def igualdad(arquetipos: list[dict], candela: dict | None) -> dict:
+    """Cada negocio con sus números y en el local de referencia (mismo
+    precio, venta, alquiler, insumos, gas y luz): lo que queda distinto es
+    cómo se organiza."""
+    pares = [(a["nombre"], a["datos"]) for a in arquetipos]
+    if candela:
+        pares.append(("Candela (datos del POS)", candela))
+
+    def medir(datos: dict) -> dict:
+        local, esc, _sup, q = armar(datos)
+        m = modelo(local, q, esc, NAC)
+        ingreso = m.util + (1500 if esc.sueldo_dueno else 0)
+        personas = personas_casa(datos["escenario"])
+        return {"utilidad": m.util, "ingreso": ingreso, "personas": personas,
+                "por_persona": ingreso / personas if personas else None,
+                "personal": m.personal, "equilibrio": equilibrio(local, esc, NAC)}
+
+    filas = [{"nombre": n, "propio": medir(d), "igual": medir(igualar(d))} for n, d in pares]
+    return {"base": BASE_IGUAL, "filas": filas}
+
+
 def _api(ruta: str):
     url, token = os.getenv("ESTUDIO_URL"), os.getenv("ESTUDIO_TOKEN")
     if not url or not token:
@@ -251,6 +273,7 @@ def generar() -> dict:
         robustez.append(corridas(g["nombre"], g["datos"], mezcla))
     datos = {
         "hallazgos": hallazgos(arquetipos, g["datos"] if candela else None),
+        "igualdad": igualdad(arquetipos, g["datos"] if candela else None),
         "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},
         "fuentes": DATA["fuentes"], "regimenes": list(REGIMENES),
