@@ -603,11 +603,38 @@ def fig_trabajo(d):
     guardar(fig, "trabajo_economica")
 
 
+def fig_capacidad(d):
+    """Cuántos menús aguanta la gente de cada negocio (con la productividad de
+    Candela) frente a los que vende."""
+    cp = d.get("capacidad")
+    if not cp:
+        return
+    filas = sorted(cp, key=lambda c: c["q"] - c["tope"])
+    hi = 240
+    fig, ax = plt.subplots(figsize=(ANCHO, 3.4))
+    for i, c in enumerate(filas):
+        ax.barh(i, min(c["tope"], hi), color=GRILLA, height=0.6, zorder=1)
+        falta = c["q"] > c["tope"] + 0.5
+        ax.scatter([min(c["q"], hi)], [i], color=PERDIDA if falta else AZUL, s=34, zorder=4)
+        gente = f"{c['cocina']} + {c['salon']}"
+        ax.text(min(max(c["q"], c["tope"]), hi) + 4, i, gente, va="center", ha="left", fontsize=7.5, color=TINTA2)
+    ax.set_xlim(0, hi)
+    ax.set_yticks(range(len(filas)), [corto(c["nombre"]) for c in filas])
+    ax.set_xlabel("Menús al día (al lado: personas en cocina + en salón)")
+    marcas = [Patch(color=GRILLA, label="lo que aguanta su gente"),
+              Line2D([], [], marker="o", color=AZUL, ls="", label="vende, y le alcanza"),
+              Line2D([], [], marker="o", color=PERDIDA, ls="", label="vende más de lo que aguanta su gente")]
+    ax.legend(handles=marcas, fontsize=7, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=3, frameon=False)
+    grilla_x(ax)
+    guardar(fig, "capacidad")
+
+
 def generar(d: dict | None = None) -> None:
     d = d or json.loads((SALIDA / "datos.json").read_text(encoding="utf-8"))
     FIG.mkdir(parents=True, exist_ok=True)
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
-              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad, fig_factores, fig_trabajo):
+              fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad, fig_factores, fig_trabajo,
+              fig_capacidad):
         f(d)
 
 
