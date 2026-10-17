@@ -202,7 +202,7 @@ def hallazgos(arquetipos: list[dict], candela_datos: dict | None) -> dict:
             "a_15_sin_igv": modelo(local.con(precio=15.0), HISTORIA["q_abrir"], sin_igv, NAC).util,
             "equilibrio_15_sin_igv": equilibrio(local.con(precio=15.0), sin_igv, NAC),
             "curvas_demanda": {str(el): [{"precio": 9 + 0.5 * k, "q": q * ((9 + 0.5 * k) / local.precio) ** (-el)}
-                                         for k in range(13)] for el in (1.0, 2.0, 2.5, 3.0, 4.0)},
+                                         for k in range(13)] for el in (1.0, 2.0, 2.4, 3.0, 4.0)},
         }
     return salida
 
