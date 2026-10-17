@@ -513,6 +513,38 @@ def parametros() -> dict:
     }
 
 
+def estados_anuales(arquetipos: list[dict], candela: dict | None) -> list[dict]:
+    """Estado de resultados de un año lleno (el mes de cada negocio por doce),
+    con el impuesto de su régimen. Es el apoyo visual de los anexos."""
+    from motor.flujo import VIDA_UTIL, _impuesto_anual
+
+    pares = [(a["nombre"], a["datos"]) for a in arquetipos]
+    if candela:
+        pares.append(("Candela (datos del POS)", candela))
+    salida = []
+    for nombre, datos in pares:
+        local, esc, sup, q = armar(datos)
+        m = modelo(local, q, esc, NAC)
+        dueno = 1500.0 if esc.sueldo_dueno else 0.0
+        ventas, netas = 12 * m.ventas, 12 * m.ventas_netas
+        insumos = 12 * (m.var_u * m.q_mes + (m.p_net_noche - m.contrib_noche) * m.q_mes_noche)
+        planilla = 12 * (m.personal - dueno)
+        alquiler, gas = 12 * m.alquiler, 12 * m.gas
+        otros = 12 * (m.fijos - m.personal - m.alquiler - m.gas)
+        operativa = 12 * m.util
+        deprec = sup.inversion / VIDA_UTIL
+        impuesto = _impuesto_anual(sup.regimen, netas, operativa, deprec, NAC.get("uit_2026", 5500), [m.ventas] * 12)
+        salida.append({
+            "nombre": nombre, "regimen": NOMBRE_REGIMEN[sup.regimen], "q": q, "precio": local.precio,
+            "dias": 12 * esc.dias, "menus": 12 * esc.dias * q, "ventas": ventas, "igv": ventas - netas, "netas": netas,
+            "insumos": insumos, "contribucion": netas - insumos, "planilla": planilla, "dueno": 12 * dueno,
+            "alquiler": alquiler, "gas": gas, "otros": otros, "operativa": operativa, "depreciacion": deprec,
+            "antes_impuesto": operativa - deprec, "impuesto": impuesto, "neta": operativa - impuesto,
+            "casa": operativa - impuesto + 12 * dueno,
+        })
+    return salida
+
+
 N_SORTEOS = 1000
 
 
@@ -633,6 +665,7 @@ def generar() -> dict:
         "igualdad": igualdad(arquetipos, g["datos"] if candela else None),
         "trabajo": trabajo(arquetipos, g["datos"] if candela else None),
         "capacidad": capacidades(arquetipos, g["datos"] if candela else None),
+        "estados": estados_anuales(arquetipos, g["datos"] if candela else None),
         "entradas": entradas(arquetipos, g["datos"] if candela else None),
         "parametros": parametros(),
         "organizacion": organizacion(arquetipos, g["datos"] if candela else None),

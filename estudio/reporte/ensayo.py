@@ -554,6 +554,34 @@ Variable & Valor & Origen \\
                          f"({c['limita']}) & {falta} & {s(c['utilidad'])} & {s(c['utilidad_ajustada'])} \\\\")
         return "\n".join(filas)
 
+    estados = d.get("estados", [])
+
+    def estado_tabla(e):
+        net = e["netas"] or 1
+        filas = [("Ventas (lo que entra a caja)", e["ventas"], False), ("IGV", -e["igv"], False),
+                 ("Ventas sin IGV", e["netas"], True), ("Insumos", -e["insumos"], False),
+                 ("Margen de contribución", e["contribucion"], True), ("Planilla", -e["planilla"], False),
+                 ("Sueldo del dueño", -e["dueno"], False), ("Alquiler", -e["alquiler"], False),
+                 ("Gas", -e["gas"], False), ("Luz, agua y otros", -e["otros"], False),
+                 ("Utilidad operativa", e["operativa"], True), ("Impuesto del régimen", -e["impuesto"], False),
+                 ("Utilidad después de impuestos", e["neta"], True),
+                 ("Para la casa (con sueldo del dueño)", e["casa"], True)]
+        cuerpo = "\n".join((r"\textbf{" + esc(t) + "} & \\textbf{" + s(v) + "} & \\textbf{" + p(v / net) + "}" if negrita
+                             else esc(t) + " & " + s(v) + " & " + p(v / net)) + r" \\"
+                            for t, v, negrita in filas if not (t == "Sueldo del dueño" and v == 0))
+        return (r"\begin{minipage}[t]{0.485\textwidth}\footnotesize" + "\n"
+                + r"\textbf{" + esc(corto(e["nombre"])) + r"}\\[1pt]{\color{gris}\scriptsize " + f"{n(e['menus'])} menús al año a "
+                + f"{s(e['precio'])}; {esc(e['regimen'])}" + r"}\par\vspace{2pt}" + "\n"
+                + r"\begin{tabularx}{\linewidth}{@{}Xrr@{}}\toprule & Soles & \% \\\midrule" + "\n" + cuerpo + "\n"
+                + r"\bottomrule\end{tabularx}\end{minipage}")
+
+    def anexo_estados():
+        bloques = []
+        for i in range(0, len(estados), 2):
+            par = estados[i:i + 2]
+            bloques.append(r"\noindent " + r"\hfill ".join(estado_tabla(e) for e in par) + r"\par\vspace{10pt}")
+        return "\n".join(bloques)
+
     def lista_neg(nombres):
         return y_lista([("la " if corto(x).startswith("Fonda") else "el ") + corto(x)[:1].lower() + corto(x)[1:]
                         for x in nombres])
@@ -2206,6 +2234,23 @@ Las fuentes de los datos (leyes, precios, sueldos, alquileres) están en el anex
 velocidades de cocina y de la investigación por ciudad, en la carpeta \texttt{{estudio/investigacion}} del proyecto.
 
 \appendix
+{"" if not estados else rf"""\section{{Estados de resultados anuales}}\label{{sec:anexo_estados}}
+
+Como apoyo visual, este anexo presenta el estado de resultados de un año completo de cada negocio, con el local
+ya lleno: el mes del modelo multiplicado por doce, con los números del cuadro~\ref{{tab:entradas}}, el IGV de 2026
+y el impuesto del régimen de cada uno (en el MYPE, la renta descuenta la depreciación de la inversión a diez años).
+Los porcentajes son sobre la venta sin IGV. La figura~\ref{{fig:estados}} resume cada estado en una cascada.
+
+\begin{{figure}}[p]
+\centering
+\includegraphics[width=\textwidth]{{fig/estados.pdf}}
+\caption{{De la venta sin IGV a lo que queda después de impuestos, en un año lleno de cada negocio (miles de soles).
+En verde lo que queda; en rojo, la pérdida.}}\label{{fig:estados}}
+\end{{figure}}
+
+{anexo_estados()}
+\clearpage
+"""}
 \section{{Supuestos del modelo}}\label{{sec:anexo}}
 
 \begin{{itemize}}[leftmargin=1.2em]
