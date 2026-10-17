@@ -110,10 +110,8 @@ directo en la base del estudio (origen `propio`), que vive aparte.
    menú) en vez de escribirlas a mano.
 3. Precios observados por zona (formulario de sondeo, Fase 2).
 4. Arrastre de pérdidas en el MYPE y valor residual del local en el flujo.
-5. Organización de la cocina (know-how): tareas con tiempos fijos y por kilo,
-   diagramas de Gantt de la mañana y comparación entre la producción doméstica
-   (plato por plato) y el *mise en place* por estaciones. Sale la capacidad
-   máxima de servicio (platos por hora) y las horas-persona; la capacidad
-   entra al modelo como techo de venta (en Candela, a S/ 10 la cocina
-   colapsaba con ~90 menús). Hipótesis: es un factor de organización,
-   independiente de la formalidad. Faltan tiempos medidos en la cocina.
+5. Organización de la cocina: hecho en `motor/cocina.py` con las tareas de
+   `data/cocina.json` (Gantt de la mañana, cola del almuerzo con la llegada de
+   pedidos del POS, capacidad por forma de trabajar). Los tiempos de las tareas
+   y lo que la organización recorta del desorden son supuestos: falta una semana
+   de registro en la cocina de Candela para reemplazarlos.
