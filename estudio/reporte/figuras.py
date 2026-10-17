@@ -713,12 +713,48 @@ def fig_cola(d):
     guardar(fig, "cola")
 
 
+def fig_estados(d):
+    """Cascada del estado de resultados anual de cada negocio: de la venta
+    sin IGV a lo que queda después de impuestos."""
+    es = d.get("estados")
+    if not es:
+        return
+    filas, cols = -(-len(es) // 3), 3
+    fig, axes = plt.subplots(filas, cols, figsize=(ANCHO, 2.05 * filas))
+    pasos = [("Venta neta", "netas", 1), ("Insumos", "insumos", -1), ("Personal", None, -1),
+             ("Alquiler", "alquiler", -1), ("Gas, luz\ny otros", None, -1), ("Impuesto", "impuesto", -1)]
+    for ax, e in zip(axes.flat, es):
+        nivel, xs = 0.0, []
+        for k, (txt, clave, signo) in enumerate(pasos):
+            v = e[clave] if clave else (e["planilla"] + e["dueno"] if txt == "Personal" else e["gas"] + e["otros"])
+            v /= 1000
+            if signo > 0:
+                ax.bar(k, v, color=AZUL, width=0.7)
+                nivel = v
+            else:
+                ax.bar(k, -v, bottom=nivel, color="#c9c6bd", width=0.7)
+                nivel -= v
+        neta = e["neta"] / 1000
+        ax.bar(len(pasos), neta, color=PERDIDA if neta < 0 else VERDE, width=0.7)
+        ax.axhline(0, color=TINTA2, lw=0.6)
+        ax.set_xticks(range(len(pasos) + 1), [t for t, _, _ in pasos] + ["Queda"], fontsize=5.2, rotation=90)
+        ax.tick_params(axis="y", labelsize=6)
+        ax.set_title(f"{corto(e['nombre'])}", fontsize=7.5, pad=2)
+        ax.text(len(pasos), neta, f"{neta:+.0f}", ha="center", va="bottom" if neta >= 0 else "top", fontsize=6,
+                color=TINTA)
+    for ax in list(axes.flat)[len(es):]:
+        ax.axis("off")
+    fig.supylabel("Miles de soles al año", fontsize=8)
+    fig.tight_layout(h_pad=0.8, w_pad=0.6)
+    guardar(fig, "estados")
+
+
 def generar(d: dict | None = None) -> None:
     d = d or json.loads((SALIDA / "datos.json").read_text(encoding="utf-8"))
     FIG.mkdir(parents=True, exist_ok=True)
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
               fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad, fig_factores, fig_trabajo,
-              fig_capacidad, fig_gantt, fig_cola):
+              fig_capacidad, fig_gantt, fig_cola, fig_estados):
         f(d)
 
 

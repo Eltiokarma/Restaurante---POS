@@ -427,7 +427,7 @@
     "zona_id": null,
     "segmento": "popular",
     "anio": 2026,
-    "formal": true,
+    "formal": false,
     "balones": 2,
     "sueldo_dueno": true,
     "q": 30,
@@ -451,7 +451,8 @@
     "sueldo_ayudante": 1230,
     "sueldo_mozo": 1230,
     "gas_balon45": 220,
-    "servicios_mes": 250
+    "servicios_mes": 250,
+    "laboral_formal": true
    },
    "supuestos": {
     "inversion": 12000,
