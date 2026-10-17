@@ -253,6 +253,14 @@ def construir(d: dict) -> str:
                 f"Utilidad económica {s(trab['Familiar sin sueldos']['utilidad_economica'])}; cobran el "
                 f"{p(trab['Familiar sin sueldos']['parte_cobrada'])} de lo que vale su trabajo",
                 veredicto(parte_de("La familia recibe menos")) if parte_de("La familia recibe menos") is not None else "--"))
+        if capac:
+            faltos = [c for c in capac.values() if c["costo_falta"] > 0]
+            cnd = capac.get("Candela (datos del POS)")
+            filas.append((
+                "¿Alcanza la gente para lo que se vende?", "Productividad de Candela: unos 33 menús por persona en cocina, 50 por mozo",
+                f"A {len(faltos)} de {len(capac)} les falta gente"
+                + ("" if not cnd else f"; Candela tiene sitio para {n(cnd['holgura'])} menús más ({s(cnd['valor_holgura'])} al mes)"),
+                "su cuello es la demanda, no la cocina" if cnd else "--"))
         filas.append((
             "¿Conviene abrir de noche?", "Barrido con una noche tipo de 30 platos",
             "Mejora a todos los negocios", "sí, si existe esa demanda (no medida)"))
@@ -268,6 +276,16 @@ def construir(d: dict) -> str:
                          for k, (a, b, c, v) in enumerate(filas, start=1))
 
     trab = {t["nombre"]: t for t in d.get("trabajo", [])}
+    capac = {c["nombre"]: c for c in d.get("capacidad", [])}
+
+    def tabla_capacidad():
+        filas = []
+        for c in sorted(capac.values(), key=lambda c: c["q"] - c["tope"]):
+            falta = " + ".join(x for x in (f"{c['falta_cocina']} cocina" if c["falta_cocina"] else "",
+                                           f"{c['falta_salon']} salón" if c["falta_salon"] else "") if x) or "--"
+            filas.append(f"{esc(corto(c['nombre']))} & {n(c['q'])} & {c['cocina']} + {c['salon']} & {n(c['tope'])} "
+                         f"({c['limita']}) & {falta} & {s(c['utilidad'])} & {s(c['utilidad_ajustada'])} \\\\")
+        return "\n".join(filas)
 
     def y_lista(xs):
         return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " y " + xs[-1]
@@ -1006,8 +1024,8 @@ S/~9 y S/~13. La figura~\ref{{fig:precio_robusto}} muestra el resultado: con la 
 casi plana entre S/~10 y S/~11; con una clientela algo más sensible conviene bajar, y con una algo menos
 sensible, subir, pero en ningún caso el mejor precio deja más de
 {s(max(max(x['utilidad'] for x in serie) - next(x['utilidad'] for x in serie if abs(x['precio'] - rc['precio0']) < 1e-9) for serie in rc['curvas'].values()))}
-al mes sobre el de hoy. El barrido tiene además un techo de cocina: a S/~10 la cocina colapsaba con unos
-{n(rc['capacidad']) if rc.get('capacidad') else 90} menús, así que ninguna combinación vende más que eso, por mucho que la curva prometa
+al mes sobre el de hoy. El barrido tiene además un techo: con tres en cocina y tres mozos, Candela aguanta unos
+{n(rc['capacidad']) if rc.get('capacidad') else 90} menús al día (a S/~10, cuando los pasaba, colapsaba), así que ninguna combinación vende más que eso, por mucho que la curva prometa
 más clientela al bajar el precio.
 
 \begin{{figure}}[t]
@@ -1202,6 +1220,65 @@ son negocios rentables en sentido estricto: pagan a su gente lo que vale y todav
 que debería mirar quien compara una fonda con un empleo: la pregunta no es si el negocio deja plata, sino si
 deja más que lo que la misma gente ganaría trabajando para otro.
 
+{"" if not capac else rf"""\subsection{{¿Alcanza la gente para lo que se vende?}}\label{{sec:capacidad}}
+
+El modelo arma la planilla a partir de la venta ---más menús, más gente---, pero no se pregunta lo contrario: si
+la gente que tiene un negocio alcanza para lo que vende. Candela da la medida. Con tres personas en cocina y tres
+mozos aguanta hasta unos S/~1\,100 al día a S/~11, cerca de 100 menús; con dos mozos también, pero sobreexigidos.
+Eso es unos 33 menús por persona en cocina y hasta 50 por mozo en su tope. El experimento aplica esa productividad
+a todos los negocios: cuenta quiénes están en cocina y en salón al mediodía (incluida la gente de la casa), calcula
+cuánto aguantan y, si les falta alguien, le suma su sueldo a la cuenta.
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/capacidad.pdf}}
+\caption{{Menús al día que aguanta la gente de cada negocio con la productividad observada en Candela (barra)
+y los que vende (punto).}}\label{{fig:capacidad}}
+\end{{figure}}
+
+\begin{{table}}[h]
+\centering\footnotesize
+\caption{{La gente frente a la venta. ``Aguanta'': menús al día con unos 33 por persona en cocina y 50 por mozo, y qué
+pone el límite. ``Ajustada'': la utilidad del mes sumando el sueldo de quien falta.}}\label{{tab:capacidad}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}Xrcrlrr}}
+\toprule
+Negocio & Vende & Gente & Aguanta & Falta & Utilidad & Ajustada \\
+\midrule
+{tabla_capacidad()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+La figura~\ref{{fig:capacidad}} y el cuadro~\ref{{tab:capacidad}} muestran dos grupos. A
+{len([c for c in capac.values() if c['costo_falta'] > 0])} negocios les falta gente para lo que se les supone que venden. El inversor que
+supervisa es el caso que importa para Candela: la planilla automática le pone dos personas en cocina para
+{n(capac['Inversor que supervisa']['q'])} menús, que con la productividad de Candela sacan unos
+{n(capac['Inversor que supervisa']['tope_cocina'])}. Con el ayudante que le falta, su utilidad pasa de
+{s(capac['Inversor que supervisa']['utilidad'])} a {s(capac['Inversor que supervisa']['utilidad_ajustada'])}: buena parte de su
+ventaja sobre Candela era gente que la cuenta no pagaba. El exitoso, con {n(capac['Exitoso (referencia compuesta)']['q'])}
+menús, necesitaría {capac['Exitoso (referencia compuesta)']['falta_cocina'] + capac['Exitoso (referencia compuesta)']['falta_salon']}
+personas más a ese ritmo; el puesto de mercado, con un solo puesto de atención para {n(capac['Puesto de mercado informal']['q'])}
+menús, también queda corto, aunque en un mostrador se despacha más rápido que en mesa y su falta está exagerada. El
+propietario que cocina y el negocio familiar, con un solo mozo para {n(capac['Propietario que cocina']['q'])} menús, quedan
+apenas sobre el tope: o contratan a alguien más o trabajan sobreexigidos, que es otra forma del trabajo no
+cobrado de la sección anterior.
+{"" if 'Candela (datos del POS)' not in capac else rf"""
+Candela está en el otro grupo. Con {capac['Candela (datos del POS)']['cocina']} en cocina y {capac['Candela (datos del POS)']['salon']} en
+salón aguanta {n(capac['Candela (datos del POS)']['tope'])} menús y vende {n(capac['Candela (datos del POS)']['q'])}: tiene sitio
+para {n(capac['Candela (datos del POS)']['holgura'])} menús más al día sin contratar a nadie. Venderlos a S/~11 le dejaría
+{s(capac['Candela (datos del POS)']['valor_holgura'])} más al mes, porque la planilla, el alquiler y el gas ya están pagados y
+cada menú extra solo cuesta sus insumos. Esa es la respuesta a por qué rinde menos que el inversor: no le falta
+capacidad, le sobra. Paga a la gente de un local de {n(capac['Candela (datos del POS)']['tope'])} menús y vende {n(capac['Candela (datos del POS)']['q'])}. Su cuello de botella no es la cocina
+sino la demanda del mediodía, y lo que más la acercaría al inversor es llenar esa capacidad (pensionistas,
+pedidos para llevar, convenios con oficinas) antes que mover el precio o recortar personal."""}
+
+Una advertencia: los 33 menús por persona son los de la cocina de Candela tal como trabaja hoy. La planilla
+automática del modelo supone hasta 80 por persona, propio de cocinas grandes con estaciones y todo picado de
+antemano. La distancia entre esas dos cifras es justamente lo que mediría el estudio pendiente de organización
+de la cocina: si Candela trabajara por estaciones, el mismo equipo aguantaría más, y su holgura valdría más.
+
+"""}
 \subsection{{La trampa del Nuevo RUS}}
 
 La figura~\ref{{fig:nrus}} sigue a un local chico a medida que crece. Mientras vende hasta {nr.get('q_tope')}

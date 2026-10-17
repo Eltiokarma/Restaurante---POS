@@ -19,6 +19,7 @@ from motor.flujo import NOMBRE_REGIMEN, REGIMENES, Supuestos, comparar_regimenes
 from motor.igualdad import BASE as BASE_IGUAL, GRUPOS, igualar, personas_casa, shapley
 from motor.incertidumbre import RANGOS, perturbar
 from motor.trabajo import casa_desde, trabajo_de_la_casa
+from motor import capacidad as cap
 from motor.modelo import Noche, Trabajador
 from motor.barrido import Factores, barrido, estres, mezcla_desde_analisis, resumen
 from motor.montecarlo import muestras
@@ -355,6 +356,30 @@ def trabajo(arquetipos: list[dict], candela: dict | None) -> list[dict]:
     return salida
 
 
+def capacidades(arquetipos: list[dict], candela: dict | None) -> list[dict]:
+    """Experimento: con la productividad observada en Candela, ¿alcanza la gente
+    de cada negocio para su venta? Si falta, cuánto cuesta la que falta; si
+    sobra, cuánto dejarían los menús que ya podría sacar."""
+    pares = [(a["nombre"], a["datos"]) for a in arquetipos]
+    if candela:
+        pares.append(("Candela (datos del POS)", candela))
+    salida = []
+    for nombre, datos in pares:
+        local, esc, _sup, q = armar(datos)
+        m = modelo(local, q, esc, NAC)
+        cocina, salon = cap.gente(datos, m)
+        c = cap.capacidad(cocina, salon)
+        f_cocina, f_salon = cap.faltan(q, cocina, salon)
+        mult = 1.05 if esc.laboral else 1.0  # cargas de la microempresa, como el modelo
+        costo = mult * (f_cocina * local.sueldo_ayudante + f_salon * local.sueldo_mozo)
+        holgura = c["tope"] - q
+        extra = modelo(local, c["tope"], esc, NAC).util - m.util if holgura >= 1 and esc.planilla else None
+        salida.append({"nombre": nombre, "q": q, **c, "falta_cocina": f_cocina, "falta_salon": f_salon,
+                       "costo_falta": costo, "utilidad": m.util, "utilidad_ajustada": m.util - costo,
+                       "holgura": holgura, "valor_holgura": extra})
+    return salida
+
+
 N_SORTEOS = 1000
 
 
@@ -474,6 +499,7 @@ def generar() -> dict:
         "hallazgos": hallazgos(arquetipos, g["datos"] if candela else None),
         "igualdad": igualdad(arquetipos, g["datos"] if candela else None),
         "trabajo": trabajo(arquetipos, g["datos"] if candela else None),
+        "capacidad": capacidades(arquetipos, g["datos"] if candela else None),
         "supuestos_robustez": robustez_supuestos(arquetipos, g["datos"] if candela else None),
         "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez, "robustez_supuesta": robustez_supuesta,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},
