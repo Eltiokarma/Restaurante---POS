@@ -381,6 +381,33 @@ def capacidades(arquetipos: list[dict], candela: dict | None) -> list[dict]:
     return salida
 
 
+def organizacion(arquetipos: list[dict], candela: dict | None) -> list[dict]:
+    """Experimento: cada negocio organizando su cocina de cada forma. Cuánta
+    gente necesita para su venta, cuánto se ahorra frente a la doméstica y
+    cuántos menús aguantaría con la gente que tiene."""
+    c = coc.cargar()
+    pares = [(a["nombre"], a["datos"]) for a in arquetipos]
+    if candela:
+        pares.append(("Candela (datos del POS)", candela))
+    salida = []
+    for nombre, datos in pares:
+        local, esc, _sup, q = armar(datos)
+        m = modelo(local, q, esc, NAC)
+        cocina_, _salon = cap.gente(datos, m)
+        mult = 1.05 if esc.laboral else 1.0
+        fila = {"nombre": nombre, "q": q, "cocina": cocina_, "modos": {}}
+        base = None
+        for modo in coc.MODOS:
+            necesita = coc.gente_necesaria(modo, q, c)
+            tope = coc.capacidad_cocina(modo, cocina_, c)["tope"] if cocina_ else 0
+            if base is None:
+                base = necesita
+            ahorro = None if necesita is None or base is None else (base - necesita) * local.sueldo_ayudante * mult
+            fila["modos"][modo] = {"necesita": necesita, "tope": tope, "ahorro": ahorro}
+        salida.append(fila)
+    return salida
+
+
 def cocina(q_candela: float | None, candela: dict | None = None) -> dict:
     """Experimento: la misma cocina trabajando de tres maneras. Gantt de la
     mañana, cola del almuerzo y cuántos menús aguanta cada forma de trabajar."""
@@ -591,6 +618,7 @@ def generar() -> dict:
         "capacidad": capacidades(arquetipos, g["datos"] if candela else None),
         "entradas": entradas(arquetipos, g["datos"] if candela else None),
         "parametros": parametros(),
+        "organizacion": organizacion(arquetipos, g["datos"] if candela else None),
         "cocina": cocina(candela["q"] if candela else None, g["datos"] if candela else None),
         "supuestos_robustez": robustez_supuestos(arquetipos, g["datos"] if candela else None),
         "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez, "robustez_supuesta": robustez_supuesta,

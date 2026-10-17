@@ -20,6 +20,7 @@
   },
   "desorden_queda": {
    "domestico": 1.0,
+   "bloques": 0.8,
    "mise": 0.5,
    "estaciones": 0.3
   },

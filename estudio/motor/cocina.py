@@ -9,6 +9,9 @@ camino por delante (la ruta crítica). Se comparan tres formas de trabajar:
 - doméstica: cada persona hace sus platos de principio a fin, como en casa;
   lo que usan varios platos (la cebolla, el ajo) lo pica cada uno para el suyo,
   y todo se hace la misma mañana;
+- por bloques: lo que usan varios platos se prepara de una vez (toda la
+  cebolla junta), pero todo la misma mañana; separa el ahorro de agrupar del
+  ahorro de adelantar;
 - mise en place: lo que aguanta de un día para otro se deja listo la tarde
   anterior, de una vez para todos los platos; en la mañana cualquiera hace
   cualquier cosa, pero cambiar de puesto cuesta unos minutos;
@@ -21,8 +24,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 RUTA = Path(__file__).resolve().parent.parent / "data" / "cocina.json"
-MODOS = ("domestico", "mise", "estaciones")
-NOMBRE_MODO = {"domestico": "Doméstica", "mise": "Mise en place", "estaciones": "Por estaciones"}
+MODOS = ("domestico", "bloques", "mise", "estaciones")
+NOMBRE_MODO = {"domestico": "Doméstica", "bloques": "Por bloques", "mise": "Mise en place",
+               "estaciones": "Por estaciones"}
 
 
 def cargar(ruta: Path = RUTA) -> dict:
@@ -175,14 +179,14 @@ def plan(modo: str, q: float, personas: int, cocina: dict | None = None) -> dict
             peso[p] += carga[plato]
         puede: list[set[str] | None] = [None] * personas
         cambio = 0  # cada uno sigue su plato
-    elif modo == "mise":
+    elif modo in ("bloques", "mise"):
         puede = [None] * personas
     else:
         carga = {}
         for t in tareas:
             carga[t.estacion] = carga.get(t.estacion, 0) + t.activo
         puede = _estaciones_de(personas, carga)
-    if modo != "domestico":
+    if modo not in ("domestico", "bloques"):
         antes = [t for t in tareas if t.anticipable]
         tarde, fin_tarde = _programar(antes, puede, minutos(cocina["tarde_inicio"]), cambio, {}, ayuda=True)
         listas = {t.id: -1.0 for t in antes}
@@ -357,3 +361,14 @@ def jornada(modo: str, q: float, personas: int, cocina: dict | None = None, marg
     entra = 15 * (entra // 15)
     sale = minutos(cocina["servicio_fin"]) + (r["fin_tarde"] - minutos(cocina["tarde_inicio"]) if r["fin_tarde"] else 0)
     return {"entra": entra, "sale": sale, "horas": (sale - entra) / 60, "horas_persona": personas * (sale - entra) / 60}
+
+
+def gente_necesaria(modo: str, q: float, cocina: dict | None = None, maximo: int = 10) -> int | None:
+    """Menos personas en cocina con que se prepara la mañana a tiempo y se
+    despacha el almuerzo sin pasar la espera máxima."""
+    cocina = cocina or cargar()
+    d = desorden_calibrado(cocina)
+    for n in range(1, maximo + 1):
+        if cabe(modo, q, n, cocina) and servicio(modo, q, n, cocina, d)["aguanta"]:
+            return n
+    return None
