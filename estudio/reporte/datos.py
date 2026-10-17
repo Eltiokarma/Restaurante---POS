@@ -381,6 +381,13 @@ def capacidades(arquetipos: list[dict], candela: dict | None) -> list[dict]:
     return salida
 
 
+def _costo_cocina(personas: int, horas_dia: float, sueldo: float, dias: int = 26) -> float:
+    """Planilla de cocina al mes: sueldos más las horas sobre ocho al día, con
+    25 % de recargo."""
+    por_hora = sueldo / (48 * 4.33)
+    return personas * (sueldo + max(0.0, horas_dia - 8) * dias * por_hora * 1.25)
+
+
 def organizacion(arquetipos: list[dict], candela: dict | None) -> list[dict]:
     """Experimento: cada negocio organizando su cocina de cada forma. Cuánta
     gente necesita para su venta, cuánto se ahorra frente a la doméstica y
@@ -400,10 +407,15 @@ def organizacion(arquetipos: list[dict], candela: dict | None) -> list[dict]:
         for modo in coc.MODOS:
             necesita = coc.gente_necesaria(modo, q, c)
             tope = coc.capacidad_cocina(modo, cocina_, c)["tope"] if cocina_ else 0
+            costo = None
+            if necesita:
+                horas = coc.jornada(modo, q, necesita, c)["horas"]
+                costo = _costo_cocina(necesita, horas, local.sueldo_ayudante) * mult
             if base is None:
-                base = necesita
-            ahorro = None if necesita is None or base is None else (base - necesita) * local.sueldo_ayudante * mult
-            fila["modos"][modo] = {"necesita": necesita, "tope": tope, "ahorro": ahorro}
+                base = costo  # la doméstica; si no alcanza, la primera organización que sí
+            ahorro = None if costo is None or base is None else base - costo
+            fila["modos"][modo] = {"necesita": necesita, "tope": tope, "ahorro": ahorro, "costo": costo,
+                                   "horas": None if not necesita else coc.jornada(modo, q, necesita, c)["horas"]}
         salida.append(fila)
     return salida
 
@@ -414,7 +426,7 @@ def cocina(q_candela: float | None, candela: dict | None = None) -> dict:
     c = coc.cargar()
     q = round(q_candela) if q_candela else 74
     d = coc.desorden_calibrado(c)
-    paneles = [("domestico", 3), ("mise", 3), ("mise", 2), ("estaciones", 3)]
+    paneles = [("domestico", 3), ("bloques", 3), ("mise", 3), ("estaciones", 3), ("mise", 2)]
     gantt = []
     for modo, n in paneles:
         r = coc.plan(modo, q, n, c)
@@ -422,7 +434,12 @@ def cocina(q_candela: float | None, candela: dict | None = None) -> dict:
         gantt.append({**{k: r[k] for k in ("modo", "personas", "manana", "tarde", "puestos", "dueno", "listo", "inicio",
                                              "trabajo_manana", "trabajo_tarde", "cambios", "fin_tarde")},
                       "jornada": j, "espera": coc.servicio(modo, q, n, c, d)["espera_maxima"]})
-    colas = [coc.servicio(m, q, n, c, d) for m, n in (("domestico", 3), ("domestico", 2), ("mise", 2), ("estaciones", 2))]
+    colas = [coc.servicio(m, q, n, c, d) for m, n in (("domestico", 3), ("domestico", 2), ("bloques", 2), ("mise", 2),
+                                                        ("estaciones", 2))]
+    # la misma comparación con gente más lenta y más rápida en la preparación
+    velocidad = [{"factor": f, "topes": {m: coc.capacidad_cocina(m, 3, coc.con_velocidad(c, f))["tope"] for m in coc.MODOS},
+                  "necesita": {m: coc.gente_necesaria(m, q, coc.con_velocidad(c, f)) for m in coc.MODOS}}
+                 for f in (0.6, 1.0, 1.5)]
     capacidad = [{**coc.capacidad_cocina(m, n, c), "horas_persona": coc.jornada(m, q, n, c)["horas_persona"],
                   "espera_q": coc.servicio(m, q, n, c, d)["espera_maxima"]}
                  for m in coc.MODOS for n in (2, 3, 4)]
@@ -439,8 +456,8 @@ def cocina(q_candela: float | None, candela: dict | None = None) -> dict:
             costo_extra = sum(h * extra_h * 1.25 for h in por_hora)
             ahorro = {"sueldo": sueldos[0], "horas_dia": j["horas"], "costo_extra": costo_extra,
                       "neto": sueldos[0] - costo_extra, "personas": len(sueldos)}
-    return {"q": q, "desorden": d, "gantt": gantt, "ahorro": ahorro, "colas": colas, "capacidad": capacidad,
-            "tareas": c["tareas"], "servicio": c["servicio"], "perfil": c["demanda_15min"]["perfil"],
+    return {"q": q, "desorden": d, "gantt": gantt, "ahorro": ahorro, "velocidad": velocidad, "colas": colas, "capacidad": capacidad,
+            "tareas": [{**t, "var": coc.variable(t)} for t in c["tareas"]], "notas": c["notas"], "servicio": c["servicio"], "perfil": c["demanda_15min"]["perfil"],
             "horarios": {k: c[k] for k in ("inicio", "almuerzo", "servicio_fin", "tarde_inicio", "tarde_fin", "cambio_estacion")},
             "estaciones": c["estaciones"], "platos": c["platos"]}
 

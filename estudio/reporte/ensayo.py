@@ -263,11 +263,11 @@ def construir(d: dict) -> str:
                 "su cuello es la demanda, no la cocina" if cnd else "--"))
         if co:
             filas.append((
-                "¿Rinde más una cocina organizada?", "La misma cocina trabajando en doméstico, mise en place y estaciones",
-                f"Con 3 personas aguanta {n(cap_('domestico', 3)['tope'])}, {n(cap_('mise', 3)['tope'])} y "
-                f"{n(cap_('estaciones', 3)['tope'])} menús"
-                + ("" if not co.get("ahorro") else f"; Candela podría trabajar con 2 y ahorrar {s(co['ahorro']['neto'])} al mes"),
-                "sí, el mise en place (desorden supuesto)"))
+                "¿Rinde más una cocina organizada?", "La misma cocina en doméstico, por bloques, mise en place y estaciones",
+                f"Con 3 personas aguanta {n(cap_('domestico', 3)['tope'])}, {n(cap_('bloques', 3)['tope'])}, "
+                f"{n(cap_('mise', 3)['tope'])} y {n(cap_('estaciones', 3)['tope'])} menús"
+                + ("" if not org_c else f"; Candela podría trabajar con una persona menos y ahorrar {s(org_c['modos'][mejor_c]['ahorro'])} al mes"),
+                "sí; el orden se mantiene con gente lenta o rápida"))
         filas.append((
             "¿Conviene abrir de noche?", "Barrido con una noche tipo de 30 platos",
             "Mejora a todos los negocios", "sí, si existe esa demanda (no medida)"))
@@ -468,43 +468,82 @@ Variable & Valor & Origen \\
     def cap_(modo, n_):
         return next(c for c in co["capacidad"] if c["modo"] == modo and c["personas"] == n_)
 
-    gd = gm3 = None
+    gd = gm3 = gb = None
     punta = 0
     if co:
         gd = next(g for g in co["gantt"] if g["modo"] == "domestico")
         gm3 = next(g for g in co["gantt"] if g["modo"] == "mise" and g["personas"] == 3)
+        gb = next(g for g in co["gantt"] if g["modo"] == "bloques")
         perf = co["perfil"]
         punta = sum(v for h, v in perf.items() if "12:45" <= h <= "13:30") / sum(perf.values())
 
-    def tabla_tareas():
+    NOMBRE_ORG = {"domestico": "Doméstica", "bloques": "Por bloques", "mise": "Mise en place",
+                  "estaciones": "Por estaciones"}
+
+    def tabla_prep():
         filas = []
         for t in co["tareas"]:
-            para = ", ".join(co["platos"][x].lower() for x in (t.get("usa") or [t.get("plato")]) if x)
-            filas.append(f"{esc(t['nombre'])} & {esc(co['estaciones'][t['estacion']].split(' ')[0])} & {t['fijo']} & "
-                         f"{t['var']} & {t.get('espera') or '--'} & {'sí' if t.get('anticipable') else ''} & {esc(para)} \\\\")
+            if "partes" not in t:
+                continue
+            for i, x in enumerate(t["partes"]):
+                nombre = esc(t["nombre"]) if i == 0 else ""
+                antes = ("sí" if t.get("anticipable") else "no") if i == 0 else ""
+                filas.append(f"{nombre} & {esc(x['insumo'])} & {n(x['cantidad'], 1)} {esc(x['unidad'])} & "
+                             f"{n(x['min_por'], 1)} & {n(x['cantidad'] * x['min_por'])} & {antes} & "
+                             f"{esc(x['fuente_velocidad'])} \\\\")
+            filas.append(r"\addlinespace[1pt]")
+        return "\n".join(filas)
+
+    def tabla_coccion():
+        filas = []
+        for t in co["tareas"]:
+            if "partes" in t:
+                continue
+            filas.append(f"{esc(t['nombre'])} & {esc(co['estaciones'][t['estacion']])} & {n(t['fijo'] + t['var'])} & "
+                         f"{t.get('espera') or '--'} \\\\")
         return "\n".join(filas)
 
     def tabla_servicio():
         sv, h = co["servicio"], co["horarios"]
-        filas = [(f"{x['nombre']} (por menú)", f"{n(x['min'], 2)} min (supuesto)") for x in sv["puestos"].values()]
+        dq = sv["desorden_queda"]
+        filas = [(f"{x['nombre']} (por menú)", f"{n(x['min'], 2)} min (estimación)") for x in sv["puestos"].values()]
         filas += [
             ("Desorden por menú, cocina doméstica", f"{n(co['desorden'], 2)} min (calibrado: {sv['calibracion']['personas']} personas aguantan {sv['calibracion']['menus']} menús)"),
-            ("Desorden que queda", f"mise en place {p(sv['desorden_queda']['mise'])}, estaciones {p(sv['desorden_queda']['estaciones'])} (supuesto)"),
+            ("Desorden que queda", f"por bloques {p(dq['bloques'])}, mise en place {p(dq['mise'])}, estaciones {p(dq['estaciones'])} (supuesto)"),
             ("Espera máxima tolerable", f"{sv['espera_maxima']} min en la hora punta (supuesto)"),
             ("Llegada de pedidos", f"por cuarto de hora, medida en el POS de Candela; el {p(punta)} entre 12:45 y 13:45"),
-            ("Horarios", f"almuerzo {h['almuerzo']}--{h['servicio_fin']}; tarde de mise en place desde {h['tarde_inicio']}, hasta {h['tarde_fin']} como máximo"),
+            ("Horarios", f"almuerzo {h['almuerzo']}--{h['servicio_fin']}; la tarde de mise en place va desde las {h['tarde_inicio']} hasta las {h['tarde_fin']} como máximo, y lo que no alcanza pasa a la mañana"),
             ("Cambio de puesto", f"{h['cambio_estacion']} min cada vez (supuesto)"),
             ("Menús del día", f"{n(co['q'])}, la venta actual de Candela"),
         ]
         return "\n".join(f"{esc(a)} & {b} \\\\" for a, b in filas)
 
     def tabla_org():
-        nombres = {"domestico": "Doméstica", "mise": "Mise en place", "estaciones": "Por estaciones"}
         filas = []
-        for m in ("domestico", "mise", "estaciones"):
+        for m in NOMBRE_ORG:
             celdas = " & ".join(f"{n(cap_(m, k)['tope'])} ({cap_(m, k)['limita'][:3]}.)" for k in (2, 3, 4))
-            filas.append(f"{nombres[m]} & {celdas} & {n(cap_(m, 3)['horas_persona'], 1)} \\\\")
+            filas.append(f"{NOMBRE_ORG[m]} & {celdas} & {n(cap_(m, 3)['horas_persona'], 1)} \\\\")
         return "\n".join(filas)
+
+    orgs = d.get("organizacion", [])
+
+    def tabla_org_negocios():
+        filas = []
+        for f in orgs:
+            md = f["modos"]
+            nec = " & ".join(str(md[m]["necesita"] or "--") for m in NOMBRE_ORG)
+            mejor = max((md[m]["ahorro"] or 0 for m in NOMBRE_ORG), default=0)
+            filas.append(f"{esc(corto(f['nombre']))} & {n(f['q'])} & {f['cocina']} & {nec} & "
+                         f"{s(mejor) if mejor > 0 else '--'} & {n(md['domestico']['tope'])} & {n(md['mise']['tope'])} \\\\")
+        return "\n".join(filas)
+
+    ahorros_pos = [max(f["modos"][m]["ahorro"] or 0 for m in NOMBRE_ORG) for f in orgs]
+    ahorros_pos = [x for x in ahorros_pos if x > 0] or [0]
+    org_c = next((f for f in orgs if f["nombre"].startswith("Candela")), None)
+    mejor_c = None if not org_c else max(NOMBRE_ORG, key=lambda m: org_c["modos"][m]["ahorro"] or -1e9)
+
+    def vel_(f, clave, m):
+        return next(v for v in co["velocidad"] if abs(v["factor"] - f) < 1e-9)[clave][m]
 
     def tabla_capacidad():
         filas = []
@@ -1633,49 +1672,79 @@ dato que más afina el modelo.
 {"" if not co else rf"""\section{{La organización de la cocina}}\label{{sec:cocina}}
 
 Muchas fondas cocinan como se cocina en casa: cada quien se encarga de sus platos de principio a fin y todo
-empieza en crudo la misma mañana ---las arvejas sin desgranar, la papa sin pelar, la cebolla entera---. La
-hipótesis de esta sección es que trabajar con \emph{{mise en place}} (dejar listo de antemano lo que aguanta de un
-día para otro) o por \emph{{estaciones}} (cada persona en un puesto fijo) rinde más con la misma gente, y que eso
-depende de la organización y no de la formalidad: una fonda familiar puede organizarse igual que un restaurante
-con planilla.
+empieza en crudo la misma mañana ---las arvejas sin desvainar, la papa sin pelar, la cebolla entera---. La
+hipótesis de esta sección es que organizarse de otra forma rinde más con la misma gente, y que eso depende de la
+organización y no de la formalidad: una fonda familiar puede organizarse igual que un restaurante con planilla.
 
 \subsection{{Cómo se modela un día de cocina}}
 
-El día se divide en dos partes que se modelan por separado. La \emph{{mañana}} es una lista de
-{len(co['tareas'])} tareas para {n(co['q'])} menús (los que vende Candela hoy), cada una con un tiempo que no
-depende del volumen (sacar, lavar, ordenar), un tiempo que crece con los menús y, si corresponde, una espera en
-que la olla cocina sola y nadie tiene que estar encima. Las tareas tienen precedencias: no hay aderezo sin
-cebolla picada ni sopa sin fondo. Un programador reparte las tareas minuto a minuto entre la gente disponible,
-siempre empezando por la que tiene más camino por delante (la ruta crítica), y así se obtiene a qué hora está
-todo listo. El \emph{{almuerzo}} es una cola: los pedidos llegan cada cuarto de hora según el perfil medido en el
-POS de Candela y la cocina despacha a su ritmo; si se atrasa, los clientes esperan.
+El día se divide en dos partes. La \emph{{mañana}} es una lista de {len(co['tareas'])} tareas con precedencias ---no
+hay aderezo sin cebolla picada ni sopa sin fondo---. Cada preparación toma la \emph{{cantidad de las recetas}} de
+Candela (por ejemplo, {n(next(x for t in co['tareas'] if t['id'] == 'papa' for x in t['partes'])['cantidad'], 1)} kilos de
+papa y camote cada 100 menús) por la \emph{{velocidad}} de una persona promedio: la del propio dueño donde la midió
+(10 kilos de papa en 45 minutos, un kilo de arvejas en vaina en media hora), la tabla de la industria cebollera de
+Estados Unidos para la cebolla y estimaciones para el resto (cuadro~\ref{{tab:prep}}). Las recetas del sistema casi
+no registran la cebolla ni el ajo de los aderezos, así que esas dos cantidades son supuestas. A eso se suma un tiempo
+fijo por tarea (sacar, lavar, ordenar). Las cocciones llevan además una \emph{{espera}} en que la olla cocina sola,
+con los tiempos de Juliaca: a 3\,825 metros el agua hierve a unos 88\,°C y el arroz, la papa y los guisos tardan
+entre 1.3 y 2 veces lo que tardan en la costa; las menestras, en olla a presión (cuadro~\ref{{tab:coccion}}). Las
+preparaciones de más de una hora se parten en tandas que pueden hacer varias personas. Un programador reparte las
+tareas minuto a minuto entre la gente disponible, siempre empezando por la que tiene más camino por delante (la ruta
+crítica), y así se obtiene a qué hora está todo listo.
 
-Las tres formas de trabajar cambian tres cosas. En la \emph{{doméstica}}, cada persona hace sus platos completos y
-lo que usan varios platos (la cebolla, el ajo, la papa) lo pica cada una para el suyo, con su propio tiempo de
-preparar y limpiar; todo se hace en la mañana. Con \emph{{mise en place}}, lo anticipable se hace la tarde anterior
-y de una sola vez; en la mañana cualquiera hace cualquier cosa, pero cambiar de puesto cuesta
-{co['horarios']['cambio_estacion']} minutos. \emph{{Por estaciones}} es mise en place con un puesto fijo para cada
-persona, que solo ayuda en otro cuando el suyo no tiene nada listo. En el almuerzo, la diferencia está en el
-\emph{{desorden}}: los minutos por menú que se van en buscar, reponer, picar lo que faltó y cambiar de tarea.
+El \emph{{almuerzo}} es una cola: los pedidos llegan cada cuarto de hora según el perfil medido en el POS de Candela
+y la cocina los despacha a su ritmo; si se atrasa, los clientes esperan. Además de servir, freír y lavar, cada menú se
+lleva un tiempo de \emph{{desorden}} ---buscar, reponer, picar lo que faltó, cambiar de tarea---, que no se puede medir
+con un cronómetro y se \emph{{calibra}}: es el valor con que una cocina doméstica de
+{co['servicio']['calibracion']['personas']} personas aguanta justo los {co['servicio']['calibracion']['menus']} menús que
+aguanta Candela sin que nadie espere más de {co['servicio']['espera_maxima']} minutos (cuadro~\ref{{tab:servicio}}).
 
-\begin{{table}}[h]
-\centering\footnotesize
-\caption{{Supuestos del día de cocina: tareas para 100 menús, en minutos de una persona. ``Fijo'': lo que no
-depende del volumen. ``Antes'': se puede dejar listo la tarde anterior.}}\label{{tab:tareas}}
-\setlength{{\tabcolsep}}{{4pt}}
-\begin{{tabularx}}{{\textwidth}}{{llrrrc>{{\raggedright\arraybackslash}}X}}
+Se comparan cuatro formas de trabajar, cada una con un cambio más que la anterior, para saber cuánto aporta cada
+cambio por separado:
+\begin{{description}}[leftmargin=1em,style=nextline,itemsep=1pt]
+\item[Doméstica] Cada persona hace sus platos completos; lo que usan varios platos (la cebolla, el ajo, la papa) lo
+prepara cada una para el suyo, con su propio tiempo fijo. Todo en la mañana.
+\item[Por bloques] Lo compartido se prepara de una sola vez (toda la cebolla junta) y cualquiera hace cualquier cosa,
+pero cambiar de puesto cuesta {co['horarios']['cambio_estacion']} minutos. Todo sigue en la mañana.
+\item[Mise en place] Además, lo que aguanta de un día para otro ---las verduras peladas, las carnes porcionadas, el
+fondo, la menestra--- se deja listo la tarde anterior, después del almuerzo; lo que no alcanza a terminarse antes de
+las {co['horarios']['tarde_fin']} vuelve a la mañana.
+\item[Por estaciones] Además, cada persona tiene un puesto fijo (fondos, verduras, carnes) y solo ayuda en otro
+cuando el suyo no tiene nada listo.
+\end{{description}}
+
+\begin{{table}}[p]
+\centering\scriptsize
+\caption{{Supuestos de la preparación, por cada 100 menús: cantidad de las recetas de Candela, minutos de una persona por
+unidad y de dónde sale la velocidad. ``Antes'': se puede dejar listo la tarde anterior. A cada tarea se suman de 3 a 10
+minutos fijos.}}\label{{tab:prep}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.17\textwidth}}>{{\raggedright\arraybackslash}}p{{0.2\textwidth}}rrrc>{{\raggedright\arraybackslash}}X}}
 \toprule
-Tarea & Puesto & Fijo & Por 100 & Espera & Antes & Para \\
+Tarea & Insumo & Cantidad & Min/unidad & Minutos & Antes & Velocidad \\
 \midrule
-{tabla_tareas()}
+{tabla_prep()}
 \bottomrule
 \end{{tabularx}}
 \end{{table}}
 
 \begin{{table}}[h]
 \centering\footnotesize
+\caption{{Supuestos de las cocciones y el montaje, por cada 100 menús: minutos de trabajo y minutos en que la olla
+cocina sola, en Juliaca.}}\label{{tab:coccion}}
+\begin{{tabular}}{{llrr}}
+\toprule
+Tarea & Puesto & Trabajo & Espera \\
+\midrule
+{tabla_coccion()}
+\bottomrule
+\end{{tabular}}
+\end{{table}}
+
+\begin{{table}}[h]
+\centering\footnotesize
 \caption{{Supuestos del almuerzo y de la calibración.}}\label{{tab:servicio}}
-\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.36\textwidth}}>{{\raggedright\arraybackslash}}X}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.34\textwidth}}>{{\raggedright\arraybackslash}}X}}
 \toprule
 Variable & Valor y origen \\
 \midrule
@@ -1684,57 +1753,46 @@ Variable & Valor y origen \\
 \end{{tabularx}}
 \end{{table}}
 
-El desorden no se puede medir con un cronómetro, así que se \emph{{calibra}}: es el valor que hace que una cocina
-doméstica de {co['servicio']['calibracion']['personas']} personas aguante justo los
-{co['servicio']['calibracion']['menus']} menús que aguanta Candela sin que nadie espere más de
-{co['servicio']['espera_maxima']} minutos en la hora punta. Sale {n(co['desorden'], 2)} minutos por menú, frente a
-{n(sum(x['min'] for x in co['servicio']['puestos'].values()), 2)} minutos de todas las tareas medibles del almuerzo. Cuánto de ese desorden recorta la organización es el
-supuesto más fuerte de la sección (la mitad con mise en place, el 70\,\% por estaciones) y el primero que habría
-que medir.
-
-\subsection{{Cuatro días de cocina}}
+\subsection{{Cinco días de cocina}}
 
 \begin{{figure}}[p]
 \centering
 \includegraphics[width=\textwidth]{{fig/gantt.pdf}}
-\caption{{Un día de cocina para {n(co['q'])} menús en cuatro organizaciones. Cada fila es una persona; las barras,
-el trabajo según su puesto, y la raya fina, el tiempo en que la olla cocina sola. Con mise en place, la tarde
-deja lista la mañana siguiente. La gente entra lo justo para tener todo listo un cuarto de hora antes del
-almuerzo.}}\label{{fig:gantt}}
+\caption{{Un día de cocina para {n(co['q'])} menús en cada organización. Cada fila es una persona; las barras, el
+trabajo según su puesto, y la raya fina, el tiempo en que la olla cocina sola. Con mise en place, la tarde deja lista la
+mañana siguiente. La gente entra lo justo para tener todo listo un cuarto de hora antes del almuerzo.}}\label{{fig:gantt}}
 \end{{figure}}
 
-La figura~\ref{{fig:gantt}} muestra el resultado con la venta de hoy de Candela. En la cocina doméstica, tres
-personas entran a las {hhmm(gd['jornada']['entra'])} y dejan todo listo en
-{n((gd['listo'] - gd['inicio']) / 60, 1)} horas: la mañana no es el problema. Trabajan
-{n(gd['trabajo_manana'] / 60, 1)} horas-persona antes del almuerzo, de las cuales
-{n(gm3['trabajo_manana'] / 60, 1)} siguen siendo de mañana con mise en place; el resto
-({n(gm3['trabajo_tarde'] / 60, 1)} horas-persona) pasa a la tarde, cuando la cocina ya terminó de atender. El mise
-en place casi no ahorra trabajo ---el ahorro es el tiempo fijo de picar una vez en lugar de tres---: lo que hace
-es \emph{{mover}} el trabajo fuera de la mañana y sacar la preparación del camino del almuerzo. Por estaciones, el
-reparto queda más ordenado, pero el puesto de verduras carga con casi toda la preparación y los demás lo
-esperan.
+La figura~\ref{{fig:gantt}} muestra un día con la venta actual de Candela. En la cocina doméstica, tres personas
+necesitan {n((gd['listo'] - gd['inicio']) / 60, 1)} horas de mañana y {n(gd['trabajo_manana'] / 60, 1)} horas-persona de
+trabajo antes del almuerzo; pelar la papa, solo eso, se lleva
+{n(next(t for t in co['tareas'] if t['id'] == 'papa')['var'] * co['q'] / 100 / 60, 1)} horas. \emph{{Por bloques}}, el trabajo baja a
+{n(gb['trabajo_manana'] / 60, 1)} horas-persona ---es el tiempo fijo de preparar una vez en lugar de tres--- y la
+mañana a {n((gb['listo'] - gb['inicio']) / 60, 1)} horas. Con \emph{{mise en place}}, {n(gm3['trabajo_tarde'] / 60, 1)}
+horas-persona pasan a la tarde anterior y la mañana se reduce a {n((gm3['listo'] - gm3['inicio']) / 60, 1)} horas, casi
+todas de cocción. El trabajo total casi no cambia: lo que cambia es \emph{{cuándo}} se hace. Y \emph{{por estaciones}}
+el reparto queda ordenado por puestos, con el de verduras como el más cargado.
 
 \begin{{figure}}[t]
 \centering
 \includegraphics[width=\textwidth]{{fig/cola.pdf}}
-\caption{{Minutos que espera por su plato el cliente que llega en cada momento del almuerzo, con
-{n(co['q'])} menús al día y los pedidos repartidos como en el POS de Candela.}}\label{{fig:cola}}
+\caption{{Minutos que espera por su plato el cliente que llega en cada momento del almuerzo, con {n(co['q'])} menús al
+día y los pedidos repartidos como en el POS de Candela.}}\label{{fig:cola}}
 \end{{figure}}
 
-El almuerzo es donde se decide la capacidad. El {p(punta)} de los pedidos del día llega entre la 1 menos cuarto
-y las dos menos cuarto, y en esa hora la cocina tiene que despachar a su máximo ritmo. La figura~\ref{{fig:cola}}
-lo muestra: con tres personas trabajando como en casa, Candela atiende sus {n(co['q'])} menús sin colas; con dos
-personas trabajando igual, la espera llega a {n(cola_('domestico', 2)['espera_maxima'])} minutos en la hora punta
----es el colapso que Candela conoce---. Con mise en place, esas mismas dos personas la bajan a
-{n(cola_('mise', 2)['espera_maxima'])} minutos. Por estaciones con dos personas no alcanza: dos puestos fijos para
-tres trabajos dejan a uno sobrecargado.
+El almuerzo es la otra mitad. El {p(punta)} de los pedidos del día llega entre la 1 menos cuarto y las dos menos
+cuarto, y en esa hora la cocina tiene que despachar a su máximo ritmo (figura~\ref{{fig:cola}}). Con tres personas
+trabajando como en casa, Candela atiende sus {n(co['q'])} menús sin colas; con dos, la espera llega a
+{n(cola_('domestico', 2)['espera_maxima'])} minutos en la hora punta ---el colapso que Candela conoce---. Por bloques
+baja a {n(cola_('bloques', 2)['espera_maxima'])}, con mise en place a {n(cola_('mise', 2)['espera_maxima'])} y por
+estaciones a {n(cola_('estaciones', 2)['espera_maxima'])}: con dos puestos fijos para tres trabajos, uno queda sobrecargado.
 
 \subsection{{Cuántos menús aguanta cada organización}}
 
 \begin{{table}}[h]
 \centering\small
-\caption{{Menús al día que aguanta la cocina según cómo trabaja y cuánta gente tiene, y horas-persona al día que
-pasa en el local con {n(co['q'])} menús. Entre paréntesis, lo que pone el límite.}}\label{{tab:org}}
+\caption{{Menús al día que aguanta la cocina según cómo trabaja y cuánta gente tiene, y horas-persona al día que pasa en
+el local con {n(co['q'])} menús y tres personas. Entre paréntesis, lo que pone el límite: la mañana o el almuerzo.}}\label{{tab:org}}
 \begin{{tabular}}{{lrrrr}}
 \toprule
 Organización & 2 personas & 3 personas & 4 personas & Horas-persona (3) \\
@@ -1744,34 +1802,70 @@ Organización & 2 personas & 3 personas & 4 personas & Horas-persona (3) \\
 \end{{tabular}}
 \end{{table}}
 
-El cuadro~\ref{{tab:org}} resume el experimento. Con la misma gente, el mise en place sube lo que aguanta la
-cocina de {n(cap_('domestico', 3)['tope'])} a {n(cap_('mise', 3)['tope'])} menús con tres personas, un
-{p(cap_('mise', 3)['tope'] / cap_('domestico', 3)['tope'] - 1)} más: de unos {n(cap_('domestico', 3)['tope'] / 3)}
-menús por persona a {n(cap_('mise', 3)['tope'] / 3)}. Las estaciones rinden lo mismo que el mise en place con tres
-personas y menos con dos o cuatro, porque un puesto fijo solo funciona si la carga está pareja: es una forma
-de organizar el almuerzo, no un reemplazo del mise en place. En todos los casos lo que pone el techo es el
-almuerzo y no la mañana. La hipótesis se sostiene en su forma más simple: lo que rinde es preparar antes y
-sacar la preparación del almuerzo, algo que cualquier fonda puede hacer, tenga o no RUC. Tiene un precio: con
-la misma gente, el día se alarga ---la cocción no se acorta y la tarde se suma---, y tres personas pasan
-{n(cap_('mise', 3)['horas_persona'] - cap_('domestico', 3)['horas_persona'], 1)} horas-persona más al día en el local. El
-mise en place no ahorra horas: compra capacidad.
-{"" if not co.get('ahorro') else rf"""
-Para Candela, que tiene capacidad de sobra (sección~\ref{{sec:capacidad}}), la lectura útil es la inversa: con
-mise en place, {co['ahorro']['personas'] - 1} personas en cocina alcanzan para los {n(co['q'])} menús de hoy. Se
-ahorraría el sueldo de {s(co['ahorro']['sueldo'])} y quienes quedan trabajarían
-{n(co['ahorro']['horas_dia'], 1)} horas al día ---algo más de la jornada de ocho, que se paga como sobretiempo, unos
-{s(co['ahorro']['costo_extra'])} al mes---: un ahorro neto de unos \textbf{{{s(co['ahorro']['neto'])} al mes}}, sin
-cambiar el menú ni el precio. El margen es estrecho: con dos personas, el tope es de
-{n(cap_('mise', 2)['tope'])} menús, y un día de más venta volvería a hacer esperar a la gente. La alternativa es
-mantener a las tres y usar la capacidad que se libera para crecer."""}
+El cuadro~\ref{{tab:org}} resume el experimento. Con tres personas, la cocina doméstica aguanta
+{n(cap_('domestico', 3)['tope'])} menús; por bloques, {n(cap_('bloques', 3)['tope'])}; con mise en place,
+{n(cap_('mise', 3)['tope'])}, y por estaciones, {n(cap_('estaciones', 3)['tope'])}: de unos {n(cap_('domestico', 3)['tope'] / 3)}
+menús por persona a {n(cap_('estaciones', 3)['tope'] / 3)}. El salto grande es el del mise en place, porque saca la
+preparación de la mañana y el desorden del almuerzo. Las estaciones suman poco y solo con tres personas, cuando cada
+puesto tiene a alguien; con dos o con cuatro, un puesto fijo deja a alguien sobrecargado o esperando. Es una forma de
+ordenar el almuerzo, no un reemplazo del mise en place. La doméstica tiene además un techo propio: como cada persona
+hace sus platos, agregar gente no acorta la mañana, y con cuatro personas ya no es el almuerzo sino la mañana la que
+limita.
+
+El orden de las organizaciones no depende de qué tan rápida sea la gente. Con una cocina un 40\,\% más rápida
+que la supuesta, tres personas aguantan {n(vel_(0.6, 'topes', 'domestico'))} menús en doméstico y
+{n(vel_(0.6, 'topes', 'mise'))} con mise en place; con una un 50\,\% más lenta, {n(vel_(1.5, 'topes', 'domestico'))} y
+{n(vel_(1.5, 'topes', 'mise'))}. La velocidad mueve las cifras; la ventaja de organizarse se mantiene.
+
+\subsection{{Dónde se ahorra en cada negocio}}
+
+El mismo experimento se repitió para todos los negocios, cada uno con su venta y su gente (cuadro~\ref{{tab:org_neg}}).
+Para cada organización se buscó la menor cantidad de personas en cocina que tiene todo listo a tiempo y atiende la hora
+punta sin pasar los {co['servicio']['espera_maxima']} minutos de espera; el ahorro compara su planilla de cocina ---con
+las horas extra si la jornada pasa de ocho--- con la de la cocina doméstica.
+
+\begin{{table}}[h]
+\centering\footnotesize
+\caption{{Organización de la cocina en cada negocio: personas en cocina que necesita para su venta con cada forma de
+trabajar, el mayor ahorro al mes frente a la doméstica (planilla con horas extra) y los menús que aguantaría con la
+gente que tiene hoy, en doméstico y con mise en place. ``--'': ninguna cantidad de gente alcanza.}}\label{{tab:org_neg}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}Xrrccccrrr}}
+\toprule
+& & & \multicolumn{{4}}{{c}}{{Necesita}} & & \multicolumn{{2}}{{c}}{{Aguanta}} \\
+\cmidrule(lr){{4-7}}\cmidrule(lr){{9-10}}
+Negocio & Vende & Tiene & Dom. & Bloq. & Mise & Est. & Ahorro & Dom. & Mise \\
+\midrule
+{tabla_org_negocios()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+La lectura cambia según el tamaño. En los negocios que ya trabajan con lo mínimo
+---{y_lista([corto(f['nombre']).lower() for f in orgs if f['modos']['domestico']['necesita'] and not any((f['modos'][m]['ahorro'] or 0) > 0 for m in NOMBRE_ORG)])}---,
+organizarse no ahorra gente: la necesitan igual para el almuerzo. Ahí el mise en place
+cuesta, porque la tarde alarga el día y se paga como sobretiempo; lo que compra es capacidad para crecer sin
+contratar. En los demás, agrupar o adelantar la preparación permite trabajar con una persona menos de la que
+exigiría la cocina doméstica y ahorrar unos {s(min(x for x in ahorros_pos))} a {s(max(x for x in ahorros_pos))} al mes, aun pagando las horas
+extra. Y en los de mucho volumen ---el puesto de mercado, el exitoso--- la cocina doméstica ni siquiera es posible:
+cuando cada uno hace su plato, la mañana no alcanza con ninguna cantidad de gente.
+{"" if not org_c else rf"""
+En Candela, con {org_c['cocina']} personas en cocina para {n(org_c['q'])} menús, la cocina doméstica necesita a las tres.
+{'Por bloques' if org_c['modos']['bloques']['necesita'] < org_c['cocina'] else 'Con mise en place'} alcanzan
+{min(org_c['modos'][m]['necesita'] for m in ('bloques', 'mise'))}, con jornadas de
+{n(org_c['modos'][mejor_c]['horas'], 1)} horas, y el ahorro neto sería de unos \textbf{{{s(org_c['modos'][mejor_c]['ahorro'])} al
+mes}}. Con las tres personas, en cambio, el mise en place le daría sitio para {n(org_c['modos']['mise']['tope'])} menús al
+día: es la misma conclusión de la sección~\ref{{sec:capacidad}} vista desde la cocina. Lo que le falta a Candela no es
+gente sino clientes, y organizarse la deja elegir entre trabajar con menos o tener con qué crecer."""}
 
 \subsection{{Qué falta medir}}
 
-Las tareas, sus tiempos y lo que la organización recorta del desorden son supuestos razonados; lo único medido
-es cuándo llegan los pedidos y cuántos menús aguanta Candela hoy. Una semana de registro en la cocina de Candela
----a qué hora entra cada persona, qué hace y cuánto le toma, y a qué hora está todo listo--- reemplazaría el
-cuadro~\ref{{tab:tareas}} por datos propios. Probar el mise en place una semana, con la misma gente, y ver si la
-hora punta deja de colapsar, contestaría la pregunta de fondo con un experimento de verdad.
+Las velocidades salen del dueño de Candela, de una tabla de la industria y de estimaciones; las cantidades de cebolla y
+ajo, de un supuesto; y lo que la organización recorta del desorden del almuerzo es el supuesto más fuerte de la sección.
+Lo medido es cuándo llegan los pedidos y cuántos menús aguanta Candela hoy. Dos o tres mañanas cronometradas en su
+cocina ---a qué hora entra cada persona, qué hace, cuánto le toma y a qué hora está todo listo--- reemplazarían los
+cuadros~\ref{{tab:prep}} y~\ref{{tab:coccion}} por datos propios. Y probar una semana trabajando por bloques, con la
+misma gente, contestaría la pregunta de fondo con un experimento de verdad.
 
 """}
 \section{{El largo plazo: diez años y cuatro regímenes}}

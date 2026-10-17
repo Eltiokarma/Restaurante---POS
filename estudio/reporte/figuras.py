@@ -635,7 +635,7 @@ def _hhmm(m, pos=None) -> str:
 
 
 COLOR_ESTACION = {"fondos": NARANJA, "verduras": AGUA, "plancha": VIOLETA}
-NOMBRE_MODO = {"domestico": "Doméstica", "mise": "Mise en place", "estaciones": "Por estaciones"}
+NOMBRE_MODO = {"domestico": "Doméstica", "bloques": "Por bloques", "mise": "Mise en place", "estaciones": "Por estaciones"}
 
 
 def fig_gantt(d):
@@ -696,7 +696,7 @@ def fig_cola(d):
     if not co:
         return
     fig, ax = plt.subplots(figsize=(ANCHO, 2.7))
-    colores = [AZUL, PERDIDA, AGUA, VIOLETA]
+    colores = [AZUL, PERDIDA, AMARILLO, AGUA, VIOLETA]
     for col, c in zip(colores, co["colas"]):
         xs = [t["inicio"] + 15 for t in c["tramos"]]
         ys = [t["espera"] for t in c["tramos"]]
