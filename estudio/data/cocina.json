@@ -1,0 +1,347 @@
+{
+ "notas": "Mañana de producción de un menú popular para 100 menús (sopa o entrada fría, segundo y refresco). Minutos de una persona: 'fijo' no depende del volumen (sacar, lavar, ordenar), 'var' es lo que escala con los menús, 'espera' es cocción sola (la olla no necesita a nadie). 'anticipable': se puede dejar listo la tarde anterior. 'usa': platos que consumen la preparación (en cocina doméstica, cada plato hace la suya). Todo son supuestos razonados para calibrar con Candela.",
+ "inicio": "07:00",
+ "almuerzo": "12:00",
+ "servicio": {
+  "notas": "Minutos de una persona de cocina por menú durante el almuerzo, por puesto. 'desorden' es el tiempo por menú que no explican esas tareas (buscar, reponer, picar lo que faltó, cambiar de tarea); se calibra para que una cocina doméstica de 3 personas aguante los ~100 menús de Candela, y la organización recorta una parte (supuesto).",
+  "puestos": {
+   "armado": {
+    "nombre": "Sopa, entrada y segundo de olla",
+    "min": 0.95
+   },
+   "plancha": {
+    "nombre": "Plancha y frituras",
+    "min": 0.75
+   },
+   "lavado": {
+    "nombre": "Lavado de vajilla",
+    "min": 1.0
+   }
+  },
+  "desorden_queda": {
+   "domestico": 1.0,
+   "mise": 0.5,
+   "estaciones": 0.3
+  },
+  "espera_maxima": 15,
+  "calibracion": {
+   "modo": "domestico",
+   "personas": 3,
+   "menus": 100
+  }
+ },
+ "tarde_inicio": "15:30",
+ "tarde_fin": "18:00",
+ "cambio_estacion": 5,
+ "estaciones": {
+  "fondos": "Fondos y guisos",
+  "verduras": "Verduras y frío",
+  "plancha": "Carnes y plancha"
+ },
+ "platos": {
+  "sopa": "Sopa",
+  "guiso": "Guiso",
+  "arroz": "Arroz",
+  "huancaina": "Papa a la huancaína",
+  "ensalada": "Ensalada",
+  "plancha": "Carnes a la plancha",
+  "refresco": "Refresco"
+ },
+ "tareas": [
+  {
+   "id": "cebolla",
+   "nombre": "Pelar y picar cebolla",
+   "corto": "Cebolla",
+   "fijo": 10,
+   "var": 40,
+   "espera": 0,
+   "anticipable": true,
+   "estacion": "verduras",
+   "usa": [
+    "guiso",
+    "ensalada",
+    "plancha"
+   ]
+  },
+  {
+   "id": "ajo",
+   "nombre": "Ajo y ají licuados",
+   "corto": "Ajo",
+   "fijo": 10,
+   "var": 15,
+   "espera": 0,
+   "anticipable": true,
+   "estacion": "verduras",
+   "usa": [
+    "guiso",
+    "arroz",
+    "huancaina"
+   ]
+  },
+  {
+   "id": "papa",
+   "nombre": "Pelar papa",
+   "corto": "Papa",
+   "fijo": 10,
+   "var": 45,
+   "espera": 0,
+   "anticipable": true,
+   "estacion": "verduras",
+   "usa": [
+    "sopa",
+    "huancaina"
+   ]
+  },
+  {
+   "id": "verd_sopa",
+   "nombre": "Zanahoria, zapallo, poro y apio",
+   "corto": "Verduras",
+   "fijo": 10,
+   "var": 25,
+   "espera": 0,
+   "anticipable": true,
+   "estacion": "verduras",
+   "usa": [
+    "sopa"
+   ]
+  },
+  {
+   "id": "arvejas",
+   "nombre": "Desgranar arvejas y habas",
+   "corto": "Arvejas",
+   "fijo": 5,
+   "var": 25,
+   "espera": 0,
+   "anticipable": true,
+   "estacion": "verduras",
+   "usa": [
+    "sopa",
+    "guiso"
+   ]
+  },
+  {
+   "id": "pollo",
+   "nombre": "Trozar pollo",
+   "corto": "Pollo",
+   "fijo": 10,
+   "var": 20,
+   "espera": 0,
+   "anticipable": true,
+   "estacion": "plancha",
+   "usa": [
+    "sopa",
+    "guiso"
+   ]
+  },
+  {
+   "id": "carnes",
+   "nombre": "Porcionar y macerar carnes",
+   "corto": "Carnes",
+   "fijo": 10,
+   "var": 20,
+   "espera": 0,
+   "anticipable": true,
+   "estacion": "plancha",
+   "usa": [
+    "plancha"
+   ]
+  },
+  {
+   "id": "trucha",
+   "nombre": "Limpiar trucha",
+   "corto": "Trucha",
+   "fijo": 5,
+   "var": 15,
+   "espera": 0,
+   "anticipable": true,
+   "estacion": "plancha",
+   "usa": [
+    "plancha"
+   ]
+  },
+  {
+   "id": "ensalada_pica",
+   "nombre": "Lavar y picar ensalada",
+   "corto": "Ensalada",
+   "fijo": 5,
+   "var": 20,
+   "espera": 0,
+   "anticipable": false,
+   "estacion": "verduras",
+   "usa": [
+    "ensalada"
+   ]
+  },
+  {
+   "id": "lavar_arroz",
+   "nombre": "Lavar arroz",
+   "corto": "Arroz",
+   "fijo": 5,
+   "var": 5,
+   "espera": 0,
+   "anticipable": false,
+   "estacion": "fondos",
+   "usa": [
+    "arroz"
+   ]
+  },
+  {
+   "id": "fondo",
+   "nombre": "Fondo de la sopa",
+   "corto": "Fondo",
+   "plato": "sopa",
+   "fijo": 5,
+   "var": 10,
+   "espera": 90,
+   "estacion": "fondos",
+   "deps": [
+    "pollo"
+   ]
+  },
+  {
+   "id": "sopa",
+   "nombre": "Terminar la sopa",
+   "corto": "Sopa",
+   "plato": "sopa",
+   "fijo": 5,
+   "var": 15,
+   "espera": 30,
+   "estacion": "fondos",
+   "deps": [
+    "fondo",
+    "papa",
+    "verd_sopa",
+    "arvejas"
+   ]
+  },
+  {
+   "id": "aderezo",
+   "nombre": "Aderezo del guiso",
+   "corto": "Aderezo",
+   "plato": "guiso",
+   "fijo": 5,
+   "var": 20,
+   "espera": 0,
+   "estacion": "fondos",
+   "deps": [
+    "cebolla",
+    "ajo"
+   ]
+  },
+  {
+   "id": "guiso",
+   "nombre": "Guiso",
+   "corto": "Guiso",
+   "plato": "guiso",
+   "fijo": 5,
+   "var": 20,
+   "espera": 45,
+   "estacion": "fondos",
+   "deps": [
+    "aderezo",
+    "pollo",
+    "arvejas"
+   ]
+  },
+  {
+   "id": "arroz",
+   "nombre": "Arroz (dos tandas)",
+   "corto": "Arroz",
+   "plato": "arroz",
+   "fijo": 5,
+   "var": 10,
+   "espera": 35,
+   "estacion": "fondos",
+   "deps": [
+    "lavar_arroz",
+    "ajo"
+   ]
+  },
+  {
+   "id": "sancochar",
+   "nombre": "Sancochar papa",
+   "corto": "Papa",
+   "plato": "huancaina",
+   "fijo": 5,
+   "var": 5,
+   "espera": 30,
+   "estacion": "verduras",
+   "deps": [
+    "papa"
+   ]
+  },
+  {
+   "id": "crema",
+   "nombre": "Crema huancaína",
+   "corto": "Crema",
+   "plato": "huancaina",
+   "fijo": 5,
+   "var": 15,
+   "espera": 0,
+   "estacion": "verduras",
+   "deps": [
+    "ajo"
+   ]
+  },
+  {
+   "id": "ensalada",
+   "nombre": "Montar ensalada",
+   "corto": "Ensalada",
+   "plato": "ensalada",
+   "fijo": 5,
+   "var": 15,
+   "espera": 0,
+   "estacion": "verduras",
+   "deps": [
+    "ensalada_pica",
+    "cebolla"
+   ]
+  },
+  {
+   "id": "refresco",
+   "nombre": "Refresco",
+   "corto": "Refresco",
+   "plato": "refresco",
+   "fijo": 5,
+   "var": 10,
+   "espera": 30,
+   "estacion": "verduras",
+   "deps": []
+  },
+  {
+   "id": "plancha_lista",
+   "nombre": "Plancha y línea listas",
+   "corto": "Plancha",
+   "plato": "plancha",
+   "fijo": 15,
+   "var": 10,
+   "espera": 0,
+   "estacion": "plancha",
+   "deps": [
+    "carnes",
+    "trucha",
+    "cebolla"
+   ]
+  }
+ ],
+ "servicio_fin": "15:30",
+ "demanda_15min": {
+  "notas": "Parte de los pedidos del día en cada cuarto de hora, observada en el POS de Candela (agosto a octubre de 2026).",
+  "perfil": {
+   "12:00": 0.03,
+   "12:15": 0.09,
+   "12:30": 0.11,
+   "12:45": 0.12,
+   "13:00": 0.13,
+   "13:15": 0.14,
+   "13:30": 0.1,
+   "13:45": 0.08,
+   "14:00": 0.09,
+   "14:15": 0.03,
+   "14:30": 0.025,
+   "14:45": 0.02,
+   "15:00": 0.01,
+   "15:15": 0.015
+  }
+ }
+}

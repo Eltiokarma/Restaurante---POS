@@ -629,12 +629,96 @@ def fig_capacidad(d):
     guardar(fig, "capacidad")
 
 
+def _hhmm(m, pos=None) -> str:
+    m = int(round(m))
+    return f"{m // 60}:{m % 60:02d}"
+
+
+COLOR_ESTACION = {"fondos": NARANJA, "verduras": AGUA, "plancha": VIOLETA}
+NOMBRE_MODO = {"domestico": "Doméstica", "mise": "Mise en place", "estaciones": "Por estaciones"}
+
+
+def fig_gantt(d):
+    """Gantt de un día de cocina en cada forma de trabajar: quién hace qué en
+    la mañana, el almuerzo y (con mise en place) la tarde que deja lista la
+    mañana siguiente."""
+    co = d.get("cocina")
+    if not co:
+        return
+    h = co["horarios"]
+    m_ = lambda x: int(x[:2]) * 60 + int(x[3:])  # noqa: E731
+    almuerzo, fin_alm = m_(h["almuerzo"]), m_(h["servicio_fin"])
+    paneles = co["gantt"]
+    filas = sum(g["personas"] for g in paneles)
+    fig, axes = plt.subplots(len(paneles), 1, figsize=(ANCHO, 1.0 + 0.36 * filas + 0.35 * len(paneles)),
+                             sharex=True, gridspec_kw={"height_ratios": [g["personas"] for g in paneles]})
+    x0, x1 = 7 * 60, 18 * 60 + 30
+    for ax, g in zip(axes, paneles):
+        corre = g["jornada"]["entra"] - g["inicio"]  # la mañana empieza a la hora en que entra la gente
+        n = g["personas"]
+        for p in range(n):
+            y = n - 1 - p
+            ax.barh(y, fin_alm - almuerzo, left=almuerzo, height=0.7, color=GRILLA, zorder=1)
+            if p == 0:
+                ax.text((almuerzo + fin_alm) / 2, y, "almuerzo", ha="center", va="center", fontsize=7, color=TINTA2)
+            for tramo, desplaza in (("manana", corre), ("tarde", 0)):
+                for b in (x for x in g[tramo] if x["persona"] == p):
+                    ini, fa, fin = b["inicio"] + desplaza, b["fin_activo"] + desplaza, b["fin"] + desplaza
+                    col = COLOR_ESTACION[b["estacion"]]
+                    ax.barh(y, fa - ini, left=ini, height=0.7, color=col, edgecolor="white", lw=0.6, zorder=3)
+                    if fin > fa:  # la olla cocina sola
+                        ax.plot([fa, fin], [y - 0.3, y - 0.3], color=col, lw=1.6, alpha=0.55, zorder=2,
+                                solid_capstyle="butt")
+                    if fa - ini >= 4.3 * len(b["corto"]) + 5:
+                        ax.text((ini + fa) / 2, y + 0.04, b["corto"], ha="center", va="center", fontsize=6,
+                                color="white", zorder=4)
+        ax.axvline(almuerzo, color=TINTA2, lw=0.6, ls=(0, (2, 2)))
+        ax.set_yticks(range(n), [f"P{n - i}" for i in range(n)], fontsize=7.5)
+        ax.set_ylim(-0.6, n - 0.4)
+        titulo = f"{NOMBRE_MODO[g['modo']]}, {n} personas"
+        ax.set_title(f"{titulo}: entran a las {_hhmm(g['jornada']['entra'])}, salen a las {_hhmm(g['jornada']['sale'])}"
+                     f" ({g['jornada']['horas']:.1f} h)", fontsize=8.5, loc="left", pad=3)
+        ax.spines["left"].set_visible(False)
+        ax.tick_params(axis="y", length=0)
+    axes[-1].set_xlim(x0, x1)
+    axes[-1].xaxis.set_major_locator(MultipleLocator(60))
+    axes[-1].xaxis.set_major_formatter(FuncFormatter(_hhmm))
+    marcas = [Patch(color=COLOR_ESTACION[e], label=t) for e, t in co["estaciones"].items()]
+    marcas += [Line2D([], [], color=TINTA2, lw=1.6, alpha=0.55, label="la olla cocina sola")]
+    axes[0].legend(handles=marcas, fontsize=7, loc="lower center", bbox_to_anchor=(0.5, 1.25), ncol=4, frameon=False)
+    fig.tight_layout(h_pad=0.6)
+    guardar(fig, "gantt")
+
+
+def fig_cola(d):
+    """Cuánto espera un cliente por su plato a lo largo del almuerzo."""
+    co = d.get("cocina")
+    if not co:
+        return
+    fig, ax = plt.subplots(figsize=(ANCHO, 2.7))
+    colores = [AZUL, PERDIDA, AGUA, VIOLETA]
+    for col, c in zip(colores, co["colas"]):
+        xs = [t["inicio"] + 15 for t in c["tramos"]]
+        ys = [t["espera"] for t in c["tramos"]]
+        ax.plot([xs[0] - 15] + xs, [0] + ys, color=col, lw=1.6,
+                label=f"{NOMBRE_MODO[c['modo']]}, {c['personas']} personas ({c['ritmo_hora']:.0f} menús/h)")
+    ax.axhline(co["servicio"]["espera_maxima"], color=TINTA2, lw=0.8, ls=(0, (3, 2)))
+    ax.text(12 * 60 + 2, co["servicio"]["espera_maxima"] + 0.6, "espera máxima tolerable", fontsize=7, color=TINTA2)
+    ax.set_xlim(12 * 60, 15 * 60 + 30)
+    ax.set_ylim(bottom=0)
+    ax.xaxis.set_major_locator(MultipleLocator(30))
+    ax.xaxis.set_major_formatter(FuncFormatter(_hhmm))
+    ax.set_ylabel("Minutos de espera")
+    ax.legend(fontsize=7, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2, frameon=False)
+    guardar(fig, "cola")
+
+
 def generar(d: dict | None = None) -> None:
     d = d or json.loads((SALIDA / "datos.json").read_text(encoding="utf-8"))
     FIG.mkdir(parents=True, exist_ok=True)
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
               fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad, fig_factores, fig_trabajo,
-              fig_capacidad):
+              fig_capacidad, fig_gantt, fig_cola):
         f(d)
 
 

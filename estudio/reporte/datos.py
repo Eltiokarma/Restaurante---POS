@@ -20,6 +20,7 @@ from motor.igualdad import BASE as BASE_IGUAL, GRUPOS, igualar, personas_casa, s
 from motor.incertidumbre import RANGOS, perturbar
 from motor.trabajo import casa_desde, trabajo_de_la_casa
 from motor import capacidad as cap
+from motor import cocina as coc
 from motor.modelo import Noche, Trabajador
 from motor.barrido import Factores, barrido, estres, mezcla_desde_analisis, resumen
 from motor.montecarlo import muestras
@@ -380,6 +381,94 @@ def capacidades(arquetipos: list[dict], candela: dict | None) -> list[dict]:
     return salida
 
 
+def cocina(q_candela: float | None, candela: dict | None = None) -> dict:
+    """Experimento: la misma cocina trabajando de tres maneras. Gantt de la
+    mañana, cola del almuerzo y cuántos menús aguanta cada forma de trabajar."""
+    c = coc.cargar()
+    q = round(q_candela) if q_candela else 74
+    d = coc.desorden_calibrado(c)
+    paneles = [("domestico", 3), ("mise", 3), ("mise", 2), ("estaciones", 3)]
+    gantt = []
+    for modo, n in paneles:
+        r = coc.plan(modo, q, n, c)
+        j = coc.jornada(modo, q, n, c)
+        gantt.append({**{k: r[k] for k in ("modo", "personas", "manana", "tarde", "puestos", "dueno", "listo", "inicio",
+                                             "trabajo_manana", "trabajo_tarde", "cambios", "fin_tarde")},
+                      "jornada": j, "espera": coc.servicio(modo, q, n, c, d)["espera_maxima"]})
+    colas = [coc.servicio(m, q, n, c, d) for m, n in (("domestico", 3), ("domestico", 2), ("mise", 2), ("estaciones", 2))]
+    capacidad = [{**coc.capacidad_cocina(m, n, c), "horas_persona": coc.jornada(m, q, n, c)["horas_persona"],
+                  "espera_q": coc.servicio(m, q, n, c, d)["espera_maxima"]}
+                 for m in coc.MODOS for n in (2, 3, 4)]
+    # Candela con mise en place y una persona menos en cocina: se ahorra el
+    # sueldo más bajo de la cocina y se pagan las horas sobre 8 de los que quedan
+    ahorro = None
+    if candela:
+        sueldos = sorted(t["monto"] for t in candela["escenario"].get("planilla") or []
+                         if t.get("area") == "cocina" for _ in range(t.get("cantidad", 1)))
+        if len(sueldos) >= 3:
+            j = coc.jornada("mise", q, len(sueldos) - 1, c)
+            extra_h = max(0.0, j["horas"] - 8) * 26
+            por_hora = [x / (48 * 4.33) for x in sueldos[1:]]
+            costo_extra = sum(h * extra_h * 1.25 for h in por_hora)
+            ahorro = {"sueldo": sueldos[0], "horas_dia": j["horas"], "costo_extra": costo_extra,
+                      "neto": sueldos[0] - costo_extra, "personas": len(sueldos)}
+    return {"q": q, "desorden": d, "gantt": gantt, "ahorro": ahorro, "colas": colas, "capacidad": capacidad,
+            "tareas": c["tareas"], "servicio": c["servicio"], "perfil": c["demanda_15min"]["perfil"],
+            "horarios": {k: c[k] for k in ("inicio", "almuerzo", "servicio_fin", "tarde_inicio", "tarde_fin", "cambio_estacion")},
+            "estaciones": c["estaciones"], "platos": c["platos"]}
+
+
+def entradas(arquetipos: list[dict], candela: dict | None) -> list[dict]:
+    """Con qué números entra cada negocio a los análisis."""
+    pares = [(a["nombre"], a["datos"]) for a in arquetipos]
+    if candela:
+        pares.append(("Candela (datos del POS)", candela))
+    salida = []
+    for nombre, datos in pares:
+        local, esc, sup, q = armar(datos)
+        m = modelo(local, q, esc, NAC)
+        cocina_, salon = cap.gente(datos, m)
+        salida.append({
+            "nombre": nombre, "precio": local.precio, "q": q, "dias": esc.dias, "alquiler": local.alquiler_mes,
+            "insumos": local.insumos, "balones": esc.balones, "servicios": local.servicios_mes,
+            "gas_luz": esc.balones * local.gas_balon45 + local.servicios_mes,
+            "cocina": cocina_, "salon": salon, "otros": sum(t.cantidad for t in esc.planilla if t.area == "otro"),
+            "personal_mes": m.personal - (1500 if esc.sueldo_dueno else 0), "planilla_propia": bool(esc.planilla),
+            "sueldo_dueno": esc.sueldo_dueno, "formal": esc.formal, "laboral": esc.laboral,
+            "noche": None if esc.noche is None else {"q": esc.noche.q, "precio": esc.noche.precio},
+            "inversion": sup.inversion, "regimen": NOMBRE_REGIMEN[sup.regimen],
+        })
+    return salida
+
+
+def parametros() -> dict:
+    """Los supuestos fijos de cada análisis, para los cuadros del ensayo."""
+    from motor import trabajo as trb
+    from motor.barrido import CALIDAD, GOLPES, N_MC, NOCHE_TIPO
+    from motor.flujo import TOPE_NRUS
+
+    jul = local_de_ciudad(CIUDADES["juliaca"], "popular")
+    f = Factores()
+    return {
+        "juliaca": {"precio": jul.precio, "insumos": jul.insumos, "alquiler": jul.alquiler_mes,
+                    "sueldo_cocinero": jul.sueldo_cocinero, "sueldo_ayudante": jul.sueldo_ayudante,
+                    "sueldo_mozo": jul.sueldo_mozo, "gas_balon45": jul.gas_balon45, "servicios": jul.servicios_mes},
+        "igualdad": dict(BASE_IGUAL),
+        "grupos": [{"clave": c, "nombre": t, "campos": list(campos)} for c, t, campos in GRUPOS],
+        "rangos": dict(RANGOS), "n_sorteos": N_SORTEOS,
+        "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},
+        "barrido": {"precio": f.precio, "calidad": {k: list(v) for k, v in CALIDAD.items()},
+                    "elasticidad_supuesta": f.elasticidad, "elasticidad_medida": ELASTICIDAD_JULIACA, "n_mc": N_MC,
+                    "noche": {"q": NOCHE_TIPO.q, "precio": NOCHE_TIPO.precio, "insumos": NOCHE_TIPO.insumos,
+                              "balones": NOCHE_TIPO.balones, "servicios": NOCHE_TIPO.servicios}},
+        "golpes": [n for k, n in GOLPES if k != "base"],
+        "trabajo": {"jornada": trb.JORNADA_LEGAL, "recargo": trb.RECARGO_EXTRA, "administrador": trb.SUELDO_ADMINISTRADOR,
+                    "tasa": 0.15},
+        "capacidad": {"por_cocina": cap.POR_COCINA, "por_mozo": cap.POR_MOZO},
+        "tope_nrus": TOPE_NRUS,
+    }
+
+
 N_SORTEOS = 1000
 
 
@@ -500,6 +589,9 @@ def generar() -> dict:
         "igualdad": igualdad(arquetipos, g["datos"] if candela else None),
         "trabajo": trabajo(arquetipos, g["datos"] if candela else None),
         "capacidad": capacidades(arquetipos, g["datos"] if candela else None),
+        "entradas": entradas(arquetipos, g["datos"] if candela else None),
+        "parametros": parametros(),
+        "cocina": cocina(candela["q"] if candela else None, g["datos"] if candela else None),
         "supuestos_robustez": robustez_supuestos(arquetipos, g["datos"] if candela else None),
         "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez, "robustez_supuesta": robustez_supuesta,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},

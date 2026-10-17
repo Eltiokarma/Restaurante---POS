@@ -261,6 +261,13 @@ def construir(d: dict) -> str:
                 f"A {len(faltos)} de {len(capac)} les falta gente"
                 + ("" if not cnd else f"; Candela tiene sitio para {n(cnd['holgura'])} menús más ({s(cnd['valor_holgura'])} al mes)"),
                 "su cuello es la demanda, no la cocina" if cnd else "--"))
+        if co:
+            filas.append((
+                "¿Rinde más una cocina organizada?", "La misma cocina trabajando en doméstico, mise en place y estaciones",
+                f"Con 3 personas aguanta {n(cap_('domestico', 3)['tope'])}, {n(cap_('mise', 3)['tope'])} y "
+                f"{n(cap_('estaciones', 3)['tope'])} menús"
+                + ("" if not co.get("ahorro") else f"; Candela podría trabajar con 2 y ahorrar {s(co['ahorro']['neto'])} al mes"),
+                "sí, el mise en place (desorden supuesto)"))
         filas.append((
             "¿Conviene abrir de noche?", "Barrido con una noche tipo de 30 platos",
             "Mejora a todos los negocios", "sí, si existe esa demanda (no medida)"))
@@ -277,6 +284,227 @@ def construir(d: dict) -> str:
 
     trab = {t["nombre"]: t for t in d.get("trabajo", [])}
     capac = {c["nombre"]: c for c in d.get("capacidad", [])}
+    co = d.get("cocina")
+    pr = d.get("parametros", {})
+    ent = d.get("entradas", [])
+
+    def cuadro(titulo, etiqueta, filas):
+        """Cuadro de supuestos de un análisis: variable, valor y de dónde sale.
+        Los valores ya vienen en LaTeX (s(), p(), n())."""
+        cuerpo = "\n".join(f"{esc(v)} & {x} & {t} \\\\" for v, x, t in filas)
+        return rf"""\begin{{table}}[h]
+\centering\footnotesize
+\caption{{{titulo}}}\label{{{etiqueta}}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.3\textwidth}}>{{\raggedright\arraybackslash}}Xl}}
+\toprule
+Variable & Valor & Origen \\
+\midrule
+{cuerpo}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+"""
+
+    def lista_n(xs, dec=1):
+        return ", ".join(n(x, dec) for x in xs)
+
+    _nch = next((e["noche"] for e in ent if e["noche"]), None)
+    noche_txt = "" if not _nch else f"{n(_nch['q'])} platos a {s(_nch['precio'])}"
+
+    def tabla_entradas():
+        filas = []
+        for e in ent:
+            gente = f"{e['cocina']} + {e['salon']}" + (f" + {e['otros']}" if e["otros"] else "")
+            formal = ("IGV, pl." if e["formal"] and e["laboral"] else "IGV" if e["formal"]
+                      else "pl." if e["laboral"] else "no")
+            filas.append(
+                f"{esc(corto(e['nombre']))} & {s(e['precio'])} & {n(e['q'])} & {s(e['alquiler'])} & {s(e['insumos'], 2)} & "
+                f"{s(e['gas_luz'])} & {gente}{'' if e['planilla_propia'] else '*'} & {s(e['personal_mes'])} & "
+                f"{'sí' if e['sueldo_dueno'] else 'no'} & {formal} & {s(e['inversion'])} \\\\")
+        return "\n".join(filas)
+
+    CAMPO_TXT = {"ciudad_id": "ciudad", "zona_id": "zona", "precio": "precio", "q": "menús al día", "dias": "días",
+                 "alquiler_mes": "alquiler", "balones": "gas", "gas_balon45": "precio del gas",
+                 "servicios_mes": "luz y agua", "insumos": "costo por menú", "segmento": "segmento",
+                 "planilla": "planilla", "sueldo_dueno": "sueldo del dueño", "sueldo_cocinero": "sueldo de cocinero",
+                 "sueldo_ayudante": "de ayudante", "sueldo_mozo": "de mozo", "formal": "IGV",
+                 "laboral_formal": "cargas laborales", "noche": "turno noche completo"}
+
+    def sup_ciudades():
+        return cuadro("Supuestos del mapa de ciudades.", "tab:sup_ciudades", [
+            ("Local", "menú popular, formal (IGV y cargas laborales)", "método"),
+            ("Precio", "el de la pizarra de cada ciudad", "observado (Lima, Cusco, Puno) / estimado"),
+            ("Insumos, alquiler y sueldos", "los de la base para cada ciudad", "ver anexo de fuentes"),
+            ("Personal", "automático: cocinero, un ayudante cada 80 menús, un mozo cada 70", "supuesto"),
+            ("Gas", "5 balones de 45~kg al mes", "supuesto"),
+            ("Sueldo del dueño", r"no se cuenta (columna aparte con S/~1\,500)", "método"),
+            ("Días de atención", "26 al mes", "supuesto"),
+            ("IGV de restaurantes", r"10.5\,\% (2026), 15\,\% (2027), 18\,\% (2028)", "ley / supuesto 2028"),
+        ])
+
+    def sup_igualdad():
+        b = pr["igualdad"]
+        return cuadro("Supuestos de la comparación a igualdad de condiciones: el local común.", "tab:sup_igualdad", [
+            ("Precio", s(b["precio"]), "el del propietario que cocina"),
+            ("Menús al día", n(b["q"]), "ídem"),
+            ("Alquiler", s(b["alquiler_mes"]), "ídem"),
+            ("Insumos por menú", s(b["insumos"], 2), "ídem"),
+            ("Gas y luz", f"{n(b['balones'])} balones al mes; {s(b['servicios_mes'])} de luz y agua", "ídem"),
+            ("Lo que queda de cada uno", "quién trabaja y cuánto se le paga, sueldo del dueño, formalidad y noche",
+             "cada negocio"),
+        ])
+
+    def sup_factores():
+        filas = [(g["nombre"], ", ".join(CAMPO_TXT.get(c, c) for c in g["campos"]), "método") for g in pr["grupos"]]
+        filas.append(("Reparto", "valor de Shapley: promedio sobre los 120 órdenes posibles", "método"))
+        return cuadro("Supuestos de la descomposición: qué entra en cada factor.", "tab:sup_factores", filas)
+
+    def sup_riesgo():
+        r = pr["riesgo"]
+        return cuadro("Supuestos de la simulación de riesgo.", "tab:sup_riesgo", [
+            ("Años simulados", r"2\,000 por negocio", "método"),
+            ("Clientela", f"lognormal, desvío de {p(r['sd_volumen'])}", "supuesto"),
+            ("Costo de insumos", f"normal, desvío de {p(r['sd_insumos_anual'])} al año", "supuesto"),
+            ("Precio", r"triangular en el rango de la ciudad ($\pm$4\,\% si es dato propio)", "supuesto"),
+            ("Paros", "2 a 8 semanas sin venta, con la probabilidad anual de cada ciudad", "historial de paros"),
+            ("Resto", "los números de cada negocio (cuadro~\\ref{tab:entradas})", "cada negocio"),
+        ])
+
+    def sup_sensibilidad():
+        return cuadro("Supuestos del análisis de sensibilidad.", "tab:sup_sensibilidad", [
+            ("Variables", "precio, menús al día, insumos, sueldos, alquiler, gas, luz y agua, días al mes", "método"),
+            ("Cómo se mueven", "una a la vez; las demás quedan como están", "método"),
+            ("Quiebre", "cuánto puede cambiar la variable hasta que la utilidad llega a cero", "método"),
+            ("Tornado", r"cada variable $\pm$10\,\%", "método"),
+            ("Matriz", r"precio de S/~2 menos a S/~2 más, en pasos de 50 céntimos; venta del 50 al 150\,\% de la actual",
+             "método"),
+        ])
+
+    def sup_barrido():
+        b = pr["barrido"]
+        cal = b["calidad"]
+        return cuadro("Supuestos del barrido de decisiones.", "tab:sup_barrido", [
+            ("Precio", f"de {s(b['precio'][0])} a {s(b['precio'][-1])} sobre el actual, en pasos de 50 céntimos", "método"),
+            ("Porción económica", f"insumos {p(cal['economica'][0] - 1)}, clientela {p(cal['economica'][1] - 1)}", "supuesto"),
+            ("Porción generosa", f"insumos +{p(cal['generosa'][0] - 1)}, clientela +{p(cal['generosa'][1] - 1)}", "supuesto"),
+            ("Sensibilidad al precio, medida", lista_n(b["elasticidad_medida"]), "medida en Candela ± margen"),
+            ("Sensibilidad al precio, supuesta", lista_n(b["elasticidad_supuesta"]), "supuesto inicial"),
+            ("Noche tipo", f"{n(b['noche']['q'])} platos a {s(b['noche']['precio'])}, insumos {s(b['noche']['insumos'], 2)}, "
+                           f"{n(b['noche']['balones'])} balones y {s(b['noche']['servicios'])} de luz, equipo propio", "supuesto"),
+            ("Techo de Candela", f"{n(rc['capacidad']) if rc and rc.get('capacidad') else 100} menús al día", "propio"),
+            ("Años simulados", f"{n(b['n_mc'])} por combinación", "método"),
+            ("Decisión robusta", "la que más deja con la sensibilidad más desfavorable", "método"),
+        ])
+
+    def sup_estres():
+        return cuadro("Supuestos de la prueba de estrés: los golpes.", "tab:sup_estres",
+                      [(g, "uno a la vez" if g != "Todo junto" else "los seis a la vez", "supuesto")
+                       for g in pr["golpes"]])
+
+    def sup_sorteos():
+        r = pr["rangos"]
+        return cuadro("Supuestos de los sorteos: cuánto puede equivocarse cada número.", "tab:sup_sorteos", [
+            ("Sorteos", f"{n(pr['n_sorteos'])} por negocio, cada número uniforme en su rango", "método"),
+            ("Precio", f"$\\pm${p(r['precio'], 0)}", "supuesto"),
+            ("Menús al día", f"$\\pm${p(r['q'], 0)}", "supuesto"),
+            ("Insumos por menú", f"$\\pm${p(r['insumos'], 0)}", "supuesto"),
+            ("Alquiler", f"$\\pm${p(r['alquiler_mes'], 0)}", "supuesto"),
+            ("Sueldos", f"$\\pm${p(r['sueldos'], 0)}, todos juntos; quien no cobra sigue sin cobrar", "supuesto"),
+            ("Gas y luz", f"$\\pm${p(r['balones'], 0)}", "supuesto"),
+            ("Veredicto", r"se sostiene ($\geq$90\,\% de los sorteos), probable (70--90\,\%), no concluyente", "método"),
+        ])
+
+    def sup_trabajo():
+        j, t = pr["juliaca"], pr["trabajo"]
+        return cuadro("Supuestos del valor del trabajo de la casa.", "tab:sup_trabajo", [
+            ("Sueldo de mercado", f"cocinero {s(j['sueldo_cocinero'])}, ayudante {s(j['sueldo_ayudante'])}, mozo "
+                                  f"{s(j['sueldo_mozo'])}, administrador {s(t['administrador'])} al mes", "base de Juliaca / supuesto"),
+            ("Jornada", f"{n(t['jornada'])} horas a la semana; las extra, con {p(t['recargo'])} de recargo", "ley"),
+            ("Horas de la casa", "60 a la semana quien cocina o atiende; 20 a 60 quien administra (cuadro~\\ref{tab:trabajo})",
+             "supuesto"),
+            ("Costo del capital", f"{p(t['tasa'])} al año sobre la inversión", "supuesto (tasa del flujo)"),
+        ])
+
+    def sup_capacidad():
+        c = pr["capacidad"]
+        return cuadro("Supuestos del experimento de capacidad.", "tab:sup_capacidad", [
+            ("Menús por persona en cocina", n(c["por_cocina"]), r"propio: 3 aguantan $\sim$100"),
+            ("Menús por mozo", n(c["por_mozo"]), r"propio: 2 aguantan $\sim$100, sobreexigidos"),
+            ("Quién cuenta", "la planilla de día por área, más la gente de la casa que cocina o atiende", "método"),
+            ("Costo de quien falta", "sueldo de ayudante o de mozo (más 5\\,\\% si la planilla es formal)", "supuesto"),
+            ("Valor de la holgura", "utilidad del modelo vendiendo hasta el tope con la misma planilla", "método"),
+        ])
+
+    def sup_candela():
+        e = next((x for x in ent if x["nombre"].startswith("Candela")), None)
+        if not e:
+            return ""
+        return cuadro("Los números de Candela.", "tab:sup_candela", [
+            ("Precio y venta", f"{s(e['precio'])}; {n(e['q'])} menús al día, {n(e['dias'])} días", "propio (POS y dueño)"),
+            ("Insumos por menú", s(e["insumos"], 2), "propio (recetas y notas de compra)"),
+            ("Alquiler", f"{s(e['alquiler'])} (el de mercado sería S/~3\\,000)", "propio"),
+            ("Planilla", f"{e['cocina']} en cocina y {e['salon']} mozos a medio tiempo: {s(e['personal_mes'])} al mes", "propio"),
+            ("Gas, luz y agua", s(e["gas_luz"]), "propio"),
+            ("Sueldo del dueño", r"S/~1\,500 cuando se cuenta", "supuesto"),
+            ("IGV", r"sobre toda la venta (peor caso); emite boleta solo cuando se la piden", "propio / supuesto"),
+            ("Inversión", s(e["inversion"]), "propio"),
+        ])
+
+    def sup_deja_ver():
+        return cuadro("Supuestos de los cálculos de esta sección.", "tab:sup_deja_ver", [
+            ("Medio sol", "misma clientela; se traduce a menús con el margen por plato de hoy", "método"),
+            ("Tope del Nuevo RUS", s(pr["tope_nrus"]) + " de ventas al año; cuota de S/~20 o S/~50 al mes", "ley"),
+            ("Noche con la misma gente", "precio S/~1 más que el día, insumos 5\\,\\% más, sin equipo nuevo", "supuesto"),
+            ("Casa propia", "alquiler cero; la venta y el precio, los de la fonda del catálogo", "supuesto"),
+        ])
+
+    def hhmm(m):
+        m = int(round(m))
+        return f"{m // 60}:{m % 60:02d}"
+
+    def cola_(modo, n_):
+        return next(c for c in co["colas"] if c["modo"] == modo and c["personas"] == n_)
+
+    def cap_(modo, n_):
+        return next(c for c in co["capacidad"] if c["modo"] == modo and c["personas"] == n_)
+
+    gd = gm3 = None
+    punta = 0
+    if co:
+        gd = next(g for g in co["gantt"] if g["modo"] == "domestico")
+        gm3 = next(g for g in co["gantt"] if g["modo"] == "mise" and g["personas"] == 3)
+        perf = co["perfil"]
+        punta = sum(v for h, v in perf.items() if "12:45" <= h <= "13:30") / sum(perf.values())
+
+    def tabla_tareas():
+        filas = []
+        for t in co["tareas"]:
+            para = ", ".join(co["platos"][x].lower() for x in (t.get("usa") or [t.get("plato")]) if x)
+            filas.append(f"{esc(t['nombre'])} & {esc(co['estaciones'][t['estacion']].split(' ')[0])} & {t['fijo']} & "
+                         f"{t['var']} & {t.get('espera') or '--'} & {'sí' if t.get('anticipable') else ''} & {esc(para)} \\\\")
+        return "\n".join(filas)
+
+    def tabla_servicio():
+        sv, h = co["servicio"], co["horarios"]
+        filas = [(f"{x['nombre']} (por menú)", f"{n(x['min'], 2)} min (supuesto)") for x in sv["puestos"].values()]
+        filas += [
+            ("Desorden por menú, cocina doméstica", f"{n(co['desorden'], 2)} min (calibrado: {sv['calibracion']['personas']} personas aguantan {sv['calibracion']['menus']} menús)"),
+            ("Desorden que queda", f"mise en place {p(sv['desorden_queda']['mise'])}, estaciones {p(sv['desorden_queda']['estaciones'])} (supuesto)"),
+            ("Espera máxima tolerable", f"{sv['espera_maxima']} min en la hora punta (supuesto)"),
+            ("Llegada de pedidos", f"por cuarto de hora, medida en el POS de Candela; el {p(punta)} entre 12:45 y 13:45"),
+            ("Horarios", f"almuerzo {h['almuerzo']}--{h['servicio_fin']}; tarde de mise en place desde {h['tarde_inicio']}, hasta {h['tarde_fin']} como máximo"),
+            ("Cambio de puesto", f"{h['cambio_estacion']} min cada vez (supuesto)"),
+            ("Menús del día", f"{n(co['q'])}, la venta actual de Candela"),
+        ]
+        return "\n".join(f"{esc(a)} & {b} \\\\" for a, b in filas)
+
+    def tabla_org():
+        nombres = {"domestico": "Doméstica", "mise": "Mise en place", "estaciones": "Por estaciones"}
+        filas = []
+        for m in ("domestico", "mise", "estaciones"):
+            celdas = " & ".join(f"{n(cap_(m, k)['tope'])} ({cap_(m, k)['limita'][:3]}.)" for k in (2, 3, 4))
+            filas.append(f"{nombres[m]} & {celdas} & {n(cap_(m, 3)['horas_persona'], 1)} \\\\")
+        return "\n".join(filas)
 
     def tabla_capacidad():
         filas = []
@@ -394,6 +622,7 @@ personas a tiempo completo (S/~1\,500, S/~1\,500 y S/~1\,300) y en el salón tre
 uno); las compras las hace el dueño. Opera con RUC de persona natural y emite boleta solo cuando el cliente la pide, así que el IGV que de verdad paga está entre los dos extremos del cuadro. La inversión inicial fue de S/~20 mil y
 el local tardó unos seis meses en llenarse.
 
+{sup_candela()}
 \begin{{table}}[h]
 \centering\small
 \caption{{Candela: el mes con los datos reales (74 menús diarios a S/~11, 26 días). El IGV se muestra aparte
@@ -676,12 +905,55 @@ tipo son \emph{{supuestos}} explícitos, documentados en su ficha. Los datos de 
 de su sistema de ventas (recetas y lo vendido de cada plato), de una entrevista con el dueño (alquiler, planilla,
 historia de precios) y de sus notas de compra (precios de carnes, verduras, abarrotes y gas). La lista de fuentes está en el anexo.
 
+\subsection{{Cómo se experimenta}}\label{{sec:metodo}}
+
+Cada análisis de este ensayo es un experimento hecho sobre el modelo, no sobre un local de verdad: se parte de
+un caso base, se cambia una cosa (o un grupo de cosas definido de antemano), todo lo demás queda igual y se mide
+qué le pasa a un resultado. El protocolo es siempre el mismo:
+\begin{{enumerate}}[leftmargin=1.4em,itemsep=1pt]
+\item \textbf{{Pregunta.}} Una sola, que se pueda contestar con un número: ¿cuánto cuesta no estar en el local?
+\item \textbf{{Caso base.}} Los números con los que entra cada negocio (cuadro~\ref{{tab:entradas}}).
+\item \textbf{{Qué se mueve y qué queda fijo.}} Cada análisis abre con un cuadro de \emph{{supuestos}}: las variables
+que entran, su valor y su origen ---dato \emph{{propio}} de Candela, \emph{{observado}}, \emph{{ley}}, \emph{{estimado}},
+\emph{{calibrado}} para reproducir algo observado, o \emph{{supuesto}} razonado---. Lo que no aparece en ese cuadro es
+lo del caso base.
+\item \textbf{{Resultado.}} Casi siempre la utilidad del mes o lo que se lleva la casa; a veces el equilibrio, la
+probabilidad de perder, los menús que aguanta la cocina o los minutos de espera.
+\item \textbf{{Veredicto.}} Si el resultado depende de números supuestos, se repite el cálculo con esos números
+movidos al azar (sección~\ref{{sec:supuestos}}) y se cuenta en qué parte de los sorteos se sostiene.
+\end{{enumerate}}
+El cuadro~\ref{{tab:tipos}} resume los tipos de experimento que se usan, y el registro de la
+sección~\ref{{sec:experimentos}} reúne cada pregunta con su resultado.
+
+\begin{{table}}[h]
+\centering\footnotesize
+\caption{{Tipos de experimento del ensayo.}}\label{{tab:tipos}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.2\textwidth}}>{{\raggedright\arraybackslash}}X>{{\raggedright\arraybackslash}}p{{0.2\textwidth}}l}}
+\toprule
+Experimento & Qué se fija y qué se mueve & Qué se mide & Dónde \\
+\midrule
+Comparación de casos & Cada negocio con sus propios números & Utilidad, equilibrio, VAN & \S\ref{{sec:negocios}} \\
+A igualdad de condiciones & Todos en el mismo local; queda distinto solo quién trabaja, la formalidad y la noche & Lo que se lleva la casa & \S\ref{{sec:negocios}} \\
+Descomposición & Se pasa de un negocio a otro factor por factor, en todos los órdenes (Shapley) & Aporte de cada factor & \S\ref{{sec:negocios}} \\
+Un cambio a la vez & Se cambia una variable o una decisión; el resto queda quieto & Cambio en la utilidad, quiebre & \S\ref{{sec:negocios}}, \S\ref{{sec:sensibilidad}} \\
+Simulación de riesgo & Clientela, insumos, precio y paros al azar, 2\,000 años & Probabilidad de perder & \S\ref{{sec:riesgo}} \\
+Barrido de decisiones & Todas las combinaciones de precio, porción y noche, con varias sensibilidades & Mejor decisión en el peor caso & \S\ref{{sec:robustez}} \\
+Prueba de estrés & Seis golpes, uno a uno y juntos & Utilidad con el golpe & \S\ref{{sec:estres}} \\
+Sorteos de supuestos & Todos los números supuestos al azar en su rango, {n(pr.get('n_sorteos', 1000))} veces & Parte de los sorteos en que se cumple & \S\ref{{sec:supuestos}} \\
+Valor de mercado & Se le pone precio al trabajo y al capital de la casa & Utilidad económica & \S\ref{{sec:trabajo}} \\
+Simulación de la cocina & Misma cocina, tres formas de trabajar, tareas y pedidos minuto a minuto & Menús que aguanta, horas & \S\ref{{sec:cocina}} \\
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
 \section{{El mapa: doce ciudades}}
 
 El cuadro~\ref{{tab:ciudades}} y la figura~\ref{{fig:ciudades}} resumen el equilibrio de un local de menú
 popular formal en cada ciudad, con el precio de su pizarra, cinco balones de gas al mes y sin sueldo del
 dueño. Es la referencia del estudio de ciudades, reproducida exactamente por el motor.
 
+{sup_ciudades()}
 \begin{{table}}[h]
 \centering\small
 \caption{{Equilibrio en menús diarios por ciudad. Formal salvo la última columna.}}\label{{tab:ciudades}}
@@ -731,7 +1003,7 @@ El calendario tributario empeora el mapa de manera desigual (figura~\ref{{fig:ig
 amplio, como en Lima, el equilibrio apenas se mueve; donde es fino, el mismo cambio dispara el volumen
 necesario. El efecto es convexo: castiga más a quien menos margen tiene.
 
-\section{{{NN.capitalize()} negocios}}
+\section{{{NN.capitalize()} negocios}}\label{{sec:negocios}}
 
 \subsection{{Un catálogo de restaurantes tipo}}
 
@@ -754,6 +1026,25 @@ compras por volumen. Ningún local de menú publica sus números; la referencia 
 que la mitad de los restaurantes recupera su inversión en 19 a 24 meses y las ventas de franquicias chicas,
 cercanas a S/~50 mil al mes.
 \end{{description}}
+
+El cuadro~\ref{{tab:entradas}} reúne los números con los que entra cada negocio a todos los análisis; los que
+no son de Candela son supuestos razonados.
+
+\begin{{table}}[h]
+\centering\scriptsize
+\caption{{Con qué números entra cada negocio. Insumos por menú; gas, luz, planilla e inversión en soles al mes
+(la inversión, una vez). Gente: en cocina + en salón (+ administración); * planilla automática del modelo.
+Planilla: sin el sueldo del dueño. Formal: qué paga en regla (IGV, planilla). Día y noche suma de noche
+{noche_txt}.}}\label{{tab:entradas}}
+\setlength{{\tabcolsep}}{{2.5pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}Xrrrrrcrccr}}
+\toprule
+Negocio & Precio & Menús & Alquiler & Insumos & Gas y luz & Gente & Planilla & Dueño & Formal & Inversión \\
+\midrule
+{tabla_entradas()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
 
 \begin{{table}}[h]
 \centering\footnotesize
@@ -813,6 +1104,7 @@ separar lo que se debe a la organización, la figura~\ref{{fig:igualdad}} los po
 el del propietario que cocina, con S/~10 por menú, 60 menús diarios, S/~1\,200 de alquiler y los mismos insumos, gas
 y luz. Lo único que queda distinto es quién trabaja, cómo se le paga, si es formal y si abre de noche.
 
+{sup_igualdad()}
 \begin{{figure}}[t]
 \centering
 \includegraphics[width=\textwidth]{{fig/igualdad.pdf}}
@@ -879,6 +1171,7 @@ formalidad y el turno noche. Como los factores se potencian entre sí ---el IGV 
 aporte de cada uno es el promedio de su efecto sobre todos los órdenes posibles en que podrían agregarse (el valor
 de Shapley de la teoría de juegos), y los cinco aportes suman exactamente la diferencia.
 
+{sup_factores()}
 \begin{{figure}}[t]
 \centering
 \includegraphics[width=\textwidth]{{fig/factores.pdf}}
@@ -921,13 +1214,14 @@ formalidad {s(-ap('Candela (datos del POS)', 'formalidad'))}. La palanca más gr
 local, sino en cómo se reparte el trabajo de la cocina y del salón."""}
 """}
 
-\section{{Riesgo}}
+\section{{Riesgo}}\label{{sec:riesgo}}
 
 Un promedio esconde la pregunta que quita el sueño: ¿qué pasa en un año malo? La figura~\ref{{fig:riesgo}}
 muestra la distribución de la utilidad anual en 2\,000 años simulados para cada negocio. Los locales con
 margen holgado ---el exitoso, día y noche, la familia--- casi nunca terminan el año en pérdida; el inversor
 lo hace la mitad de las veces y el inversor ausente casi siempre.
 
+{sup_riesgo()}
 \begin{{figure}}[t]
 \centering
 \includegraphics[width=\textwidth]{{fig/riesgo.pdf}}
@@ -941,13 +1235,14 @@ propietario que cocina tiene una caja angosta y casi toda a la derecha del cero:
 principal costo laboral, ella misma, se ajusta solo cuando las ventas bajan. Esa es la razón económica de la
 resistencia de la fonda familiar: no es más rentable por plato, sino más flexible ante un mal año.
 
-\section{{Sensibilidad: cuánto aguanta cada negocio}}
+\section{{Sensibilidad: cuánto aguanta cada negocio}}\label{{sec:sensibilidad}}
 
 La sensibilidad mide lo que el promedio no muestra: cuánto margen de error tiene cada negocio. La
 figura~\ref{{fig:quiebres}} y el cuadro~\ref{{tab:quiebres}} muestran, para cada uno, cuánto puede moverse
 cada variable ---sola, con las demás quietas--- antes de que la utilidad llegue a cero. Si el negocio ya
 pierde, la celda indica cuánto tendría que moverse para dejar de perder.
 
+{sup_sensibilidad()}
 \begin{{figure}}[t]
 \centering
 \includegraphics[width=\textwidth]{{fig/quiebres.pdf}}
@@ -1016,6 +1311,8 @@ mejor peor caso: la que conviene aunque la demanda resulte ser la menos favorabl
 estudio calculó {n(sum(combinaciones(r) for r in d.get('robustez', [])))} combinaciones
 para los {NN} negocios, cada una con su simulación de riesgo y su flujo a diez años.
 
+{sup_barrido()}
+
 {"" if not rc else rf"""\subsection{{Candela, con su propia elasticidad}}
 
 Para Candela no hace falta suponer cómo reacciona la clientela: su historia lo mide. El barrido usó tres
@@ -1075,12 +1372,13 @@ que menos se conoce. Lo que el barrido sí establece es que, si esa demanda exis
 el alquiler ya está pagado. La distancia entre el punto amarillo y el azul es el valor de averiguarlo con un
 piloto.
 
-\section{{Prueba de estrés}}
+\section{{Prueba de estrés}}\label{{sec:estres}}
 
 La última pregunta es la del año malo deliberado: ¿qué pasa si llega un golpe? Cada negocio se sometió a seis
 golpes por separado ---clientela $-$15\,\%, insumos $+$20\,\%, IGV de 18\,\%, sueldos $+$10\,\%, alquiler
 $+$25\,\% y un competidor que obliga a bajar S/~1--- y a todos juntos (figura~\ref{{fig:estres}}).
 
+{sup_estres()}
 \begin{{figure}}[t]
 \centering
 \includegraphics[width=\textwidth]{{fig/estres.pdf}}
@@ -1105,6 +1403,7 @@ el alquiler ±{p(sr['rangos']['alquiler_mes'], 0)}, los sueldos ±{p(sr['rangos'
 hallazgo: se sostiene si se cumple en nueve de cada diez o más, es probable entre siete y nueve, y no es
 concluyente por debajo.
 
+{sup_sorteos()}
 \begin{{table}}[h]
 \centering\small
 \caption{{Parte de los {n(sr['n'])} sorteos en que se cumple cada hallazgo.}}\label{{tab:supuestos}}
@@ -1149,6 +1448,7 @@ que ganan por razones distintas.
 Más allá de los números de cada caso, el modelo permite hacer preguntas que en la operación diaria no se
 hacen. Cinco de ellas cambian la manera de pensar el negocio.
 
+{sup_deja_ver()}
 \subsection{{Cuánto vale medio sol}}
 
 Medio sol más en la pizarra, con la misma clientela, equivale a vender más menús al precio de hoy. Cuántos,
@@ -1170,6 +1470,7 @@ verdad trabajan, con el recargo de ley por las horas extra--- y lo que rendiría
 que lo atiende. Las horas son supuestos razonados (60 por semana para quien cocina, de 20 a 40 para quien solo
 administra) y están en el cuadro~\ref{{tab:trabajo}}.
 
+{sup_trabajo()}
 \begin{{figure}}[t]
 \centering
 \includegraphics[width=\textwidth]{{fig/trabajo_hora.pdf}}
@@ -1229,6 +1530,7 @@ Eso es unos 33 menús por persona en cocina y hasta 50 por mozo en su tope. El e
 a todos los negocios: cuenta quiénes están en cocina y en salón al mediodía (incluida la gente de la casa), calcula
 cuánto aguantan y, si les falta alguien, le suma su sueldo a la cuenta.
 
+{sup_capacidad()}
 \begin{{figure}}[t]
 \centering
 \includegraphics[width=\textwidth]{{fig/capacidad.pdf}}
@@ -1271,12 +1573,13 @@ para {n(capac['Candela (datos del POS)']['holgura'])} menús más al día sin co
 cada menú extra solo cuesta sus insumos. Esa es la respuesta a por qué rinde menos que el inversor: no le falta
 capacidad, le sobra. Paga a la gente de un local de {n(capac['Candela (datos del POS)']['tope'])} menús y vende {n(capac['Candela (datos del POS)']['q'])}. Su cuello de botella no es la cocina
 sino la demanda del mediodía, y lo que más la acercaría al inversor es llenar esa capacidad (pensionistas,
-pedidos para llevar, convenios con oficinas) antes que mover el precio o recortar personal."""}
+pedidos para llevar, convenios con oficinas) antes que mover el precio; si la demanda no crece, la otra salida
+es ordenar la cocina para trabajar con una persona menos (sección~\ref{{sec:cocina}})."""}
 
 Una advertencia: los 33 menús por persona son los de la cocina de Candela tal como trabaja hoy. La planilla
 automática del modelo supone hasta 80 por persona, propio de cocinas grandes con estaciones y todo picado de
-antemano. La distancia entre esas dos cifras es justamente lo que mediría el estudio pendiente de organización
-de la cocina: si Candela trabajara por estaciones, el mismo equipo aguantaría más, y su holgura valdría más.
+antemano. La distancia entre esas dos cifras depende de cómo se organiza la cocina, que es el tema de la
+sección~\ref{{sec:cocina}}.
 
 """}
 \subsection{{La trampa del Nuevo RUS}}
@@ -1327,7 +1630,153 @@ puede mejorar la utilidad porque permite prescindir de alguien--- y obligan a le
 calculada con la planilla automática. Para un local concreto, la planilla real, persona por persona, es el
 dato que más afina el modelo.
 
+{"" if not co else rf"""\section{{La organización de la cocina}}\label{{sec:cocina}}
+
+Muchas fondas cocinan como se cocina en casa: cada quien se encarga de sus platos de principio a fin y todo
+empieza en crudo la misma mañana ---las arvejas sin desgranar, la papa sin pelar, la cebolla entera---. La
+hipótesis de esta sección es que trabajar con \emph{{mise en place}} (dejar listo de antemano lo que aguanta de un
+día para otro) o por \emph{{estaciones}} (cada persona en un puesto fijo) rinde más con la misma gente, y que eso
+depende de la organización y no de la formalidad: una fonda familiar puede organizarse igual que un restaurante
+con planilla.
+
+\subsection{{Cómo se modela un día de cocina}}
+
+El día se divide en dos partes que se modelan por separado. La \emph{{mañana}} es una lista de
+{len(co['tareas'])} tareas para {n(co['q'])} menús (los que vende Candela hoy), cada una con un tiempo que no
+depende del volumen (sacar, lavar, ordenar), un tiempo que crece con los menús y, si corresponde, una espera en
+que la olla cocina sola y nadie tiene que estar encima. Las tareas tienen precedencias: no hay aderezo sin
+cebolla picada ni sopa sin fondo. Un programador reparte las tareas minuto a minuto entre la gente disponible,
+siempre empezando por la que tiene más camino por delante (la ruta crítica), y así se obtiene a qué hora está
+todo listo. El \emph{{almuerzo}} es una cola: los pedidos llegan cada cuarto de hora según el perfil medido en el
+POS de Candela y la cocina despacha a su ritmo; si se atrasa, los clientes esperan.
+
+Las tres formas de trabajar cambian tres cosas. En la \emph{{doméstica}}, cada persona hace sus platos completos y
+lo que usan varios platos (la cebolla, el ajo, la papa) lo pica cada una para el suyo, con su propio tiempo de
+preparar y limpiar; todo se hace en la mañana. Con \emph{{mise en place}}, lo anticipable se hace la tarde anterior
+y de una sola vez; en la mañana cualquiera hace cualquier cosa, pero cambiar de puesto cuesta
+{co['horarios']['cambio_estacion']} minutos. \emph{{Por estaciones}} es mise en place con un puesto fijo para cada
+persona, que solo ayuda en otro cuando el suyo no tiene nada listo. En el almuerzo, la diferencia está en el
+\emph{{desorden}}: los minutos por menú que se van en buscar, reponer, picar lo que faltó y cambiar de tarea.
+
+\begin{{table}}[h]
+\centering\footnotesize
+\caption{{Supuestos del día de cocina: tareas para 100 menús, en minutos de una persona. ``Fijo'': lo que no
+depende del volumen. ``Antes'': se puede dejar listo la tarde anterior.}}\label{{tab:tareas}}
+\setlength{{\tabcolsep}}{{4pt}}
+\begin{{tabularx}}{{\textwidth}}{{llrrrc>{{\raggedright\arraybackslash}}X}}
+\toprule
+Tarea & Puesto & Fijo & Por 100 & Espera & Antes & Para \\
+\midrule
+{tabla_tareas()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+\begin{{table}}[h]
+\centering\footnotesize
+\caption{{Supuestos del almuerzo y de la calibración.}}\label{{tab:servicio}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.36\textwidth}}>{{\raggedright\arraybackslash}}X}}
+\toprule
+Variable & Valor y origen \\
+\midrule
+{tabla_servicio()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+El desorden no se puede medir con un cronómetro, así que se \emph{{calibra}}: es el valor que hace que una cocina
+doméstica de {co['servicio']['calibracion']['personas']} personas aguante justo los
+{co['servicio']['calibracion']['menus']} menús que aguanta Candela sin que nadie espere más de
+{co['servicio']['espera_maxima']} minutos en la hora punta. Sale {n(co['desorden'], 2)} minutos por menú, frente a
+{n(sum(x['min'] for x in co['servicio']['puestos'].values()), 2)} minutos de todas las tareas medibles del almuerzo. Cuánto de ese desorden recorta la organización es el
+supuesto más fuerte de la sección (la mitad con mise en place, el 70\,\% por estaciones) y el primero que habría
+que medir.
+
+\subsection{{Cuatro días de cocina}}
+
+\begin{{figure}}[p]
+\centering
+\includegraphics[width=\textwidth]{{fig/gantt.pdf}}
+\caption{{Un día de cocina para {n(co['q'])} menús en cuatro organizaciones. Cada fila es una persona; las barras,
+el trabajo según su puesto, y la raya fina, el tiempo en que la olla cocina sola. Con mise en place, la tarde
+deja lista la mañana siguiente. La gente entra lo justo para tener todo listo un cuarto de hora antes del
+almuerzo.}}\label{{fig:gantt}}
+\end{{figure}}
+
+La figura~\ref{{fig:gantt}} muestra el resultado con la venta de hoy de Candela. En la cocina doméstica, tres
+personas entran a las {hhmm(gd['jornada']['entra'])} y dejan todo listo en
+{n((gd['listo'] - gd['inicio']) / 60, 1)} horas: la mañana no es el problema. Trabajan
+{n(gd['trabajo_manana'] / 60, 1)} horas-persona antes del almuerzo, de las cuales
+{n(gm3['trabajo_manana'] / 60, 1)} siguen siendo de mañana con mise en place; el resto
+({n(gm3['trabajo_tarde'] / 60, 1)} horas-persona) pasa a la tarde, cuando la cocina ya terminó de atender. El mise
+en place casi no ahorra trabajo ---el ahorro es el tiempo fijo de picar una vez en lugar de tres---: lo que hace
+es \emph{{mover}} el trabajo fuera de la mañana y sacar la preparación del camino del almuerzo. Por estaciones, el
+reparto queda más ordenado, pero el puesto de verduras carga con casi toda la preparación y los demás lo
+esperan.
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/cola.pdf}}
+\caption{{Minutos que espera por su plato el cliente que llega en cada momento del almuerzo, con
+{n(co['q'])} menús al día y los pedidos repartidos como en el POS de Candela.}}\label{{fig:cola}}
+\end{{figure}}
+
+El almuerzo es donde se decide la capacidad. El {p(punta)} de los pedidos del día llega entre la 1 menos cuarto
+y las dos menos cuarto, y en esa hora la cocina tiene que despachar a su máximo ritmo. La figura~\ref{{fig:cola}}
+lo muestra: con tres personas trabajando como en casa, Candela atiende sus {n(co['q'])} menús sin colas; con dos
+personas trabajando igual, la espera llega a {n(cola_('domestico', 2)['espera_maxima'])} minutos en la hora punta
+---es el colapso que Candela conoce---. Con mise en place, esas mismas dos personas la bajan a
+{n(cola_('mise', 2)['espera_maxima'])} minutos. Por estaciones con dos personas no alcanza: dos puestos fijos para
+tres trabajos dejan a uno sobrecargado.
+
+\subsection{{Cuántos menús aguanta cada organización}}
+
+\begin{{table}}[h]
+\centering\small
+\caption{{Menús al día que aguanta la cocina según cómo trabaja y cuánta gente tiene, y horas-persona al día que
+pasa en el local con {n(co['q'])} menús. Entre paréntesis, lo que pone el límite.}}\label{{tab:org}}
+\begin{{tabular}}{{lrrrr}}
+\toprule
+Organización & 2 personas & 3 personas & 4 personas & Horas-persona (3) \\
+\midrule
+{tabla_org()}
+\bottomrule
+\end{{tabular}}
+\end{{table}}
+
+El cuadro~\ref{{tab:org}} resume el experimento. Con la misma gente, el mise en place sube lo que aguanta la
+cocina de {n(cap_('domestico', 3)['tope'])} a {n(cap_('mise', 3)['tope'])} menús con tres personas, un
+{p(cap_('mise', 3)['tope'] / cap_('domestico', 3)['tope'] - 1)} más: de unos {n(cap_('domestico', 3)['tope'] / 3)}
+menús por persona a {n(cap_('mise', 3)['tope'] / 3)}. Las estaciones rinden lo mismo que el mise en place con tres
+personas y menos con dos o cuatro, porque un puesto fijo solo funciona si la carga está pareja: es una forma
+de organizar el almuerzo, no un reemplazo del mise en place. En todos los casos lo que pone el techo es el
+almuerzo y no la mañana. La hipótesis se sostiene en su forma más simple: lo que rinde es preparar antes y
+sacar la preparación del almuerzo, algo que cualquier fonda puede hacer, tenga o no RUC. Tiene un precio: con
+la misma gente, el día se alarga ---la cocción no se acorta y la tarde se suma---, y tres personas pasan
+{n(cap_('mise', 3)['horas_persona'] - cap_('domestico', 3)['horas_persona'], 1)} horas-persona más al día en el local. El
+mise en place no ahorra horas: compra capacidad.
+{"" if not co.get('ahorro') else rf"""
+Para Candela, que tiene capacidad de sobra (sección~\ref{{sec:capacidad}}), la lectura útil es la inversa: con
+mise en place, {co['ahorro']['personas'] - 1} personas en cocina alcanzan para los {n(co['q'])} menús de hoy. Se
+ahorraría el sueldo de {s(co['ahorro']['sueldo'])} y quienes quedan trabajarían
+{n(co['ahorro']['horas_dia'], 1)} horas al día ---algo más de la jornada de ocho, que se paga como sobretiempo, unos
+{s(co['ahorro']['costo_extra'])} al mes---: un ahorro neto de unos \textbf{{{s(co['ahorro']['neto'])} al mes}}, sin
+cambiar el menú ni el precio. El margen es estrecho: con dos personas, el tope es de
+{n(cap_('mise', 2)['tope'])} menús, y un día de más venta volvería a hacer esperar a la gente. La alternativa es
+mantener a las tres y usar la capacidad que se libera para crecer."""}
+
+\subsection{{Qué falta medir}}
+
+Las tareas, sus tiempos y lo que la organización recorta del desorden son supuestos razonados; lo único medido
+es cuándo llegan los pedidos y cuántos menús aguanta Candela hoy. Una semana de registro en la cocina de Candela
+---a qué hora entra cada persona, qué hace y cuánto le toma, y a qué hora está todo listo--- reemplazaría el
+cuadro~\ref{{tab:tareas}} por datos propios. Probar el mise en place una semana, con la misma gente, y ver si la
+hora punta deja de colapsar, contestaría la pregunta de fondo con un experimento de verdad.
+
+"""}
 \section{{El largo plazo: diez años y cuatro regímenes}}
+
+Los supuestos del flujo (tasa, inflación, ajuste de precio, regímenes) están en el anexo~\ref{{sec:anexo}}.
 
 La figura~\ref{{fig:flujo}} sigue la caja acumulada de siete negocios desde la inversión inicial hasta 2035.
 Las líneas se separan pronto y no se vuelven a cruzar: el que empieza ganando sigue ganando, y el que
@@ -1495,7 +1944,7 @@ desde el sistema de Candela al estudio, y un \emph{{pesaje}} de una semana de la
 segundos más vendidos.
 
 \appendix
-\section{{Supuestos del modelo}}
+\section{{Supuestos del modelo}}\label{{sec:anexo}}
 
 \begin{{itemize}}[leftmargin=1.2em]
 \item Días de atención: 26 al mes (ajustable por escenario). Merma general: 5\,\%. Descartables: S/~0.20 por menú
