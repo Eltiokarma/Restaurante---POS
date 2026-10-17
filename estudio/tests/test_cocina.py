@@ -65,3 +65,25 @@ def test_reparto_de_puestos_con_poca_gente():
     ritmo, grupos = coc._reparto(2, {"a": 1.0, "b": 1.0, "c": 2.0})
     assert sorted(sorted(g) for g in grupos) == [["a", "b"], ["c"]]
     assert abs(ritmo - 0.5) < 1e-9
+
+
+def test_tareas_largas_van_en_tandas():
+    r = coc.plan("bloques", 220, 6)
+    tandas = [b for b in r["manana"] if b["id"].startswith("papa#")]
+    assert len(tandas) > 1 and all(b["fin_activo"] - b["inicio"] <= coc.TANDA + 10 for b in tandas)
+    assert len({b["persona"] for b in tandas}) > 1
+
+
+def test_minutos_salen_de_la_receta():
+    c = coc.cargar()
+    papa = next(t for t in c["tareas"] if t["id"] == "papa")
+    assert coc.variable(papa) == sum(x["cantidad"] * x["min_por"] for x in papa["partes"])
+    lenta = coc.con_velocidad(c, 1.5)
+    assert coc.variable(next(t for t in lenta["tareas"] if t["id"] == "papa")) == 1.5 * coc.variable(papa)
+
+
+def test_bloques_prepara_una_sola_vez_lo_compartido():
+    dom = coc.plan("domestico", 74, 3)
+    blo = coc.plan("bloques", 74, 3)
+    assert blo["trabajo_manana"] - blo["cambios"] < dom["trabajo_manana"]
+    assert not blo["tarde"]

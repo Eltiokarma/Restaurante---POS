@@ -9,6 +9,9 @@ camino por delante (la ruta crítica). Se comparan tres formas de trabajar:
 - doméstica: cada persona hace sus platos de principio a fin, como en casa;
   lo que usan varios platos (la cebolla, el ajo) lo pica cada uno para el suyo,
   y todo se hace la misma mañana;
+- por bloques: lo que usan varios platos se prepara de una vez (toda la
+  cebolla junta), pero todo la misma mañana; separa el ahorro de agrupar del
+  ahorro de adelantar;
 - mise en place: lo que aguanta de un día para otro se deja listo la tarde
   anterior, de una vez para todos los platos; en la mañana cualquiera hace
   cualquier cosa, pero cambiar de puesto cuesta unos minutos;
@@ -21,8 +24,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 RUTA = Path(__file__).resolve().parent.parent / "data" / "cocina.json"
-MODOS = ("domestico", "mise", "estaciones")
-NOMBRE_MODO = {"domestico": "Doméstica", "mise": "Mise en place", "estaciones": "Por estaciones"}
+MODOS = ("domestico", "bloques", "mise", "estaciones")
+NOMBRE_MODO = {"domestico": "Doméstica", "bloques": "Por bloques", "mise": "Mise en place",
+               "estaciones": "Por estaciones"}
 
 
 def cargar(ruta: Path = RUTA) -> dict:
@@ -57,6 +61,7 @@ def _tareas(cocina: dict, q: float, modo: str) -> list[Tarea]:
     varios platos se parte en una tarea por plato, cada una con su tiempo fijo."""
     esc = q / 100
     salida: list[Tarea] = []
+    cocina = {**cocina, "tareas": [{**t, "var": variable(t)} for t in cocina["tareas"]]}
     partes: dict[str, dict[str, str]] = {}
     for t in cocina["tareas"]:
         usa = t.get("usa")
@@ -73,7 +78,40 @@ def _tareas(cocina: dict, q: float, modo: str) -> list[Tarea]:
                             plato, list(t.get("deps", [])), bool(t.get("anticipable"))))
     for t in salida:  # cada plato depende de su parte de la preparación compartida
         t.deps = [partes[d].get(t.plato, next(iter(partes[d].values()))) if d in partes else d for d in t.deps]
+    return _en_tandas(salida)
+
+
+TANDA = 60  # minutos: una preparación más larga se parte para que la compartan varias personas
+
+
+def _en_tandas(tareas: list[Tarea]) -> list[Tarea]:
+    """Parte en tandas de hasta una hora las preparaciones largas (pelar 30 kg
+    de papa no es una sola tarea indivisible); lo que dependía de la
+    preparación pasa a depender de todas sus tandas."""
+    salida: list[Tarea] = []
+    tandas: dict[str, list[str]] = {}
+    for t in tareas:
+        k = int(-(-t.activo // TANDA)) if t.espera == 0 and t.activo > TANDA else 1
+        if k == 1:
+            salida.append(t)
+            continue
+        tandas[t.id] = []
+        for i in range(k):
+            tid = f"{t.id}#{i + 1}"
+            tandas[t.id].append(tid)
+            salida.append(Tarea(tid, t.nombre, t.corto, t.activo / k, 0, t.estacion, t.plato, list(t.deps), t.anticipable))
+    for t in salida:
+        t.deps = [x for d in t.deps for x in tandas.get(d, [d])]
     return salida
+
+
+def variable(t: dict) -> float:
+    """Minutos de una persona que crecen con el volumen, por cada 100 menús:
+    los de la tarea o, si trae sus partes, cantidad de la receta × minutos por
+    unidad (kilo, pollo, trucha...)."""
+    if "partes" in t:
+        return sum(x["cantidad"] * x["min_por"] for x in t["partes"])
+    return t["var"]
 
 
 def _prioridades(tareas: list[Tarea]) -> dict[str, float]:
@@ -175,18 +213,26 @@ def plan(modo: str, q: float, personas: int, cocina: dict | None = None) -> dict
             peso[p] += carga[plato]
         puede: list[set[str] | None] = [None] * personas
         cambio = 0  # cada uno sigue su plato
-    elif modo == "mise":
+    elif modo in ("bloques", "mise"):
         puede = [None] * personas
     else:
         carga = {}
         for t in tareas:
             carga[t.estacion] = carga.get(t.estacion, 0) + t.activo
         puede = _estaciones_de(personas, carga)
-    if modo != "domestico":
+    if modo not in ("domestico", "bloques"):
+        # lo anticipable va a la tarde; lo que no alcanza a terminarse antes
+        # del cierre se queda para la mañana
         antes = [t for t in tareas if t.anticipable]
-        tarde, fin_tarde = _programar(antes, puede, minutos(cocina["tarde_inicio"]), cambio, {}, ayuda=True)
+        limite = minutos(cocina["tarde_fin"])
+        while True:
+            tarde, _ = _programar(antes, puede, minutos(cocina["tarde_inicio"]), cambio, {}, ayuda=True)
+            tarde_ids = {b["id"] for b in tarde if b["fin_activo"] <= limite}
+            if len(tarde_ids) == len(antes):
+                break
+            antes = [t for t in antes if t.id in tarde_ids]
         listas = {t.id: -1.0 for t in antes}
-        tareas = [t for t in tareas if not t.anticipable]
+        tareas = [t for t in tareas if t.id not in listas]
     manana, fin = _programar(tareas, puede, inicio, cambio, listas, dueno, ayuda=modo == "estaciones")
     listo = max(b["fin"] for b in manana)
     trabajo_m = sum(b["fin_activo"] - b["inicio"] for b in manana)
@@ -357,3 +403,25 @@ def jornada(modo: str, q: float, personas: int, cocina: dict | None = None, marg
     entra = 15 * (entra // 15)
     sale = minutos(cocina["servicio_fin"]) + (r["fin_tarde"] - minutos(cocina["tarde_inicio"]) if r["fin_tarde"] else 0)
     return {"entra": entra, "sale": sale, "horas": (sale - entra) / 60, "horas_persona": personas * (sale - entra) / 60}
+
+
+def gente_necesaria(modo: str, q: float, cocina: dict | None = None, maximo: int = 10) -> int | None:
+    """Menos personas en cocina con que se prepara la mañana a tiempo y se
+    despacha el almuerzo sin pasar la espera máxima."""
+    cocina = cocina or cargar()
+    d = desorden_calibrado(cocina)
+    for n in range(1, maximo + 1):
+        if cabe(modo, q, n, cocina) and servicio(modo, q, n, cocina, d)["aguanta"]:
+            return n
+    return None
+
+
+def con_velocidad(cocina: dict, factor: float) -> dict:
+    """La misma cocina con gente más lenta (factor > 1) o más rápida (< 1) en
+    la preparación: multiplica los minutos por unidad de cada parte."""
+    tareas = []
+    for t in cocina["tareas"]:
+        if "partes" in t:
+            t = {**t, "partes": [{**x, "min_por": x["min_por"] * factor} for x in t["partes"]]}
+        tareas.append(t)
+    return {**cocina, "tareas": tareas}

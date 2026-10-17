@@ -1,25 +1,26 @@
 {
- "notas": "Mañana de producción de un menú popular para 100 menús (sopa o entrada fría, segundo y refresco). Minutos de una persona: 'fijo' no depende del volumen (sacar, lavar, ordenar), 'var' es lo que escala con los menús, 'espera' es cocción sola (la olla no necesita a nadie). 'anticipable': se puede dejar listo la tarde anterior. 'usa': platos que consumen la preparación (en cocina doméstica, cada plato hace la suya). Todo son supuestos razonados para calibrar con Candela.",
+ "notas": "Producción de un día de menú en Juliaca (3 825 m), por cada 100 menús. Preparación: cantidades de las recetas de Candela (salvo cebolla y ajo, que las recetas casi no registran) por minutos por unidad (velocidades del dueño, de la industria y estimaciones). 'fijo': sacar, lavar y ordenar. 'espera': la olla cocina sola, con los tiempos de cocción en altura (×1.3 a ×2 sobre nivel del mar). Cocciones y montaje: minutos activos supuestos ('var').",
  "inicio": "07:00",
  "almuerzo": "12:00",
  "servicio": {
-  "notas": "Minutos de una persona de cocina por menú durante el almuerzo, por puesto. 'desorden' es el tiempo por menú que no explican esas tareas (buscar, reponer, picar lo que faltó, cambiar de tarea); se calibra para que una cocina doméstica de 3 personas aguante los ~100 menús de Candela, y la organización recorta una parte (supuesto).",
+  "notas": "Minutos de una persona de cocina por menú en el almuerzo: servir sopa 10–15 s y segundo 20–40 s; plancha ~1 min por pieza en 4 de cada 10 menús; lavado a mano ~45 s por cubierto (estimaciones). 'desorden': lo que no explican esas tareas, calibrado para que una cocina doméstica de 3 aguante ~100 menús.",
   "puestos": {
    "armado": {
-    "nombre": "Sopa, entrada y segundo de olla",
-    "min": 0.95
+    "nombre": "Servir sopa o entrada y segundo",
+    "min": 0.7
    },
    "plancha": {
     "nombre": "Plancha y frituras",
-    "min": 0.75
+    "min": 0.6
    },
    "lavado": {
     "nombre": "Lavado de vajilla",
-    "min": 1.0
+    "min": 0.75
    }
   },
   "desorden_queda": {
    "domestico": 1.0,
+   "bloques": 0.8,
    "mise": 0.5,
    "estaciones": 0.3
   },
@@ -50,10 +51,19 @@
  "tareas": [
   {
    "id": "cebolla",
-   "nombre": "Pelar y picar cebolla",
+   "nombre": "Pelar y cortar cebolla",
    "corto": "Cebolla",
    "fijo": 10,
-   "var": 40,
+   "partes": [
+    {
+     "insumo": "Cebolla (aderezos, saltados, sarsa)",
+     "cantidad": 3.5,
+     "unidad": "kg",
+     "min_por": 9.5,
+     "fuente_cantidad": "supuesto: las recetas del POS registran 1 kg",
+     "fuente_velocidad": "USA Onions (pluma, 2½\"), ajustado a un cocinero promedio"
+    }
+   ],
    "espera": 0,
    "anticipable": true,
    "estacion": "verduras",
@@ -65,10 +75,27 @@
   },
   {
    "id": "ajo",
-   "nombre": "Ajo y ají licuados",
+   "nombre": "Pelar y moler ajo; ají",
    "corto": "Ajo",
    "fijo": 10,
-   "var": 15,
+   "partes": [
+    {
+     "insumo": "Ajo",
+     "cantidad": 0.5,
+     "unidad": "kg",
+     "min_por": 40,
+     "fuente_cantidad": "supuesto: las recetas no lo registran",
+     "fuente_velocidad": "estimación"
+    },
+    {
+     "insumo": "Ají (se compra molido)",
+     "cantidad": 0.2,
+     "unidad": "kg",
+     "min_por": 10,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    }
+   ],
    "espera": 0,
    "anticipable": true,
    "estacion": "verduras",
@@ -80,24 +107,67 @@
   },
   {
    "id": "papa",
-   "nombre": "Pelar papa",
+   "nombre": "Pelar papa y camote",
    "corto": "Papa",
    "fijo": 10,
-   "var": 45,
+   "partes": [
+    {
+     "insumo": "Papa blanca y amarilla, camote",
+     "cantidad": 27.8,
+     "unidad": "kg",
+     "min_por": 4.5,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "usuario (10 kg en 45 min)"
+    }
+   ],
    "espera": 0,
    "anticipable": true,
    "estacion": "verduras",
    "usa": [
     "sopa",
-    "huancaina"
+    "huancaina",
+    "plancha"
    ]
   },
   {
    "id": "verd_sopa",
-   "nombre": "Zanahoria, zapallo, poro y apio",
+   "nombre": "Zanahoria, zapallo, betarraga y otras",
    "corto": "Verduras",
    "fijo": 10,
-   "var": 25,
+   "partes": [
+    {
+     "insumo": "Zanahoria",
+     "cantidad": 1.03,
+     "unidad": "kg",
+     "min_por": 15,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación (usuario: 30)"
+    },
+    {
+     "insumo": "Zapallo",
+     "cantidad": 0.75,
+     "unidad": "kg",
+     "min_por": 8,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    },
+    {
+     "insumo": "Betarraga",
+     "cantidad": 0.42,
+     "unidad": "kg",
+     "min_por": 8,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    },
+    {
+     "insumo": "Apio, poro, vainita, col",
+     "cantidad": 0.5,
+     "unidad": "kg",
+     "min_por": 6,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    }
+   ],
    "espera": 0,
    "anticipable": true,
    "estacion": "verduras",
@@ -107,10 +177,19 @@
   },
   {
    "id": "arvejas",
-   "nombre": "Desgranar arvejas y habas",
+   "nombre": "Desvainar arvejas",
    "corto": "Arvejas",
    "fijo": 5,
-   "var": 25,
+   "partes": [
+    {
+     "insumo": "Arveja (grano)",
+     "cantidad": 0.73,
+     "unidad": "kg",
+     "min_por": 65,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "usuario (30 min por kg de vaina) y rendimiento de 45 %"
+    }
+   ],
    "espera": 0,
    "anticipable": true,
    "estacion": "verduras",
@@ -120,11 +199,58 @@
    ]
   },
   {
+   "id": "choclo",
+   "nombre": "Choclo y huevo",
+   "corto": "Choclo",
+   "fijo": 5,
+   "partes": [
+    {
+     "insumo": "Choclo",
+     "cantidad": 3.4,
+     "unidad": "unid.",
+     "min_por": 1.5,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    },
+    {
+     "insumo": "Huevo (sancochar y pelar)",
+     "cantidad": 11.6,
+     "unidad": "unid.",
+     "min_por": 0.5,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    }
+   ],
+   "espera": 0,
+   "anticipable": true,
+   "estacion": "verduras",
+   "usa": [
+    "sopa"
+   ]
+  },
+  {
    "id": "pollo",
-   "nombre": "Trozar pollo",
+   "nombre": "Trozar pollo y deshilachar pechuga",
    "corto": "Pollo",
    "fijo": 10,
-   "var": 20,
+   "partes": [
+    {
+     "insumo": "Pollo entero (8 presas)",
+     "cantidad": 3.5,
+     "unidad": "pollos",
+     "min_por": 4,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación (recetas caseras, 5–10 min)"
+    },
+    {
+     "insumo": "Pechuga para deshilachar",
+     "cantidad": 1.1,
+     "unidad": "kg",
+     "min_por": 10,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    }
+   ],
    "espera": 0,
    "anticipable": true,
    "estacion": "plancha",
@@ -135,14 +261,40 @@
   },
   {
    "id": "carnes",
-   "nombre": "Porcionar y macerar carnes",
+   "nombre": "Trozar y porcionar carnes",
    "corto": "Carnes",
    "fijo": 10,
-   "var": 20,
+   "partes": [
+    {
+     "insumo": "Pulpa y pecho de res, chancho",
+     "cantidad": 7.1,
+     "unidad": "kg",
+     "min_por": 8,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    },
+    {
+     "insumo": "Chuleta",
+     "cantidad": 9.6,
+     "unidad": "unid.",
+     "min_por": 0.5,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    },
+    {
+     "insumo": "Bistec",
+     "cantidad": 2.4,
+     "unidad": "unid.",
+     "min_por": 1,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    }
+   ],
    "espera": 0,
    "anticipable": true,
    "estacion": "plancha",
    "usa": [
+    "guiso",
     "plancha"
    ]
   },
@@ -151,7 +303,16 @@
    "nombre": "Limpiar trucha",
    "corto": "Trucha",
    "fijo": 5,
-   "var": 15,
+   "partes": [
+    {
+     "insumo": "Trucha entera",
+     "cantidad": 4.7,
+     "unidad": "unid.",
+     "min_por": 2,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    }
+   ],
    "espera": 0,
    "anticipable": true,
    "estacion": "plancha",
@@ -164,7 +325,24 @@
    "nombre": "Lavar y picar ensalada",
    "corto": "Ensalada",
    "fijo": 5,
-   "var": 20,
+   "partes": [
+    {
+     "insumo": "Tomate, lechuga, pepinillo, palta",
+     "cantidad": 2.8,
+     "unidad": "kg",
+     "min_por": 6,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    },
+    {
+     "insumo": "Limón (exprimir)",
+     "cantidad": 0.28,
+     "unidad": "kg",
+     "min_por": 10,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación"
+    }
+   ],
    "espera": 0,
    "anticipable": false,
    "estacion": "verduras",
@@ -176,8 +354,17 @@
    "id": "lavar_arroz",
    "nombre": "Lavar arroz",
    "corto": "Arroz",
-   "fijo": 5,
-   "var": 5,
+   "fijo": 3,
+   "partes": [
+    {
+     "insumo": "Arroz",
+     "cantidad": 10.7,
+     "unidad": "kg",
+     "min_por": 0.7,
+     "fuente_cantidad": "recetas de Candela",
+     "fuente_velocidad": "estimación (3 min por tanda de 4 kg)"
+    }
+   ],
    "espera": 0,
    "anticipable": false,
    "estacion": "fondos",
@@ -192,11 +379,12 @@
    "plato": "sopa",
    "fijo": 5,
    "var": 10,
-   "espera": 90,
+   "espera": 120,
    "estacion": "fondos",
    "deps": [
     "pollo"
-   ]
+   ],
+   "anticipable": true
   },
   {
    "id": "sopa",
@@ -205,22 +393,23 @@
    "plato": "sopa",
    "fijo": 5,
    "var": 15,
-   "espera": 30,
+   "espera": 40,
    "estacion": "fondos",
    "deps": [
     "fondo",
     "papa",
     "verd_sopa",
-    "arvejas"
+    "arvejas",
+    "choclo"
    ]
   },
   {
    "id": "aderezo",
-   "nombre": "Aderezo del guiso",
+   "nombre": "Aderezo de los guisos",
    "corto": "Aderezo",
    "plato": "guiso",
    "fijo": 5,
-   "var": 20,
+   "var": 25,
    "espera": 0,
    "estacion": "fondos",
    "deps": [
@@ -230,18 +419,31 @@
   },
   {
    "id": "guiso",
-   "nombre": "Guiso",
+   "nombre": "Guisos (estofado, seco)",
    "corto": "Guiso",
    "plato": "guiso",
    "fijo": 5,
    "var": 20,
-   "espera": 45,
+   "espera": 100,
    "estacion": "fondos",
    "deps": [
     "aderezo",
     "pollo",
+    "carnes",
     "arvejas"
    ]
+  },
+  {
+   "id": "menestra",
+   "nombre": "Menestra en olla a presión",
+   "corto": "Menestra",
+   "plato": "guiso",
+   "fijo": 5,
+   "var": 5,
+   "espera": 60,
+   "estacion": "fondos",
+   "deps": [],
+   "anticipable": true
   },
   {
    "id": "arroz",
@@ -250,7 +452,7 @@
    "plato": "arroz",
    "fijo": 5,
    "var": 10,
-   "espera": 35,
+   "espera": 55,
    "estacion": "fondos",
    "deps": [
     "lavar_arroz",
@@ -264,7 +466,7 @@
    "plato": "huancaina",
    "fijo": 5,
    "var": 5,
-   "espera": 30,
+   "espera": 50,
    "estacion": "verduras",
    "deps": [
     "papa"
@@ -285,7 +487,7 @@
   },
   {
    "id": "ensalada",
-   "nombre": "Montar ensalada",
+   "nombre": "Montar ensaladas",
    "corto": "Ensalada",
    "plato": "ensalada",
    "fijo": 5,
@@ -320,7 +522,8 @@
    "deps": [
     "carnes",
     "trucha",
-    "cebolla"
+    "cebolla",
+    "papa"
    ]
   }
  ],
