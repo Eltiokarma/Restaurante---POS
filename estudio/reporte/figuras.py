@@ -369,7 +369,7 @@ def fig_precio_robusto(d):
         or next(x for x in d["robustez"] if x["nombre"].startswith("Inversor"))
     fig, ax = plt.subplots(figsize=(ANCHO, 2.9))
     etiquetas = {"0.5": "clientela fiel (0.5)", "1.0": "intermedia (1.0)", "1.5": "mucha competencia (1.5)",
-                 "2.0": "2", "2.5": "2.5 (la medida en Candela)", "3.0": "3", "4.0": "4"}
+                 "1.9": "1.9", "2.0": "2", "2.4": "2.4 (la medida en Candela)", "2.9": "2.9", "3.0": "3", "4.0": "4"}
     for (el, serie), col in zip(sorted(r["curvas"].items(), key=lambda x: float(x[0])), (AGUA, NARANJA, PERDIDA)):
         xs = [x["precio"] for x in serie]
         ys = [x["utilidad"] for x in serie]
@@ -457,10 +457,10 @@ def fig_historia(d):
         return
     h = pc["historia"]
     fig, ax = plt.subplots(figsize=(ANCHO * 0.78, 3.1))
-    colores = {"1.0": "#9a988f", "2.0": AGUA, "2.5": AZUL, "3.0": NARANJA, "4.0": PERDIDA}
+    colores = {"1.0": "#9a988f", "2.0": AGUA, "2.4": AZUL, "3.0": NARANJA, "4.0": PERDIDA}
     for el, serie in pc["curvas_demanda"].items():
         ax.plot([x["precio"] for x in serie], [x["q"] for x in serie], color=colores[el],
-                lw=2.2 if el == "2.5" else 1.3, ls="-" if el == "2.5" else (0, (4, 2)),
+                lw=2.2 if el == "2.4" else 1.3, ls="-" if el == "2.4" else (0, (4, 2)),
                 label=f"$\\varepsilon$ = {float(el):g}")
     puntos = [(h["p_abrir"], h["q_abrir_bajo"], h["q_abrir_alto"], "al abrir: S/ 15,\nS/ 450–550 al día", (-78, 48)),
               (h["p0"], h["q0_bajo"], h["q0_alto"], "S/ 10: S/ 800–1 000,\ncocina al límite", (10, 6)),

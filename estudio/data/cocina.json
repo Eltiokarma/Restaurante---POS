@@ -117,7 +117,7 @@
      "unidad": "kg",
      "min_por": 4.5,
      "fuente_cantidad": "recetas de Candela",
-     "fuente_velocidad": "usuario (10 kg en 45 min)"
+     "fuente_velocidad": "dueño de Candela (10 kg en 45 min)"
     }
    ],
    "espera": 0,
@@ -141,7 +141,7 @@
      "unidad": "kg",
      "min_por": 15,
      "fuente_cantidad": "recetas de Candela",
-     "fuente_velocidad": "estimación (usuario: 30)"
+     "fuente_velocidad": "estimación (el dueño mide 30)"
     },
     {
      "insumo": "Zapallo",
@@ -187,7 +187,7 @@
      "unidad": "kg",
      "min_por": 65,
      "fuente_cantidad": "recetas de Candela",
-     "fuente_velocidad": "usuario (30 min por kg de vaina) y rendimiento de 45 %"
+     "fuente_velocidad": "dueño de Candela (30 min por kg de vaina) y rendimiento de 45 %"
     }
    ],
    "espera": 0,
