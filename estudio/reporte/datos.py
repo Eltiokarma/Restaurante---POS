@@ -545,6 +545,31 @@ def estados_anuales(arquetipos: list[dict], candela: dict | None) -> list[dict]:
     return salida
 
 
+PRECIOS_COMUNES = [7, 9, 10, 11, 12, 13, 15, 18]
+
+
+def mismos_precios(arquetipos: list[dict], candela: dict | None) -> dict:
+    """Experimento: todos los negocios a los mismos precios de pizarra. Para
+    cada precio, los menús diarios que necesita cada uno para no perder (sin
+    suponer nada sobre la clientela) y lo que se llevaría la casa si vendiera
+    lo mismo que hoy (solo cambia el precio)."""
+    pares = [(a["nombre"], a["datos"]) for a in arquetipos]
+    if candela:
+        pares.append(("Candela (datos del POS)", candela))
+    filas = []
+    for nombre, datos in pares:
+        local, esc, _sup, q = armar(datos)
+        sueldo = 1500 if esc.sueldo_dueno else 0
+        eq, casa = {}, {}
+        for pr in PRECIOS_COMUNES:
+            l2 = local.con(precio=float(pr), precio_propio=True)
+            eq[str(pr)] = equilibrio(l2, esc, NAC)
+            casa[str(pr)] = modelo(l2, q, esc, NAC).util + sueldo
+        filas.append({"nombre": nombre, "precio": local.precio, "q": q, "equilibrio": eq, "casa": casa,
+                      "precio_minimo": precio_minimo(local, q, esc, NAC)})
+    return {"precios": PRECIOS_COMUNES, "filas": filas}
+
+
 N_SORTEOS = 1000
 
 
@@ -665,6 +690,7 @@ def generar() -> dict:
         "igualdad": igualdad(arquetipos, g["datos"] if candela else None),
         "trabajo": trabajo(arquetipos, g["datos"] if candela else None),
         "capacidad": capacidades(arquetipos, g["datos"] if candela else None),
+        "mismos_precios": mismos_precios(arquetipos, g["datos"] if candela else None),
         "estados": estados_anuales(arquetipos, g["datos"] if candela else None),
         "entradas": entradas(arquetipos, g["datos"] if candela else None),
         "parametros": parametros(),
