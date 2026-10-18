@@ -273,6 +273,12 @@ def construir(d: dict) -> str:
                 f"A S/~10: familia {eq_('Familiar sin sueldos', 10)}, propietario {eq_('Propietario que cocina', 10)}, inversor "
                 f"{eq_('Inversor que supervisa', 10)}, ausente {eq_('Inversor ausente', 10)} menús; a S/~7 ningún negocio con planilla "
                 "contratada cubre costos", "ordena sin suponer clientela"))
+        if mv:
+            filas.append((
+                "¿Quién gana con la misma venta?", "Todos con los mismos menús al día (40 a 140), cada uno a su precio",
+                f"A 60: familia {s(vcasa_('Familiar sin sueldos', 60))}, inversor {s(vcasa_('Inversor que supervisa', 60))}; "
+                f"el puesto gana desde {volumen_cubre('Puesto de mercado informal')} y el ausente desde "
+                f"{volumen_cubre('Inversor ausente') or 'más de 140'} menús", "ordena sin suponer precio"))
         filas.append((
             "¿Casa propia o local alquilado?", "Fonda en casa propia frente al propietario con local",
             f"{s(casos['Fonda en casa propia']['ingreso_dueno'])} contra {s(dc['ingreso_dueno'])} al mes",
@@ -637,6 +643,35 @@ Variable & Valor & Origen \\
     def precio_cubre(nombre):
         f = next(f for f in mp["filas"] if f["nombre"] == nombre)
         return next((pr for pr in mp["precios"] if f["casa"][str(pr)] >= 0), None)
+
+    mv = d.get("mismos_volumenes")
+
+    def tabla_volumenes(clave):
+        filas = []
+        for f in en_orden(mv["filas"]):
+            celdas = []
+            for v in mv["volumenes"]:
+                x = f[clave][str(v)]
+                pasa = f["tope"] is not None and v > f["tope"] + 0.5
+                if clave == "casa":
+                    txt = s(x)
+                    txt = (r"\textcolor{perdida}{" + txt + "}") if x < 0 else (r"\textbf{" + txt + "}" if v == f["q"] else txt)
+                else:
+                    txt = s(x, 2)
+                    txt = (r"\textbf{" + txt + "}") if v == f["q"] else txt
+                celdas.append(txt + (r"$^{\dagger}$" if pasa else ""))
+            filas.append((f["nombre"], esc(corto(f["nombre"])) + " & " + n(f["q"]) + " & " + " & ".join(celdas) + r" \\"))
+        return con_grupos(filas, 2 + len(mv["volumenes"]))
+
+    def vcasa_(nombre, v):
+        return next(f for f in mv["filas"] if f["nombre"] == nombre)["casa"][str(v)]
+
+    def vpmin_(nombre, v):
+        return next(f for f in mv["filas"] if f["nombre"] == nombre)["precio_minimo"][str(v)]
+
+    def volumen_cubre(nombre):
+        f = next(f for f in mv["filas"] if f["nombre"] == nombre)
+        return next((v for v in mv["volumenes"] if f["casa"][str(v)] >= 0), None)
 
     def lista_neg(nombres):
         return y_lista([("la " if corto(x).startswith("Fonda") else "el ") + corto(x)[:1].lower() + corto(x)[1:]
@@ -1113,6 +1148,7 @@ Experimento & Qué se fija y qué se mueve & Qué se mide & Dónde \\
 \midrule
 Comparación de casos & Cada negocio con sus propios números & Utilidad, equilibrio, VAN & \S\ref{{sec:negocios}} \\
 A los mismos precios & Todos con la misma pizarra, de S/~7 a S/~18; cada uno con su venta y sus costos & Equilibrio y lo que se lleva la casa & \S\ref{{sec:precios}} \\
+Con la misma venta & Todos con los mismos menús al día, de 40 a 140; cada uno a su precio & Lo que se lleva la casa y precio mínimo & \S\ref{{sec:volumenes}} \\
 A igualdad de condiciones & Todos en el mismo local; queda distinto solo quién trabaja, la formalidad y la noche & Lo que se lleva la casa & \S\ref{{sec:negocios}} \\
 Descomposición & Se pasa de un negocio a otro factor por factor, en todos los órdenes (Shapley) & Aporte de cada factor & \S\ref{{sec:negocios}} \\
 Un cambio a la vez & Se cambia una variable o una decisión; el resto queda quieto & Cambio en la utilidad, quiebre & \S\ref{{sec:negocios}}, \S\ref{{sec:sensibilidad}} \\
@@ -1553,6 +1589,90 @@ cubre sus costos cada uno con su venta actual: el inversor que supervisa desde S
 el inversor ausente desde S/~{precio_cubre('Inversor ausente')}, el ejecutivo desde S/~{precio_cubre('Ejecutivo en el centro')}{"" if not cand else f" y Candela desde S/~{precio_cubre('Candela (datos del POS)')}"}.
 Que esos precios se puedan cobrar es otra pregunta, y la contesta la clientela: la \seccion{{sec:robustez}} muestra que,
 con la sensibilidad medida en Juliaca, subir la pizarra pierde más clientes de los que el margen compensa.
+"""}
+
+{"" if not mv else rf"""
+\subsubsection{{Todos con la misma venta}}\label{{sec:volumenes}}
+
+El experimento anterior fijó el precio; este fija la venta. Todos los negocios venden los mismos menús al día
+---40, 60, 80, 100, 120 y 140---, cada uno a su propio precio y con sus costos, y se mide lo que se llevaría la casa
+(\cuadro{{tab:volumenes_casa}} y \figura{{fig:volumenes}}) y el precio mínimo que necesitaría a esa venta para no perder
+(\cuadro{{tab:volumenes_pmin}}). Hay una diferencia con el precio que conviene tener presente: vender más exige
+gente. Los negocios con planilla automática la agrandan solos (un ayudante cada 80 menús, un mozo cada 70); los que
+traen su planilla ---el propietario, la familia, la fonda, el puesto, el pequeño, el inversor ausente y Candela--- la
+mantienen fija, así que sus cifras a volúmenes altos suponen la misma gente sirviendo más de lo que aguanta. El
+símbolo $\dagger$ marca las celdas donde la venta pasa de lo que su gente puede atender según la
+\seccion{{sec:capacidad}}: ahí haría falta contratar, y la utilidad real sería menor.
+
+{cuadro("Supuestos del experimento de ventas comunes.", "tab:sup_volumenes", [
+    ("Menús al día", ", ".join(str(x) for x in mv["volumenes"]), "elegidos para cubrir del pequeño al exitoso"),
+    ("Lo que queda de cada negocio", "su precio, su planilla, su alquiler, sus insumos y su régimen", "cada negocio"),
+    ("Planilla", "la automática crece con la venta; la propia queda fija ($\\dagger$ cuando la venta pasa de su capacidad)", "método"),
+    ("Precio mínimo", "el que deja la utilidad en cero a esa venta", "método"),
+])}
+
+\begin{{table}}[h]
+\centering\footnotesize
+\caption{{Lo que se llevaría la casa al mes si cada negocio vendiera cada volumen, a su propio precio (utilidad más
+sueldo del dueño). En negrita, su venta actual; en rojo, pérdida; $\dagger$: más de lo que aguanta su gente.}}\label{{tab:volumenes_casa}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}Xr{"r" * len(mv["volumenes"])}}}
+\toprule
+Negocio & Hoy & {" & ".join(str(x) for x in mv["volumenes"])} \\
+\midrule
+{tabla_volumenes("casa")}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+\begin{{figure}}[t]
+\centering
+\includegraphics[width=\textwidth]{{fig/volumenes.pdf}}
+\caption{{Lo que se lleva la casa al mes según los menús al día, con el precio, la planilla, el alquiler y los insumos
+de cada negocio.}}\label{{fig:volumenes}}
+\end{{figure}}
+
+\begin{{table}}[h]
+\centering\footnotesize
+\caption{{Precio mínimo del menú para no perder a cada venta diaria. En negrita, la venta actual de cada negocio;
+$\dagger$: más de lo que aguanta su gente.}}\label{{tab:volumenes_pmin}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}Xr{"r" * len(mv["volumenes"])}}}
+\toprule
+Negocio & Hoy & {" & ".join(str(x) for x in mv["volumenes"])} \\
+\midrule
+{tabla_volumenes("precio_minimo")}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+Las curvas de la \figura{{fig:volumenes}} son rectas, y su pendiente es el margen de contribución del mes por cada
+menú diario: unos {s((vcasa_('Propietario que cocina', 100) - vcasa_('Propietario que cocina', 80)) / 20)} al mes por
+cada menú más al día en el propietario que cocina, {s((vcasa_('Ejecutivo en el centro', 100) - vcasa_('Ejecutivo en el centro', 80)) / 20)}
+en el ejecutivo. Lo que las separa es dónde cortan el cero. A 60 menús ---la venta del propietario--- la familia se
+lleva {s(vcasa_('Familiar sin sueldos', 60))} y el inversor que supervisa pierde {s(-vcasa_('Inversor que supervisa', 60))};
+a 100, todos los de la casa ganan y el inversor ya se lleva {s(vcasa_('Inversor que supervisa', 100))}, pero el ausente
+sigue perdiendo {s(-vcasa_('Inversor ausente', 100))} y recién cubre costos pasados los {volumen_cubre('Inversor ausente') or 140}
+menús diarios. El puesto de mercado es el caso más claro de negocio de volumen: a 60 menús pierde, porque a S/~7 el
+margen por plato es chico, y recién a {volumen_cubre('Puesto de mercado informal')} empieza a ganar; vende 120 porque
+no puede vender menos. El exitoso, al revés, necesita {volumen_cubre('Exitoso (referencia compuesta)')} menús para
+cubrir su local y su planilla, y a 220 los diluye hasta ganar más que todos: su ventaja es la escala, como ya mostró
+la descomposición.
+
+El \cuadro{{tab:volumenes_pmin}} lee lo mismo desde el precio. A 60 menús, la familia podría cobrar
+{s(vpmin_('Familiar sin sueldos', 60), 2)} sin perder; el propietario, {s(vpmin_('Propietario que cocina', 60), 2)}; el
+inversor que supervisa, {s(vpmin_('Inversor que supervisa', 60), 2)}, y el inversor ausente,
+{s(vpmin_('Inversor ausente', 60), 2)}. Ese es el precio con el que cada organización puede competir en la cuadra, y
+explica por qué la pizarra la marcan los que no pagan el trabajo: con 60 menús, el que contrata a todos necesita
+cobrar S/~{n(vpmin_('Inversor que supervisa', 60) - vpmin_('Familiar sin sueldos', 60), 1)} más que la familia por el mismo
+plato. El volumen cierra parte de esa brecha ---a 140 menús la diferencia baja a
+S/~{n(vpmin_('Inversor que supervisa', 140) - vpmin_('Familiar sin sueldos', 140), 1)}--- pero no la elimina, porque la
+planilla automática también crece con la venta.
+{"" if not cand else rf"""
+Candela, con su planilla de seis, se lleva {s(vcasa_('Candela (datos del POS)', 100))} al mes a 100 menús, el tope de su
+cocina y de su salón, y necesita {s(cand['precio_minimo'], 2)} para no perder con la venta de hoy frente
+a {s(vpmin_('Candela (datos del POS)', 100), 2)} si vendiera 100: la lectura es la misma que la de la \seccion{{sec:capacidad}},
+ahora en soles por menú."""}
 """}
 
 {candela_seccion}
@@ -2260,6 +2380,7 @@ sorteos en que se sostiene (\seccion{{sec:supuestos}}).
 contrata a todos apenas cubre costos ({s(inv['utilidad_mes'])}) y el inversor ausente, que terceriza hasta las
 compras, pierde {s(-aus['utilidad_mes'])} al mes{sorteos_txt("El propietario que cocina se lleva más que el inversor")}.
 \item \textbf{{A los mismos precios, el orden lo da quién paga el trabajo.}} {"" if not mp else rf"A S/~10, la familia necesita {eq_('Familiar sin sueldos', 10)} menús al día para no perder; el propietario que cocina, {eq_('Propietario que cocina', 10)}; el inversor que supervisa, {eq_('Inversor que supervisa', 10)}, y el inversor ausente, {eq_('Inversor ausente', 10)}. A S/~7, ningún negocio con planilla contratada y en regla cubre sus costos con ninguna cantidad de menús."}
+\item \textbf{{Con la misma venta, el precio mínimo lo fija quién paga el trabajo.}} {"" if not mv else rf"A 60 menús, la familia no pierde cobrando {s(vpmin_('Familiar sin sueldos', 60), 2)}; el propietario, {s(vpmin_('Propietario que cocina', 60), 2)}; el inversor que supervisa necesita {s(vpmin_('Inversor que supervisa', 60), 2)}, y el ausente {s(vpmin_('Inversor ausente', 60), 2)}. Por eso la pizarra de la cuadra la marcan los que no pagan el trabajo, y el volumen la acerca pero no la cierra."}
 \item \textbf{{Ganar no siempre es mérito de la organización.}} {"" if not fac else rf"""Al repartir la diferencia
 de cada negocio con el propietario que cocina, el exitoso debe casi todo a su local y su venta
 ({s(ap('Exitoso (referencia compuesta)', 'local'))} al mes) y el puesto de mercado a un plato barato de hacer

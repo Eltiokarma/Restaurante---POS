@@ -554,6 +554,42 @@ def fig_precios(d):
     guardar(fig, "precios")
 
 
+def fig_volumenes(d):
+    """Lo que se lleva la casa al mes si cada negocio vendiera cada volumen común, a su precio."""
+    mv = d.get("mismos_volumenes")
+    if not mv:
+        return
+    estilo = {"La casa pone el trabajo": (AZUL, "-"), "El capital contrata": (NARANJA, "-"),
+              "Referencia": (VERDE, (0, (4, 2))), "Caso real": (PERDIDA, (0, (1, 1.5)))}
+    orden = {nm: i for i, nm in enumerate(ORDEN_NEGOCIO)}
+    filas = sorted(mv["filas"], key=lambda f: orden.get(f["nombre"], 99))
+    fig, ax = plt.subplots(figsize=(ANCHO, 3.6))
+    finales = []
+    for f in filas:
+        col, ls = estilo[GRUPO_DE.get(f["nombre"], "Referencia")]
+        xs = mv["volumenes"]
+        ys = [f["casa"][str(v)] for v in xs]
+        ax.plot(xs, ys, color=col, ls=ls, lw=1.4, marker="o", ms=3, alpha=0.9)
+        finales.append([ys[-1], corto(f["nombre"]), col])
+    finales.sort()
+    paso = 1300
+    for i in range(1, len(finales)):
+        if finales[i][0] - finales[i - 1][0] < paso:
+            finales[i][0] = finales[i - 1][0] + paso
+    for y, nombre, col in finales:
+        ax.annotate(nombre, (140, y), xytext=(6, 0), textcoords="offset points", fontsize=6.5, va="center", color=col)
+    ax.axhline(0, color=TINTA2, lw=0.8)
+    ax.set_xlim(35, 168)
+    ax.set_xticks(mv["volumenes"])
+    ax.yaxis.set_major_formatter(FuncFormatter(soles))
+    ax.set_ylabel("Lo que se lleva la casa al mes")
+    ax.set_xlabel("Menús al día, los mismos para todos (cada uno a su precio)")
+    marcas = [Line2D([], [], color=c, ls=l, label=g) for g, (c, l) in estilo.items()]
+    ax.legend(handles=marcas, fontsize=7, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=4, frameon=False)
+    grilla_x(ax)
+    guardar(fig, "volumenes")
+
+
 def fig_factores(d):
     """Del propietario que cocina a cada negocio: el aporte de cada factor."""
     dc = (d.get("igualdad") or {}).get("descomposicion")
@@ -801,7 +837,7 @@ def generar(d: dict | None = None) -> None:
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
               fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad, fig_factores, fig_trabajo,
               fig_capacidad, fig_gantt, fig_cola, fig_estados,
-              fig_precios):
+              fig_precios, fig_volumenes):
         f(d)
 
 
