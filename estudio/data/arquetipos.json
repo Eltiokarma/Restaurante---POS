@@ -1,6 +1,7 @@
 [
  {
   "nombre": "Propietario que cocina",
+  "grupo": "La casa pone el trabajo",
   "datos": {
    "ficha": {
     "categoria": "Quién trabaja",
@@ -75,6 +76,7 @@
  },
  {
   "nombre": "Familiar sin sueldos",
+  "grupo": "La casa pone el trabajo",
   "datos": {
    "ficha": {
     "categoria": "Quién trabaja",
@@ -176,7 +178,224 @@
   }
  },
  {
+  "nombre": "Fonda en casa propia",
+  "grupo": "La casa pone el trabajo",
+  "datos": {
+   "ficha": {
+    "categoria": "Local",
+    "descripcion": "El propietario cocina en su propia casa: no paga alquiler, pero la casa está fuera de la calle con más paso, así que vende menos. La luz y el agua se mezclan con las de la casa.",
+    "supuestos": [
+     "precio S/ 9",
+     "45 menús/día",
+     "alquiler S/ 0",
+     "jornal S/ 40 y S/ 35"
+    ],
+    "fuente": "Supuesto del estudio, a contrastar con datos reales"
+   },
+   "escenario": {
+    "ciudad_id": "juliaca",
+    "zona_id": null,
+    "segmento": "popular",
+    "anio": 2026,
+    "formal": false,
+    "balones": 3,
+    "sueldo_dueno": true,
+    "q": 45,
+    "dias": 26,
+    "planilla": [
+     {
+      "puesto": "Ayudante de cocina",
+      "monto": 40,
+      "modalidad": "diario",
+      "cantidad": 1,
+      "area": "cocina",
+      "dias": null,
+      "turno": "dia"
+     },
+     {
+      "puesto": "Atención",
+      "monto": 35,
+      "modalidad": "diario",
+      "cantidad": 1,
+      "area": "salon",
+      "dias": null,
+      "turno": "dia"
+     }
+    ],
+    "noche": null,
+    "precio": 9,
+    "insumos": 4.3,
+    "alquiler_mes": 0,
+    "sueldo_cocinero": 1300,
+    "sueldo_ayudante": 1230,
+    "sueldo_mozo": 1230,
+    "gas_balon45": 220,
+    "servicios_mes": 300
+   },
+   "supuestos": {
+    "inversion": 8000,
+    "meses_arranque": 6,
+    "arranque_desde": 0.4,
+    "crecimiento_q": 0,
+    "inflacion": 0.025,
+    "alza_precio": 0.025,
+    "alza_rmv": 0.037,
+    "tasa_descuento": 0.15,
+    "regimen": "informal"
+   },
+   "casa": [
+    {
+     "quien": "Propietario",
+     "rol": "cocinero",
+     "horas_semana": 60
+    }
+   ]
+  }
+ },
+ {
+  "nombre": "Puesto de mercado informal",
+  "grupo": "La casa pone el trabajo",
+  "datos": {
+   "ficha": {
+    "categoria": "Formalidad",
+    "descripcion": "Puesto en el mercado: alquiler bajo, precio bajo, mucho volumen. El propietario cocina; jornaleras por día. Sin RUC.",
+    "supuestos": [
+     "precio S/ 7",
+     "120 menús/día",
+     "puesto S/ 600",
+     "jornal S/ 40"
+    ],
+    "fuente": "Supuesto del estudio, a contrastar con datos reales"
+   },
+   "escenario": {
+    "ciudad_id": "juliaca",
+    "zona_id": null,
+    "segmento": "popular",
+    "anio": 2026,
+    "formal": false,
+    "balones": 6,
+    "sueldo_dueno": true,
+    "q": 120,
+    "dias": 26,
+    "planilla": [
+     {
+      "puesto": "Ayudante",
+      "monto": 40,
+      "modalidad": "diario",
+      "cantidad": 2,
+      "area": "cocina",
+      "dias": null,
+      "turno": "dia"
+     },
+     {
+      "puesto": "Atención",
+      "monto": 35,
+      "modalidad": "diario",
+      "cantidad": 1,
+      "area": "salon",
+      "dias": null,
+      "turno": "dia"
+     }
+    ],
+    "noche": null,
+    "precio": 7,
+    "insumos": 3.4,
+    "alquiler_mes": 600,
+    "sueldo_cocinero": 1300,
+    "sueldo_ayudante": 1230,
+    "sueldo_mozo": 1230,
+    "gas_balon45": 220,
+    "servicios_mes": 200
+   },
+   "supuestos": {
+    "inversion": 8000,
+    "meses_arranque": 6,
+    "arranque_desde": 0.4,
+    "crecimiento_q": 0,
+    "inflacion": 0.025,
+    "alza_precio": 0.025,
+    "alza_rmv": 0.037,
+    "tasa_descuento": 0.15,
+    "regimen": "informal"
+   },
+   "casa": [
+    {
+     "quien": "Propietario",
+     "rol": "cocinero",
+     "horas_semana": 60
+    }
+   ]
+  }
+ },
+ {
+  "nombre": "Pequeño en Nuevo RUS",
+  "grupo": "La casa pone el trabajo",
+  "datos": {
+   "ficha": {
+    "categoria": "Formalidad",
+    "descripcion": "Formal pero chico, para no pasar el tope del Nuevo RUS (S/ 8 mil al mes). El propietario cocina y una ayudante.",
+    "supuestos": [
+     "precio S/ 10",
+     "30 menús/día",
+     "ventas ~S/ 7,800/mes"
+    ],
+    "fuente": "Supuesto del estudio, a contrastar con datos reales"
+   },
+   "escenario": {
+    "ciudad_id": "juliaca",
+    "zona_id": null,
+    "segmento": "popular",
+    "anio": 2026,
+    "formal": false,
+    "balones": 2,
+    "sueldo_dueno": true,
+    "q": 30,
+    "dias": 26,
+    "planilla": [
+     {
+      "puesto": "Ayudante",
+      "monto": 1230,
+      "modalidad": "mensual",
+      "cantidad": 1,
+      "area": "cocina",
+      "dias": null,
+      "turno": "dia"
+     }
+    ],
+    "noche": null,
+    "precio": 10,
+    "insumos": 4.3,
+    "alquiler_mes": 900,
+    "sueldo_cocinero": 1300,
+    "sueldo_ayudante": 1230,
+    "sueldo_mozo": 1230,
+    "gas_balon45": 220,
+    "servicios_mes": 250,
+    "laboral_formal": true
+   },
+   "supuestos": {
+    "inversion": 12000,
+    "meses_arranque": 6,
+    "arranque_desde": 0.4,
+    "crecimiento_q": 0,
+    "inflacion": 0.025,
+    "alza_precio": 0.025,
+    "alza_rmv": 0.037,
+    "tasa_descuento": 0.15,
+    "regimen": "nuevo_rus"
+   },
+   "casa": [
+    {
+     "quien": "Propietario",
+     "rol": "cocinero",
+     "horas_semana": 60
+    }
+   ]
+  }
+ },
+ {
   "nombre": "Inversor que supervisa",
+  "grupo": "El capital contrata",
   "datos": {
    "ficha": {
     "categoria": "Quién trabaja",
@@ -231,7 +450,126 @@
   }
  },
  {
+  "nombre": "Día y noche",
+  "grupo": "El capital contrata",
+  "datos": {
+   "ficha": {
+    "categoria": "Precio y servicio",
+    "descripcion": "El inversor promedio que además abre de noche (cena/platos a la carta), con su propio equipo de noche.",
+    "supuestos": [
+     "día: S/ 11 × 80",
+     "noche: S/ 15 × 40",
+     "luz y gas extra"
+    ],
+    "fuente": "Supuesto del estudio, a contrastar con datos reales"
+   },
+   "escenario": {
+    "ciudad_id": "juliaca",
+    "zona_id": null,
+    "segmento": "popular",
+    "anio": 2026,
+    "formal": true,
+    "balones": 5,
+    "sueldo_dueno": false,
+    "q": 80,
+    "dias": 26,
+    "planilla": [],
+    "noche": {
+     "q": 40,
+     "precio": 15,
+     "insumos": 5.5,
+     "dias": null,
+     "balones": 3,
+     "servicios": 250
+    },
+    "precio": 11,
+    "insumos": 4.94,
+    "alquiler_mes": 2200,
+    "sueldo_cocinero": 1300,
+    "sueldo_ayudante": 1230,
+    "sueldo_mozo": 1230,
+    "gas_balon45": 220,
+    "servicios_mes": 450
+   },
+   "supuestos": {
+    "inversion": 50000,
+    "meses_arranque": 6,
+    "arranque_desde": 0.4,
+    "crecimiento_q": 0,
+    "inflacion": 0.025,
+    "alza_precio": 0.025,
+    "alza_rmv": 0.037,
+    "tasa_descuento": 0.15,
+    "regimen": "mype"
+   },
+   "casa": [
+    {
+     "quien": "Dueño (supervisa los dos turnos)",
+     "rol": "administrador",
+     "horas_semana": 30
+    }
+   ]
+  }
+ },
+ {
+  "nombre": "Ejecutivo en el centro",
+  "grupo": "El capital contrata",
+  "datos": {
+   "ficha": {
+    "categoria": "Precio y servicio",
+    "descripcion": "Menú ejecutivo de S/ 18: mejor plato, local más caro y más mozos por cliente.",
+    "supuestos": [
+     "precio S/ 18",
+     "60 menús/día",
+     "alquiler S/ 3,500",
+     "insumos S/ 7"
+    ],
+    "fuente": "Supuesto del estudio, a contrastar con datos reales"
+   },
+   "escenario": {
+    "ciudad_id": "juliaca",
+    "zona_id": null,
+    "segmento": "ejecutivo",
+    "anio": 2026,
+    "formal": true,
+    "balones": 5,
+    "sueldo_dueno": false,
+    "q": 60,
+    "dias": 26,
+    "planilla": [],
+    "noche": null,
+    "precio": 18,
+    "insumos": 7.0,
+    "alquiler_mes": 3500,
+    "sueldo_cocinero": 1300,
+    "sueldo_ayudante": 1230,
+    "sueldo_mozo": 1230,
+    "gas_balon45": 220,
+    "servicios_mes": 600
+   },
+   "supuestos": {
+    "inversion": 60000,
+    "meses_arranque": 6,
+    "arranque_desde": 0.4,
+    "crecimiento_q": 0,
+    "inflacion": 0.025,
+    "alza_precio": 0.025,
+    "alza_rmv": 0.037,
+    "tasa_descuento": 0.15,
+    "regimen": "mype"
+   },
+   "casa": [
+    {
+     "quien": "Dueño (supervisa)",
+     "rol": "administrador",
+     "horas_semana": 20
+    }
+   ]
+  }
+ },
+ {
   "nombre": "Inversor ausente",
+  "grupo": "El capital contrata",
   "datos": {
    "ficha": {
     "categoria": "Quién trabaja",
@@ -336,262 +674,8 @@
   }
  },
  {
-  "nombre": "Puesto de mercado informal",
-  "datos": {
-   "ficha": {
-    "categoria": "Formalidad",
-    "descripcion": "Puesto en el mercado: alquiler bajo, precio bajo, mucho volumen. El propietario cocina; jornaleras por día. Sin RUC.",
-    "supuestos": [
-     "precio S/ 7",
-     "120 menús/día",
-     "puesto S/ 600",
-     "jornal S/ 40"
-    ],
-    "fuente": "Supuesto del estudio, a contrastar con datos reales"
-   },
-   "escenario": {
-    "ciudad_id": "juliaca",
-    "zona_id": null,
-    "segmento": "popular",
-    "anio": 2026,
-    "formal": false,
-    "balones": 6,
-    "sueldo_dueno": true,
-    "q": 120,
-    "dias": 26,
-    "planilla": [
-     {
-      "puesto": "Ayudante",
-      "monto": 40,
-      "modalidad": "diario",
-      "cantidad": 2,
-      "area": "cocina",
-      "dias": null,
-      "turno": "dia"
-     },
-     {
-      "puesto": "Atención",
-      "monto": 35,
-      "modalidad": "diario",
-      "cantidad": 1,
-      "area": "salon",
-      "dias": null,
-      "turno": "dia"
-     }
-    ],
-    "noche": null,
-    "precio": 7,
-    "insumos": 3.4,
-    "alquiler_mes": 600,
-    "sueldo_cocinero": 1300,
-    "sueldo_ayudante": 1230,
-    "sueldo_mozo": 1230,
-    "gas_balon45": 220,
-    "servicios_mes": 200
-   },
-   "supuestos": {
-    "inversion": 8000,
-    "meses_arranque": 6,
-    "arranque_desde": 0.4,
-    "crecimiento_q": 0,
-    "inflacion": 0.025,
-    "alza_precio": 0.025,
-    "alza_rmv": 0.037,
-    "tasa_descuento": 0.15,
-    "regimen": "informal"
-   },
-   "casa": [
-    {
-     "quien": "Propietario",
-     "rol": "cocinero",
-     "horas_semana": 60
-    }
-   ]
-  }
- },
- {
-  "nombre": "Pequeño en Nuevo RUS",
-  "datos": {
-   "ficha": {
-    "categoria": "Formalidad",
-    "descripcion": "Formal pero chico, para no pasar el tope del Nuevo RUS (S/ 8 mil al mes). El propietario cocina y una ayudante.",
-    "supuestos": [
-     "precio S/ 10",
-     "30 menús/día",
-     "ventas ~S/ 7,800/mes"
-    ],
-    "fuente": "Supuesto del estudio, a contrastar con datos reales"
-   },
-   "escenario": {
-    "ciudad_id": "juliaca",
-    "zona_id": null,
-    "segmento": "popular",
-    "anio": 2026,
-    "formal": false,
-    "balones": 2,
-    "sueldo_dueno": true,
-    "q": 30,
-    "dias": 26,
-    "planilla": [
-     {
-      "puesto": "Ayudante",
-      "monto": 1230,
-      "modalidad": "mensual",
-      "cantidad": 1,
-      "area": "cocina",
-      "dias": null,
-      "turno": "dia"
-     }
-    ],
-    "noche": null,
-    "precio": 10,
-    "insumos": 4.3,
-    "alquiler_mes": 900,
-    "sueldo_cocinero": 1300,
-    "sueldo_ayudante": 1230,
-    "sueldo_mozo": 1230,
-    "gas_balon45": 220,
-    "servicios_mes": 250,
-    "laboral_formal": true
-   },
-   "supuestos": {
-    "inversion": 12000,
-    "meses_arranque": 6,
-    "arranque_desde": 0.4,
-    "crecimiento_q": 0,
-    "inflacion": 0.025,
-    "alza_precio": 0.025,
-    "alza_rmv": 0.037,
-    "tasa_descuento": 0.15,
-    "regimen": "nuevo_rus"
-   },
-   "casa": [
-    {
-     "quien": "Propietario",
-     "rol": "cocinero",
-     "horas_semana": 60
-    }
-   ]
-  }
- },
- {
-  "nombre": "Ejecutivo en el centro",
-  "datos": {
-   "ficha": {
-    "categoria": "Precio y servicio",
-    "descripcion": "Menú ejecutivo de S/ 18: mejor plato, local más caro y más mozos por cliente.",
-    "supuestos": [
-     "precio S/ 18",
-     "60 menús/día",
-     "alquiler S/ 3,500",
-     "insumos S/ 7"
-    ],
-    "fuente": "Supuesto del estudio, a contrastar con datos reales"
-   },
-   "escenario": {
-    "ciudad_id": "juliaca",
-    "zona_id": null,
-    "segmento": "ejecutivo",
-    "anio": 2026,
-    "formal": true,
-    "balones": 5,
-    "sueldo_dueno": false,
-    "q": 60,
-    "dias": 26,
-    "planilla": [],
-    "noche": null,
-    "precio": 18,
-    "insumos": 7.0,
-    "alquiler_mes": 3500,
-    "sueldo_cocinero": 1300,
-    "sueldo_ayudante": 1230,
-    "sueldo_mozo": 1230,
-    "gas_balon45": 220,
-    "servicios_mes": 600
-   },
-   "supuestos": {
-    "inversion": 60000,
-    "meses_arranque": 6,
-    "arranque_desde": 0.4,
-    "crecimiento_q": 0,
-    "inflacion": 0.025,
-    "alza_precio": 0.025,
-    "alza_rmv": 0.037,
-    "tasa_descuento": 0.15,
-    "regimen": "mype"
-   },
-   "casa": [
-    {
-     "quien": "Dueño (supervisa)",
-     "rol": "administrador",
-     "horas_semana": 20
-    }
-   ]
-  }
- },
- {
-  "nombre": "Día y noche",
-  "datos": {
-   "ficha": {
-    "categoria": "Precio y servicio",
-    "descripcion": "El inversor promedio que además abre de noche (cena/platos a la carta), con su propio equipo de noche.",
-    "supuestos": [
-     "día: S/ 11 × 80",
-     "noche: S/ 15 × 40",
-     "luz y gas extra"
-    ],
-    "fuente": "Supuesto del estudio, a contrastar con datos reales"
-   },
-   "escenario": {
-    "ciudad_id": "juliaca",
-    "zona_id": null,
-    "segmento": "popular",
-    "anio": 2026,
-    "formal": true,
-    "balones": 5,
-    "sueldo_dueno": false,
-    "q": 80,
-    "dias": 26,
-    "planilla": [],
-    "noche": {
-     "q": 40,
-     "precio": 15,
-     "insumos": 5.5,
-     "dias": null,
-     "balones": 3,
-     "servicios": 250
-    },
-    "precio": 11,
-    "insumos": 4.94,
-    "alquiler_mes": 2200,
-    "sueldo_cocinero": 1300,
-    "sueldo_ayudante": 1230,
-    "sueldo_mozo": 1230,
-    "gas_balon45": 220,
-    "servicios_mes": 450
-   },
-   "supuestos": {
-    "inversion": 50000,
-    "meses_arranque": 6,
-    "arranque_desde": 0.4,
-    "crecimiento_q": 0,
-    "inflacion": 0.025,
-    "alza_precio": 0.025,
-    "alza_rmv": 0.037,
-    "tasa_descuento": 0.15,
-    "regimen": "mype"
-   },
-   "casa": [
-    {
-     "quien": "Dueño (supervisa los dos turnos)",
-     "rol": "administrador",
-     "horas_semana": 30
-    }
-   ]
-  }
- },
- {
   "nombre": "Exitoso (referencia compuesta)",
+  "grupo": "Referencia",
   "datos": {
    "ficha": {
     "categoria": "Referencia",
@@ -641,80 +725,6 @@
     {
      "quien": "Dueño (gerente)",
      "rol": "administrador",
-     "horas_semana": 60
-    }
-   ]
-  }
- },
- {
-  "nombre": "Fonda en casa propia",
-  "datos": {
-   "ficha": {
-    "categoria": "Local",
-    "descripcion": "El propietario cocina en su propia casa: no paga alquiler, pero la casa está fuera de la calle con más paso, así que vende menos. La luz y el agua se mezclan con las de la casa.",
-    "supuestos": [
-     "precio S/ 9",
-     "45 menús/día",
-     "alquiler S/ 0",
-     "jornal S/ 40 y S/ 35"
-    ],
-    "fuente": "Supuesto del estudio, a contrastar con datos reales"
-   },
-   "escenario": {
-    "ciudad_id": "juliaca",
-    "zona_id": null,
-    "segmento": "popular",
-    "anio": 2026,
-    "formal": false,
-    "balones": 3,
-    "sueldo_dueno": true,
-    "q": 45,
-    "dias": 26,
-    "planilla": [
-     {
-      "puesto": "Ayudante de cocina",
-      "monto": 40,
-      "modalidad": "diario",
-      "cantidad": 1,
-      "area": "cocina",
-      "dias": null,
-      "turno": "dia"
-     },
-     {
-      "puesto": "Atención",
-      "monto": 35,
-      "modalidad": "diario",
-      "cantidad": 1,
-      "area": "salon",
-      "dias": null,
-      "turno": "dia"
-     }
-    ],
-    "noche": null,
-    "precio": 9,
-    "insumos": 4.3,
-    "alquiler_mes": 0,
-    "sueldo_cocinero": 1300,
-    "sueldo_ayudante": 1230,
-    "sueldo_mozo": 1230,
-    "gas_balon45": 220,
-    "servicios_mes": 300
-   },
-   "supuestos": {
-    "inversion": 8000,
-    "meses_arranque": 6,
-    "arranque_desde": 0.4,
-    "crecimiento_q": 0,
-    "inflacion": 0.025,
-    "alza_precio": 0.025,
-    "alza_rmv": 0.037,
-    "tasa_descuento": 0.15,
-    "regimen": "informal"
-   },
-   "casa": [
-    {
-     "quien": "Propietario",
-     "rol": "cocinero",
      "horas_semana": 60
     }
    ]
