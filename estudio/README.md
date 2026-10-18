@@ -115,3 +115,9 @@ directo en la base del estudio (origen `propio`), que vive aparte.
    pedidos del POS, capacidad por forma de trabajar). Los tiempos de las tareas
    y lo que la organización recorta del desorden son supuestos: falta una semana
    de registro en la cocina de Candela para reemplazarlos.
+6. Capítulo 2 del ensayo (ciudades): actualizar la base con lo de
+   `investigacion/ciudades.md` (gas por departamento, factor de altura, sueldos,
+   alquileres), modelar la competencia como tope de precio y hacer un sondeo de
+   pizarras.
+7. Otros formatos de comida: chicharronería, pollería de pollo frito, cevichería
+   y carrito sanguchero, con sus recetas, planilla y venta, comparados con el menú.

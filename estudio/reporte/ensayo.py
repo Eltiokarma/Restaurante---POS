@@ -72,22 +72,46 @@ def describir_decision(dd: dict) -> str:
 
 # ---------------------------------------------------------------- piezas
 
+# Los negocios se presentan siempre en el mismo orden, agrupados por quién pone el trabajo
+GRUPOS_NEGOCIO = [('La casa pone el trabajo', ['Propietario que cocina', 'Familiar sin sueldos', 'Fonda en casa propia', 'Puesto de mercado informal', 'Pequeño en Nuevo RUS']), ('El capital contrata', ['Inversor que supervisa', 'Día y noche', 'Ejecutivo en el centro', 'Inversor ausente']), ('Referencia', ['Exitoso (referencia compuesta)']), ('Caso real', ['Candela (datos del POS)'])]
+ORDEN_NEGOCIO = [nm for _, nms in GRUPOS_NEGOCIO for nm in nms]
+GRUPO_DE = {nm: g for g, nms in GRUPOS_NEGOCIO for nm in nms}
+
+
+def en_orden(items, nombre=lambda x: x["nombre"]):
+    return sorted(items, key=lambda x: ORDEN_NEGOCIO.index(nombre(x)) if nombre(x) in ORDEN_NEGOCIO else 99)
+
+
+def con_grupos(pares, ncols: int) -> str:
+    """Filas de una tabla de negocios con un subtítulo por grupo. `pares`:
+    (nombre del negocio, fila en LaTeX), ya en orden."""
+    salida, ultimo = [], None
+    for nombre, fila in pares:
+        g = GRUPO_DE.get(nombre, "")
+        if g != ultimo:
+            salida.append(r"\rowcolor{white}\multicolumn{" + str(ncols) + r"}{@{}l}{\textit{\color{acento}" + g
+                          + r"}} \\")
+            ultimo = g
+        salida.append(fila)
+    return "\n".join(salida)
+
+
 def tabla_casos(cs: list[dict]) -> str:
     filas = []
-    for c in cs:
-        filas.append(" & ".join([
+    for c in en_orden(cs):
+        filas.append((c["nombre"], " & ".join([
             esc(corto(c["nombre"])), s(c["precio"], 2 if c["precio"] % 1 else 0),
             n(c["q"]) + ("+n" if c["noche"] else ""), str(c["trabajadores"]), "sí" if c["formal"] else "no",
             s(c["ingreso_dueno"]), str(c["equilibrio"] or "$>$600"), p(c["mc"]["prob_perdida"]),
             s(c["flujo"]["van"]), anios(c["flujo"]["recupero"]),
-        ]) + r" \\")
-    return "\n".join(filas)
+        ]) + r" \\"))
+    return con_grupos(filas, 10)
 
 
 def tabla_quiebres(cs: list[dict]) -> str:
     claves = ("precio", "q", "insumos", "sueldos", "alquiler_mes")
     filas = []
-    for c in cs:
+    for c in en_orden(cs):
         pierde = c["utilidad_mes"] < 0
         celdas = []
         for k in claves:
@@ -98,8 +122,8 @@ def tabla_quiebres(cs: list[dict]) -> str:
                 celdas.append(f"\\textcolor{{perdida}}{{falta {p(abs(x))}}}")
             else:
                 celdas.append(("$\\downarrow$\\," if x < 0 else "$\\uparrow$\\,") + p(abs(x)))
-        filas.append(esc(corto(c["nombre"])) + " & " + " & ".join(celdas) + r" \\")
-    return "\n".join(filas)
+        filas.append((c["nombre"], esc(corto(c["nombre"])) + " & " + " & ".join(celdas) + r" \\"))
+    return con_grupos(filas, 6)
 
 
 def tabla_ciudades(cs: list[dict]) -> str:
@@ -169,11 +193,12 @@ def construir(d: dict) -> str:
         return fac[nombre]["aportes"][clave]
 
     def tabla_factores():
-        filas = sorted(dcp["filas"], key=lambda f: -f["propio"])
+        filas = en_orden([f for f in dcp["filas"] if f["nombre"] != dcp["referencia"]])
         celda = lambda v: "" if abs(v) < 1 else s(v)  # noqa: E731
         lineas = [f"{esc(corto(dcp['referencia']))} (referencia) & & & & & & {s(dcp['base'])} \\\\ \\midrule"]
-        lineas += [f"{esc(corto(f['nombre']))} & " + " & ".join(celda(f['aportes'][c]) for c, _ in dcp['grupos'])
-                   + f" & {s(f['propio'])} \\\\" for f in filas]
+        lineas.append(con_grupos([(f["nombre"], f"{esc(corto(f['nombre']))} & "
+                                   + " & ".join(celda(f['aportes'][c]) for c, _ in dcp['grupos'])
+                                   + f" & {s(f['propio'])} \\\\") for f in filas], 7))
         return "\n".join(lineas)
 
     formales = [f for f in (dcp or {}).get("filas", []) if abs(f["aportes"]["formalidad"]) >= 1]
@@ -313,15 +338,15 @@ Variable & Valor & Origen \\
 
     def tabla_entradas():
         filas = []
-        for e in ent:
+        for e in en_orden(ent):
             gente = f"{e['cocina']} + {e['salon']}" + (f" + {e['otros']}" if e["otros"] else "")
             formal = ("IGV, pl." if e["formal"] and e["laboral"] else "IGV" if e["formal"]
                       else "pl." if e["laboral"] else "no")
-            filas.append(
+            filas.append((e["nombre"],
                 f"{esc(corto(e['nombre']))} & {s(e['precio'])} & {n(e['q'])} & {s(e['alquiler'])} & {s(e['insumos'], 2)} & "
                 f"{s(e['gas_luz'])} & {gente}{'' if e['planilla_propia'] else '*'} & {s(e['personal_mes'])} & "
-                f"{'sí' if e['sueldo_dueno'] else 'no'} & {formal} & {s(e['inversion'])} \\\\")
-        return "\n".join(filas)
+                f"{'sí' if e['sueldo_dueno'] else 'no'} & {formal} & {s(e['inversion'])} \\\\"))
+        return con_grupos(filas, 11)
 
     CAMPO_TXT = {"ciudad_id": "ciudad", "zona_id": "zona", "precio": "precio", "q": "menús al día", "dias": "días",
                  "alquiler_mes": "alquiler", "balones": "gas", "gas_balon45": "precio del gas",
@@ -529,13 +554,13 @@ Variable & Valor & Origen \\
 
     def tabla_org_negocios():
         filas = []
-        for f in orgs:
+        for f in en_orden(orgs):
             md = f["modos"]
             nec = " & ".join(str(md[m]["necesita"] or "--") for m in NOMBRE_ORG)
             mejor = max((md[m]["ahorro"] or 0 for m in NOMBRE_ORG), default=0)
-            filas.append(f"{esc(corto(f['nombre']))} & {n(f['q'])} & {f['cocina']} & {nec} & "
-                         f"{s(mejor) if mejor > 0 else '--'} & {n(md['domestico']['tope'])} & {n(md['mise']['tope'])} \\\\")
-        return "\n".join(filas)
+            filas.append((f["nombre"], f"{esc(corto(f['nombre']))} & {n(f['q'])} & {f['cocina']} & {nec} & "
+                         f"{s(mejor) if mejor > 0 else '--'} & {n(md['domestico']['tope'])} & {n(md['mise']['tope'])} \\\\"))
+        return con_grupos(filas, 10)
 
     ahorros_pos = [max(f["modos"][m]["ahorro"] or 0 for m in NOMBRE_ORG) for f in orgs]
     ahorros_pos = [x for x in ahorros_pos if x > 0] or [0]
@@ -547,14 +572,14 @@ Variable & Valor & Origen \\
 
     def tabla_capacidad():
         filas = []
-        for c in sorted(capac.values(), key=lambda c: c["q"] - c["tope"]):
+        for c in en_orden(list(capac.values())):
             falta = " + ".join(x for x in (f"{c['falta_cocina']} cocina" if c["falta_cocina"] else "",
                                            f"{c['falta_salon']} salón" if c["falta_salon"] else "") if x) or "--"
-            filas.append(f"{esc(corto(c['nombre']))} & {n(c['q'])} & {c['cocina']} + {c['salon']} & {n(c['tope'])} "
-                         f"({c['limita']}) & {falta} & {s(c['utilidad'])} & {s(c['utilidad_ajustada'])} \\\\")
-        return "\n".join(filas)
+            filas.append((c["nombre"], f"{esc(corto(c['nombre']))} & {n(c['q'])} & {c['cocina']} + {c['salon']} & {n(c['tope'])} "
+                         f"({c['limita']}) & {falta} & {s(c['utilidad'])} & {s(c['utilidad_ajustada'])} \\\\"))
+        return con_grupos(filas, 7)
 
-    estados = d.get("estados", [])
+    estados = en_orden(d.get("estados", []))
 
     def estado_tabla(e):
         net = e["netas"] or 1
@@ -594,15 +619,15 @@ Variable & Valor & Origen \\
 
     def tabla_trabajo():
         filas = []
-        for t in sorted(trab.values(), key=lambda t: -t["utilidad_economica"]):
+        for t in en_orden(list(trab.values())):
             horas = [c["horas_semana"] for c in t["casa"]]
             gente = ("nadie" if not horas else f"{len(horas)} × {n(horas[0])}~h" if len(set(horas)) == 1 and len(horas) > 1
                      else " + ".join(f"{n(h)}~h" for h in horas))
             cobra = ("--" if t["parte_cobrada"] is None else "nada" if t["parte_cobrada"] <= 0
                      else p(t["parte_cobrada"]))
-            filas.append(f"{esc(corto(t['nombre']))} & {gente} & {s(t['ingreso'])} & {s(t['valor_mercado'])} & "
-                         f"{s(t['costo_capital'])} & {s(t['utilidad_economica'])} & {cobra} \\\\")
-        return "\n".join(filas)
+            filas.append((t["nombre"], f"{esc(corto(t['nombre']))} & {gente} & {s(t['ingreso'])} & {s(t['valor_mercado'])} & "
+                         f"{s(t['costo_capital'])} & {s(t['utilidad_economica'])} & {cobra} \\\\"))
+        return con_grupos(filas, 7)
 
     def tabla_ausencia():
         return "\n".join(f"{esc(x['paso'])} & {s(x['utilidad'])} & {'' if x['cambio'] is None else s(x['cambio'])} \\\\"
@@ -665,7 +690,7 @@ el segundo y {s(pl['costo_entrada_bebida_promedio'], 2)} lo demás. Sobre un pre
 {p(pl['menu']['costo'] / prec_neto)}. Es más que el 35--45\,\% de referencia para menú popular, pero coherente
 con un menú bien servido a S/~11 en el sur. El gasto semanal en insumos según lo vendido ronda los
 {s(pl['gasto_semana'])}, y se concentra en pocos productos: {top3}. Los tres primeros suman
-{p(par[2]['acumulado'])} de las compras (figura~\ref{{fig:platos}}, derecha).
+{p(par[2]['acumulado'])} de las compras (\figura{{fig:platos}}, derecha).
 
 \begin{{figure}}[t]
 \centering
@@ -716,7 +741,7 @@ Queda para el dueño, sin IGV & {s(pc['sin_igv'] + 1500)} & \\
 \end{{tabular}}
 \end{{table}}
 
-El cuadro~\ref{{tab:candela}} cuenta la situación sin adornos. Sin IGV, la venta alcanza justo para pagar
+El \cuadro{{tab:candela}} cuenta la situación sin adornos. Sin IGV, la venta alcanza justo para pagar
 insumos, sueldos y local: al dueño le quedan {s(pc['sin_igv'] + 1500)} al mes por hacer las compras y
 administrar, {"menos de lo que gana una de sus cocineras" if pc['sin_igv'] + 1500 < 1500 else "apenas lo que gana una de sus cocineras"}. Si el IGV se paga sobre toda la venta, el local
 {"pierde " + s(-(cand['utilidad_mes'] + 1500)) if cand['utilidad_mes'] + 1500 < 0 else "deja " + s(cand['utilidad_mes'] + 1500)} al mes. Los insumos se llevan más de la mitad de la venta neta; la planilla,
@@ -735,7 +760,7 @@ venta saltó a S/~800--1\,000 diarios (unos 90 menús), tanto que la cocina cola
 de los insumos y para mejorar la comida, y hoy vende S/~750--800 (unos 70). Los tres puntos caen cerca de una
 misma curva: la sensibilidad constante que mejor los ajusta es de {n(pc['elasticidad_ajuste'], 1)}, y el paso de
 S/~10 a S/~11, por sí solo, da {n(pc['elasticidad_central'], 1)} (entre {n(pc['elasticidad_arco'][0], 1)} y
-{n(pc['elasticidad_arco'][1], 1)} según qué extremo de cada rango se tome; figura~\ref{{fig:historia}}).
+{n(pc['elasticidad_arco'][1], 1)} según qué extremo de cada rango se tome; \figura{{fig:historia}}).
 
 \begin{{figure}}[t]
 \centering
@@ -763,7 +788,7 @@ no exige cambiar la pizarra: basta un segundo ``especial'' a S/~15 junto al men�
 
 \subsubsection{{Dónde está Candela}}
 
-La figura~\ref{{fig:matriz}} muestra el mapa completo: cada celda es la utilidad mensual para una combinación
+La \figura{{fig:matriz}} muestra el mapa completo: cada celda es la utilidad mensual para una combinación
 de precio y volumen, con los costos reales y pagando IGV; el recuadro marca la situación actual. Su
 equilibrio ---pagando IGV sobre toda la venta y un sueldo de S/~1\,500 al dueño--- está en {cand['equilibrio']} menús
 diarios a S/~11. Leído junto con la lección del precio, el mapa dice
@@ -781,7 +806,7 @@ IGV. El recuadro es la situación de hoy.}}\label{{fig:matriz}}
 
 El alquiler de Candela equivale a vender {n(next(a['menus'] for a in hz['alquiler'] if a['nombre'].startswith('Candela')))}
 menús diarios solo para pagarlo. El descuento de conocido vale S/~1\,000 al mes. Con la misma medida del
-cuadro~\ref{{tab:candela}} ---pagando IGV y sin contar el sueldo del dueño---, hoy el local pierde
+\cuadro{{tab:candela}} ---pagando IGV y sin contar el sueldo del dueño---, hoy el local pierde
 {s(-(cand['utilidad_mes'] + 1500))} al mes; con el alquiler de mercado perdería
 {s(-(next(v['utilidad_mes'] for v in d['candela_variantes'] if 'mercado' in v['nombre']) + 1500))}, y en un local
 propio quedaría en {s(next(v['utilidad_mes'] for v in d['candela_variantes'] if 'propio' in v['nombre']) + 1500)}. El
@@ -810,13 +835,16 @@ puede terminarse. Conviene tratarlo como lo que es: una ventaja temporal, no un 
 \usepackage[most]{{tcolorbox}}
 \usepackage{{float}}
 \usepackage[section]{{placeins}}
-\usepackage[hidelinks]{{hyperref}}
+\usepackage{{etoolbox}}
+\usepackage{{hyperref}}
+\usepackage[all]{{hypcap}}
 \usepackage{{xurl}}
 
 \definecolor{{acento}}{{HTML}}{{1F4E79}}
 \definecolor{{perdida}}{{HTML}}{{B03024}}
 \definecolor{{gris}}{{HTML}}{{5B5A56}}
 \definecolor{{fondo}}{{HTML}}{{F4F2EC}}
+\definecolor{{franja}}{{HTML}}{{EFEDE6}}
 \hypersetup{{colorlinks=true,linkcolor=acento,urlcolor=acento,citecolor=acento}}
 
 \captionsetup{{font=small,labelfont={{sc}},labelsep=period,margin=0.5cm}}
@@ -826,6 +854,23 @@ puede terminarse. Conviene tratarlo como lo que es: una ventaja temporal, no un 
 \titlespacing*{{\section}}{{0pt}}{{2.2ex plus 1ex}}{{1.2ex}}
 \setcounter{{tocdepth}}{{2}}
 \setlist{{itemsep=0.35ex,topsep=0.6ex}}
+% tablas más aireadas y con franjas para seguir cada fila
+\renewcommand{{\arraystretch}}{{1.22}}
+\AtBeginEnvironment{{tabular}}{{\rowcolors{{2}}{{white}}{{franja}}}}
+\AtBeginEnvironment{{tabularx}}{{\rowcolors{{2}}{{white}}{{franja}}}}
+% los cuadros se llaman cuadros, como en el texto
+\gappto\captionsspanish{{\renewcommand{{\tablename}}{{Cuadro}}\renewcommand{{\listtablename}}{{Índice de cuadros}}\renewcommand{{\listfigurename}}{{Índice de figuras}}\renewcommand{{\partname}}{{Capítulo}}}}
+% referencias que se pueden tocar: lleva a la figura, el cuadro o la sección
+\newcommand{{\cuadro}}[1]{{\hyperref[#1]{{cuadro~\ref*{{#1}}}}}}
+\newcommand{{\figura}}[1]{{\hyperref[#1]{{figura~\ref*{{#1}}}}}}
+\newcommand{{\seccion}}[1]{{\hyperref[#1]{{sección~\ref*{{#1}}}}}}
+\newcommand{{\anexo}}[1]{{\hyperref[#1]{{anexo~\ref*{{#1}}}}}}
+\newcommand{{\capitulo}}[1]{{\hyperref[#1]{{capítulo~\ref*{{#1}}}}}}
+% capítulos: cada uno con su propia numeración de secciones
+\renewcommand{{\partname}}{{Capítulo}}
+\renewcommand{{\thepart}}{{\arabic{{part}}}}
+\counterwithin*{{section}}{{part}}
+\titleformat{{\part}}[display]{{\normalfont\huge\bfseries\color{{acento}}}}{{\partname~\thepart}}{{0.4em}}{{}}
 \setlength{{\parskip}}{{0.35ex}}
 \linespread{{1.06}}
 
@@ -873,12 +918,12 @@ mismo motor ---{NT} restaurantes tipo y el caso real de Candela, en Juliaca--- q
 qué tan formales son, a qué precio venden y cuántas horas abren. Para cada uno se calcula el estado de
 resultados del mes, el punto de equilibrio, la probabilidad de terminar el año en pérdida (2\,000 años
 simulados), el flujo de caja a diez años en cuatro regímenes tributarios y cuánto puede moverse cada variable
-antes de que el negocio pierda. El documento presenta primero el marco teórico y la metodología ---cada variación se trata como un
+antes de que el negocio pierda. El documento tiene dos capítulos. El primero, sobre los negocios, presenta el marco teórico y la metodología ---cada variación se trata como un
 experimento, con sus supuestos a la vista--- y después los resultados, la discusión y las conclusiones; el
-registro de la sección~\ref{{sec:experimentos}} dice cuáles se sostienen aunque los supuestos se equivoquen y cuáles
-quedan abiertas.
+registro de la \seccion{{sec:experimentos}} dice cuáles se sostienen aunque los supuestos se equivoquen y cuáles
+quedan abiertas. El segundo, todavía en construcción, compara las ciudades.
 
-Los resultados principales, que la sección~\ref{{sec:conclusiones}} desarrolla, son cuatro. En una fonda de
+Los resultados principales, que la \seccion{{sec:conclusiones}} desarrolla, son cuatro. En una fonda de
 provincia gana el trabajo y no el capital: el propietario que cocina y la familia ganan donde el inversor que
 contrata a todos apenas cubre costos. Con la clientela medida en Juliaca, subir el precio no paga: la mejora tiene
 que venir del costo, la mezcla de platos, más horas de venta o una cocina mejor organizada. La formalidad cuesta,
@@ -888,6 +933,12 @@ capacidad de sobra: le falta clientela, no gente.
 \clearpage
 \tableofcontents
 \clearpage
+\listoffigures
+\listoftables
+\clearpage
+
+\clearpage
+\part{{Los negocios del menú}}\label{{cap:negocios}}
 
 \section{{Introducción}}
 
@@ -1003,7 +1054,7 @@ un caso base, se cambia una cosa (o un grupo de cosas definido de antemano), tod
 qué le pasa a un resultado. El protocolo es siempre el mismo:
 \begin{{enumerate}}[leftmargin=1.4em,itemsep=1pt]
 \item \textbf{{Pregunta.}} Una sola, que se pueda contestar con un número: ¿cuánto cuesta no estar en el local?
-\item \textbf{{Caso base.}} Los números con los que entra cada negocio (cuadro~\ref{{tab:entradas}}).
+\item \textbf{{Caso base.}} Los números con los que entra cada negocio (\cuadro{{tab:entradas}}).
 \item \textbf{{Qué se mueve y qué queda fijo.}} Cada análisis abre con un cuadro de \emph{{supuestos}}: las variables
 que entran, su valor y su origen ---dato \emph{{propio}} de Candela, \emph{{observado}}, \emph{{ley}}, \emph{{estimado}},
 \emph{{calibrado}} para reproducir algo observado, o \emph{{supuesto}} razonado---. Lo que no aparece en ese cuadro es
@@ -1011,10 +1062,10 @@ lo del caso base.
 \item \textbf{{Resultado.}} Casi siempre la utilidad del mes o lo que se lleva la casa; a veces el equilibrio, la
 probabilidad de perder, los menús que aguanta la cocina o los minutos de espera.
 \item \textbf{{Veredicto.}} Si el resultado depende de números supuestos, se repite el cálculo con esos números
-movidos al azar (sección~\ref{{sec:supuestos}}) y se cuenta en qué parte de los sorteos se sostiene.
+movidos al azar (\seccion{{sec:supuestos}}) y se cuenta en qué parte de los sorteos se sostiene.
 \end{{enumerate}}
-El cuadro~\ref{{tab:tipos}} resume los tipos de experimento que se usan, y el registro de la
-sección~\ref{{sec:experimentos}} reúne cada pregunta con su resultado.
+El \cuadro{{tab:tipos}} resume los tipos de experimento que se usan, y el registro de la
+\seccion{{sec:experimentos}} reúne cada pregunta con su resultado.
 
 \begin{{table}}[h]
 \centering\footnotesize
@@ -1095,7 +1146,7 @@ que la mitad de los restaurantes recupera su inversión en 19 a 24 meses y las v
 cercanas a S/~50 mil al mes.
 \end{{description}}
 
-El cuadro~\ref{{tab:entradas}} reúne los números con los que entra cada negocio a todos los análisis; los que
+El \cuadro{{tab:entradas}} reúne los números con los que entra cada negocio a todos los análisis; los que
 no son de Candela son supuestos razonados.
 
 \begin{{table}}[h]
@@ -1141,7 +1192,7 @@ q \;=\; q_0\,\Bigl(\frac{{p}}{{p_0}}\Bigr)^{{-\varepsilon}} f_{{\text{{porción}
 donde $\varepsilon$ es la elasticidad: cuántos clientes se pierden por cada 1\,\% de alza. Al empezar el
 estudio nadie la había medido para el menú de Juliaca, y el barrido suponía una clientela poco sensible
 ---0.5, 1.0 y 1.5---. La historia de precios de Candela la midió después: la sensibilidad que mejor ajusta sus
-tres precios es de {n(pc['elasticidad_ajuste'], 1) if pc else "2.4"} (sección~\ref{{sec:candela}}). Por eso cada
+tres precios es de {n(pc['elasticidad_ajuste'], 1) if pc else "2.4"} (\seccion{{sec:candela}}). Por eso cada
 combinación se calculó dos veces: con la sensibilidad medida en Juliaca y un margen a cada lado ({el_med}), que
 es la versión principal, y con la supuesta de antes, para ver qué conclusiones dependían de ella. En cada caso
 se le asignó a la combinación su \emph{{peor}} resultado. La decisión robusta es la que tiene el
@@ -1158,11 +1209,11 @@ hay aderezo sin cebolla picada ni sopa sin fondo---. Cada preparación toma la \
 Candela (por ejemplo, {n(next(x for t in co['tareas'] if t['id'] == 'papa' for x in t['partes'])['cantidad'], 1)} kilos de
 papa y camote cada 100 menús) por la \emph{{velocidad}} de una persona promedio: la del propio dueño donde la midió
 (10 kilos de papa en 45 minutos, un kilo de arvejas en vaina en media hora), la tabla de la industria cebollera de
-Estados Unidos para la cebolla y estimaciones para el resto (cuadro~\ref{{tab:prep}}). Las recetas del sistema casi
+Estados Unidos para la cebolla y estimaciones para el resto (\cuadro{{tab:prep}}). Las recetas del sistema casi
 no registran la cebolla ni el ajo de los aderezos, así que esas dos cantidades son supuestas. A eso se suma un tiempo
 fijo por tarea (sacar, lavar, ordenar). Las cocciones llevan además una \emph{{espera}} en que la olla cocina sola,
 con los tiempos de Juliaca: a 3\,825 metros el agua hierve a unos 88\,°C y el arroz, la papa y los guisos tardan
-entre 1.3 y 2 veces lo que tardan en la costa; las menestras, en olla a presión (cuadro~\ref{{tab:coccion}}). Las
+entre 1.3 y 2 veces lo que tardan en la costa; las menestras, en olla a presión (\cuadro{{tab:coccion}}). Las
 preparaciones de más de una hora se parten en tandas que pueden hacer varias personas. Un programador reparte las
 tareas minuto a minuto entre la gente disponible, siempre empezando por la que tiene más camino por delante (la ruta
 crítica), y así se obtiene a qué hora está todo listo.
@@ -1172,7 +1223,7 @@ y la cocina los despacha a su ritmo; si se atrasa, los clientes esperan. Además
 lleva un tiempo de \emph{{desorden}} ---buscar, reponer, picar lo que faltó, cambiar de tarea---, que no se puede medir
 con un cronómetro y se \emph{{calibra}}: es el valor con que una cocina doméstica de
 {co['servicio']['calibracion']['personas']} personas aguanta justo los {co['servicio']['calibracion']['menus']} menús que
-aguanta Candela sin que nadie espere más de {co['servicio']['espera_maxima']} minutos (cuadro~\ref{{tab:servicio}}).
+aguanta Candela sin que nadie espere más de {co['servicio']['espera_maxima']} minutos (\cuadro{{tab:servicio}}).
 
 Se comparan cuatro formas de trabajar, cada una con un cambio más que la anterior, para saber cuánto aporta cada
 cambio por separado:
@@ -1232,71 +1283,14 @@ Variable & Valor y origen \\
 
 \section{{Resultados}}\label{{sec:resultados}}
 
-Los resultados van de lo general a lo particular: primero las ciudades, después los once negocios y el caso
-Candela, luego el riesgo y la robustez de las conclusiones, y al final lo que el modelo deja ver sobre el trabajo,
+Los resultados van de lo general a lo particular: primero los once negocios y el caso Candela, luego el riesgo y la robustez de las conclusiones, y al final lo que el modelo deja ver sobre el trabajo,
 la capacidad y la organización de la cocina. La sección cierra con el registro de todos los experimentos.
-
-\subsection{{El mapa: doce ciudades}}
-
-El cuadro~\ref{{tab:ciudades}} y la figura~\ref{{fig:ciudades}} resumen el equilibrio de un local de menú
-popular formal en cada ciudad, con el precio de su pizarra, cinco balones de gas al mes y sin sueldo del
-dueño. Es la referencia del estudio de ciudades, reproducida exactamente por el motor.
-
-{sup_ciudades()}
-\begin{{table}}[h]
-\centering\small
-\caption{{Equilibrio en menús diarios por ciudad. Formal salvo la última columna.}}\label{{tab:ciudades}}
-\begin{{tabular}}{{lrlrrrrr}}
-\toprule
-& & & \multicolumn{{3}}{{c}}{{Formal, sin sueldo del dueño}} & Con sueldo & Informal \\
-\cmidrule(lr){{4-6}}
-Ciudad & Precio & Dato & 2026 & 2027 & 2028 & 2026 & 2026 \\
-\midrule
-{tabla_ciudades(d['ciudades'])}
-\bottomrule
-\end{{tabular}}
-\end{{table}}
-
-\begin{{figure}}[h]
-\centering
-\includegraphics[width=\textwidth]{{fig/ciudades.pdf}}
-\caption{{Menús diarios para no perder en 2026, local formal frente a informal (mismo local, sin IGV ni cargas
-laborales).}}\label{{fig:ciudades}}
-\end{{figure}}
-
-Tres lecturas sobresalen. Primero, el rango es amplio: de {ciud['lima']['eq_2026']} menús en Lima a
-{ciud['juliaca']['eq_2026']} en Juliaca, donde el precio estimado de la base (S/~8) resultó bajo. La base lo
-deriva del ingreso de la ciudad; en Candela se cobra S/~11 ---y se cobró S/~10 durante un año--- sin perder la
-clientela del todo. Con ese precio, la fila \emph{{Juliaca (observado)}} baja el equilibrio a
-{ciud['juliaca_obs']['eq_2026']} menús: de la peor ciudad del mapa pasa al puesto
-{1 + sum(1 for c in d['ciudades'] if c['id'] != 'juliaca_obs' and c['id'] != 'juliaca' and c['eq_2026'] < ciud['juliaca_obs']['eq_2026'])}
-de {len(d['ciudades']) - 1}, porque combina un precio de ciudad intermedia con sueldos y alquileres de provincia. Es un
-solo local y no un sondeo, así que la cifra estimada se deja en la base, pero la lectura de Juliaca como la plaza
-más difícil del país dependía de ese supuesto. Que Candela necesite muchos más menús que este local de referencia
-no se debe a la plaza sino a su planilla, como muestra la sección~\ref{{sec:candela}}. Segundo, la informalidad compra entre
-{min(c['eq_2026'] - c['eq_informal'] for c in d['ciudades'])} y {max(c['eq_2026'] - c['eq_informal'] for c in d['ciudades'])}
-menús diarios de holgura: es la diferencia entre no pagar IGV ni cargas laborales y pagarlas. Tercero, el
-sueldo del dueño es un costo real aunque no salga de la caja: contarlo agrega entre
-{min(c['eq_con_sueldo'] - c['eq_2026'] for c in d['ciudades'])} y {max(c['eq_con_sueldo'] - c['eq_2026'] for c in d['ciudades'])}
-menús al equilibrio.
-
-\begin{{figure}}[h]
-\centering
-\includegraphics[width=0.66\textwidth]{{fig/igv.pdf}}
-\caption{{Equilibrio formal según el año. *El 18\,\% de 2028 es un supuesto: la tasa especial de
-restaurantes vence en 2027.}}\label{{fig:igv}}
-\end{{figure}}
-
-El calendario tributario empeora el mapa de manera desigual (figura~\ref{{fig:igv}}). El paso del IGV de
-10.5\,\% a 18\,\% le quita a un menú de S/~10 unos 60 céntimos de ingreso neto. Donde el margen por plato es
-amplio, como en Lima, el equilibrio apenas se mueve; donde es fino, el mismo cambio dispara el volumen
-necesario. El efecto es convexo: castiga más a quien menos margen tiene.
 
 \subsection{{{NN.capitalize()} negocios}}\label{{sec:negocios}}
 
 \subsubsection{{Quién se lleva qué}}
 
-La figura~\ref{{fig:ingreso}} ordena los negocios por lo que se lleva el dueño cada mes. El resultado más
+La \figura{{fig:ingreso}} ordena los negocios por lo que se lleva el dueño cada mes. El resultado más
 claro es el de las cuatro formas de organizar el trabajo. Con los mismos costos de insumos y la misma ciudad,
 el propietario que cocina gana {s(dc['ingreso_dueno'])} al mes, la familia {s(fam['ingreso_dueno'])}, el inversor
 {s(inv['ingreso_dueno'])} y el inversor ausente pierde {s(-aus['ingreso_dueno'])}. La diferencia no está en la
@@ -1311,7 +1305,7 @@ con su tiempo, y a 100 menús diarios no le alcanza.
 \caption{{Lo que se lleva el dueño al mes: utilidad más su sueldo, si el modelo le asigna uno.}}\label{{fig:ingreso}}
 \end{{figure}}
 
-La estructura de costos (figura~\ref{{fig:estructura}}) explica el orden. En todos los casos los insumos se
+La estructura de costos (\figura{{fig:estructura}}) explica el orden. En todos los casos los insumos se
 llevan entre 40 y 57 centavos de cada sol vendido sin IGV: esa parte es casi fija. Lo que separa a los
 ganadores de los perdedores es el personal, que va del {p(fam['estructura']['personal'])} de la venta en la
 fonda familiar al {p(aus['estructura']['personal'])} del inversor ausente, y el alquiler, que va del
@@ -1334,7 +1328,7 @@ de la luz ya están pagados al mediodía: cada cena vendida aporta casi todo su 
 {"" if not ig else rf"""\subsubsection{{A igualdad de condiciones}}
 
 Los negocios del catálogo difieren en todo a la vez: precio, venta, alquiler y forma de organizarse. Para
-separar lo que se debe a la organización, la figura~\ref{{fig:igualdad}} los pone a todos en el mismo local:
+separar lo que se debe a la organización, la \figura{{fig:igualdad}} los pone a todos en el mismo local:
 el del propietario que cocina, con S/~10 por menú, 60 menús diarios, S/~1\,200 de alquiler y los mismos insumos, gas
 y luz. Lo único que queda distinto es quién trabaja, cómo se le paga, si es formal y si abre de noche.
 
@@ -1367,7 +1361,7 @@ planilla de seis personas, perdería {s(-ig_('Candela (datos del POS)'))} en ese
 {ig_('Propietario que cocina', campo='equilibrio')} del propietario que cocina. """}
 
 {"" if not pasos_aus else rf"""El caso del inversor ausente merece separarse en partes, porque mezcla dos cosas: un equipo de
-cocina más grande y el costo de no estar. El cuadro~\ref{{tab:ausencia}} parte del inversor en el mismo local y le
+cocina más grande y el costo de no estar. El \cuadro{{tab:ausencia}} parte del inversor en el mismo local y le
 agrega, uno por uno, los cambios del inversor ausente. La gerencia pagada ---administrador, cajero y encargado de
 compras--- es el golpe más grande: {s(-pasos_aus[2]['cambio'])} al mes. El contador externo suma {s(-pasos_aus[3]['cambio'])} y
 las compras sin el control del dueño, {s(-pasos_aus[4]['cambio'])} más; ese último renglón crece con el volumen, porque
@@ -1398,7 +1392,7 @@ insumos que se quieran poner.
 {"" if not dcp else rf"""\subsubsection{{Qué separa a cada negocio del propietario que cocina}}
 
 La igualación responde qué pasaría si todos tuvieran el mismo local. La pregunta inversa es de dónde viene la
-diferencia de cada uno. El cuadro~\ref{{tab:factores}} y la figura~\ref{{fig:factores}} parten del propietario que
+diferencia de cada uno. El \cuadro{{tab:factores}} y la \figura{{fig:factores}} parten del propietario que
 cocina ({s(dcp['base'])} al mes para su casa) y reparten la distancia a cada negocio entre cinco factores: el
 local y la venta (precio, menús, alquiler, gas y luz), los insumos por menú, quién trabaja y cuánto se le paga, la
 formalidad y el turno noche. Como los factores se potencian entre sí ---el IGV pesa más cuanto más se vende---, el
@@ -1452,7 +1446,7 @@ local, sino en cómo se reparte el trabajo de la cocina y del salón."""}
 
 \subsection{{Riesgo}}\label{{sec:riesgo}}
 
-Un promedio esconde la pregunta que quita el sueño: ¿qué pasa en un año malo? La figura~\ref{{fig:riesgo}}
+Un promedio esconde la pregunta que quita el sueño: ¿qué pasa en un año malo? La \figura{{fig:riesgo}}
 muestra la distribución de la utilidad anual en 2\,000 años simulados para cada negocio. Los locales con
 margen holgado ---el exitoso, día y noche, la familia--- casi nunca terminan el año en pérdida; el inversor
 lo hace la mitad de las veces y el inversor ausente casi siempre.
@@ -1474,7 +1468,7 @@ resistencia de la fonda familiar: no es más rentable por plato, sino más flexi
 \subsection{{Sensibilidad: cuánto aguanta cada negocio}}\label{{sec:sensibilidad}}
 
 La sensibilidad mide lo que el promedio no muestra: cuánto margen de error tiene cada negocio. La
-figura~\ref{{fig:quiebres}} y el cuadro~\ref{{tab:quiebres}} muestran, para cada uno, cuánto puede moverse
+\figura{{fig:quiebres}} y el \cuadro{{tab:quiebres}} muestran, para cada uno, cuánto puede moverse
 cada variable ---sola, con las demás quietas--- antes de que la utilidad llegue a cero. Si el negocio ya
 pierde, la celda indica cuánto tendría que moverse para dejar de perder.
 
@@ -1514,7 +1508,7 @@ proveedor de gas.
 propietario que cocina y el exitoso. La línea vertical es la utilidad actual.}}\label{{fig:tornados}}
 \end{{figure}}
 
-La figura~\ref{{fig:tornados}} muestra el mismo análisis en forma de tornado para tres casos. En todos, un
+La \figura{{fig:tornados}} muestra el mismo análisis en forma de tornado para tres casos. En todos, un
 10\,\% de precio mueve la utilidad más que un 10\,\% de cualquier costo. Un detalle técnico ayuda a leer los
 casos chicos: como el personal crece por escalones, una baja del volumen puede, en un rango corto, mejorar la
 utilidad, porque permite prescindir de un mozo. Los negocios pequeños viven en esos escalones.
@@ -1524,13 +1518,13 @@ utilidad, porque permite prescindir de un mozo. Los negocios pequeños viven en 
 La sensibilidad mueve una variable a la vez. Las decisiones reales se toman juntas ---subir el precio y a la
 vez cambiar la porción, o abrir de noche--- y, sobre todo, se toman sin saber cómo va a reaccionar la
 clientela. El análisis anterior tenía un supuesto optimista escondido: si el precio sube, la clientela no
-cambia. Esta sección lo quita con el barrido de decisiones descrito en la sección~\ref{{sec:barrido}}.
+cambia. Esta sección lo quita con el barrido de decisiones descrito en la \seccion{{sec:barrido}}.
 
 {"" if not rc else rf"""\subsubsection{{Candela, con su propia elasticidad}}
 
 Para Candela no hace falta suponer cómo reacciona la clientela: su historia lo mide. El barrido usó tres
 sensibilidades alrededor de la observada ({", ".join(n(float(k), 1) for k in sorted(rc['curvas'], key=float))}) y precios entre
-S/~9 y S/~13. La figura~\ref{{fig:precio_robusto}} muestra el resultado: con la sensibilidad medida, la curva es
+S/~9 y S/~13. La \figura{{fig:precio_robusto}} muestra el resultado: con la sensibilidad medida, la curva es
 casi plana entre S/~10 y S/~11; con una clientela algo más sensible conviene bajar, y con una algo menos
 sensible, subir, pero en ningún caso el mejor precio deja más de
 {s(max(max(x['utilidad'] for x in serie) - next(x['utilidad'] for x in serie if abs(x['precio'] - rc['precio0']) < 1e-9) for serie in rc['curvas'].values()))}
@@ -1557,7 +1551,7 @@ existiera esa demanda nocturna.
 
 \subsubsection{{Todos los negocios}}
 
-La figura~\ref{{fig:decisiones}} resume el barrido de los {NN} negocios: la utilidad de hoy, la de la mejor
+La \figura{{fig:decisiones}} resume el barrido de los {NN} negocios: la utilidad de hoy, la de la mejor
 decisión sin abrir de noche y la de la mejor decisión en general, siempre en el peor supuesto de demanda. En
 todos los casos existe una combinación que mejora la situación actual aun con la demanda más desfavorable. El
 inversor pasa de {s(r_inv['base']['utilidad_media'])} a {s(r_inv['mejor']['utilidad_peor'])} de utilidad al mes; el propietario que
@@ -1589,7 +1583,7 @@ piloto.
 
 La última pregunta es la del año malo deliberado: ¿qué pasa si llega un golpe? Cada negocio se sometió a seis
 golpes por separado ---clientela $-$15\,\%, insumos $+$20\,\%, IGV de 18\,\%, sueldos $+$10\,\%, alquiler
-$+$25\,\% y un competidor que obliga a bajar S/~1--- y a todos juntos (figura~\ref{{fig:estres}}).
+$+$25\,\% y un competidor que obliga a bajar S/~1--- y a todos juntos (\figura{{fig:estres}}).
 
 {sup_estres()}
 \begin{{figure}}[t]
@@ -1612,7 +1606,7 @@ números se equivoquen es una conclusión. Para separarlos, el cálculo se repit
 azar, y por separado para cada negocio, todos sus números dentro de rangos razonables: el precio
 ±{p(sr['rangos']['precio'], 0)}, la venta ±{p(sr['rangos']['q'], 0)}, los insumos ±{p(sr['rangos']['insumos'], 0)},
 el alquiler ±{p(sr['rangos']['alquiler_mes'], 0)}, los sueldos ±{p(sr['rangos']['sueldos'], 0)} y el gas y la luz
-±{p(sr['rangos']['balones'], 0)}. El cuadro~\ref{{tab:supuestos}} cuenta en qué parte de esos sorteos se cumple cada
+±{p(sr['rangos']['balones'], 0)}. El \cuadro{{tab:supuestos}} cuenta en qué parte de esos sorteos se cumple cada
 hallazgo: se sostiene si se cumple en nueve de cada diez o más, es probable entre siete y nueve, y no es
 concluyente por debajo.
 
@@ -1649,7 +1643,7 @@ Negocio & Hoy & Rango & Repite & No pierde \\
 \end{{tabularx}}
 \end{{table}}
 
-El orden tiene puntas firmes y un medio móvil (cuadro~\ref{{tab:lugares}}). El exitoso es siempre el primero y el
+El orden tiene puntas firmes y un medio móvil (\cuadro{{tab:lugares}}). El exitoso es siempre el primero y el
 inversor ausente casi siempre el último, pero los negocios del medio ---el puesto de mercado, día y noche, la familia y
 el propietario que cocina--- cambian de lugar entre sí con facilidad: la diferencia entre ellos es menor que el error de
 los supuestos. Leído así, el catálogo no dice cuál de esas cuatro fondas es mejor; dice que las cuatro ganan y
@@ -1681,7 +1675,7 @@ de mercado ---el sueldo de una cocinera, un ayudante, un mozo o un administrador
 verdad trabajan, con el recargo de ley por las horas extra--- y lo que rendiría la inversión en otro lado, al
 15\,\% anual del flujo. Si la utilidad económica es negativa, el negocio no gana: vive de un subsidio de la familia
 que lo atiende. Las horas son supuestos razonados (60 por semana para quien cocina, de 20 a 40 para quien solo
-administra) y están en el cuadro~\ref{{tab:trabajo}}.
+administra) y están en el \cuadro{{tab:trabajo}}.
 
 {sup_trabajo()}
 \begin{{figure}}[t]
@@ -1705,7 +1699,7 @@ Negocio & Horas/semana & Se lleva & Su trabajo & Capital & Utilidad económica &
 \end{{tabularx}}
 \end{{table}}
 
-La figura~\ref{{fig:trabajo_hora}} muestra la primera lectura. El propietario que cocina, con 60 horas a la semana, se
+La \figura{{fig:trabajo_hora}} muestra la primera lectura. El propietario que cocina, con 60 horas a la semana, se
 lleva {s(tr_('Propietario que cocina', 'por_hora'), 2)} por hora, cuando contratar a una cocinera para esas mismas horas
 costaría {s(tr_('Propietario que cocina', 'mercado_por_hora'), 2)}: cobra {n(tr_('Propietario que cocina', 'parte_cobrada'), 1)} veces su
 trabajo, porque además del sueldo se queda con el margen del negocio. El negocio familiar sin sueldos, en el mismo local,
@@ -1724,7 +1718,7 @@ administración, la cuenta es peor: si paga IGV sobre toda la venta, pone su tra
 y el del capital (color).}}\label{{fig:trabajo_economica}}
 \end{{figure}}
 
-La figura~\ref{{fig:trabajo_economica}} cambia el orden de los negocios. Por lo que se lleva la casa, el negocio familiar
+La \figura{{fig:trabajo_economica}} cambia el orden de los negocios. Por lo que se lleva la casa, el negocio familiar
 sin sueldos es de las que más ganan ({s(tr_('Familiar sin sueldos', 'ingreso'))} al mes); por utilidad económica queda en
 {s(tr_('Familiar sin sueldos', 'utilidad_economica'))}: lo que muestra la caja es, casi entero, su propio trabajo. Que quede
 por encima o por debajo del valor de mercado no es concluyente{"" if parte_de("La familia recibe menos") is None else " (queda por debajo en el " + p(parte_de("La familia recibe menos")) + " de los sorteos)"}; lo que sí se
@@ -1765,7 +1759,7 @@ Negocio & Vende & Gente & Aguanta & Falta & Utilidad & Ajustada \\
 \end{{tabularx}}
 \end{{table}}
 
-La figura~\ref{{fig:capacidad}} y el cuadro~\ref{{tab:capacidad}} muestran dos grupos. A
+La \figura{{fig:capacidad}} y el \cuadro{{tab:capacidad}} muestran dos grupos. A
 {len([c for c in capac.values() if c['costo_falta'] > 0])} negocios les falta gente para lo que se les supone que venden. El inversor que
 supervisa es el caso que importa para Candela: la planilla automática le pone dos personas en cocina para
 {n(capac['Inversor que supervisa']['q'])} menús, que con la productividad de Candela sacan unos
@@ -1787,17 +1781,17 @@ cada menú extra solo cuesta sus insumos. Esa es la respuesta a por qué rinde m
 capacidad, le sobra. Paga a la gente de un local de {n(capac['Candela (datos del POS)']['tope'])} menús y vende {n(capac['Candela (datos del POS)']['q'])}. Su cuello de botella no es la cocina
 sino la demanda del mediodía, y lo que más la acercaría al inversor es llenar esa capacidad (pensionistas,
 pedidos para llevar, convenios con oficinas) antes que mover el precio; si la demanda no crece, la otra salida
-es ordenar la cocina para trabajar con una persona menos (sección~\ref{{sec:cocina}})."""}
+es ordenar la cocina para trabajar con una persona menos (\seccion{{sec:cocina}})."""}
 
 Una advertencia: los 33 menús por persona son los de la cocina de Candela tal como trabaja hoy. La planilla
 automática del modelo supone hasta 80 por persona, propio de cocinas grandes con estaciones y todo picado de
 antemano. La distancia entre esas dos cifras depende de cómo se organiza la cocina, que es el tema de la
-sección~\ref{{sec:cocina}}.
+\seccion{{sec:cocina}}.
 
 """}
 \subsubsection{{La trampa del Nuevo RUS}}
 
-La figura~\ref{{fig:nrus}} sigue a un local chico a medida que crece. Mientras vende hasta {nr.get('q_tope')}
+La \figura{{fig:nrus}} sigue a un local chico a medida que crece. Mientras vende hasta {nr.get('q_tope')}
 menús diarios cabe en el Nuevo RUS: no cobra IGV y paga una cuota fija. Al pasar el tope de S/~96 mil al año
 tiene que cambiar de régimen y empezar a cobrar IGV, y su utilidad cae de golpe de {s(nr.get('nrus_tope', 0))}
 a {s(nr.get('rer_justo_despues', 0))} al mes. Para volver a ganar lo mismo que antes del salto tiene que llegar a
@@ -1849,7 +1843,7 @@ Muchas fondas cocinan como se cocina en casa: cada quien se encarga de sus plato
 empieza en crudo la misma mañana ---las arvejas sin desvainar, la papa sin pelar, la cebolla entera---. La
 hipótesis de esta sección es que organizarse de otra forma rinde más con la misma gente, y que eso depende de la
 organización y no de la formalidad: una fonda familiar puede organizarse igual que un restaurante con planilla.
-Para ponerla a prueba se usa la simulación descrita en la sección~\ref{{sec:sim_cocina}}, con las cuatro formas de
+Para ponerla a prueba se usa la simulación descrita en la \seccion{{sec:sim_cocina}}, con las cuatro formas de
 trabajar y los supuestos de los cuadros~\ref{{tab:prep}} a~\ref{{tab:servicio}}.
 
 \subsubsection{{Cinco días de cocina}}
@@ -1862,7 +1856,7 @@ trabajo según su puesto, y la raya fina, el tiempo en que la olla cocina sola. 
 mañana siguiente. La gente entra lo justo para tener todo listo un cuarto de hora antes del almuerzo.}}\label{{fig:gantt}}
 \end{{figure}}
 
-La figura~\ref{{fig:gantt}} muestra un día con la venta actual de Candela. En la cocina doméstica, tres personas
+La \figura{{fig:gantt}} muestra un día con la venta actual de Candela. En la cocina doméstica, tres personas
 necesitan {n((gd['listo'] - gd['inicio']) / 60, 1)} horas de mañana y {n(gd['trabajo_manana'] / 60, 1)} horas-persona de
 trabajo antes del almuerzo; pelar la papa, solo eso, se lleva
 {n(next(t for t in co['tareas'] if t['id'] == 'papa')['var'] * co['q'] / 100 / 60, 1)} horas. \emph{{Por bloques}}, el trabajo baja a
@@ -1880,7 +1874,7 @@ día y los pedidos repartidos como en el POS de Candela.}}\label{{fig:cola}}
 \end{{figure}}
 
 El almuerzo es la otra mitad. El {p(punta)} de los pedidos del día llega entre la 1 menos cuarto y las dos menos
-cuarto, y en esa hora la cocina tiene que despachar a su máximo ritmo (figura~\ref{{fig:cola}}). Con tres personas
+cuarto, y en esa hora la cocina tiene que despachar a su máximo ritmo (\figura{{fig:cola}}). Con tres personas
 trabajando como en casa, Candela atiende sus {n(co['q'])} menús sin colas; con dos, la espera llega a
 {n(cola_('domestico', 2)['espera_maxima'])} minutos en la hora punta ---el colapso que Candela conoce---. Por bloques
 baja a {n(cola_('bloques', 2)['espera_maxima'])}, con mise en place a {n(cola_('mise', 2)['espera_maxima'])} y por
@@ -1901,7 +1895,7 @@ Organización & 2 personas & 3 personas & 4 personas & Horas-persona (3) \\
 \end{{tabular}}
 \end{{table}}
 
-El cuadro~\ref{{tab:org}} resume el experimento. Con tres personas, la cocina doméstica aguanta
+El \cuadro{{tab:org}} resume el experimento. Con tres personas, la cocina doméstica aguanta
 {n(cap_('domestico', 3)['tope'])} menús; por bloques, {n(cap_('bloques', 3)['tope'])}; con mise en place,
 {n(cap_('mise', 3)['tope'])}, y por estaciones, {n(cap_('estaciones', 3)['tope'])}: de unos {n(cap_('domestico', 3)['tope'] / 3)}
 menús por persona a {n(cap_('estaciones', 3)['tope'] / 3)}. El salto grande es el del mise en place, porque saca la
@@ -1919,7 +1913,7 @@ gente mueve las cifras cuando la mañana es el límite; la ventaja de organizars
 
 \subsubsection{{Dónde se ahorra en cada negocio}}
 
-El mismo experimento se repitió para todos los negocios, cada uno con su venta y su gente (cuadro~\ref{{tab:org_neg}}).
+El mismo experimento se repitió para todos los negocios, cada uno con su venta y su gente (\cuadro{{tab:org_neg}}).
 Para cada organización se buscó la menor cantidad de personas en cocina que tiene todo listo a tiempo y atiende la hora
 punta sin pasar los {co['servicio']['espera_maxima']} minutos de espera; el ahorro compara su planilla de cocina ---con
 las horas extra si la jornada pasa de ocho--- con la de la cocina doméstica.
@@ -1955,7 +1949,7 @@ En Candela, con {org_c['cocina']} personas en cocina para {n(org_c['q'])} menús
 {min(org_c['modos'][m]['necesita'] for m in ('bloques', 'mise'))}, con jornadas de
 {n(org_c['modos'][mejor_c]['horas'], 1)} horas, y el ahorro neto sería de unos \textbf{{{s(org_c['modos'][mejor_c]['ahorro'])} al
 mes}}. Con las tres personas, en cambio, el mise en place le daría sitio para {n(org_c['modos']['mise']['tope'])} menús al
-día: es la misma conclusión de la sección~\ref{{sec:capacidad}} vista desde la cocina. Lo que le falta a Candela no es
+día: es la misma conclusión de la \seccion{{sec:capacidad}} vista desde la cocina. Lo que le falta a Candela no es
 gente sino clientes, y organizarse la deja elegir entre trabajar con menos o tener con qué crecer."""}
 
 \subsubsection{{Qué falta medir}}
@@ -1970,9 +1964,9 @@ misma gente, contestaría la pregunta de fondo con un experimento de verdad.
 """}
 \subsection{{El largo plazo: diez años y cuatro regímenes}}
 
-Los supuestos del flujo (tasa, inflación, ajuste de precio, regímenes) están en el anexo~\ref{{sec:anexo}}.
+Los supuestos del flujo (tasa, inflación, ajuste de precio, regímenes) están en el \anexo{{sec:anexo}}.
 
-La figura~\ref{{fig:flujo}} sigue la caja acumulada de siete negocios desde la inversión inicial hasta 2035.
+La \figura{{fig:flujo}} sigue la caja acumulada de siete negocios desde la inversión inicial hasta 2035.
 Las líneas se separan pronto y no se vuelven a cruzar: el que empieza ganando sigue ganando, y el que
 empieza perdiendo no se recupera solo con el tiempo, porque la inflación de costos y el sueldo mínimo suben
 al ritmo del precio y el IGV de 2027--2028 empuja hacia abajo.
@@ -1984,7 +1978,7 @@ al ritmo del precio y el IGV de 2027--2028 empuja hacia abajo.
 del IGV.}}\label{{fig:flujo}}
 \end{{figure}}
 
-El régimen tributario cambia la cuenta de manera decisiva (figura~\ref{{fig:regimenes}}). Con los mismos
+El régimen tributario cambia la cuenta de manera decisiva (\figura{{fig:regimenes}}). Con los mismos
 supuestos, el inversor tendría un VAN de {s(reg(inv, 'informal')['van'])} en la informalidad y de
 {s(reg(inv, 'mype')['van'])} en el régimen MYPE. La diferencia no es la renta ---a estos niveles de utilidad
 el impuesto a la renta es pequeño--- sino el IGV y las cargas laborales. Por eso la formalización de una
@@ -2007,9 +2001,9 @@ de impuestos; es la forma jurídica de un acuerdo familiar que la ley laboral no
 \subsection{{Registro de experimentos}}\label{{sec:experimentos}}
 
 Cada variación de este estudio es un experimento: se fija todo, se cambia una cosa y se mira qué pasa. El
-cuadro~\ref{{tab:experimentos}} los reúne con la pregunta que contestan, lo que se varió, el resultado y un
+\cuadro{{tab:experimentos}} los reúne con la pregunta que contestan, lo que se varió, el resultado y un
 veredicto. Donde el resultado depende de los números supuestos de los restaurantes tipo, el veredicto sale de
-los sorteos de la sección~\ref{{sec:supuestos}}. Las conclusiones del ensayo son las filas que se sostienen; las
+los sorteos de la \seccion{{sec:supuestos}}. Las conclusiones del ensayo son las filas que se sostienen; las
 demás quedan como preguntas abiertas.
 
 \begin{{table}}[h]
@@ -2161,7 +2155,7 @@ La pregunta del ensayo era quién gana con un menú y por qué. La respuesta cor
 gana el trabajo, no el capital, y que lo que separa a un negocio de otro es menos su cocina que su organización:
 quién trabaja y cuánto se le paga, cuántos menús logra vender por cada sol de local, cómo paga el IGV y cómo
 reparte el trabajo de la cocina. Cada conclusión lleva, cuando depende de números supuestos, la parte de los
-sorteos en que se sostiene (sección~\ref{{sec:supuestos}}).
+sorteos en que se sostiene (\seccion{{sec:supuestos}}).
 
 \begin{{enumerate}}[leftmargin=1.4em]
 \item \textbf{{En una fonda de provincia gana el trabajo, no el capital.}} El propietario que cocina se lleva
@@ -2192,9 +2186,7 @@ IGV, sueldos, alquiler y competencia): {lista_neg(sobreviven)}.
 cada uno de sus tres integrantes se lleva menos de la mitad que él solo{sorteos_txt("Cada integrante de la familia")}.
 Descontado su trabajo a precio de mercado, su utilidad económica queda cerca de cero
 ({s(trab['Familiar sin sueldos']['utilidad_economica']) if trab else ''}): lo que muestra la caja es, casi entero, su propio sueldo.
-{"" if 'juliaca_obs' not in ciud else rf"""\item \textbf{{Juliaca no es la plaza más difícil del país.}} Con el precio estimado de la base (S/~8) lo parecía:
-{ciud['juliaca']['eq_2026']} menús diarios para no perder. Con el que se cobra en Candela (S/~11) el equilibrio baja a
-{ciud['juliaca_obs']['eq_2026']} y queda entre las mejores plazas del mapa; falta confirmarlo con más locales."""}
+
 \item \textbf{{El Nuevo RUS castiga crecer.}} Al pasar su tope, un local chico pierde {s(nr['nrus_tope'] - nr['rer_justo_despues'])}
 al mes de golpe y necesita llegar a unos {nr['q_recupera']} menús diarios para recuperarse.
 {candela_resumen}
@@ -2214,6 +2206,142 @@ fonda se puede analizar como cualquier empresa: con un modelo explícito, supues
 dicen qué conclusiones resisten. Lo que falta para cerrar las preguntas abiertas no es teoría sino medición: un
 sondeo de pizarras, unas mañanas cronometradas en la cocina y una semana de prueba de cada cambio.
 
+\clearpage
+\part{{Las ciudades}}\label{{cap:ciudades}}
+
+\section{{Por qué un capítulo aparte}}
+
+El capítulo~1 comparó negocios dentro de una misma ciudad para que la plaza no confundiera el efecto de la
+organización. Este capítulo hace lo contrario: deja fijo el negocio y cambia la ciudad. Es un análisis distinto,
+con sus propias preguntas ---cuánto cuesta producir un menú en cada plaza, cuánto se puede cobrar y qué tan
+difícil es cocinar en altura--- y con datos más débiles, porque los precios y costos por ciudad casi no se
+publican. Por eso va separado: lo que aquí se concluye no debe mezclarse con las conclusiones sobre la
+organización de los negocios.
+
+El capítulo está en construcción. Presenta el mapa de equilibrios del estudio de ciudades, resume lo que la
+investigación posterior encontró y deja planteado lo que falta medir antes de sacar conclusiones firmes.
+
+\section{{El mapa: doce ciudades}}\label{{sec:mapa}}
+
+El \cuadro{{tab:ciudades}} y la \figura{{fig:ciudades}} resumen el equilibrio de un local de menú
+popular formal en cada ciudad, con el precio de su pizarra, cinco balones de gas al mes y sin sueldo del
+dueño. Es la referencia del estudio de ciudades, reproducida exactamente por el motor.
+
+{sup_ciudades()}
+\begin{{table}}[h]
+\centering\small
+\caption{{Equilibrio en menús diarios por ciudad. Formal salvo la última columna.}}\label{{tab:ciudades}}
+\begin{{tabular}}{{lrlrrrrr}}
+\toprule
+& & & \multicolumn{{3}}{{c}}{{Formal, sin sueldo del dueño}} & Con sueldo & Informal \\
+\cmidrule(lr){{4-6}}
+Ciudad & Precio & Dato & 2026 & 2027 & 2028 & 2026 & 2026 \\
+\midrule
+{tabla_ciudades(d['ciudades'])}
+\bottomrule
+\end{{tabular}}
+\end{{table}}
+
+\begin{{figure}}[h]
+\centering
+\includegraphics[width=\textwidth]{{fig/ciudades.pdf}}
+\caption{{Menús diarios para no perder en 2026, local formal frente a informal (mismo local, sin IGV ni cargas
+laborales).}}\label{{fig:ciudades}}
+\end{{figure}}
+
+Tres lecturas sobresalen. Primero, el rango es amplio: de {ciud['lima']['eq_2026']} menús en Lima a
+{ciud['juliaca']['eq_2026']} en Juliaca, donde el precio estimado de la base (S/~8) resultó bajo. La base lo
+deriva del ingreso de la ciudad; en Candela se cobra S/~11 ---y se cobró S/~10 durante un año--- sin perder la
+clientela del todo. Con ese precio, la fila \emph{{Juliaca (observado)}} baja el equilibrio a
+{ciud['juliaca_obs']['eq_2026']} menús: de la peor ciudad del mapa pasa al puesto
+{1 + sum(1 for c in d['ciudades'] if c['id'] != 'juliaca_obs' and c['id'] != 'juliaca' and c['eq_2026'] < ciud['juliaca_obs']['eq_2026'])}
+de {len(d['ciudades']) - 1}, porque combina un precio de ciudad intermedia con sueldos y alquileres de provincia. Es un
+solo local y no un sondeo, así que la cifra estimada se deja en la base, pero la lectura de Juliaca como la plaza
+más difícil del país dependía de ese supuesto. Que Candela necesite muchos más menús que este local de referencia
+no se debe a la plaza sino a su planilla, como muestra la \seccion{{sec:candela}}. Segundo, la informalidad compra entre
+{min(c['eq_2026'] - c['eq_informal'] for c in d['ciudades'])} y {max(c['eq_2026'] - c['eq_informal'] for c in d['ciudades'])}
+menús diarios de holgura: es la diferencia entre no pagar IGV ni cargas laborales y pagarlas. Tercero, el
+sueldo del dueño es un costo real aunque no salga de la caja: contarlo agrega entre
+{min(c['eq_con_sueldo'] - c['eq_2026'] for c in d['ciudades'])} y {max(c['eq_con_sueldo'] - c['eq_2026'] for c in d['ciudades'])}
+menús al equilibrio.
+
+\begin{{figure}}[h]
+\centering
+\includegraphics[width=0.66\textwidth]{{fig/igv.pdf}}
+\caption{{Equilibrio formal según el año. *El 18\,\% de 2028 es un supuesto: la tasa especial de
+restaurantes vence en 2027.}}\label{{fig:igv}}
+\end{{figure}}
+
+El calendario tributario empeora el mapa de manera desigual (\figura{{fig:igv}}). El paso del IGV de
+10.5\,\% a 18\,\% le quita a un menú de S/~10 unos 60 céntimos de ingreso neto. Donde el margen por plato es
+amplio, como en Lima, el equilibrio apenas se mueve; donde es fino, el mismo cambio dispara el volumen
+necesario. El efecto es convexo: castiga más a quien menos margen tiene.
+
+
+
+\section{{Lo que encontró la investigación posterior}}\label{{sec:investigacion_ciudades}}
+
+Una revisión de fuentes públicas (MINEM, INEI, mercados mayoristas, prensa y avisos; el detalle y las direcciones
+están en \texttt{{estudio/investigacion/ciudades.md}}) matiza varios supuestos del mapa. El cuadro~\ref{{tab:investigacion}}
+los resume con su grado de confianza.
+
+\begin{{table}}[h]
+\centering\footnotesize
+\caption{{Hallazgos de la investigación por ciudad y cómo cambiarían el mapa. Confianza: A, fuente oficial; B, prensa
+o agregador con datos declarados; C, avisos sueltos; Est., cálculo propio.}}\label{{tab:investigacion}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.2\textwidth}}>{{\raggedright\arraybackslash}}Xc>{{\raggedright\arraybackslash}}p{{0.26\textwidth}}}}
+\toprule
+Tema & Hallazgo & Conf. & Efecto en el mapa \\
+\midrule
+Verduras en la sierra & La papa y la cebolla de Juliaca y Puno cuestan lo mismo que en el mayorista de Lima; lo que viene de la costa o de la selva (arroz, limón, pollo) cuesta más arriba & B & Los insumos de Juliaca y Puno suben un poco; no bajan \\
+Gas & El balón ya cuesta entre 10\,\% y 25\,\% más que en la base; por departamento, de $-1$\,\% (Junín) a $+42$\,\% (Loreto) frente a Lima & A & Más costo fijo en todas las plazas, más en Loreto y el sur \\
+Altura & El agua hierve a 92\,°C en Arequipa, 89\,°C en Cusco y Huancayo y 87\,°C en Juliaca y Puno: las cocciones duran más y gastan más gas & Est. & Gas $+$35--60\,\% en Juliaca sin olla a presión, $+$10--20\,\% con ella \\
+Sueldos & El ingreso laboral promedio de Juliaca es 46\,\% menor que el de Lima; Cusco es la excepción por el turismo & A & Planilla más barata en la sierra, no más cara \\
+Precio del menú & El menú ejecutivo coincide con la base en $\pm$S/~2; del menú popular no hay dato observado en siete ciudades & B & Sigue siendo la variable más débil \\
+Alquiler & Trujillo parece sobrestimado (avisos de S/~18--28 por m² frente a 45 en la base) & C & Equilibrio de Trujillo más bajo \\
+Competencia & Hay datos de empresas de restaurantes por región, no por ciudad; la informalidad del rubro es de 75\,\% en el país & A & Sin dato para modelar la competencia por plaza \\
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+Dos ideas que parecían naturales no se sostienen. La primera, que en la sierra las verduras son mucho más baratas:
+para un restaurante urbano no lo son, y lo que se trae de lejos es más caro. La segunda, que cocinar en altura
+exige pagar más: es más difícil y más lento, pero los sueldos de la sierra son más bajos que los de la costa. Lo
+que sí cambia con la altura es el gas y el tiempo de cocina, dos costos que el mapa hoy no distingue.
+
+\section{{Lo que falta para cerrar el capítulo}}
+
+Cuatro trabajos convertirían este capítulo en un análisis comparable al primero:
+\begin{{enumerate}}[leftmargin=1.4em]
+\item \textbf{{Actualizar la base}} con el gas por departamento, los insumos que suben en la sierra, los sueldos por
+ciudad y los alquileres corregidos.
+\item \textbf{{Un factor de altura}} para el gas y para los tiempos de cocción, que ya usa la simulación de la cocina del
+capítulo~1 para Juliaca.
+\item \textbf{{La competencia como tope de precio}}: cuántos locales hay cerca y a cuánto venden, para modelar cuánto
+se puede cobrar en cada plaza en lugar de suponerlo.
+\item \textbf{{Un sondeo de pizarras}} en Juliaca y en dos o tres ciudades más: precio, segundos ofrecidos y conteo de
+comensales. Es la única forma de tener el precio del menú popular donde hoy es una estimación.
+\end{{enumerate}}
+
+El mismo método sirve más allá del menú. Las chicharronerías, las pollerías de pollo frito, las cevicherías o el
+carrito sanguchero de la esquina ---la ``tía veneno''--- son negocios de comida igual de comunes, con otra mezcla de
+costos: menos platos y más proteína, otro horario, otro local o ninguno. Con sus recetas, su planilla y su venta,
+el motor del capítulo~1 puede compararlos con el menú, y es una extensión natural para un capítulo siguiente.
+
+\section{{Conclusiones del capítulo}}
+
+\begin{{itemize}}[leftmargin=1.2em]
+{"" if 'juliaca_obs' not in ciud else rf"""\item \textbf{{Juliaca no es la plaza más difícil del país.}} Con el precio estimado de la base (S/~8) lo parecía:
+{ciud['juliaca']['eq_2026']} menús diarios para no perder. Con el que se cobra en Candela (S/~11) el equilibrio baja a
+{ciud['juliaca_obs']['eq_2026']} y queda entre las mejores plazas del mapa; falta confirmarlo con más locales."""}
+\item \textbf{{El costo del menú es casi nacional; el precio y algunos costos fijos, no.}} Las verduras de mercado
+cuestan parecido en todas partes; el gas, la altura y el sueldo separan a las plazas más que el plato.
+\item \textbf{{El calendario del IGV pesa distinto en cada ciudad.}} Donde el margen por plato es fino, el paso a 18\,\%
+dispara el volumen necesario: es la misma convexidad que se vio en los negocios, ahora entre plazas.
+\end{{itemize}}
+
+\clearpage
 \section*{{Referencias}}
 \addcontentsline{{toc}}{{section}}{{Referencias}}
 
@@ -2230,16 +2358,16 @@ sondeo de pizarras, unas mañanas cronometradas en la cocina y una semana de pru
 \item Thaler, R. (1985). Mental accounting and consumer choice. \emph{{Marketing Science}}, 4(3), 199--214.
 \item Wald, A. (1945). Statistical decision functions which minimize the maximum risk. \emph{{Annals of Mathematics}}, 46(2), 265--280.
 \end{{itemize}}
-Las fuentes de los datos (leyes, precios, sueldos, alquileres) están en el anexo~\ref{{sec:fuentes}}; las de las
+Las fuentes de los datos (leyes, precios, sueldos, alquileres) están en el \anexo{{sec:fuentes}}; las de las
 velocidades de cocina y de la investigación por ciudad, en la carpeta \texttt{{estudio/investigacion}} del proyecto.
 
 \appendix
 {"" if not estados else rf"""\section{{Estados de resultados anuales}}\label{{sec:anexo_estados}}
 
 Como apoyo visual, este anexo presenta el estado de resultados de un año completo de cada negocio, con el local
-ya lleno: el mes del modelo multiplicado por doce, con los números del cuadro~\ref{{tab:entradas}}, el IGV de 2026
+ya lleno: el mes del modelo multiplicado por doce, con los números del \cuadro{{tab:entradas}}, el IGV de 2026
 y el impuesto del régimen de cada uno (en el MYPE, la renta descuenta la depreciación de la inversión a diez años).
-Los porcentajes son sobre la venta sin IGV. La figura~\ref{{fig:estados}} resume cada estado en una cascada.
+Los porcentajes son sobre la venta sin IGV. La \figura{{fig:estados}} resume cada estado en una cascada.
 
 \begin{{figure}}[p]
 \centering
