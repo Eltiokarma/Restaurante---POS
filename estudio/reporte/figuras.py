@@ -56,6 +56,14 @@ def pct(v: float, pos=None) -> str:
     return f"{v * 100:.0f} %"
 
 
+GRUPOS_NEGOCIO = [("La casa pone el trabajo", ["Propietario que cocina", "Familiar sin sueldos", "Fonda en casa propia",
+                                               "Puesto de mercado informal", "Pequeño en Nuevo RUS"]),
+                  ("El capital contrata", ["Inversor que supervisa", "Día y noche", "Ejecutivo en el centro", "Inversor ausente"]),
+                  ("Referencia", ["Exitoso (referencia compuesta)"]), ("Caso real", ["Candela (datos del POS)"])]
+ORDEN_NEGOCIO = [nm for _, nms in GRUPOS_NEGOCIO for nm in nms]
+GRUPO_DE = {nm: g for g, nms in GRUPOS_NEGOCIO for nm in nms}
+
+
 def corto(nombre: str) -> str:
     return (nombre.replace(" (referencia compuesta)", "").replace(" (todo tercerizado)", "")
             .replace(" (promedio)", "").replace(" (datos del POS)", ""))
@@ -508,6 +516,44 @@ def fig_igualdad(d):
     guardar(fig, "igualdad")
 
 
+def fig_precios(d):
+    """Menús al día que necesita cada negocio para no perder, a cada precio común."""
+    mp = d.get("mismos_precios")
+    if not mp:
+        return
+    estilo = {"La casa pone el trabajo": (AZUL, "-"), "El capital contrata": (NARANJA, "-"),
+              "Referencia": (VERDE, (0, (4, 2))), "Caso real": (PERDIDA, (0, (1, 1.5)))}
+    orden = {nm: i for i, nm in enumerate(ORDEN_NEGOCIO)}
+    filas = sorted(mp["filas"], key=lambda f: orden.get(f["nombre"], 99))
+    fig, ax = plt.subplots(figsize=(ANCHO, 3.6))
+    tope = 300
+    finales = []
+    for k, f in enumerate(filas):
+        col, ls = estilo[GRUPO_DE.get(f["nombre"], "Referencia")]
+        xs = [pr for pr in mp["precios"] if f["equilibrio"][str(pr)] is not None]
+        ys = [min(f["equilibrio"][str(pr)], tope) for pr in xs]
+        ax.plot(xs, ys, color=col, ls=ls, lw=1.4, marker="o", ms=3, alpha=0.9)
+        if xs:
+            finales.append([ys[-1], corto(f["nombre"]), col])
+    # etiquetas al final de cada curva, separadas para que no se pisen
+    finales.sort()
+    paso = 11
+    for i in range(1, len(finales)):
+        if finales[i][0] - finales[i - 1][0] < paso:
+            finales[i][0] = finales[i - 1][0] + paso
+    for y, nombre, col in finales:
+        ax.annotate(nombre, (18, y), xytext=(6, 0), textcoords="offset points", fontsize=6.5, va="center", color=col)
+    ax.set_ylim(0, tope)
+    ax.set_xlim(6.5, 21.5)
+    ax.set_xticks(mp["precios"], [str(x) for x in mp["precios"]])
+    ax.set_ylabel("Menús al día para no perder")
+    ax.set_xlabel("Precio del menú en soles, el mismo para todos")
+    marcas = [Line2D([], [], color=c, ls=l, label=g) for g, (c, l) in estilo.items()]
+    ax.legend(handles=marcas, fontsize=7, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=4, frameon=False)
+    grilla_x(ax)
+    guardar(fig, "precios")
+
+
 def fig_factores(d):
     """Del propietario que cocina a cada negocio: el aporte de cada factor."""
     dc = (d.get("igualdad") or {}).get("descomposicion")
@@ -754,7 +800,8 @@ def generar(d: dict | None = None) -> None:
     FIG.mkdir(parents=True, exist_ok=True)
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
               fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad, fig_factores, fig_trabajo,
-              fig_capacidad, fig_gantt, fig_cola, fig_estados):
+              fig_capacidad, fig_gantt, fig_cola, fig_estados,
+              fig_precios):
         f(d)
 
 
