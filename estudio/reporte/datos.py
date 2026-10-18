@@ -570,6 +570,33 @@ def mismos_precios(arquetipos: list[dict], candela: dict | None) -> dict:
     return {"precios": PRECIOS_COMUNES, "filas": filas}
 
 
+VOLUMENES_COMUNES = [40, 60, 80, 100, 120, 140]
+
+
+def mismos_volumenes(arquetipos: list[dict], candela: dict | None) -> dict:
+    """Experimento: todos los negocios con la misma venta diaria. Para cada
+    volumen, lo que se llevaría la casa a su propio precio y el precio mínimo
+    que necesitaría para no perder. La planilla propia no cambia con la venta;
+    la automática del modelo sí (un ayudante cada 80 menús, un mozo cada 70)."""
+    pares = [(a["nombre"], a["datos"]) for a in arquetipos]
+    if candela:
+        pares.append(("Candela (datos del POS)", candela))
+    filas = []
+    for nombre, datos in pares:
+        local, esc, _sup, q = armar(datos)
+        sueldo = 1500 if esc.sueldo_dueno else 0
+        m0 = modelo(local, q, esc, NAC)
+        cocina_, salon = cap.gente(datos, m0)
+        tope = cap.capacidad(cocina_, salon)["tope"] if esc.planilla else None
+        casa, pmin = {}, {}
+        for v in VOLUMENES_COMUNES:
+            casa[str(v)] = modelo(local, v, esc, NAC).util + sueldo
+            pmin[str(v)] = precio_minimo(local, v, esc, NAC)
+        filas.append({"nombre": nombre, "precio": local.precio, "q": q, "planilla_propia": bool(esc.planilla),
+                      "tope": tope, "casa": casa, "precio_minimo": pmin})
+    return {"volumenes": VOLUMENES_COMUNES, "filas": filas}
+
+
 N_SORTEOS = 1000
 
 
@@ -690,6 +717,7 @@ def generar() -> dict:
         "igualdad": igualdad(arquetipos, g["datos"] if candela else None),
         "trabajo": trabajo(arquetipos, g["datos"] if candela else None),
         "capacidad": capacidades(arquetipos, g["datos"] if candela else None),
+        "mismos_volumenes": mismos_volumenes(arquetipos, g["datos"] if candela else None),
         "mismos_precios": mismos_precios(arquetipos, g["datos"] if candela else None),
         "estados": estados_anuales(arquetipos, g["datos"] if candela else None),
         "entradas": entradas(arquetipos, g["datos"] if candela else None),
