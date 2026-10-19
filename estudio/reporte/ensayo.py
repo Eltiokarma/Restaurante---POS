@@ -329,7 +329,7 @@ def construir(d: dict) -> str:
         """Cuadro de supuestos de un análisis: variable, valor y de dónde sale.
         Los valores ya vienen en LaTeX (s(), p(), n())."""
         cuerpo = "\n".join(f"{esc(v)} & {x} & {t} \\\\" for v, x, t in filas)
-        return rf"""\begin{{table}}[h]
+        return rf"""\begin{{table}}[H]
 \centering\footnotesize
 \caption{{{titulo}}}\label{{{etiqueta}}}
 \begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.3\textwidth}}>{{\raggedright\arraybackslash}}Xl}}
@@ -673,6 +673,17 @@ Variable & Valor & Origen \\
         f = next(f for f in mv["filas"] if f["nombre"] == nombre)
         return next((v for v in mv["volumenes"] if f["casa"][str(v)] >= 0), None)
 
+    def mapas_anexo():
+        from reporte.figuras import archivo_matriz
+        bloques = []
+        for c in en_orden(d["casos"] + ([cand] if cand else [])):
+            bloques.append(r"\begin{figure}[H]\centering" + "\n"
+                           + r"\includegraphics[width=\textwidth]{fig/" + archivo_matriz(c["nombre"]) + ".pdf}" + "\n"
+                           + r"\caption{" + esc(corto(c["nombre"])) + f": utilidad del mes (miles de soles) por precio y menús al día; hoy, {n(c['q'])} menús a {s(c['precio'])}." + "}"
+                           + r"\label{fig:matriz_" + archivo_matriz(c["nombre"])[7:] + "}\n"
+                           + r"\end{figure}")
+        return "\n\n".join(bloques)
+
     def lista_neg(nombres):
         return y_lista([("la " if corto(x).startswith("Fonda") else "el ") + corto(x)[:1].lower() + corto(x)[1:]
                         for x in nombres])
@@ -758,7 +769,7 @@ con un menú bien servido a S/~11 en el sur. El gasto semanal en insumos según 
 {s(pl['gasto_semana'])}, y se concentra en pocos productos: {top3}. Los tres primeros suman
 {p(par[2]['acumulado'])} de las compras (\figura{{fig:platos}}, derecha).
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/platos.pdf}}
 \caption{{Candela. Izquierda: ingeniería de menú de los segundos (parte de las ventas contra margen por menú;
@@ -785,7 +796,7 @@ uno); las compras las hace el dueño. Opera con RUC de persona natural y emite b
 el local tardó unos seis meses en llenarse.
 
 {sup_candela()}
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\small
 \caption{{Candela: el mes con los datos reales (74 menús diarios a S/~11, 26 días). El IGV se muestra aparte
 porque depende de si se emite comprobante por toda la venta.}}\label{{tab:candela}}
@@ -828,7 +839,7 @@ misma curva: la sensibilidad constante que mejor los ajusta es de {n(pc['elastic
 S/~10 a S/~11, por sí solo, da {n(pc['elasticidad_central'], 1)} (entre {n(pc['elasticidad_arco'][0], 1)} y
 {n(pc['elasticidad_arco'][1], 1)} según qué extremo de cada rango se tome; \figura{{fig:historia}}).
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=0.8\textwidth]{{fig/historia.pdf}}
 \caption{{Candela: la venta diaria en sus tres precios (barras: el rango que da el dueño) frente a curvas de
@@ -861,7 +872,7 @@ diarios a S/~11. Leído junto con la lección del precio, el mapa dice
 que la salida no está en moverse hacia la derecha (más precio, menos clientes) sino hacia abajo en el costo:
 el margen por plato es el que no alcanza.
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=0.92\textwidth]{{fig/matriz.pdf}}
 \caption{{Candela: utilidad del mes (miles de soles) por precio y menús al día, con los costos reales y pagando
@@ -1138,7 +1149,7 @@ movidos al azar (\seccion{{sec:supuestos}}) y se cuenta en qué parte de los sor
 El \cuadro{{tab:tipos}} resume los tipos de experimento que se usan, y el registro de la
 \seccion{{sec:experimentos}} reúne cada pregunta con su resultado.
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Tipos de experimento del ensayo.}}\label{{tab:tipos}}
 \setlength{{\tabcolsep}}{{3pt}}
@@ -1222,7 +1233,7 @@ cercanas a S/~50 mil al mes.
 El \cuadro{{tab:entradas}} reúne los números con los que entra cada negocio a todos los análisis; los que
 no son de Candela son supuestos razonados.
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\scriptsize
 \caption{{Con qué números entra cada negocio. Insumos por menú; gas, luz, planilla e inversión en soles al mes
 (la inversión, una vez). Gente: en cocina + en salón (+ administración); * planilla automática del modelo.
@@ -1238,7 +1249,7 @@ Negocio & Precio & Menús & Alquiler & Insumos & Gas y luz & Gente & Planilla & 
 \end{{tabularx}}
 \end{{table}}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Los {NN} negocios. ``Dueño'': utilidad del mes más el sueldo del dueño si se paga uno. VAN al
 15\,\% a diez años; $+$n: abre también de noche.}}\label{{tab:casos}}
@@ -1312,7 +1323,7 @@ las {co['horarios']['tarde_fin']} vuelve a la mañana.
 cuando el suyo no tiene nada listo.
 \end{{description}}
 
-\begin{{table}}[p]
+\begin{{table}}[H]
 \centering\scriptsize
 \caption{{Supuestos de la preparación, por cada 100 menús: cantidad de las recetas de Candela, minutos de una persona por
 unidad y de dónde sale la velocidad. ``Antes'': se puede dejar listo la tarde anterior. A cada tarea se suman de 3 a 10
@@ -1327,7 +1338,7 @@ Tarea & Insumo & Cantidad & Min/unidad & Minutos & Antes & Velocidad \\
 \end{{tabularx}}
 \end{{table}}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Supuestos de las cocciones y el montaje, por cada 100 menús: minutos de trabajo y minutos en que la olla
 cocina sola, en Juliaca.}}\label{{tab:coccion}}
@@ -1340,7 +1351,7 @@ Tarea & Puesto & Trabajo & Espera \\
 \end{{tabular}}
 \end{{table}}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Supuestos del almuerzo y de la calibración.}}\label{{tab:servicio}}
 \begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.34\textwidth}}>{{\raggedright\arraybackslash}}X}}
@@ -1372,7 +1383,7 @@ remunerado es, literalmente, la utilidad: lo que el estado de resultados muestra
 que la familia no se cobra. El inversor ausente es el caso opuesto: compra con plata lo que los otros ponen
 con su tiempo, y a 100 menús diarios no le alcanza.
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/ingreso.pdf}}
 \caption{{Lo que se lleva el dueño al mes: utilidad más su sueldo, si el modelo le asigna uno.}}\label{{fig:ingreso}}
@@ -1386,7 +1397,7 @@ fonda familiar al {p(aus['estructura']['personal'])} del inversor ausente, y el 
 exitoso gana porque diluye ambos: con 220 menús, su personal es apenas el {p(exi['estructura']['personal'])} y
 sus compras por volumen bajan los insumos al {p(exi['estructura']['insumos'])}.
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/estructura.pdf}}
 \caption{{A dónde va cada sol vendido (sin IGV). Más allá de la línea del 100\,\%, el negocio pierde.}}\label{{fig:estructura}}
@@ -1406,7 +1417,7 @@ el del propietario que cocina, con S/~10 por menú, 60 menús diarios, S/~1\,200
 y luz. Lo único que queda distinto es quién trabaja, cómo se le paga, si es formal y si abre de noche.
 
 {sup_igualdad()}
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/igualdad.pdf}}
 \caption{{Lo que se lleva la casa al mes, con los números de cada negocio (gris) y con todos en el mismo local
@@ -1443,7 +1454,7 @@ el sobrecosto se paga en cada plato. En total, no estar le cuesta
 lo que el propietario que cocina se lleva a su casa. El resto de la brecha, {s(-pasos_aus[1]['cambio'])}, no es ausencia sino
 una cocina con más gente y mejor pagada.
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\small
 \caption{{Del inversor al inversor ausente, un cambio a la vez, en el mismo local (S/~10, 60 menús, S/~1\,200 de
 alquiler). Utilidad del mes, sin sueldo del dueño.}}\label{{tab:ausencia}}
@@ -1473,14 +1484,14 @@ aporte de cada uno es el promedio de su efecto sobre todos los órdenes posibles
 de Shapley de la teoría de juegos), y los cinco aportes suman exactamente la diferencia.
 
 {sup_factores()}
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/factores.pdf}}
 \caption{{Del propietario que cocina a cada negocio: cuánto suma o resta cada factor a lo que se lleva la casa al
 mes. El rombo es la diferencia total.}}\label{{fig:factores}}
 \end{{figure}}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Aporte de cada factor a la diferencia con el propietario que cocina, en soles al mes (valores de Shapley). La
 última columna es lo que se lleva la casa: utilidad más el sueldo del dueño, si trabaja.}}\label{{tab:factores}}
@@ -1533,7 +1544,7 @@ cuántos menús al día tiene que vender cada negocio, a ese precio, para no per
     ("Lo que se lleva la casa", "utilidad del mes más el sueldo del dueño, con la venta de hoy", "método"),
 ])}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Menús al día que necesita cada negocio para no perder, según el precio del menú. En negrita, su precio
 actual; ``--'': no alcanza ni con 600 menús diarios.}}\label{{tab:precios_eq}}
@@ -1547,14 +1558,14 @@ Negocio & Hoy & {" & ".join("S/~" + str(x) for x in mp["precios"])} \\
 \end{{tabularx}}
 \end{{table}}
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/precios.pdf}}
 \caption{{Menús al día para no perder, según el precio del menú, con la planilla, el alquiler y los insumos de
 cada negocio. Las curvas cortadas arriba pasan de 300.}}\label{{fig:precios}}
 \end{{figure}}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Lo que se llevaría la casa al mes si cada negocio vendiera lo de hoy a cada precio (utilidad más sueldo del
 dueño). En negrita, su precio actual; en rojo, pérdida.}}\label{{tab:precios_casa}}
@@ -1611,7 +1622,7 @@ símbolo $\dagger$ marca las celdas donde la venta pasa de lo que su gente puede
     ("Precio mínimo", "el que deja la utilidad en cero a esa venta", "método"),
 ])}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Lo que se llevaría la casa al mes si cada negocio vendiera cada volumen, a su propio precio (utilidad más
 sueldo del dueño). En negrita, su venta actual; en rojo, pérdida; $\dagger$: más de lo que aguanta su gente.}}\label{{tab:volumenes_casa}}
@@ -1625,14 +1636,14 @@ Negocio & Hoy & {" & ".join(str(x) for x in mv["volumenes"])} \\
 \end{{tabularx}}
 \end{{table}}
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/volumenes.pdf}}
 \caption{{Lo que se lleva la casa al mes según los menús al día, con el precio, la planilla, el alquiler y los insumos
 de cada negocio.}}\label{{fig:volumenes}}
 \end{{figure}}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Precio mínimo del menú para no perder a cada venta diaria. En negrita, la venta actual de cada negocio;
 $\dagger$: más de lo que aguanta su gente.}}\label{{tab:volumenes_pmin}}
@@ -1685,7 +1696,7 @@ margen holgado ---el exitoso, día y noche, la familia--- casi nunca terminan el
 lo hace la mitad de las veces y el inversor ausente casi siempre.
 
 {sup_riesgo()}
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/riesgo.pdf}}
 \caption{{Distribución de la utilidad de un año (2\,000 simulaciones por caso) y probabilidad de terminarlo
@@ -1706,14 +1717,14 @@ cada variable ---sola, con las demás quietas--- antes de que la utilidad llegue
 pierde, la celda indica cuánto tendría que moverse para dejar de perder.
 
 {sup_sensibilidad()}
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/quiebres.pdf}}
 \caption{{Cuánto puede moverse cada número antes de llegar a pérdida ($\downarrow$ bajar, $\uparrow$ subir). En
 rojo, los negocios que ya pierden: cuánto les falta. ``Sobra'': aguanta cualquier cambio razonable.}}\label{{fig:quiebres}}
 \end{{figure}}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\small
 \caption{{Cambio que deja la utilidad en cero (variables principales).}}\label{{tab:quiebres}}
 \begin{{tabular}}{{lccccc}}
@@ -1734,7 +1745,7 @@ local a pérdida. Esto ordena las prioridades de gestión: proteger el precio y 
 calidad que sostiene la pizarra, la clientela fija--- vale más que negociar el alquiler o cambiar de
 proveedor de gas.
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/tornados.pdf}}
 \caption{{Utilidad del mes cuando cada variable baja (naranja) o sube (azul) 10\,\%: {fig_candela_tornado}el
@@ -1765,7 +1776,7 @@ al mes sobre el de hoy. El barrido tiene además un techo: con tres en cocina y 
 {n(rc['capacidad']) if rc.get('capacidad') else 90} menús al día (a S/~10, cuando los pasaba, colapsaba), así que ninguna combinación vende más que eso, por mucho que la curva prometa
 más clientela al bajar el precio.
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/precio_robusto.pdf}}
 \caption{{Candela: utilidad del mes según el precio con la sensibilidad medida en su propia historia y dos
@@ -1799,7 +1810,7 @@ medida, la mejor decisión deja el precio donde está en {quietos_med} de los {l
 la porción, la mezcla de segundos y, sobre todo, el turno noche. Dos de esas palancas descansan en supuestos del
 barrido: cuánta clientela se pierde con una porción más chica y la noche tipo de 30 platos.
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/decisiones.pdf}}
 \caption{{Utilidad del mes hoy y con la mejor decisión, en el peor de tres supuestos de demanda. En amarillo, lo
@@ -1819,7 +1830,7 @@ golpes por separado ---clientela $-$15\,\%, insumos $+$20\,\%, IGV de 18\,\%, su
 $+$25\,\% y un competidor que obliga a bajar S/~1--- y a todos juntos (\figura{{fig:estres}}).
 
 {sup_estres()}
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/estres.pdf}}
 \caption{{Utilidad del mes (miles de soles) de cada negocio frente a cada golpe; la última columna los suma
@@ -1844,7 +1855,7 @@ hallazgo: se sostiene si se cumple en nueve de cada diez o más, es probable ent
 concluyente por debajo.
 
 {sup_sorteos()}
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\small
 \caption{{Parte de los {n(sr['n'])} sorteos en que se cumple cada hallazgo.}}\label{{tab:supuestos}}
 \begin{{tabularx}}{{\textwidth}}{{Xrl}}
@@ -1863,7 +1874,7 @@ citarlas con cuidado. Que la familia cobre menos que el mínimo por hora depende
 sin IGV es una moneda al aire: el local está tan cerca del equilibrio que un error pequeño en cualquiera de sus
 números lo cambia, lo cual es en sí mismo un dato sobre su fragilidad.
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\small
 \caption{{Lugar de cada negocio por lo que se lleva la casa al mes: hoy, el rango en nueve de cada diez sorteos,
 cuántas veces repite su lugar y cuántas veces no pierde.}}\label{{tab:lugares}}
@@ -1903,14 +1914,14 @@ que lo atiende. Las horas son supuestos razonados (60 por semana para quien coci
 administra) y están en el \cuadro{{tab:trabajo}}.
 
 {sup_trabajo()}
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/trabajo_hora.pdf}}
 \caption{{Lo que cobra por hora la gente de la casa (barra) frente a lo que valdría esa hora si se contratara a
 alguien (raya) y al sueldo mínimo por hora.}}\label{{fig:trabajo_hora}}
 \end{{figure}}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{El trabajo de la casa a precio de mercado, en soles al mes. ``Cobra'': parte del valor de su trabajo que
 la casa de verdad se lleva.}}\label{{tab:trabajo}}
@@ -1936,7 +1947,7 @@ pone el trabajo de dueño casi no cobra nada por él{"" if 'Candela (datos del P
 {n(trab['Candela (datos del POS)']['casa'][0]['horas_semana'] if trab['Candela (datos del POS)']['casa'] else 0)} horas semanales que se le suponen al dueño para compras, caja y
 administración, la cuenta es peor: si paga IGV sobre toda la venta, pone su trabajo y además pierde plata"""}.
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/trabajo_economica.pdf}}
 \caption{{Lo que se lleva la casa (gris) y la utilidad económica, ya descontado el valor de mercado de su trabajo
@@ -1963,14 +1974,14 @@ a todos los negocios: cuenta quiénes están en cocina y en salón al mediodía 
 cuánto aguantan y, si les falta alguien, le suma su sueldo a la cuenta.
 
 {sup_capacidad()}
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/capacidad.pdf}}
 \caption{{Menús al día que aguanta la gente de cada negocio con la productividad observada en Candela (barra)
 y los que vende (punto).}}\label{{fig:capacidad}}
 \end{{figure}}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{La gente frente a la venta. ``Aguanta'': menús al día con unos 33 por persona en cocina y 50 por mozo, y qué
 pone el límite. ``Ajustada'': la utilidad del mes sumando el sueldo de quien falta.}}\label{{tab:capacidad}}
@@ -2023,7 +2034,7 @@ a {s(nr.get('rer_justo_despues', 0))} al mes. Para volver a ganar lo mismo que a
 unos {nr.get('q_recupera')} menús diarios. El régimen castiga el crecimiento justo en el tramo en que un negocio
 chico intenta despegar; no es raro que muchos prefieran quedarse chicos o salir de la formalidad.
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/nrus.pdf}}
 \caption{{Un local chico que crece: utilidad después de impuestos en el Nuevo RUS (hasta su tope) y en el RER.
@@ -2065,9 +2076,9 @@ trabajar y los supuestos de los cuadros~\ref{{tab:prep}} a~\ref{{tab:servicio}}.
 
 \subsubsection{{Cinco días de cocina}}
 
-\begin{{figure}}[p]
+\begin{{figure}}[H]
 \centering
-\includegraphics[width=\textwidth]{{fig/gantt.pdf}}
+\includegraphics[width=\textwidth,height=0.78\textheight,keepaspectratio]{{fig/gantt.pdf}}
 \caption{{Un día de cocina para {n(co['q'])} menús en cada organización. Cada fila es una persona; las barras, el
 trabajo según su puesto, y la raya fina, el tiempo en que la olla cocina sola. Con mise en place, la tarde deja lista la
 mañana siguiente. La gente entra lo justo para tener todo listo un cuarto de hora antes del almuerzo.}}\label{{fig:gantt}}
@@ -2083,7 +2094,7 @@ horas-persona pasan a la tarde anterior y la mañana se reduce a {n((gm3['listo'
 todas de cocción. El trabajo total casi no cambia: lo que cambia es \emph{{cuándo}} se hace. Y \emph{{por estaciones}}
 el reparto queda ordenado por puestos, con el de verduras como el más cargado.
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/cola.pdf}}
 \caption{{Minutos que espera por su plato el cliente que llega en cada momento del almuerzo, con {n(co['q'])} menús al
@@ -2099,7 +2110,7 @@ estaciones a {n(cola_('estaciones', 2)['espera_maxima'])}: con dos puestos fijos
 
 \subsubsection{{Cuántos menús aguanta cada organización}}
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\small
 \caption{{Menús al día que aguanta la cocina según cómo trabaja y cuánta gente tiene, y horas-persona al día que pasa en
 el local con {n(co['q'])} menús y tres personas. Entre paréntesis, lo que pone el límite: la mañana o el almuerzo.}}\label{{tab:org}}
@@ -2135,7 +2146,7 @@ Para cada organización se buscó la menor cantidad de personas en cocina que ti
 punta sin pasar los {co['servicio']['espera_maxima']} minutos de espera; el ahorro compara su planilla de cocina ---con
 las horas extra si la jornada pasa de ocho--- con la de la cocina doméstica.
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Organización de la cocina en cada negocio: personas en cocina que necesita para su venta con cada forma de
 trabajar, el mayor ahorro al mes frente a la doméstica (planilla con horas extra) y los menús que aguantaría con la
@@ -2188,9 +2199,9 @@ Las líneas se separan pronto y no se vuelven a cruzar: el que empieza ganando s
 empieza perdiendo no se recupera solo con el tiempo, porque la inflación de costos y el sueldo mínimo suben
 al ritmo del precio y el IGV de 2027--2028 empuja hacia abajo.
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
-\includegraphics[width=\textwidth]{{fig/flujo.pdf}}
+\includegraphics[width=0.9\textwidth]{{fig/flujo.pdf}}
 \caption{{Caja acumulada después de la inversión, régimen de cada caso. Las líneas verticales marcan los saltos
 del IGV.}}\label{{fig:flujo}}
 \end{{figure}}
@@ -2203,9 +2214,9 @@ fonda es, ante todo, una decisión sobre el IGV: a 10.5\,\% es soportable; a 18\
 o cobrar más. El Nuevo RUS aparece atractivo en el gráfico para varios casos, pero con barras rayadas: ninguno
 de ellos cabe en su tope de ventas.
 
-\begin{{figure}}[t]
+\begin{{figure}}[H]
 \centering
-\includegraphics[width=\textwidth]{{fig/regimenes.pdf}}
+\includegraphics[width=0.94\textwidth]{{fig/regimenes.pdf}}
 \caption{{VAN a diez años según el régimen. Rayado: el negocio supera el tope de ventas del régimen y no
 podría acogerse a él.}}\label{{fig:regimenes}}
 \end{{figure}}
@@ -2223,9 +2234,10 @@ veredicto. Donde el resultado depende de los números supuestos de los restauran
 los sorteos de la \seccion{{sec:supuestos}}. Las conclusiones del ensayo son las filas que se sostienen; las
 demás quedan como preguntas abiertas.
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Registro de experimentos: pregunta, qué se varió, resultado y veredicto.}}\label{{tab:experimentos}}
+\renewcommand{{\arraystretch}}{{1.08}}\scriptsize
 \setlength{{\tabcolsep}}{{3pt}}
 \begin{{tabularx}}{{\textwidth}}{{r>{{\raggedright\arraybackslash}}p{{0.2\textwidth}}>{{\raggedright\arraybackslash}}p{{0.2\textwidth}}>{{\raggedright\arraybackslash}}X>{{\raggedright\arraybackslash}}p{{0.15\textwidth}}}}
 \toprule
@@ -2447,7 +2459,7 @@ popular formal en cada ciudad, con el precio de su pizarra, cinco balones de gas
 dueño. Es la referencia del estudio de ciudades, reproducida exactamente por el motor.
 
 {sup_ciudades()}
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\small
 \caption{{Equilibrio en menús diarios por ciudad. Formal salvo la última columna.}}\label{{tab:ciudades}}
 \begin{{tabular}}{{lrlrrrrr}}
@@ -2461,7 +2473,7 @@ Ciudad & Precio & Dato & 2026 & 2027 & 2028 & 2026 & 2026 \\
 \end{{tabular}}
 \end{{table}}
 
-\begin{{figure}}[h]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=\textwidth]{{fig/ciudades.pdf}}
 \caption{{Menús diarios para no perder en 2026, local formal frente a informal (mismo local, sin IGV ni cargas
@@ -2484,7 +2496,7 @@ sueldo del dueño es un costo real aunque no salga de la caja: contarlo agrega e
 {min(c['eq_con_sueldo'] - c['eq_2026'] for c in d['ciudades'])} y {max(c['eq_con_sueldo'] - c['eq_2026'] for c in d['ciudades'])}
 menús al equilibrio.
 
-\begin{{figure}}[h]
+\begin{{figure}}[H]
 \centering
 \includegraphics[width=0.66\textwidth]{{fig/igv.pdf}}
 \caption{{Equilibrio formal según el año. *El 18\,\% de 2028 es un supuesto: la tasa especial de
@@ -2504,7 +2516,7 @@ Una revisión de fuentes públicas (MINEM, INEI, mercados mayoristas, prensa y a
 están en \texttt{{estudio/investigacion/ciudades.md}}) matiza varios supuestos del mapa. El cuadro~\ref{{tab:investigacion}}
 los resume con su grado de confianza.
 
-\begin{{table}}[h]
+\begin{{table}}[H]
 \centering\footnotesize
 \caption{{Hallazgos de la investigación por ciudad y cómo cambiarían el mapa. Confianza: A, fuente oficial; B, prensa
 o agregador con datos declarados; C, avisos sueltos; Est., cálculo propio.}}\label{{tab:investigacion}}
@@ -2581,6 +2593,16 @@ Las fuentes de los datos (leyes, precios, sueldos, alquileres) están en el \ane
 velocidades de cocina y de la investigación por ciudad, en la carpeta \texttt{{estudio/investigacion}} del proyecto.
 
 \appendix
+{"" if not d["casos"] else rf"""\section{{Utilidad por precio y venta de cada negocio}}\label{{sec:anexo_matrices}}
+
+Este anexo repite para cada negocio el mapa que la \figura{{fig:matriz}} muestra para Candela: la utilidad del mes, en
+miles de soles, para precios de S/~2 menos a S/~2 más que el suyo y para ventas del 50 al 150\,\% de la de hoy, con su
+planilla, su alquiler, sus insumos y su régimen. El recuadro marca la situación de hoy; el verde, ganancia, y el rojo,
+pérdida. La utilidad es la del negocio, sin sumar el sueldo del dueño cuando el modelo le asigna uno.
+
+{mapas_anexo()}
+\clearpage
+"""}
 {"" if not estados else rf"""\section{{Estados de resultados anuales}}\label{{sec:anexo_estados}}
 
 Como apoyo visual, este anexo presenta el estado de resultados de un año completo de cada negocio, con el local
@@ -2588,9 +2610,9 @@ ya lleno: el mes del modelo multiplicado por doce, con los números del \cuadro{
 y el impuesto del régimen de cada uno (en el MYPE, la renta descuenta la depreciación de la inversión a diez años).
 Los porcentajes son sobre la venta sin IGV. La \figura{{fig:estados}} resume cada estado en una cascada.
 
-\begin{{figure}}[p]
+\begin{{figure}}[H]
 \centering
-\includegraphics[width=\textwidth]{{fig/estados.pdf}}
+\includegraphics[width=\textwidth,height=0.78\textheight,keepaspectratio]{{fig/estados.pdf}}
 \caption{{De la venta sin IGV a lo que queda después de impuestos, en un año lleno de cada negocio (miles de soles).
 En verde lo que queda; en rojo, la pérdida.}}\label{{fig:estados}}
 \end{{figure}}

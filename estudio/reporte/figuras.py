@@ -308,11 +308,11 @@ def fig_regimenes(d):
     guardar(fig, "regimenes")
 
 
-def fig_matriz(d):
-    c = d.get("candela") or next(x for x in d["casos"] if x["nombre"].startswith("Inversor"))
+def _matriz(c, nombre_archivo, alto=3.3):
+    """Utilidad del mes por precio y menús al día de un negocio (miles de soles)."""
     m = c["matriz"]
-    fig, ax = plt.subplots(figsize=(ANCHO, 3.3))
-    vmax = max(abs(v) for fila in m["utilidad"] for v in fila)
+    fig, ax = plt.subplots(figsize=(ANCHO, alto))
+    vmax = max(abs(v) for fila in m["utilidad"] for v in fila) or 1
     cmap = LinearSegmentedColormap.from_list("div", ["#c2372f", "#f4f2ec", "#1f8a4c"])
     ax.imshow(m["utilidad"], cmap=cmap, vmin=-vmax, vmax=vmax, aspect="auto")
     for i, fila in enumerate(m["utilidad"]):
@@ -329,7 +329,21 @@ def fig_matriz(d):
     jp = min(range(len(m["precios"])), key=lambda j: abs(m["precios"][j] - c["precio"]))
     iq = min(range(len(m["volumenes"])), key=lambda i: abs(m["volumenes"][i] - c["q"]))
     ax.add_patch(plt.Rectangle((jp - 0.5, iq - 0.5), 1, 1, fill=False, ec=TINTA, lw=1.4))
-    guardar(fig, "matriz")
+    guardar(fig, nombre_archivo)
+
+
+def archivo_matriz(nombre: str) -> str:
+    import unicodedata
+    base = unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode().lower()
+    return "matriz_" + "".join(ch if ch.isalnum() else "_" for ch in base).strip("_")
+
+
+def fig_matriz(d):
+    c = d.get("candela") or next(x for x in d["casos"] if x["nombre"].startswith("Inversor"))
+    _matriz(c, "matriz")
+    # el mismo mapa para cada negocio, para el anexo
+    for caso in d["casos"] + ([d["candela"]] if d.get("candela") else []):
+        _matriz(caso, archivo_matriz(caso["nombre"]), alto=3.0)
 
 
 def fig_platos(d):
