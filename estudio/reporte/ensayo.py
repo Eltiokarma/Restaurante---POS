@@ -2032,7 +2032,8 @@ menús diarios cabe en el Nuevo RUS: no cobra IGV y paga una cuota fija. Al pasa
 tiene que cambiar de régimen y empezar a cobrar IGV, y su utilidad cae de golpe de {s(nr.get('nrus_tope', 0))}
 a {s(nr.get('rer_justo_despues', 0))} al mes. Para volver a ganar lo mismo que antes del salto tiene que llegar a
 unos {nr.get('q_recupera')} menús diarios. El régimen castiga el crecimiento justo en el tramo en que un negocio
-chico intenta despegar; no es raro que muchos prefieran quedarse chicos o salir de la formalidad.
+chico intenta despegar; no es raro que muchos prefieran quedarse chicos, declarar menos de lo que venden o salir de
+la formalidad (\seccion{{sec:evidencia}}).
 
 \begin{{figure}}[H]
 \centering
@@ -2278,6 +2279,102 @@ estudio: no cuesta plata, cuesta orden.
 El exitoso confirma la regla por el otro lado: gana mucho porque vende mucho, no porque su plato sea más
 barato ni su cocina más eficiente. Su riesgo es el de cualquier negocio grande: necesita años para llenarse,
 más inversión y una administración que el dueño ya no puede hacer solo.
+
+\subsection{{Los hallazgos frente a la evidencia}}\label{{sec:evidencia}}
+
+Un modelo puede ser coherente y estar equivocado. Para saber cuánto de lo encontrado se sostiene fuera del
+modelo, se buscó evidencia publicada sobre cada hallazgo principal: no para adornarlo, sino para ver si lo
+confirma, lo matiza o lo contradice. El \cuadro{{tab:evidencia}} resume el resultado; los párrafos que siguen lo
+explican. Donde no se encontró nada sólido, se dice.
+
+\begin{{table}}[H]
+\centering\footnotesize
+\caption{{Los hallazgos del estudio frente a la evidencia publicada.}}\label{{tab:evidencia}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.25\textwidth}}>{{\raggedright\arraybackslash}}X>{{\raggedright\arraybackslash}}p{{0.14\textwidth}}}}
+\toprule
+Hallazgo & Lo que dice la evidencia & Veredicto \\
+\midrule
+Gana el trabajo, no el capital & Los independientes urbanos del Perú ganan cerca de la mitad que los asalariados; el INEI encuentra que la microempresa sobrevive gracias al trabajo familiar no remunerado; los experimentos con microempresas muestran que el capital sí rinde, pero que la mayoría de dueños se parece más a un asalariado que a un empresario & confirma, con matiz \\
+La clientela de un local es muy sensible al precio ($\varepsilon\approx2.4$) & La comida fuera de casa como categoría tiene 0.8; la de restaurantes con servicio, cerca de 2; la de una marca o un puesto individual, entre 2 y 4 & confirma el orden de magnitud \\
+El precio lo fija la referencia de la cuadra & Prensa de 2026: un menú que subió de S/~10 a S/~12 frente a vecinos de S/~6--8 perdió buena parte de su clientela; pero cuando el costo sube para todos, el índice de precios del menú sube para todos & confirma, con matiz \\
+Margen fino y apalancamiento alto & La utilidad mediana de los restaurantes en EE.~UU. es de 3 a 4\,\% de la venta; uno de cada cuatro independientes cierra el primer año & confirma \\
+Insumos de 40 a 57\,\% de la venta & En restaurantes de EE.~UU. y en guías peruanas, 30 a 35\,\% & difiere; se explica \\
+El IGV reducido y su calendario & Tasas confirmadas por ley; el MEF sostiene que la rebaja no formalizó & confirma \\
+El tope del Nuevo RUS castiga crecer & Los negocios reaccionan al tope, pero sobre todo declarando menos & matiza \\
+Organizar la cocina da capacidad & En comedores, preparar fuera del servicio sube las comidas por hora-hombre de 20 a 25\,\%; agrupar en lotes puede ahorrar horas & confirma; matiza las horas \\
+La hora punta decide la capacidad & En un comedor peruano, la cola se forma en los primeros 20 minutos aunque el promedio parezca holgado & confirma \\
+Cocinar en altura cuesta más & Las cocinas a gas pierden 0.56\,\% de potencia por cada 100~m; no hay mediciones de gas por plato & confirma la dirección \\
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+\paragraph{{El trabajo y el capital.}} La tesis central del capítulo ---que la fonda rentable es, sobre todo, el
+empleo de su dueño o de su familia--- tiene respaldo directo en el Perú. Un estudio del INEI con la ENAHO describe
+las unidades de menos de cinco trabajadores como negocios para los que ``la abundancia del trabajo familiar no
+remunerado parece ser el medio que permite la sobrevivencia'', algunos ``con nula capacidad de generar
+excedentes'' (Gamero, 2012). Los independientes urbanos ganaban en promedio unos S/~930 al mes entre 2017 y
+2021, cerca del sueldo mínimo de entonces, y los trabajadores de alojamiento y restaurantes, el 65\,\% del ingreso
+medio del país. Fuera del Perú, la literatura sobre microempresas llega a lo mismo: la mayoría de sus dueños se
+parece más a un asalariado que a un empresario, y abaratar su registro no los hace crecer (La~Porta y Shleifer,
+2014). Hay un matiz importante: los experimentos que regalan capital a microempresas encuentran retornos altos al
+capital adicional (de~Mel, McKenzie y Woodruff, 2008). Lo que el estudio sostiene, entonces, no es que el capital
+no rinda, sino que en una fonda el excedente que queda \emph{{después de pagar el trabajo}} es chico, y que el
+inversor que paga todo el trabajo a precio de mercado compite contra hogares que no lo hacen.
+
+\paragraph{{El precio.}} La sensibilidad de {n(pc['elasticidad_ajuste'], 1) if pc else "2.4"} que muestra la historia de Candela parece alta
+frente a la elasticidad de la comida fuera de casa como categoría, que un metaanálisis de 160 estudios ubica en
+0.81 (Andreyeva, Long y Brownell, 2010). Pero no se mide lo mismo: cuando todos los locales suben a la vez, el
+cliente no tiene adónde ir; cuando sube uno solo, se va a la cuadra de al lado. Por eso la elasticidad de un
+restaurante con servicio en Estados Unidos ronda 2 (Okrent y Alston, 2012) y la de una marca individual, 2.6 en
+promedio (Bijmolt, van Heerde y Pieters, 2005). Un 2.4 para un local de menú con competencia cerca es plausible.
+La prensa de 2026 muestra el mecanismo: en un mercado de Lima, un menú que subió de S/~10 a S/~12 por el precio
+del gas, con locales vecinos a S/~6--8, perdió buena parte de su clientela según sus propios comerciantes. Y
+muestra también el límite del argumento: cuando el costo sube para todos, la referencia se mueve, y el índice de
+precios del menú en Lima subió 11\,\% en 2022. Dos advertencias sobre la cifra de Candela: sus tres precios son
+de épocas distintas, y entre ellas el resto de los menús de la ciudad también subió, de modo que la sensibilidad
+frente a la competencia podría ser mayor que la medida; y es un solo local.
+
+\paragraph{{La estructura de costos.}} El margen fino del modelo coincide con lo que se mide en otras partes: la
+utilidad antes de impuestos mediana de los restaurantes de Estados Unidos es de 2.8\,\% en los de servicio completo y
+4\,\% en los de servicio rápido (National Restaurant Association, 2025), y uno de cada cuatro restaurantes
+independientes cierra en su primer año (Parsa y otros, 2005). La composición de los costos, en cambio, es distinta:
+el modelo pone los insumos en 40 a 57\,\% de la venta neta, cuando en restaurantes de Estados Unidos rondan el
+30--35\,\% y las guías comerciales peruanas proponen lo mismo. La diferencia tiene explicación: el menú popular
+vende un plato completo con proteína a un precio bajo y sin bebidas de alto margen, y su personal pesa mucho menos
+que en un restaurante con planilla ---en la fonda familiar, casi nada---. Pero es una diferencia que conviene
+verificar con la Encuesta Económica Anual del INEI para restaurantes, que tiene la estructura de costos del sector
+y este estudio no ha procesado.
+
+\paragraph{{La formalidad.}} Las tasas del IGV de restaurantes que usa el modelo están en la ley: 8\,\% de IGV más
+2.5\,\% de impuesto de promoción municipal en 2026 y 12\,\% más 3\,\% en 2027 (Leyes 32219 y 32387); para 2028 no hay
+tasa especial. El propio MEF ha sostenido que la rebaja no formalizó a nadie y que su beneficio se concentró en los
+restaurantes que más venden, y un experimento en el Cercado de Lima encontró que solo una de cada cuatro
+microempresas informales aceptaba un incentivo para sacar su licencia, por los costos que vienen después (GRADE,
+2012). Ambos datos refuerzan la lectura del estudio: a los precios del menú, la formalidad no es un trámite sino un
+costo que muchos negocios no pueden pagar. Sobre el Nuevo RUS, la evidencia matiza: cuando en 2017 se eliminaron
+sus categorías más altas, la mitad de los negocios afectados pasó a \emph{{declarar}} ventas menores en lugar de cambiar
+de régimen (Azuero, Bosch y Lagomarsino). La ``trampa'' del tope existe, pero su efecto más visible no es que los
+negocios dejen de crecer sino que dejen de declarar lo que crecen.
+
+\paragraph{{La cocina.}} No hay estudios de productividad de fondas ni de menús, así que la comparación es con
+análogos. En comedores escolares de hasta cien raciones, una cocina convencional produce de 8 a 10 comidas por
+hora-hombre, y una que recibe parte del trabajo ya hecho, de 10 a 12 (Institute of Child Nutrition, 2014): de 20 a
+25\,\% más, del mismo orden que lo que el modelo atribuye al mise en place. Sobre las horas, la evidencia está
+dividida: en hospitales, cambiar a sistemas de producción anticipada no redujo costos laborales (Greathouse y otros,
+1989), pero en un restaurante japonés cocinar por lotes sí redujo horas, a cambio de desacoplar el trabajo de la
+demanda y con un periodo de aprendizaje de unos dos meses en que la cocina rindió menos (Shimmura y otros, 2017,
+2018). La conclusión del estudio ---el mise en place compra capacidad, no horas--- vale para mover la misma tarea
+a otra hora; agrupar tareas iguales probablemente ahorra algo más de lo que el modelo calcula. La importancia de la
+hora punta tiene un ejemplo cercano: en el comedor de una universidad de Huaraz, el servicio parecía holgado con
+el promedio del almuerzo, pero en los primeros veinte minutos llegaba seis veces más gente de la que podía atender y
+se formaban colas de más de ochenta personas. Y la altura cuesta: las cocinas a gas probadas entre 2\,300 y 4\,150
+metros pierden 0.56\,\% de potencia por cada 100~m, unos 20\,\% en Juliaca, aunque no hay mediciones de cuánto gas
+más gasta un plato.
+
+Lo que queda sin contraste externo es justamente lo más propio del estudio: los números de Candela, la sensibilidad de
+la clientela de Juliaca y la productividad de su cocina. Para esos tres, la única evidencia posible es la que el
+propio local puede generar: la que proponen las recomendaciones.
 
 \subsection{{La paradoja del inversor}}
 
@@ -2577,14 +2674,28 @@ dispara el volumen necesario: es la misma convexidad que se vio en los negocios,
 \addcontentsline{{toc}}{{section}}{{Referencias}}
 
 \begin{{itemize}}[leftmargin=1.2em,label={{}}]
+\item Andreyeva, T., Long, M. W. y Brownell, K. D. (2010). The impact of food prices on consumption: a systematic review of research on the price elasticity of demand for food. \emph{{American Journal of Public Health}}, 100(2), 216--222.
+\item Azuero, R., Bosch, M. y Lagomarsino, B. (s.~f.). [Estudio sobre la eliminación de categorías del Nuevo RUS en 2017 con datos de SUNAT]. Documento de trabajo, BID. \url{{http://rodrigoazuero.com/files/rmt.pdf}}
+\item Bijmolt, T. H. A., van Heerde, H. J. y Pieters, R. G. M. (2005). New empirical generalizations on the determinants of price elasticity. \emph{{Journal of Marketing Research}}, 42(2), 141--156.
 \item Chayanov, A. V. (1925/1974). \emph{{La organización de la unidad económica campesina}}. Buenos Aires: Nueva Visión.
+\item de Mel, S., McKenzie, D. y Woodruff, C. (2008). Returns to capital in microenterprises: evidence from a field experiment. \emph{{Quarterly Journal of Economics}}, 123(4), 1329--1372.
 \item De Soto, H. (1986). \emph{{El otro sendero: la revolución informal}}. Lima: El Barranco.
 \item Escoffier, A. (1903). \emph{{Le guide culinaire}}. París: Flammarion.
+\item Gamero, J. (2012). [Investigación sobre el empleo y el trabajo familiar no remunerado en la microempresa, con la ENAHO 2009]. Lima: INEI. \url{{https://www.inei.gob.pe/media/MenuRecursivo/investigaciones/investigacion-final-julio-gamero.pdf}}
+\item GRADE (2012). El impacto de la licencia municipal en el desempeño de las microempresas en el Cercado de Lima. Lima: Grupo de Análisis para el Desarrollo. \url{{https://grade.org.pe/en/publicaciones/1133-el-impacto-de-la-licencia-municipal-en-el-desempeno-de-las-microempresas-en-el-cercado-de-lima}}
+\item Greathouse, K. R. y otros (1989). Comparison of conventional, cook-chill, and cook-freeze foodservice systems. \emph{{Journal of the American Dietetic Association}}, 89(11).
+\item Institute of Child Nutrition (2014). \emph{{Meals per labor hour (MPLH)}}. Serie de indicadores clave. \url{{https://theicn.org/resources/1569/key-performance-indicators-mini-series/118698/kpi-mini-series-meals-per-labor-hour-mplh.pdf}}
 \item Kahneman, D. y Tversky, A. (1979). Prospect theory: an analysis of decision under risk. \emph{{Econometrica}}, 47(2), 263--291.
 \item Kelley, J. E. y Walker, M. R. (1959). Critical-path planning and scheduling. \emph{{Proceedings of the Eastern Joint Computer Conference}}, 160--173.
+\item La Porta, R. y Shleifer, A. (2014). Informality and development. \emph{{Journal of Economic Perspectives}}, 28(3), 109--126.
 \item Little, J. D. C. (1961). A proof for the queuing formula $L=\lambda W$. \emph{{Operations Research}}, 9(3), 383--387.
 \item Loayza, N. (2007). \emph{{Causas y consecuencias de la informalidad en el Perú}}. Documento de trabajo, Banco Central de Reserva del Perú.
+\item National Restaurant Association (2025). \emph{{Restaurant Operations Data Abstract}} (año fiscal 2024).
+\item Okrent, A. y Alston, J. (2012). \emph{{The Demand for Disaggregated Food-Away-from-Home and Food-at-Home Products in the United States}}. Economic Research Report 139, USDA.
+\item Parsa, H. G., Self, J. T., Njite, D. y King, T. (2005). Why restaurants fail. \emph{{Cornell Hotel and Restaurant Administration Quarterly}}, 46(3), 304--322.
 \item Shapley, L. S. (1953). A value for $n$-person games. En H. W. Kuhn y A. W. Tucker (eds.), \emph{{Contributions to the Theory of Games II}}, 307--317. Princeton University Press.
+\item Shimmura, T. y otros (2017). [Rediseño de la distribución de una cocina de restaurante guiado por simulación]. \emph{{Procedia CIRP}}, 62. \url{{https://hdl.handle.net/20.500.14094/90004434}}
+\item Shimmura, T. y otros (2018). [Cambios en el proceso de cocina y productividad de un restaurante de servicio completo]. \emph{{International Journal of Automation Technology}}, 12(4). \url{{https://doi.org/10.20965/ijat.2018.p0449}}
 \item Smith, A. (1776). \emph{{An Inquiry into the Nature and Causes of the Wealth of Nations}}. Londres: W. Strahan y T. Cadell.
 \item Thaler, R. (1985). Mental accounting and consumer choice. \emph{{Marketing Science}}, 4(3), 199--214.
 \item Wald, A. (1945). Statistical decision functions which minimize the maximum risk. \emph{{Annals of Mathematics}}, 46(2), 265--280.
