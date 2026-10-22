@@ -743,6 +743,146 @@ Variable & Valor & Origen \\
             filas.append(f"S/~{pr} & " + " & ".join("--" if v is None else str(v) for v in celdas) + r" \\")
         return "\n".join(filas), otros
 
+    # ------------------------------------------------ quién hace qué (anexo)
+    pers = d.get("personal") or []
+    FAMILIARES = {"Propietario que cocina", "Familiar sin sueldos", "Fonda en casa propia", "Puesto de mercado informal",
+                  "Pequeño en Nuevo RUS"}
+
+    def funcion(neg, puesto, turno):
+        """Funciones y horario de referencia de un puesto, según el negocio."""
+        pl = puesto.lower()
+        chico = neg in FAMILIARES
+        if neg == AUTO and puesto in FUNCIONES:
+            turno_a, texto = FUNCIONES[puesto]
+            h = a0["horarios"].get(turno_a) if aut else None
+            return (f"{h[0]}--{h[1]}" if h else "--"), texto
+        if turno == "noche":
+            if "cocinero" in pl:
+                return "16:30--22:30", ("Prepara la carta de la noche (platos al momento, sopas y segundos de la "
+                                         "tarde), recibe lo que deja listo el turno día y limpia la cocina al cerrar.")
+            return "17:30--22:30", "Atiende las mesas de la noche, toma pedidos, sirve, cobra y cierra el salón."
+        if pl.startswith("mamá"):
+            return "06:00--16:00", ("Decide el menú del día, compra en el mercado temprano, cocina la sopa y los "
+                                    "segundos, sazona y porciona; reparte el trabajo de la casa.")
+        if pl.startswith("tía"):
+            return "07:00--16:00", ("Pela y pica, prepara el refresco y las entradas, sirve en el almuerzo y lava "
+                                    "ollas; reemplaza a la mamá en la cocina si falta.")
+        if pl.startswith("hijo"):
+            return "10:30--16:00", ("Abre y arma el salón, toma pedidos, lleva los platos, cobra y lleva la cuenta del "
+                                    "día; recoge y limpia mesas; atiende los pedidos por WhatsApp y los encargos.")
+        if "ayudante pagado" in pl:
+            return "08:00--15:30", "Lava vajilla y ollas, pela papa y verduras y ayuda a servir en la hora punta."
+        if pl.startswith("jefe de cocina") or (pl == "cocinero" and neg in ("Inversor ausente",)):
+            return "07:00--15:30", ("Cocina los fondos y segundos, dirige a los ayudantes, controla porciones y "
+                                    "pide al encargado de compras lo que falta.")
+        if pl.startswith("cocinero"):
+            if neg == "Ejecutivo en el centro":
+                return "07:30--16:00", ("Cocina una carta ejecutiva más elaborada (entrada, fondo y postre), emplata "
+                                        "cada pedido y cuida la presentación; dirige al ayudante.")
+            if "Candela" in neg:
+                return "07:00--15:30", ("Prepara fondos, guisos, arroz y segundos; en el almuerzo arma los platos y "
+                                        "atiende la plancha. Una de las dos cocineras lleva la sazón y los tiempos.")
+            return "07:00--15:30", ("Recibe el menú del dueño, prepara fondos, guisos, arroz y segundos, dirige al "
+                                    "ayudante y en el almuerzo atiende la plancha y las frituras al momento.")
+        if pl.startswith("ayudante") or pl.startswith("auxiliar"):
+            if neg == "Pequeño en Nuevo RUS":
+                return "07:00--15:30", ("En la mañana pela, pica y ayuda a cocinar; en el almuerzo atiende las "
+                                        "mesas y cobra, porque el local no tiene mozo; al cierre lava y limpia.")
+            if neg == "Puesto de mercado informal":
+                return "06:30--15:00", ("Pelan, pican y lavan; en la hora punta sirven en el mostrador. Una se "
+                                        "encarga del refresco y de los táperes para llevar.")
+            if chico:
+                return "07:30--15:30", ("Pela y pica papa y verduras, desvaina, lava arroz, prepara el refresco; en "
+                                        "el almuerzo sirve la sopa y lava vajilla y ollas.")
+            return "07:00--15:30", ("Antes del almuerzo: pela y pica papa y verduras, desvaina arvejas, lava el "
+                                    "arroz, trocea el pollo y prepara el refresco. En el almuerzo sirve sopas y "
+                                    "entradas, arma platos y lava. Al cierre limpia la cocina.")
+        if pl.startswith("mozo"):
+            if "medio tiempo" in pl:
+                return "11:30--15:30", ("Arma las mesas, toma el pedido y lo canta a la cocina, lleva sopa y "
+                                        "segundo, sirve refresco, recoge y limpia. Cobra el dueño.")
+            if neg == "Ejecutivo en el centro":
+                return "11:00--16:30", ("Atención de mesa más cuidada: presenta la carta, sirve por tiempos "
+                                        "(entrada, fondo, postre), cobra con tarjeta y emite la boleta.")
+            cobra = "" if neg == "Inversor ausente" else ", cobra"
+            return "11:00--16:00", (f"Arma las mesas, toma el pedido y lo canta a la cocina, lleva sopa y segundo, "
+                                    f"sirve el refresco{cobra}, limpia y vuelve a montar la mesa.")
+        if pl.startswith("atención"):
+            return "11:00--15:30", ("Atiende el mostrador o las pocas mesas: toma el pedido, sirve, cobra y lava "
+                                    "platos cuando baja la gente.")
+        if pl.startswith("administrador"):
+            return "08:00--16:00", ("Manda en el local: hace los turnos, autoriza compras y pagos, controla caja e "
+                                    "inventario, trata con el contador y reporta al dueño cada semana.")
+        if pl.startswith("cajero"):
+            return "11:00--16:00", "Cobra, emite boletas y facturas y cuadra la caja con el administrador."
+        if pl.startswith("encargado de compras"):
+            return "05:30--13:30", ("Compra en el mercado y a los proveedores, recibe y guarda en el almacén, "
+                                    "controla el stock, lo que se vence y la merma.")
+        return "--", "--"
+
+    def funcion_casa(neg, c):
+        quien = c["quien"].split(" (")[0]
+        h = f"{n(c['horas_semana'])} h/sem."
+        if c["rol"] == "cocinero":
+            extra = (" Como no hay mozo propio, sale a atender en la hora punta." if neg == "Pequeño en Nuevo RUS"
+                     else " Trabaja en su propia casa y mezcla la cocina del negocio con la de la familia."
+                     if neg == "Fonda en casa propia" else "")
+            return quien, h, ("Compra en el mercado al amanecer, decide el menú, cocina sopa y segundos, controla "
+                              "porciones, paga los jornales y cuadra la caja al cierre." + extra)
+        if neg == "Exitoso (referencia compuesta)":
+            return quien, h, ("Gerencia a tiempo completo: negocia compras por volumen, contrata y organiza al "
+                              "personal, controla costos, caja e inventario y cuida la clientela y la marca.")
+        if "Candela" in neg:
+            return quien, h, ("Hace las compras, cobra en caja, paga la planilla y a los proveedores, lleva el "
+                              "sistema de ventas y las recetas, y decide precios y menú.")
+        if neg == AUTO:
+            return quien, h, ("Supervisa, compra con el jefe de cocina, revisa la caja y el inventario y "
+                              "decide la carta de la rotación.")
+        dos = " Coordina además el turno de la noche." if "dos turnos" in c["quien"] else ""
+        return quien, h, ("Compra o encarga las compras, cobra en la hora punta, paga planilla y proveedores, "
+                          "lleva las cuentas y la SUNAT y supervisa que el menú salga a tiempo." + dos)
+
+    def pago(f):
+        if f["monto"] == 0:
+            return "sin sueldo"
+        if f["modalidad"] == "diario":
+            return f"{s(f['monto'])} al día"
+        return s(f["monto"]) + ("" if f["jornada"] >= 1 else " (medio t.)")
+
+    def tablas_personal():
+        bloques = []
+        for x in en_orden(pers):
+            neg = x["nombre"]
+            filas = []
+            for c in x["casa"]:
+                quien, h, texto = funcion_casa(neg, c)
+                sueldo = r"S/~1\,500" if x["sueldo_dueno"] else "la utilidad"
+                filas.append(rf"{esc(quien)} & 1 & {h} & {sueldo} & {esc(texto)} \\")
+            if neg == "Inversor ausente":
+                filas.append(r"Dueño & 1 & -- & la utilidad & No trabaja en el local: recibe los reportes del "
+                             r"administrador y del contador externo. \\")
+            for f in x["filas"]:
+                horario, texto = funcion(neg, f["puesto"], f["turno"])
+                filas.append(rf"{esc(f['puesto'])} & {f['cantidad']} & {horario} & {pago(f)} & {esc(texto)} \\")
+            if neg == "Inversor ausente":
+                filas.append(r"Contador externo & servicio & -- & en servicios & Lleva la contabilidad, la planilla "
+                             r"electrónica y las declaraciones a la SUNAT. \\")
+            nota = "" if any(f["propia"] for f in x["filas"]) or not x["filas"] else \
+                " Planilla automática del modelo según la venta (\\seccion{sec:capacidad} muestra que se queda corta)."
+            bloques.append(rf"""\begin{{table}}[H]
+\centering\footnotesize
+\caption{{{esc(corto(neg))}: {n(x['q'])} menús al día a {s(x['precio'])}.{nota}}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.17\textwidth}}c>{{\raggedright\arraybackslash}}p{{0.11\textwidth}}>{{\raggedright\arraybackslash}}p{{0.1\textwidth}}>{{\raggedright\arraybackslash}}X}}
+\toprule
+Quién & N.º & Horario & Pago & Funciones \\
+\midrule
+{chr(10).join(filas)}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}""")
+        return "\n\n".join(bloques)
+
     def mapas_anexo():
         from reporte.figuras import archivo_matriz
         bloques = []
@@ -1304,7 +1444,8 @@ cercanas a S/~50 mil al mes.
 \end{{description}}
 
 El \cuadro{{tab:entradas}} reúne los números con los que entra cada negocio a todos los análisis; los que
-no son de Candela son supuestos razonados.
+no son de Candela son supuestos razonados. El \anexo{{sec:anexo_personal}} dice qué hace cada persona de la
+planilla y de la casa en cada negocio.
 
 \begin{{table}}[H]
 \centering\scriptsize
@@ -3008,6 +3149,38 @@ pérdida. La utilidad es la del negocio, sin sumar el sueldo del dueño cuando e
 {mapas_anexo()}
 \clearpage
 """}
+{"" if not pers else rf"""\section{{Quién hace qué en cada negocio}}\label{{sec:anexo_personal}}
+
+Este anexo dice qué hace cada persona en cada negocio: los de la planilla y los de la casa que no cobran sueldo. Las
+funciones son generales y los horarios, de referencia: describen cómo suele repartirse el trabajo en un local de
+menú de Juliaca, no lo que se observó en cada uno (salvo Candela, por la entrevista). El \cuadro{{tab:roles}}
+compara primero los puestos de un menú tradicional con los de un autoservicio que trabaja con la preparación hecha
+antes (\seccion{{sec:autoservicio}}): los cargos se llaman casi igual, pero el trabajo cambia.
+
+\begin{{table}}[H]
+\centering\footnotesize
+\caption{{El mismo puesto en un menú tradicional y en un autoservicio con la preparación hecha antes.}}\label{{tab:roles}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.16\textwidth}}>{{\raggedright\arraybackslash}}X>{{\raggedright\arraybackslash}}X}}
+\toprule
+Puesto & Menú tradicional & Autoservicio con preparación anticipada \\
+\midrule
+Cocinero o jefe de cocina & Cocina la sopa y los segundos del día, que cambian cada día; arma los platos y atiende la plancha al momento en el almuerzo. & Cocina los fondos de olla de una carta que se repite día por medio, con recetas y porciones fijas; en el almuerzo no arma platos, controla el baño maría. \\
+Ayudante de cocina & Pela y pica en la mañana para el menú de ese mismo día; en el almuerzo sirve sopas, arma platos y lava. & Deja lista la mise en place del día siguiente en la tarde (pelar, picar, porcionar carnes); en la mañana prepara entradas y guarniciones, y en el almuerzo repone frituras y saltados por tandas. \\
+Atención & El mozo toma el pedido, lo canta a la cocina, lleva sopa y segundo, cobra y limpia la mesa. & No hay mozo: el cliente pide en la tablet; el despachador sirve lo porcionado y llama el número del ticket. \\
+Caja & La lleva el dueño o el mozo, entre pedido y pedido. & Un cajero fijo en la hora punta cobra cada pedido de la tablet y cuadra la caja. \\
+Lavado y salón & Lo hacen los ayudantes y los mozos cuando baja la gente. & Un auxiliar lava en el almuerzo y una persona de salón recoge bandejas y limpia mesas y baños. \\
+Dueño & Compra, cocina o supervisa, cobra y lleva las cuentas: casi todo pasa por él. & Supervisa, compra con el jefe de cocina y revisa caja e inventario; el día a día lo sostiene el sistema. \\
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+Los cuadros que siguen van negocio por negocio, en el orden de todo el ensayo. ``Pago'' es el sueldo del mes o el
+jornal sin las cargas; ``la utilidad'' significa que esa persona no cobra sueldo y vive de lo que queda.
+
+{tablas_personal()}
+"""}
+
 {"" if not estados else rf"""\section{{Estados de resultados anuales}}\label{{sec:anexo_estados}}
 
 Como apoyo visual, este anexo presenta el estado de resultados de un año completo de cada negocio, con el local

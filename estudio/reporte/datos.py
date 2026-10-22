@@ -609,6 +609,42 @@ def mismos_volumenes(arquetipos: list[dict], candela: dict | None) -> dict:
     return {"volumenes": VOLUMENES_COMUNES, "filas": filas}
 
 
+def personal(arquetipos: list[dict], candela: dict | None) -> list[dict]:
+    """Quién trabaja en cada negocio: la planilla (la propia o la que arma el
+    modelo según la venta, con su turno de noche) y la gente de la casa que no
+    está en ella. Las funciones de cada uno las pone el ensayo."""
+    from motor.personal import calendario_pagos
+
+    pares = [(a["nombre"], a["datos"]) for a in arquetipos]
+    if candela:
+        pares.append(("Candela (datos del POS)", candela))
+    salida = []
+    for nombre, datos in pares:
+        local, esc, _sup, q = armar(datos)
+        m = modelo(local, q, esc, NAC)
+        mult = NAC["mult_micro"] if esc.laboral else 1.0
+        filas = []
+        if esc.planilla:
+            for t in esc.planilla:
+                filas.append({"puesto": t.puesto, "cantidad": t.cantidad, "monto": t.monto, "modalidad": t.modalidad,
+                              "area": t.area, "turno": t.turno, "jornada": t.jornada, "propia": True})
+        else:
+            cocina_dia = m.cocina - (math.ceil(esc.noche.q / 80) if esc.noche else 0)
+            mozos_dia = m.mozos - (math.ceil(esc.noche.q / 70) if esc.noche else 0)
+            cal = calendario_pagos(local, esc, NAC, cocina_dia, mozos_dia)
+            for f in cal["filas"]:
+                filas.append({"puesto": f["puesto"], "cantidad": f["cantidad"],
+                              "monto": f["costo_mes"] / f["cantidad"] / (mult if esc.laboral else 1.0),
+                              "modalidad": "mensual", "area": f["area"], "turno": f["turno"], "jornada": 1.0,
+                              "propia": False})
+        en_planilla = {f["puesto"].split(" (")[0].lower() for f in filas}
+        casa = [c for c in datos.get("casa") or [] if c["quien"].split(" (")[0].lower() not in en_planilla]
+        salida.append({"nombre": nombre, "q": q, "precio": local.precio, "filas": filas, "casa": casa,
+                       "sueldo_dueno": esc.sueldo_dueno, "laboral": esc.laboral,
+                       "noche": None if esc.noche is None else {"q": esc.noche.q}})
+    return salida
+
+
 N_SORTEOS = 1000
 
 # El autoservicio de comida criolla: entra a todos los análisis como un negocio
@@ -846,6 +882,7 @@ def generar() -> dict:
         "organizacion": organizacion(arquetipos, g["datos"] if candela else None),
         "cocina": cocina(candela["q"] if candela else None, g["datos"] if candela else None),
         "autoservicio": autoservicio(),
+        "personal": personal(arquetipos, g["datos"] if candela else None),
         "supuestos_robustez": robustez_supuestos(arquetipos, g["datos"] if candela else None),
         "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez, "robustez_supuesta": robustez_supuesta,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},
