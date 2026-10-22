@@ -98,3 +98,34 @@ Entregado y en producción (PR #102 a #119):
   con `DATABASE_PATH` en el scratchpad + `seed.py`, puerto 8011. Para
   matarlo: `ps -eo pid,args | grep "[u]vicorn ... --port 8011" | awk
   '{print $1}' | xargs -r kill` (`pkill -f` mata la propia shell).
+
+## Estudio de rentabilidad: pendientes (cierre del 22/10)
+
+Estado: ensayo `estudio/reporte/` al día en `main` (PR #163 a #167): evidencia
+publicada frente a los hallazgos, autoservicio criollo (`motor/autoservicio.py`),
+inversor con la gente que pide su cocina y anexo B «Quién hace qué». El PDF se
+arma con `python reporte/ensayo.py` desde `estudio/`.
+
+1. **Credenciales del servicio**: guardar `ESTUDIO_URL` y `ESTUDIO_TOKEN` como
+   secretos del entorno (no en el chat). Sin ellos el ensayo sale sin Candela.
+   En esta sesión se reconstruyeron las entradas de Candela desde el
+   `datos.json` anterior y se verificó que daban los mismos números (0
+   diferencias); eso no se sube al repositorio.
+2. **Seguridad**: rotar la contraseña de Postgres, `ADMIN_PASSWORD` y el PIN,
+   que se compartieron en el chat.
+3. **Preguntas al dueño de Candela**: horas reales a la semana (el estudio
+   supone 40); si las dos personas de cocina son mujeres (el ensayo dice
+   «cocineras»); nombre exacto o distrito de «Missing Plus» (no se encontró).
+4. **Elegir lo siguiente**: Capítulo 2 (ciudades: gas por departamento, factor
+   de altura, sueldos, alquileres, competencia como tope de precio) u otros
+   formatos (chicharronería, pollería, cevichería, carrito sanguchero).
+5. **Medir en campo** para reemplazar supuestos: 2–3 mañanas cronometradas en la
+   cocina de Candela; una semana probando trabajar por bloques; sondeo de
+   pizarras (precio y comensales); para el autoservicio, flujo de gente en la
+   ubicación, segundos por cobro con Yape y menús por hora de una línea de
+   baño maría.
+6. **Mejoras del modelo**: la planilla automática del modelo (inversor, día y
+   noche, ejecutivo, exitoso) se queda corta frente a la simulación de cocina;
+   evaluar usar la gente simulada en todos los análisis. Contrastar insumos
+   (40–57 % de la venta) con la Encuesta Económica Anual del INEI. Arrastre de
+   pérdidas en el MYPE y valor residual en el flujo (README del estudio).
