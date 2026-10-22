@@ -732,14 +732,16 @@ Variable & Valor & Origen \\
         return "\n".join(filas)
 
     def tabla_auto_precios():
-        comparar = [AUTO, "Inversor que supervisa", "Exitoso (referencia compuesta)"] + (
-            ["Candela (datos del POS)"] if cand else [])
-        eqs = {nm: next(f for f in mp["filas"] if f["nombre"] == nm)["equilibrio"] for nm in comparar}
+        otros = ["Exitoso (referencia compuesta)"] + (["Candela (datos del POS)"] if cand else [])
+        eqs = {nm: next(f for f in mp["filas"] if f["nombre"] == nm)["equilibrio"]
+               for nm in [AUTO, "Inversor que supervisa"] + otros}
         filas = []
         for pr in mp["precios"]:
-            celdas = [eqs[AUTO][str(pr)], aut["equilibrio_encargado"][str(pr)]] + [eqs[nm][str(pr)] for nm in comparar[1:]]
+            k = str(pr)
+            celdas = [eqs[AUTO][k], aut["equilibrio_encargado"][k], aut["equilibrio_mozos"][k],
+                      aut["equilibrio_inversor_sim"][k], eqs["Inversor que supervisa"][k]] + [eqs[nm][k] for nm in otros]
             filas.append(f"S/~{pr} & " + " & ".join("--" if v is None else str(v) for v in celdas) + r" \\")
-        return "\n".join(filas), comparar[1:]
+        return "\n".join(filas), otros
 
     def mapas_anexo():
         from reporte.figuras import archivo_matriz
@@ -2365,26 +2367,49 @@ tarde. El turno temprano entra a las {a0['horarios']['temprano'][0]} y el turno 
 
 \subsubsection{{Cuánto necesita vender}}
 
-{(lambda t: rf"""El \cuadro{{tab:auto_precios}} pone al autoservicio en la escala del experimento de precios comunes
+El \cuadro{{tab:auto_precios}} pone al autoservicio en la escala del experimento de precios comunes
 (\seccion{{sec:precios}}). A {s(a_sup['precio'])} necesita {aut['equilibrio'][str(a_sup['precio'])]} menús al día para no
 perder; a S/~10, {aut['equilibrio']['10'] or 'más de 400'}, y a S/~9 o menos no cubre sus costos con ninguna venta.
 Si el dueño no supervisa y paga un encargado de {s(a_sup['sueldos']['encargado'])}, el umbral a {s(a_sup['precio'])}
-sube a {aut['equilibrio_encargado'][str(a_sup['precio'])]}. A cualquier precio necesita más venta que el inversor que
-supervisa: su local es más caro, su luz también, y con poca venta paga una caja y un salón que la fonda no
-tiene.
+sube a {aut['equilibrio_encargado'][str(a_sup['precio'])]}.
 
-\begin{{table}}[H]
+La comparación con el inversor que supervisa pide un cuidado. Su planilla es la automática del modelo ---una persona
+de cocina cada 80 menús y un mozo cada 70---, y con la productividad que muestra Candela esa gente no alcanza
+(\seccion{{sec:capacidad}}): con {aut['inversor_sim'][2]['q']} menús el modelo le pone {aut['inversor_sim'][2]['personas_auto']}
+personas, y la simulación de su cocina, organizada por estaciones y con un mozo cada 50 menús, pide
+{aut['inversor_sim'][2]['personas_sim']}. Con la gente que de verdad necesita, a {s(a_sup['precio'])} y
+{aut['inversor_sim'][2]['q']} menús deja {s(aut['inversor_sim'][2]['util_sim'])} al mes y no
+{s(aut['inversor_sim'][2]['util_auto'])}, y su umbral sube de {eq_('Inversor que supervisa', a_sup['precio'])} a
+{aut['equilibrio_inversor_sim'][str(a_sup['precio'])]} menús. Por eso el cuadro trae al inversor de las dos
+formas, y también el mismo local del autoservicio servido con mozos.
+
+{(lambda t: rf"""\begin{{table}}[H]
 \centering\footnotesize
-\caption{{Menús al día que necesita cada negocio para no perder, a cada precio, con la planilla de cada volumen en el
-autoservicio. ``--'': no cubre sus costos con ninguna venta hasta 400 menús.}}\label{{tab:auto_precios}}
-\begin{{tabular}}{{lrrrrr}}
+\caption{{Menús al día que necesita cada negocio para no perder, a cada precio. El autoservicio, el mismo local con
+mozos y el inversor ``con su gente'' llevan la planilla que pide la simulación de la cocina para cada volumen; el
+inversor ``del modelo'', la planilla automática de los demás análisis. ``--'': no cubre sus costos con ninguna venta
+hasta 400 menús.}}\label{{tab:auto_precios}}
+\setlength{{\tabcolsep}}{{4pt}}
+\begin{{tabular}}{{lrrrrr{"r" * len(t[1])}}}
 \toprule
-Precio & Autoservicio & Con encargado & {" & ".join(esc(corto(x)) for x in t[1])} \\
+& \multicolumn{{2}}{{c}}{{Autoservicio}} & Mismo local & \multicolumn{{2}}{{c}}{{Inversor que supervisa}} & \multicolumn{{{len(t[1])}}}{{c}}{{Otros}} \\
+\cmidrule(lr){{2-3}}\cmidrule(lr){{5-6}}\cmidrule(lr){{7-{6 + len(t[1])}}}
+Precio & Dueño & Encargado & con mozos & Con su gente & Del modelo & {" & ".join(esc(corto(x)) for x in t[1])} \\
 \midrule
 {t[0]}
 \bottomrule
 \end{{tabular}}
 \end{{table}}""")(tabla_auto_precios())}
+
+Con la gente bien contada, el orden depende del precio. A {s(a_sup['precio'])} o más, el inversor necesita algo
+menos venta que el autoservicio ({aut['equilibrio_inversor_sim'][str(a_sup['precio'])]} contra
+{aut['equilibrio'][str(a_sup['precio'])]} menús), porque su local cuesta {s(a_sup['alquiler_mes'] - aut['inversor_local']['alquiler'])}
+menos al mes, su luz {s(a_sup['servicios_mes'] + a_sup['otros_mes'] - aut['inversor_local']['servicios'])} menos y no paga
+táper. A S/~11 empatan ({aut['equilibrio']['11']} menús cada uno) y a S/~10 el autoservicio necesita
+{aut['equilibrio']['10']} y el inversor {aut['equilibrio_inversor_sim']['10'] or 'más de 400'}: cuanto más barato el
+menú, más venta hace falta, y con mucha venta pesa más la gente que el local. Con {aut['inversor_sim'][2]['q']} menús a
+{s(a_sup['precio'])}, el autoservicio deja {s(a0['utilidad'])} y el inversor {s(aut['inversor_sim'][2]['util_sim'])}, aun
+pagando {s(a_sup['alquiler_mes'] - aut['inversor_local']['alquiler'])} más de alquiler.
 
 La \figura{{fig:auto_matriz}} da el mapa completo, de 40 a 300 menús y de S/~7 a S/~18. La frontera entre perder y
 ganar corre de unos {aut['equilibrio']['10'] or 'más de 400'} menús a S/~10 a {aut['equilibrio']['18']} menús a S/~18: el autoservicio es un negocio de volumen o de precio, no de
@@ -2402,7 +2427,11 @@ cada volumen. Recuadro: la venta base, {n(a_sup['q'])} menús a {s(a_sup['precio
 Para separar el efecto del formato se armó el mismo local ---mismo alquiler, comida, precio y formalidad--- servido
 como un menú de siempre: la cocina de Candela organizada por estaciones, con plancha al momento, y un mozo cada 50
 menús, que toma el pedido, lo lleva y cobra. La \figura{{fig:auto_formato}} compara los dos. Con poca venta, el menú
-con mozos gana: el autoservicio carga con una caja y un salón que a 60 u 80 menús sobran. {"Desde unos " + str(a_cruce) + " menús" if a_cruce else "Con mucha venta"}
+con mozos gana, pero por poco y no por la gente. Con 40 menús el autoservicio tiene {aq[40]['personas']} personas y el
+menú con mozos {aq[40]['mozos']['personas']}: la caja y el salón son puestos fijos, mientras que un solo mozo toma el
+pedido, lo lleva y cobra. De 60 a 80 menús los dos tienen {aq[80]['personas']} personas y casi la misma planilla
+({s(aq[80]['personal'])} y {s(aq[80]['mozos']['personal'])} al mes); la diferencia es el táper de lo que se lleva,
+unos {s(a_sup['para_llevar'] * a_sup['taper'] * 80 * 26)} al mes con 80 menús. {"Desde unos " + str(a_cruce) + " menús" if a_cruce else "Con mucha venta"}
 el autoservicio deja más: a 160 menús necesita {aq[160]['personas']} personas y el menú con mozos
 {aq[160]['mozos']['personas']}, porque servir lo porcionado es más rápido que armar a pedido y no hace falta un mozo
 por cada 50 menús. {(lambda ds: rf"De ahí en adelante, a {s(a_sup['precio'])}, el autoservicio deja entre {s(min(ds))} y {s(max(ds))} más al mes; la diferencia salta cada vez que el menú con mozos tiene que sumar gente de golpe.")([aq[q]['utilidad'] - aq[q]['mozos']['utilidad'] for q in aq if a_cruce and q > a_cruce])}
