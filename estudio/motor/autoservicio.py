@@ -273,18 +273,51 @@ def equipo_mozos(q: float, cfg: dict | None = None, base: dict | None = None) ->
 
 
 def escenario_mozos(q: float, precio: float | None = None, cfg: dict | None = None,
-                    base: dict | None = None, eq: dict | None = None) -> tuple[Local, Escenario]:
+                    base: dict | None = None, eq: dict | None = None, local: Local | None = None,
+                    sueldos: dict | None = None) -> tuple[Local, Escenario]:
+    """Un menú con mozos y la gente que pide la simulación de su cocina. Por
+    defecto, el local del autoservicio sin táper; con `local` y `sueldos`, el
+    de otro negocio (el inversor que supervisa)."""
     cfg = cfg or cargar()
     eq = eq or equipo_mozos(q, cfg, base)
-    s = cfg["sueldos"]
+    s = sueldos or cfg["sueldos"]
     filas = [Trabajador("Jefe de cocina", s["jefe"], area="cocina")]
     if eq["cocina"] > 1:
         filas.append(Trabajador("Cocinero", s["cocinero"], cantidad=eq["cocina"] - 1, area="cocina"))
     if eq["turno_tarde"]:
         filas.append(Trabajador("Auxiliar de turno tarde", s["auxiliar"], cantidad=eq["turno_tarde"], area="cocina"))
     filas.append(Trabajador("Mozo", s["auxiliar"], cantidad=eq["mozos"], area="salon"))
-    loc = local_de(cfg, precio).con(insumos=cfg["insumos"])  # todo se come en el local: sin táper
+    if local is None:
+        local = local_de(cfg).con(insumos=cfg["insumos"])  # todo se come en el local: sin táper
+    if precio is not None:
+        local = local.con(precio=float(precio))
     esc = Escenario(segmento="popular", anio=2026, formal=True, sueldo_dueno=False,
                     balones=math.ceil(q / cfg["menus_por_balon"]), planilla=tuple(filas))
-    return loc, esc
+    return local, esc
 
+
+class _EquiposMozos(_Equipos):
+    def __call__(self, q: float) -> dict:
+        k = round(q)
+        if k not in self.memo:
+            self.memo[k] = equipo_mozos(k, self.cfg, self.base)
+        return self.memo[k]
+
+
+def equipos_mozos(cfg: dict | None = None, base: dict | None = None) -> _EquiposMozos:
+    return _EquiposMozos(cfg or cargar(), base or coc.cargar())
+
+
+def utilidad_mozos(q: float, precio: float, nacional: dict, equipos: _EquiposMozos, **kw) -> float:
+    loc, esc = escenario_mozos(q, precio, equipos.cfg, equipos.base, eq=equipos(q), **kw)
+    return modelo(loc, q, esc, nacional).util
+
+
+def equilibrio_mozos(precio: float, nacional: dict, equipos: _EquiposMozos, paso: int = 5, maximo: int = 400,
+                     **kw) -> int | None:
+    """Menos menús al día con que el menú con mozos no pierde a ese precio,
+    con la gente que pide la simulación para cada volumen."""
+    for q in range(paso, maximo + 1, paso):
+        if utilidad_mozos(q, precio, nacional, equipos, **kw) >= 0:
+            return q
+    return None

@@ -656,6 +656,25 @@ def autoservicio() -> dict:
     utilidad = [[round(au.utilidad(q, p, NAC, EQUIPOS)) for p in precios] for q in volumenes]
     eq = {str(p): au.equilibrio(p, NAC, EQUIPOS) for p in precios}
     eq_enc = {str(p): au.equilibrio(p, NAC, EQUIPOS, encargado=True) for p in precios}
+    # los menús con mozos, con la gente que pide la simulación de su cocina (no la planilla automática):
+    # el mismo local del autoservicio y el local del inversor que supervisa
+    em = au.equipos_mozos(cfg)
+    arq = json.loads((RAIZ.parent / "data" / "arquetipos.json").read_text(encoding="utf-8"))
+    inv_loc, inv_esc, _s, _q = armar(next(a["datos"] for a in arq if a["nombre"] == "Inversor que supervisa"))
+    rmv = 1230
+    sueldos_inv = {"jefe": max(inv_loc.sueldo_cocinero, rmv * 1.06), "cocinero": max(inv_loc.sueldo_ayudante, rmv),
+                   "auxiliar": max(inv_loc.sueldo_mozo, rmv)}
+    eq_mozos = {str(p): au.equilibrio_mozos(p, NAC, em) for p in precios}
+    eq_inv = {str(p): au.equilibrio_mozos(p, NAC, em, local=inv_loc, sueldos=sueldos_inv) for p in precios}
+    inv_sim = []
+    for q in (80, 100, 150):
+        e = em(q)
+        loc, esc = au.escenario_mozos(q, 13, cfg, eq=e, local=inv_loc, sueldos=sueldos_inv)
+        m_sim = modelo(loc, q, esc, NAC)
+        m_aut = modelo(inv_loc.con(precio=13.0), q, inv_esc, NAC)
+        inv_sim.append({"q": q, "personas_sim": sum(t.cantidad for t in esc.planilla), "util_sim": m_sim.util,
+                        "personas_auto": m_aut.cocina + m_aut.mozos, "util_auto": m_aut.util})
+    inv_dif = {"alquiler": inv_loc.alquiler_mes, "servicios": inv_loc.servicios_mes, "insumos": inv_loc.insumos}
     # el día del autoservicio a su venta base, para el Gantt
     q0 = cfg["q"]
     e0 = EQUIPOS(q0)
@@ -672,7 +691,8 @@ def autoservicio() -> dict:
                                           "servicio", "caja", "salon", "sueldos")},
         "precios": precios, "volumenes": volumenes, "por_q": por_q,
         "matriz": {"precios": precios, "volumenes": volumenes, "utilidad": utilidad},
-        "equilibrio": eq, "equilibrio_encargado": eq_enc, "gantt": gantt,
+        "equilibrio": eq, "equilibrio_encargado": eq_enc, "equilibrio_mozos": eq_mozos,
+        "equilibrio_inversor_sim": eq_inv, "inversor_sim": inv_sim, "inversor_local": inv_dif, "gantt": gantt,
         "estaciones": base_cocina["estaciones"],
         "tareas_cocina": {"candela": sum(coc.variable(t) + t["fijo"] for t in base_cocina["tareas"]),
                           "autoservicio": sum(coc.variable(t) + t["fijo"] for t in cc["tareas"])},
