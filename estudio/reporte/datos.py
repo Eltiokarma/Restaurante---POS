@@ -19,6 +19,7 @@ from motor.flujo import NOMBRE_REGIMEN, REGIMENES, Supuestos, comparar_regimenes
 from motor.igualdad import BASE as BASE_IGUAL, GRUPOS, igualar, personas_casa, shapley
 from motor.incertidumbre import RANGOS, perturbar
 from motor.trabajo import casa_desde, trabajo_de_la_casa
+from motor import autoservicio as au
 from motor import capacidad as cap
 from motor import cocina as coc
 from motor.modelo import Noche, Trabajador
@@ -366,6 +367,8 @@ def capacidades(arquetipos: list[dict], candela: dict | None) -> list[dict]:
         pares.append(("Candela (datos del POS)", candela))
     salida = []
     for nombre, datos in pares:
+        if datos.get("autoservicio"):
+            continue  # sin mozos: su gente sale de su propio modelo (autoservicio())
         local, esc, _sup, q = armar(datos)
         m = modelo(local, q, esc, NAC)
         cocina, salon = cap.gente(datos, m)
@@ -398,6 +401,8 @@ def organizacion(arquetipos: list[dict], candela: dict | None) -> list[dict]:
         pares.append(("Candela (datos del POS)", candela))
     salida = []
     for nombre, datos in pares:
+        if datos.get("autoservicio"):
+            continue
         local, esc, _sup, q = armar(datos)
         m = modelo(local, q, esc, NAC)
         cocina_, _salon = cap.gente(datos, m)
@@ -472,6 +477,8 @@ def entradas(arquetipos: list[dict], candela: dict | None) -> list[dict]:
         local, esc, sup, q = armar(datos)
         m = modelo(local, q, esc, NAC)
         cocina_, salon = cap.gente(datos, m)
+        if datos.get("autoservicio"):  # sin mozos: nadie de cocina sale al salón
+            cocina_, salon = sum(t.cantidad for t in esc.planilla if t.area == "cocina"), 0
         salida.append({
             "nombre": nombre, "precio": local.precio, "q": q, "dias": esc.dias, "alquiler": local.alquiler_mes,
             "insumos": local.insumos, "balones": esc.balones, "servicios": local.servicios_mes,
@@ -563,7 +570,8 @@ def mismos_precios(arquetipos: list[dict], candela: dict | None) -> dict:
         eq, casa = {}, {}
         for pr in PRECIOS_COMUNES:
             l2 = local.con(precio=float(pr), precio_propio=True)
-            eq[str(pr)] = equilibrio(l2, esc, NAC)
+            # el autoservicio arma su planilla según la venta: se recalcula en cada volumen
+            eq[str(pr)] = au.equilibrio(pr, NAC, EQUIPOS) if datos.get("autoservicio") else equilibrio(l2, esc, NAC)
             casa[str(pr)] = modelo(l2, q, esc, NAC).util + sueldo
         filas.append({"nombre": nombre, "precio": local.precio, "q": q, "equilibrio": eq, "casa": casa,
                       "precio_minimo": precio_minimo(local, q, esc, NAC)})
@@ -587,9 +595,13 @@ def mismos_volumenes(arquetipos: list[dict], candela: dict | None) -> dict:
         sueldo = 1500 if esc.sueldo_dueno else 0
         m0 = modelo(local, q, esc, NAC)
         cocina_, salon = cap.gente(datos, m0)
-        tope = cap.capacidad(cocina_, salon)["tope"] if esc.planilla else None
+        tope = cap.capacidad(cocina_, salon)["tope"] if esc.planilla and not datos.get("autoservicio") else None
         casa, pmin = {}, {}
         for v in VOLUMENES_COMUNES:
+            if datos.get("autoservicio"):
+                casa[str(v)] = au.utilidad(v, local.precio, NAC, EQUIPOS)
+                pmin[str(v)] = au.precio_minimo(v, NAC, EQUIPOS)
+                continue
             casa[str(v)] = modelo(local, v, esc, NAC).util + sueldo
             pmin[str(v)] = precio_minimo(local, v, esc, NAC)
         filas.append({"nombre": nombre, "precio": local.precio, "q": q, "planilla_propia": bool(esc.planilla),
@@ -598,6 +610,91 @@ def mismos_volumenes(arquetipos: list[dict], candela: dict | None) -> dict:
 
 
 N_SORTEOS = 1000
+
+# El autoservicio de comida criolla: entra a todos los análisis como un negocio
+# más, con la planilla que necesita a su venta; donde cambia la venta, la
+# planilla se recalcula (motor/autoservicio.py).
+AUTOSERVICIO = "Autoservicio criollo"
+EQUIPOS = au.equipos()
+
+
+def arquetipo_autoservicio() -> dict:
+    return {"nombre": AUTOSERVICIO, "grupo": "Formato estandarizado", "datos": au.datos()}
+
+
+def _horas(m: float) -> str:
+    return coc.hora(m)
+
+
+def autoservicio() -> dict:
+    """Experimento: el autoservicio con cada venta y cada precio. Gente por
+    puesto, turnos, costo y utilidad; precio mínimo por volumen y menús para
+    no perder por precio, con y sin un encargado pagado."""
+    cfg = au.cargar()
+    precios, volumenes = cfg["precios"], cfg["volumenes"]
+    por_q = []
+    for q in volumenes:
+        e = EQUIPOS(q)
+        loc, esc = au.escenario(q, eq=e)
+        m = modelo(loc, q, esc, NAC)
+        h = au.horarios(e)
+        por_q.append({
+            "q": q, "cocina": e["cocina"], "turno_tarde": au.turno_tarde(e), "cajas": e["cajas"],
+            "uso_caja": e["uso_caja"], "salon": e["salon"], "almuerzo": e["almuerzo"],
+            "personas": sum(t.cantidad for t in esc.planilla),
+            "equivalentes": sum(t.cantidad * t.jornada for t in esc.planilla),
+            "planilla": [{"puesto": t.puesto, "cantidad": t.cantidad, "jornada": t.jornada, "monto": t.monto}
+                         for t in esc.planilla],
+            "horarios": {k: (None if v is None else [_horas(v[0]), _horas(v[1])]) for k, v in h.items()},
+            "espera_maxima": e["servicio"]["espera_maxima"], "ritmo_hora": e["servicio"]["ritmo_hora"],
+            "personal": m.personal, "balones": esc.balones, "ventas": m.ventas, "utilidad": m.util,
+            "insumos": m.var_u * m.q_mes, "fijos": m.fijos, "alquiler": m.alquiler,
+            "precio_minimo": au.precio_minimo(q, NAC, EQUIPOS),
+            "por_menu_personal": m.personal / m.q_mes,
+            "mozos": _con_mozos(q, cfg),
+        })
+    utilidad = [[round(au.utilidad(q, p, NAC, EQUIPOS)) for p in precios] for q in volumenes]
+    eq = {str(p): au.equilibrio(p, NAC, EQUIPOS) for p in precios}
+    eq_enc = {str(p): au.equilibrio(p, NAC, EQUIPOS, encargado=True) for p in precios}
+    # el día del autoservicio a su venta base, para el Gantt
+    q0 = cfg["q"]
+    e0 = EQUIPOS(q0)
+    r = e0["plan"]
+    cc = au.cocina_de(cfg)
+    gantt = {**{k: r[k] for k in ("modo", "personas", "manana", "tarde", "puestos", "inicio", "listo")},
+             "jornada": e0["jornada"], "turno_tarde": au.turno_tarde(e0), "horarios": au.horarios(e0)}
+    # comparación con el menú de la misma cocina (Candela) y el inversor que supervisa
+    base_cocina = coc.cargar()
+    return {
+        "supuestos": {k: cfg[k] for k in ("carta", "precio", "q", "insumos", "insumos_nota", "para_llevar", "taper",
+                                          "alquiler_mes", "servicios_mes", "otros_mes", "menus_por_balon",
+                                          "inversion", "inversion_detalle", "estandarizacion", "fondos_en_olla",
+                                          "servicio", "caja", "salon", "sueldos")},
+        "precios": precios, "volumenes": volumenes, "por_q": por_q,
+        "matriz": {"precios": precios, "volumenes": volumenes, "utilidad": utilidad},
+        "equilibrio": eq, "equilibrio_encargado": eq_enc, "gantt": gantt,
+        "estaciones": base_cocina["estaciones"],
+        "tareas_cocina": {"candela": sum(coc.variable(t) + t["fijo"] for t in base_cocina["tareas"]),
+                          "autoservicio": sum(coc.variable(t) + t["fijo"] for t in cc["tareas"])},
+        "desorden": coc.desorden_calibrado(base_cocina),
+    }
+
+
+def _con_mozos(q: float, cfg: dict) -> dict:
+    """El mismo local servido como un menú de siempre, con mozos."""
+    e = au.equipo_mozos(q, cfg)
+    loc, esc = au.escenario_mozos(q, eq=e, cfg=cfg)
+    m = modelo(loc, q, esc, NAC)
+    return {"cocina": e["cocina"], "turno_tarde": e["turno_tarde"], "mozos": e["mozos"],
+            "personas": sum(t.cantidad for t in esc.planilla), "personal": m.personal, "utilidad": m.util,
+            "utilidad_11": modelo(loc.con(precio=11.0), q, esc, NAC).util,
+            "auto_11": au.utilidad(q, 11, NAC, EQUIPOS)}
+
+
+def matriz_autoservicio(c: dict) -> dict:
+    """El mapa de precio y volumen del anexo, con la planilla de cada volumen."""
+    m = c["matriz"]
+    return {**m, "utilidad": [[round(au.utilidad(v, p, NAC, EQUIPOS)) for p in m["precios"]] for v in m["volumenes"]]}
 
 
 def robustez_supuestos(arquetipos: list[dict], candela: dict | None, n: int = N_SORTEOS, semilla: int = 7) -> dict:
@@ -695,7 +792,11 @@ def _api(ruta: str):
 
 def generar() -> dict:
     arquetipos = json.loads((RAIZ.parent / "data" / "arquetipos.json").read_text(encoding="utf-8"))
+    arquetipos.append(arquetipo_autoservicio())
     casos = [caso(a["nombre"], a["datos"]) for a in arquetipos]
+    for c in casos:
+        if c["nombre"] == AUTOSERVICIO:
+            c["matriz"] = matriz_autoservicio(c)
     candela = platos = g = None
     variantes: list = []
     guardados = _api("/escenarios")
@@ -724,6 +825,7 @@ def generar() -> dict:
         "parametros": parametros(),
         "organizacion": organizacion(arquetipos, g["datos"] if candela else None),
         "cocina": cocina(candela["q"] if candela else None, g["datos"] if candela else None),
+        "autoservicio": autoservicio(),
         "supuestos_robustez": robustez_supuestos(arquetipos, g["datos"] if candela else None),
         "ciudades": ciudades(), "casos": casos, "candela": candela, "candela_variantes": variantes, "platos": platos, "robustez": robustez, "robustez_supuesta": robustez_supuesta,
         "nacional": {k: v for k, v in NAC.items() if k != "notas"}, "riesgo": {k: v for k, v in RIESGO.items() if k != "notas"},

@@ -121,3 +121,7 @@ directo en la base del estudio (origen `propio`), que vive aparte.
    pizarras.
 7. Otros formatos de comida: chicharronería, pollería de pollo frito, cevichería
    y carrito sanguchero, con sus recetas, planilla y venta, comparados con el menú.
+   El primero ya está: el autoservicio criollo (`motor/autoservicio.py`, supuestos
+   en `data/autoservicio.json`), con la planilla calculada puesto por puesto para
+   cada venta. Falta contrastarlo con un local real: flujo de gente de la
+   ubicación, tiempo de cobro con Yape y menús por hora de una línea de baño maría.
