@@ -59,6 +59,7 @@ def pct(v: float, pos=None) -> str:
 GRUPOS_NEGOCIO = [("La casa pone el trabajo", ["Propietario que cocina", "Familiar sin sueldos", "Fonda en casa propia",
                                                "Puesto de mercado informal", "Pequeño en Nuevo RUS"]),
                   ("El capital contrata", ["Inversor que supervisa", "Día y noche", "Ejecutivo en el centro", "Inversor ausente"]),
+                  ("Formato estandarizado", ["Autoservicio criollo"]),
                   ("Referencia", ["Exitoso (referencia compuesta)"]), ("Caso real", ["Candela (datos del POS)"])]
 ORDEN_NEGOCIO = [nm for _, nms in GRUPOS_NEGOCIO for nm in nms]
 GRUPO_DE = {nm: g for g, nms in GRUPOS_NEGOCIO for nm in nms}
@@ -536,7 +537,7 @@ def fig_precios(d):
     if not mp:
         return
     estilo = {"La casa pone el trabajo": (AZUL, "-"), "El capital contrata": (NARANJA, "-"),
-              "Referencia": (VERDE, (0, (4, 2))), "Caso real": (PERDIDA, (0, (1, 1.5)))}
+              "Formato estandarizado": (VIOLETA, "-"), "Referencia": (VERDE, (0, (4, 2))), "Caso real": (PERDIDA, (0, (1, 1.5)))}
     orden = {nm: i for i, nm in enumerate(ORDEN_NEGOCIO)}
     filas = sorted(mp["filas"], key=lambda f: orden.get(f["nombre"], 99))
     fig, ax = plt.subplots(figsize=(ANCHO, 3.6))
@@ -574,7 +575,7 @@ def fig_volumenes(d):
     if not mv:
         return
     estilo = {"La casa pone el trabajo": (AZUL, "-"), "El capital contrata": (NARANJA, "-"),
-              "Referencia": (VERDE, (0, (4, 2))), "Caso real": (PERDIDA, (0, (1, 1.5)))}
+              "Formato estandarizado": (VIOLETA, "-"), "Referencia": (VERDE, (0, (4, 2))), "Caso real": (PERDIDA, (0, (1, 1.5)))}
     orden = {nm: i for i, nm in enumerate(ORDEN_NEGOCIO)}
     filas = sorted(mv["filas"], key=lambda f: orden.get(f["nombre"], 99))
     fig, ax = plt.subplots(figsize=(ANCHO, 3.6))
@@ -734,6 +735,34 @@ COLOR_ESTACION = {"fondos": NARANJA, "verduras": AGUA, "plancha": VIOLETA}
 NOMBRE_MODO = {"domestico": "Doméstica", "bloques": "Por bloques", "mise": "Mise en place", "estaciones": "Por estaciones"}
 
 
+def _panel_gantt(ax, g, almuerzo, fin_alm):
+    """Un panel del Gantt: una fila por persona, la mañana corrida a la hora en
+    que entra la gente, el almuerzo en gris y la tarde que deja lista la mañana."""
+    corre = g["jornada"]["entra"] - g["inicio"]  # la mañana empieza a la hora en que entra la gente
+    n = g["personas"]
+    for p in range(n):
+        y = n - 1 - p
+        ax.barh(y, fin_alm - almuerzo, left=almuerzo, height=0.7, color=GRILLA, zorder=1)
+        if p == 0:
+            ax.text((almuerzo + fin_alm) / 2, y, "almuerzo", ha="center", va="center", fontsize=7, color=TINTA2)
+        for tramo, desplaza in (("manana", corre), ("tarde", 0)):
+            for b in (x for x in g[tramo] if x["persona"] == p):
+                ini, fa, fin = b["inicio"] + desplaza, b["fin_activo"] + desplaza, b["fin"] + desplaza
+                col = COLOR_ESTACION[b["estacion"]]
+                ax.barh(y, fa - ini, left=ini, height=0.7, color=col, edgecolor="white", lw=0.6, zorder=3)
+                if fin > fa:  # la olla cocina sola
+                    ax.plot([fa, fin], [y - 0.3, y - 0.3], color=col, lw=1.6, alpha=0.55, zorder=2,
+                            solid_capstyle="butt")
+                if fa - ini >= 4.3 * len(b["corto"]) + 5:
+                    ax.text((ini + fa) / 2, y + 0.04, b["corto"], ha="center", va="center", fontsize=6,
+                            color="white", zorder=4)
+    ax.axvline(almuerzo, color=TINTA2, lw=0.6, ls=(0, (2, 2)))
+    ax.set_yticks(range(n), [f"P{n - i}" for i in range(n)], fontsize=7.5)
+    ax.set_ylim(-0.6, n - 0.4)
+    ax.spines["left"].set_visible(False)
+    ax.tick_params(axis="y", length=0)
+
+
 def fig_gantt(d):
     """Gantt de un día de cocina en cada forma de trabajar: quién hace qué en
     la mañana, el almuerzo y (con mise en place) la tarde que deja lista la
@@ -750,32 +779,10 @@ def fig_gantt(d):
                              sharex=True, gridspec_kw={"height_ratios": [g["personas"] for g in paneles]})
     x0, x1 = 7 * 60, 18 * 60 + 30
     for ax, g in zip(axes, paneles):
-        corre = g["jornada"]["entra"] - g["inicio"]  # la mañana empieza a la hora en que entra la gente
-        n = g["personas"]
-        for p in range(n):
-            y = n - 1 - p
-            ax.barh(y, fin_alm - almuerzo, left=almuerzo, height=0.7, color=GRILLA, zorder=1)
-            if p == 0:
-                ax.text((almuerzo + fin_alm) / 2, y, "almuerzo", ha="center", va="center", fontsize=7, color=TINTA2)
-            for tramo, desplaza in (("manana", corre), ("tarde", 0)):
-                for b in (x for x in g[tramo] if x["persona"] == p):
-                    ini, fa, fin = b["inicio"] + desplaza, b["fin_activo"] + desplaza, b["fin"] + desplaza
-                    col = COLOR_ESTACION[b["estacion"]]
-                    ax.barh(y, fa - ini, left=ini, height=0.7, color=col, edgecolor="white", lw=0.6, zorder=3)
-                    if fin > fa:  # la olla cocina sola
-                        ax.plot([fa, fin], [y - 0.3, y - 0.3], color=col, lw=1.6, alpha=0.55, zorder=2,
-                                solid_capstyle="butt")
-                    if fa - ini >= 4.3 * len(b["corto"]) + 5:
-                        ax.text((ini + fa) / 2, y + 0.04, b["corto"], ha="center", va="center", fontsize=6,
-                                color="white", zorder=4)
-        ax.axvline(almuerzo, color=TINTA2, lw=0.6, ls=(0, (2, 2)))
-        ax.set_yticks(range(n), [f"P{n - i}" for i in range(n)], fontsize=7.5)
-        ax.set_ylim(-0.6, n - 0.4)
-        titulo = f"{NOMBRE_MODO[g['modo']]}, {n} personas"
+        _panel_gantt(ax, g, almuerzo, fin_alm)
+        titulo = f"{NOMBRE_MODO[g['modo']]}, {g['personas']} personas"
         ax.set_title(f"{titulo}: entran a las {_hhmm(g['jornada']['entra'])}, salen a las {_hhmm(g['jornada']['sale'])}"
                      f" ({g['jornada']['horas']:.1f} h)", fontsize=8.5, loc="left", pad=3)
-        ax.spines["left"].set_visible(False)
-        ax.tick_params(axis="y", length=0)
     axes[-1].set_xlim(x0, x1)
     axes[-1].xaxis.set_major_locator(MultipleLocator(60))
     axes[-1].xaxis.set_major_formatter(FuncFormatter(_hhmm))
@@ -784,6 +791,49 @@ def fig_gantt(d):
     axes[0].legend(handles=marcas, fontsize=7, loc="lower center", bbox_to_anchor=(0.5, 1.25), ncol=4, frameon=False)
     fig.tight_layout(h_pad=0.6)
     guardar(fig, "gantt")
+
+
+def fig_autoservicio(d):
+    """El autoservicio: su cocina en un día, la gente y la utilidad frente al
+    mismo local con mozos, y el mapa de precio y venta."""
+    a = d.get("autoservicio")
+    if not a:
+        return
+    sup = a["supuestos"]
+    _matriz({"matriz": a["matriz"], "precio": sup["precio"], "q": sup["q"]}, "auto_matriz", alto=3.6)
+    # gente y utilidad por volumen, en los dos formatos
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(ANCHO, 2.7))
+    qs = [r["q"] for r in a["por_q"]]
+    a1.plot(qs, [r["personas"] for r in a["por_q"]], color=VIOLETA, marker="o", ms=3, lw=1.5, label="Autoservicio")
+    a1.plot(qs, [r["mozos"]["personas"] for r in a["por_q"]], color=NARANJA, marker="o", ms=3, lw=1.5,
+            label="El mismo local con mozos")
+    a1.set_ylabel("Personas en planilla")
+    a1.set_xlabel("Menús al día")
+    a1.set_ylim(bottom=0)
+    a2.plot(qs, [r["utilidad"] for r in a["por_q"]], color=VIOLETA, marker="o", ms=3, lw=1.5)
+    a2.plot(qs, [r["mozos"]["utilidad"] for r in a["por_q"]], color=NARANJA, marker="o", ms=3, lw=1.5)
+    a2.axhline(0, color=TINTA2, lw=0.8)
+    a2.yaxis.set_major_formatter(FuncFormatter(soles))
+    a2.set_ylabel(f"Utilidad del mes a S/ {sup['precio']:g}")
+    a2.set_xlabel("Menús al día")
+    for ax in (a1, a2):
+        ax.yaxis.grid(True, color=GRILLA, lw=0.6)
+        ax.set_axisbelow(True)
+    a1.legend(fontsize=7.5, loc="upper left")
+    fig.tight_layout(w_pad=1.5)
+    guardar(fig, "auto_formato")
+    # el día de su cocina
+    g = a["gantt"]
+    m_ = lambda x: int(x[:2]) * 60 + int(x[3:])  # noqa: E731
+    fig, ax = plt.subplots(figsize=(ANCHO, 0.9 + 0.42 * g["personas"]))
+    _panel_gantt(ax, g, m_("12:00"), m_("15:30"))
+    ax.set_xlim(7 * 60, 18 * 60 + 30)
+    ax.xaxis.set_major_locator(MultipleLocator(60))
+    ax.xaxis.set_major_formatter(FuncFormatter(_hhmm))
+    marcas = [Patch(color=COLOR_ESTACION[e], label=t) for e, t in a["estaciones"].items()]
+    marcas += [Line2D([], [], color=TINTA2, lw=1.6, alpha=0.55, label="la olla cocina sola")]
+    ax.legend(handles=marcas, fontsize=7, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=4, frameon=False)
+    guardar(fig, "auto_gantt")
 
 
 def fig_cola(d):
@@ -851,7 +901,7 @@ def generar(d: dict | None = None) -> None:
     for f in (fig_ciudades, fig_igv, fig_ingreso, fig_estructura, fig_riesgo, fig_quiebres, fig_tornados, fig_flujo,
               fig_regimenes, fig_matriz, fig_platos, fig_precio_robusto, fig_decisiones, fig_estres, fig_nrus, fig_historia, fig_igualdad, fig_factores, fig_trabajo,
               fig_capacidad, fig_gantt, fig_cola, fig_estados,
-              fig_precios, fig_volumenes):
+              fig_precios, fig_volumenes, fig_autoservicio):
         f(d)
 
 

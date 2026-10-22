@@ -73,7 +73,7 @@ def describir_decision(dd: dict) -> str:
 # ---------------------------------------------------------------- piezas
 
 # Los negocios se presentan siempre en el mismo orden, agrupados por quién pone el trabajo
-GRUPOS_NEGOCIO = [('La casa pone el trabajo', ['Propietario que cocina', 'Familiar sin sueldos', 'Fonda en casa propia', 'Puesto de mercado informal', 'Pequeño en Nuevo RUS']), ('El capital contrata', ['Inversor que supervisa', 'Día y noche', 'Ejecutivo en el centro', 'Inversor ausente']), ('Referencia', ['Exitoso (referencia compuesta)']), ('Caso real', ['Candela (datos del POS)'])]
+GRUPOS_NEGOCIO = [('La casa pone el trabajo', ['Propietario que cocina', 'Familiar sin sueldos', 'Fonda en casa propia', 'Puesto de mercado informal', 'Pequeño en Nuevo RUS']), ('El capital contrata', ['Inversor que supervisa', 'Día y noche', 'Ejecutivo en el centro', 'Inversor ausente']), ('Formato estandarizado', ['Autoservicio criollo']), ('Referencia', ['Exitoso (referencia compuesta)']), ('Caso real', ['Candela (datos del POS)'])]
 ORDEN_NEGOCIO = [nm for _, nms in GRUPOS_NEGOCIO for nm in nms]
 GRUPO_DE = {nm: g for g, nms in GRUPOS_NEGOCIO for nm in nms}
 
@@ -305,6 +305,13 @@ def construir(d: dict) -> str:
                 f"{n(cap_('mise', 3)['tope'])} y {n(cap_('estaciones', 3)['tope'])} menús"
                 + ("" if not org_c else f"; Candela podría trabajar con una persona menos y ahorrar {s(org_c['modos'][mejor_c]['ahorro'])} al mes"),
                 "sí; el orden se mantiene con gente lenta o rápida"))
+        if aut:
+            filas.append((
+                "¿Funcionaría un autoservicio criollo?",
+                "Planilla por puesto de 40 a 300 menús y de S/~7 a S/~18; el mismo local con mozos",
+                f"A {s(a_sup['precio'])} no pierde desde {aut['equilibrio'][str(a_sup['precio'])]} menús y con "
+                f"{n(a_sup['q'])} deja {s(a0['utilidad'])} al mes; deja más que el local con mozos desde "
+                f"{a_cruce} menús; a S/~9 no cubre costos", "sí, con flujo de gente; esa venta no está medida"))
         filas.append((
             "¿Conviene abrir de noche?", "Barrido con una noche tipo de 30 platos",
             "Mejora a todos los negocios", "sí, si existe esa demanda (no medida)"))
@@ -673,6 +680,67 @@ Variable & Valor & Origen \\
         f = next(f for f in mv["filas"] if f["nombre"] == nombre)
         return next((v for v in mv["volumenes"] if f["casa"][str(v)] >= 0), None)
 
+    aut = d.get("autoservicio")
+    AUTO = "Autoservicio criollo"
+    if aut:
+        a_sup = aut["supuestos"]
+        aq = {r["q"]: r for r in aut["por_q"]}
+        a0 = aq[a_sup["q"]]
+        a_caso = next(c for c in d["casos"] if c["nombre"] == AUTO)
+        # desde cuántos menús el autoservicio deja más que el mismo local con mozos (y no vuelve a dejar menos)
+        a_cruce = next((q for q in sorted(aq) if all(aq[x]["utilidad"] >= aq[x]["mozos"]["utilidad"]
+                                                     for x in aq if x >= q)), None)
+        a_rob = rob.get(AUTO)
+
+    FUNCIONES = {
+        "Jefe de cocina": ("temprano", "Cocina los fondos de olla, fija porciones y recetas, controla el baño maría y "
+                                       "pide las compras del día siguiente."),
+        "Cocinero de producción": ("temprano", "Entradas, arroz y guarniciones; en el almuerzo repone frituras y "
+                                               "saltados en tandas pequeñas."),
+        "Despachador de línea": ("temprano", "Sirve el fondo porcionado en la bandeja o el táper, llama el número del "
+                                             "ticket y entrega."),
+        "Auxiliar de lavado": ("temprano", "Lava bandejas, platos y ollas durante el almuerzo."),
+        "Auxiliar de turno tarde": ("tarde", "Ayuda a terminar la mañana, lava en el almuerzo y deja lista la mise en "
+                                             "place del día siguiente: pelar, picar, porcionar carnes."),
+        "Cajero": ("caja", "Cobra el pedido hecho en la tablet (efectivo, QR o tarjeta), entrega el ticket y cuadra la "
+                           "caja con el dueño."),
+        "Salón: recojo y limpieza": ("salon", "Recoge bandejas, limpia mesas y baños, repone cubiertos y servilletas."),
+    }
+
+    def tabla_auto_cargos():
+        filas = []
+        for t in a0["planilla"]:
+            turno, funcion = FUNCIONES[t["puesto"]]
+            h = a0["horarios"][turno]
+            cant = n(t["cantidad"]) + (" (medio tiempo)" if t["jornada"] < 1 else "")
+            filas.append(f"{esc(t['puesto'])} & {cant} & {h[0]}--{h[1]} & {s(t['monto'])} & {esc(funcion)} \\\\")
+        filas.append(r"Dueño & 1 & a demanda & sin sueldo & Supervisa, compra con el jefe de cocina, revisa la caja y "
+                     r"el inventario (unas 20 horas a la semana). \\")
+        return "\n".join(filas)
+
+    def tabla_auto_equipo():
+        filas = []
+        for r in aut["por_q"]:
+            neg = r"\textcolor{perdida}{" + s(r["utilidad"]) + "}" if r["utilidad"] < 0 else s(r["utilidad"])
+            negm = (r"\textcolor{perdida}{" + s(r["mozos"]["utilidad"]) + "}" if r["mozos"]["utilidad"] < 0
+                    else s(r["mozos"]["utilidad"]))
+            fila = (f"{n(r['q'])} & {r['cocina']} & {r['turno_tarde']} & {r['cajas']} & {n(r['salon'], 1)} & "
+                    f"{r['personas']} & {s(r['por_menu_personal'], 2)} & {n(r['espera_maxima'], 1)} & {neg} & "
+                    f"{s(r['precio_minimo'], 2)} & {r['mozos']['personas']} & {negm} \\\\")
+            filas.append(r"\textbf{" + fila.split(" & ")[0] + "}" + fila[len(fila.split(" & ")[0]):]
+                         if r["q"] == a_sup["q"] else fila)
+        return "\n".join(filas)
+
+    def tabla_auto_precios():
+        comparar = [AUTO, "Inversor que supervisa", "Exitoso (referencia compuesta)"] + (
+            ["Candela (datos del POS)"] if cand else [])
+        eqs = {nm: next(f for f in mp["filas"] if f["nombre"] == nm)["equilibrio"] for nm in comparar}
+        filas = []
+        for pr in mp["precios"]:
+            celdas = [eqs[AUTO][str(pr)], aut["equilibrio_encargado"][str(pr)]] + [eqs[nm][str(pr)] for nm in comparar[1:]]
+            filas.append(f"S/~{pr} & " + " & ".join("--" if v is None else str(v) for v in celdas) + r" \\")
+        return "\n".join(filas), comparar[1:]
+
     def mapas_anexo():
         from reporte.figuras import archivo_matriz
         bloques = []
@@ -1003,13 +1071,13 @@ buscan las decisiones que resisten la incertidumbre sobre la clientela, se les p
 la capacidad de la cocina, y se simula minuto a minuto un día de cocina en cuatro formas de organizarla. Un sorteo
 de los supuestos dice qué conclusiones se sostienen aunque los números se equivoquen.
 
-Los resultados principales, que la \seccion{{sec:conclusiones}} desarrolla, son cuatro. En una fonda de provincia
+Los resultados principales, que la \seccion{{sec:conclusiones}} desarrolla, son {"cinco" if aut else "cuatro"}. En una fonda de provincia
 gana el trabajo y no el capital: a S/~10, la familia necesita {eq_('Familiar sin sueldos', 10) if mp else 29} menús al día
 para no perder, el propietario que cocina {eq_('Propietario que cocina', 10) if mp else 48} y el inversor que contrata a
 todos {eq_('Inversor que supervisa', 10) if mp else 99}. Con la clientela medida en Juliaca, subir el precio no paga: la
 mejora tiene que venir del costo, la mezcla de platos, más horas de venta o una cocina mejor organizada. La
 formalidad cuesta, y el calendario del IGV la encarece. Y Candela está en su punto de equilibrio antes de impuestos
-con capacidad de sobra: le falta clientela, no gente. El documento tiene dos capítulos: el primero, sobre los
+con capacidad de sobra: le falta clientela, no gente.{"" if not aut else rf" Un formato distinto, el autoservicio criollo con carta fija y pedidos en tablet, sí gana contratando a toda su gente, pero solo con volumen y a precio de menú ejecutivo: a {s(a_sup['precio'])} necesita {aut['equilibrio'][str(a_sup['precio'])]} menús al día para no perder y supera al mismo local con mozos desde unos {a_cruce}."} El documento tiene dos capítulos: el primero, sobre los
 negocios; el segundo, todavía en construcción, sobre las ciudades.
 
 \clearpage
@@ -1224,6 +1292,9 @@ compras y contador, y sus compras cuestan 6\,\% más sin el regateo y el control
 que además abre de noche con su propio equipo.
 \item[Local] La \emph{{fonda en casa propia}} no paga alquiler, pero está fuera de la calle con más paso:
 vende a S/~9 y unos 45 menús diarios.
+\item[Formato] El \emph{{autoservicio criollo}} es otra manera de servir: carta fija que rota, pedidos en
+tablet, caja y una línea de baño maría, sin mozos. Su planilla no se supone: se calcula puesto por puesto con la
+simulación de la cocina para cada venta (\seccion{{sec:autoservicio}}).
 \item[Referencia] El \emph{{exitoso}} es una referencia compuesta, no un local real: 220 menús a S/~13 con
 compras por volumen. Ningún local de menú publica sus números; la referencia combina el dato del MINCETUR de
 que la mitad de los restaurantes recupera su inversión en 19 a 24 meses y las ventas de franquicias chicas,
@@ -1367,7 +1438,7 @@ Variable & Valor y origen \\
 
 \section{{Resultados}}\label{{sec:resultados}}
 
-Los resultados van de lo general a lo particular: primero los once negocios y el caso Candela, luego el riesgo y la robustez de las conclusiones, y al final lo que el modelo deja ver sobre el trabajo,
+Los resultados van de lo general a lo particular: primero los {NT} restaurantes tipo y el caso Candela, luego el riesgo y la robustez de las conclusiones, y al final lo que el modelo deja ver sobre el trabajo,
 la capacidad y la organización de la cocina. La sección cierra con el registro de todos los experimentos.
 
 \subsection{{{NN.capitalize()} negocios}}\label{{sec:negocios}}
@@ -2191,6 +2262,189 @@ cuadros~\ref{{tab:prep}} y~\ref{{tab:coccion}} por datos propios. Y probar una s
 misma gente, contestaría la pregunta de fondo con un experimento de verdad.
 
 """}
+{"" if not aut else rf"""\subsection{{Otro formato: el autoservicio criollo}}\label{{sec:autoservicio}}
+
+Todos los negocios anteriores son una fonda de menú: se cocina en la mañana, un mozo toma el pedido, lo lleva a
+la mesa y cobra. El autoservicio criollo cambia el formato. Su carta es fija y rota ---menú A un día, menú B el
+siguiente, con {a_sup['carta']['fondos']} fondos y {a_sup['carta']['entradas']} entradas cada día---, todo se prepara
+antes del almuerzo y se sirve desde una línea de baño maría. El cliente pide en una tablet ---el mismo sistema de
+pedidos con que trabaja Candela---, paga en caja y recoge su bandeja o su bolsa; nadie atiende mesas, solo se
+recoge y se limpia. Es la lógica de una cadena de comida rápida aplicada a la comida criolla. La pregunta es si
+funcionaría en Juliaca y desde cuánta venta.
+
+\subsubsection{{Cómo se calcula}}
+
+El autoservicio entra a todos los análisis del capítulo como un negocio más, con dos diferencias de método. La
+primera: su planilla no se supone, se calcula puesto por puesto con la simulación de la cocina
+(\seccion{{sec:sim_cocina}}), y se recalcula para cada volumen de venta. La segunda: como el dueño invierte y
+supervisa sin cobrar sueldo, se compara sobre todo con el inversor que supervisa y con el mismo local servido con
+mozos. El \cuadro{{tab:auto_supuestos}} reúne los supuestos.
+
+{cuadro("Supuestos del autoservicio criollo. Los que no tienen fuente son del estudio y deben contrastarse con un local real.", "tab:auto_supuestos", [
+    ("Carta", f"{a_sup['carta']['fondos']} fondos ({a_sup['fondos_en_olla']} de olla, {a_sup['carta']['fondos'] - a_sup['fondos_en_olla']} en tanda) y {a_sup['carta']['entradas']} entradas; rota día por medio", "supuesto"),
+    ("Precio y venta base", f"{s(a_sup['precio'])} por entrada y fondo; {n(a_sup['q'])} menús al día", "supuesto"),
+    ("Insumos por menú", f"{s(a_sup['insumos'], 2)} más táper de {s(a_sup['taper'], 2)} en el {p(a_sup['para_llevar'])} que se lleva", "supuesto"),
+    ("Alquiler", f"{s(a_sup['alquiler_mes'])} al mes, calle con paso de gente", "supuesto"),
+    ("Luz, agua y sistema", f"{s(a_sup['servicios_mes'] + a_sup['otros_mes'])} al mes (baño maría, vitrinas, tablets)", "supuesto"),
+    ("Gas", f"un balón cada {a_sup['menus_por_balon']} menús diarios", "como Candela"),
+    ("Inversión", f"{s(a_sup['inversion'])}: cocina, línea de baño maría, frío, tablets, mesas, local", "supuesto"),
+    ("Velocidad de preparación", f"{p(1 - a_sup['estandarizacion']['velocidad'])} más rápida por repetir los platos", "ICN, 2014"),
+    ("Desorden del almuerzo", rf"queda {p(a_sup['estandarizacion']['desorden_queda'])} del de una cocina doméstica (estaciones: 30\,\%)", "supuesto"),
+    ("Minutos por menú en el almuerzo", f"servir {n(a_sup['servicio']['armado'], 2)}; reponer tandas {n(a_sup['servicio']['plancha'], 2)}; lavar {n(a_sup['servicio']['lavado'], 2)} si come en el local", "supuesto"),
+    ("Caja", f"{n(a_sup['caja']['min_por_pedido'] * 60)} s por pedido de {n(a_sup['caja']['menus_por_pedido'], 1)} menús, en la hora punta del POS", "Polasik, 2012"),
+    ("Salón", f"una persona por cada {a_sup['salon']['menus_por_persona']} menús que se comen en el local", "supuesto"),
+    ("Sueldos", f"jefe de cocina {s(a_sup['sueldos']['jefe'])}; cocinero {s(a_sup['sueldos']['cocinero'])}; auxiliares, caja y salón {s(a_sup['sueldos']['auxiliar'])}", "Juliaca"),
+    ("Formalidad", "MYPE Tributario, planilla en regla, dueño sin sueldo", "supuesto"),
+])}
+
+La cocina es la de Candela con los cambios del formato. Cada menú lleva la misma comida, pero repartida en más
+ollas: los guisos se parten en {a_sup['fondos_en_olla']}, cada uno con su tiempo fijo, y la plancha al momento se
+vuelve tandas de frituras y saltados. Quien repite los mismos platos día por medio trabaja más rápido: se supone
+{p(1 - a_sup['estandarizacion']['velocidad'])} menos minutos por kilo, por debajo del 20 a 25\,\% que se mide en
+comedores que preparan fuera del servicio (Institute of Child Nutrition, 2014). En el almuerzo no se arma un plato
+a pedido: se sirve lo ya porcionado. La caja se dimensiona para el cuarto de hora más cargado del POS de Candela
+({p(max(co['perfil'].values()) / sum(co['perfil'].values()) if co else 0.14)} de los pedidos del día). Los
+{n(a_sup['caja']['min_por_pedido'] * 60)} segundos por pedido están entre lo que se mide al pagar en efectivo
+(29~s) y con el celular (56~s) (Polasik y otros, 2012); con Yape o Plin nadie lo ha medido. Las horas de cocina
+que pasan de ocho ---la mise en place del día siguiente, que se hace en la tarde--- las cubre un turno tarde que
+entra a media mañana, en lugar de pagar horas extra a todos: cuesta casi lo mismo y nadie trabaja más de ocho horas.
+
+\subsubsection{{Cuánta gente y con qué cargos}}
+
+El \cuadro{{tab:auto_equipo}} muestra el equipo que necesita cada volumen y lo que deja a {s(a_sup['precio'])}. La
+planilla sube a saltos: con {n(aq[60]['personas'])} personas se atiende de 60 a 120 menús, y con
+{n(aq[300]['personas'])}, 300. Por eso el costo de personal por menú cae de {s(aq[40]['por_menu_personal'], 2)}
+con 40 menús a {s(aq[300]['por_menu_personal'], 2)} con 300.
+
+\begin{{table}}[H]
+\centering\scriptsize
+\caption{{El autoservicio con cada venta, a {s(a_sup['precio'])}: personas en cocina en la mañana y el almuerzo,
+auxiliares del turno tarde, cajeros y gente de salón (0.5: medio tiempo); planilla por menú vendido; la espera más
+larga en el almuerzo; utilidad del mes y precio mínimo para no perder. A la derecha, el mismo local servido como un
+menú de siempre, con mozos y la cocina de Candela organizada por estaciones. En negrita, la venta base.}}\label{{tab:auto_equipo}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabular}}{{rrrrrrrrrrrr}}
+\toprule
+& \multicolumn{{9}}{{c}}{{Autoservicio}} & \multicolumn{{2}}{{c}}{{Con mozos}} \\
+\cmidrule(lr){{2-10}}\cmidrule(lr){{11-12}}
+Menús & Cocina & Tarde & Caja & Salón & Total & Planilla/menú & Espera & Utilidad & Precio mín. & Total & Utilidad \\
+\midrule
+{tabla_auto_equipo()}
+\bottomrule
+\end{{tabular}}
+\end{{table}}
+
+Con su venta base, {n(a_sup['q'])} menús al día, el equipo es de {a0['personas']} personas. El
+\cuadro{{tab:auto_cargos}} da sus cargos, horarios y funciones, y la \figura{{fig:auto_gantt}} el día de su cocina.
+La línea despacha unos {n(a0['ritmo_hora'])} menús por hora y la espera más larga del almuerzo es de
+{n(a0['espera_maxima'], 1)} minutos; la caja trabaja al {p(a0['uso_caja'])} de su capacidad en el cuarto de hora más
+cargado, y si cobrar con el celular tomara un minuto por pedido llegaría al {p(min(1.0, a0['uso_caja'] / a_sup['caja']['min_por_pedido']))}: es el
+primer puesto que conviene cronometrar.
+
+\begin{{table}}[H]
+\centering\footnotesize
+\caption{{Cargos, horarios y funciones del autoservicio con {n(a_sup['q'])} menús al día. Sueldo del mes, sin las cargas
+de la microempresa.}}\label{{tab:auto_cargos}}
+\setlength{{\tabcolsep}}{{3pt}}
+\begin{{tabularx}}{{\textwidth}}{{>{{\raggedright\arraybackslash}}p{{0.2\textwidth}}>{{\raggedright\arraybackslash}}p{{0.1\textwidth}}lr>{{\raggedright\arraybackslash}}X}}
+\toprule
+Cargo & Personas & Horario & Sueldo & Funciones \\
+\midrule
+{tabla_auto_cargos()}
+\bottomrule
+\end{{tabularx}}
+\end{{table}}
+
+\begin{{figure}}[H]
+\centering
+\includegraphics[width=\textwidth]{{fig/auto_gantt.pdf}}
+\caption{{Un día de la cocina del autoservicio con {n(a_sup['q'])} menús: las {aut['gantt']['personas']} personas del turno
+temprano preparan la mañana, atienden el almuerzo y avanzan la mise en place del día siguiente, que termina el turno
+tarde. El turno temprano entra a las {a0['horarios']['temprano'][0]} y el turno tarde a las {a0['horarios']['tarde'][0] if a0['horarios']['tarde'] else '--'}.}}\label{{fig:auto_gantt}}
+\end{{figure}}
+
+\subsubsection{{Cuánto necesita vender}}
+
+{(lambda t: rf"""El \cuadro{{tab:auto_precios}} pone al autoservicio en la escala del experimento de precios comunes
+(\seccion{{sec:precios}}). A {s(a_sup['precio'])} necesita {aut['equilibrio'][str(a_sup['precio'])]} menús al día para no
+perder; a S/~10, {aut['equilibrio']['10'] or 'más de 400'}, y a S/~9 o menos no cubre sus costos con ninguna venta.
+Si el dueño no supervisa y paga un encargado de {s(a_sup['sueldos']['encargado'])}, el umbral a {s(a_sup['precio'])}
+sube a {aut['equilibrio_encargado'][str(a_sup['precio'])]}. A cualquier precio necesita más venta que el inversor que
+supervisa: su local es más caro, su luz también, y con poca venta paga una caja y un salón que la fonda no
+tiene.
+
+\begin{{table}}[H]
+\centering\footnotesize
+\caption{{Menús al día que necesita cada negocio para no perder, a cada precio, con la planilla de cada volumen en el
+autoservicio. ``--'': no cubre sus costos con ninguna venta hasta 400 menús.}}\label{{tab:auto_precios}}
+\begin{{tabular}}{{lrrrrr}}
+\toprule
+Precio & Autoservicio & Con encargado & {" & ".join(esc(corto(x)) for x in t[1])} \\
+\midrule
+{t[0]}
+\bottomrule
+\end{{tabular}}
+\end{{table}}""")(tabla_auto_precios())}
+
+La \figura{{fig:auto_matriz}} da el mapa completo, de 40 a 300 menús y de S/~7 a S/~18. La frontera entre perder y
+ganar corre de unos {aut['equilibrio']['10'] or 'más de 400'} menús a S/~10 a {aut['equilibrio']['18']} menús a S/~18: el autoservicio es un negocio de volumen o de precio, no de
+plato barato.
+
+\begin{{figure}}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{{fig/auto_matriz.pdf}}
+\caption{{Autoservicio criollo: utilidad del mes (miles de soles) por precio y menús al día, con la planilla que necesita
+cada volumen. Recuadro: la venta base, {n(a_sup['q'])} menús a {s(a_sup['precio'])}.}}\label{{fig:auto_matriz}}
+\end{{figure}}
+
+\subsubsection{{¿Mejor que el mismo local con mozos?}}
+
+Para separar el efecto del formato se armó el mismo local ---mismo alquiler, comida, precio y formalidad--- servido
+como un menú de siempre: la cocina de Candela organizada por estaciones, con plancha al momento, y un mozo cada 50
+menús, que toma el pedido, lo lleva y cobra. La \figura{{fig:auto_formato}} compara los dos. Con poca venta, el menú
+con mozos gana: el autoservicio carga con una caja y un salón que a 60 u 80 menús sobran. {"Desde unos " + str(a_cruce) + " menús" if a_cruce else "Con mucha venta"}
+el autoservicio deja más: a 160 menús necesita {aq[160]['personas']} personas y el menú con mozos
+{aq[160]['mozos']['personas']}, porque servir lo porcionado es más rápido que armar a pedido y no hace falta un mozo
+por cada 50 menús. {(lambda ds: rf"De ahí en adelante, a {s(a_sup['precio'])}, el autoservicio deja entre {s(min(ds))} y {s(max(ds))} más al mes; la diferencia salta cada vez que el menú con mozos tiene que sumar gente de golpe.")([aq[q]['utilidad'] - aq[q]['mozos']['utilidad'] for q in aq if a_cruce and q > a_cruce])}
+
+\begin{{figure}}[H]
+\centering
+\includegraphics[width=\textwidth]{{fig/auto_formato.pdf}}
+\caption{{El autoservicio frente al mismo local con mozos, a {s(a_sup['precio'])}: personas en planilla (izquierda) y
+utilidad del mes (derecha) según los menús al día.}}\label{{fig:auto_formato}}
+\end{{figure}}
+
+\subsubsection{{¿Funcionaría en Juliaca?}}
+
+Con {n(a_sup['q'])} menús a {s(a_sup['precio'])}, el autoservicio deja {s(a_caso['utilidad_mes'])} al mes, recupera
+su inversión de {s(a_sup['inversion'])} en {anios(a_caso['flujo']['recupero'])} y pierde plata en
+{p(a_caso['mc']['prob_perdida'])} de las simulaciones de riesgo. Es el segundo negocio que más gana del estudio,
+detrás del exitoso ---que es una referencia compuesta, no un local---, y el que más gana entre los que contratan a
+toda su gente{"" if not a_rob else rf"; con todos los golpes juntos de la prueba de estrés pierde {s(-a_rob['estres'][-1]['utilidad'])} al mes"}.
+Pero esos números dependen de una venta que hoy no se observa en Juliaca: Candela vende {n(cand['q']) if cand else 74} menús
+a S/~11, y el autoservicio necesita el doble a un precio más alto. Tres condiciones deciden si funciona:
+
+\begin{{enumerate}}[leftmargin=1.4em]
+\item \textbf{{Una ubicación con flujo.}} Por debajo de unos {aut['equilibrio'][str(a_sup['precio'])]} menús a
+{s(a_sup['precio'])} pierde plata, y por debajo de {a_cruce or 100} le conviene más ser un menú con mozos. Su
+lugar es donde pasa mucha gente con poco tiempo: un mercado grande, el terminal, una universidad, una zona de
+oficinas.
+\item \textbf{{Competir con el menú ejecutivo, no con el popular.}} A S/~10 necesita {aut['equilibrio']['10'] or 'más de 400'}
+menús y a S/~9 no cubre costos: no puede pelear con la pizarra de S/~8 de la cuadra. Su oferta es otra: comida
+criolla con varios fondos, a un precio cercano al del menú ejecutivo de Juliaca y servida en minutos.
+\item \textbf{{Una carta que de verdad se repita.}} La ventaja de la cocina viene de repetir los mismos platos y
+servirlos ya porcionados. Si la carta cambia cada día o se arman platos a pedido, la cocina vuelve a ser la de un
+menú y el formato pierde su razón.
+\end{{enumerate}}
+
+No se encontró evidencia pública de una cadena criolla que trabaje así en el Perú. El autoservicio más grande del
+país es el buffet criollo dentro de los supermercados, cobrado por peso (Euromonitor International, 2025), y las cadenas de comida
+saludable de Lima ya usan tablets para pedir; los proveedores de esas tablets reportan pedidos entre 12 y 30\,\%
+más caros, una cifra sin estudios independientes que aquí no se usó. Antes de invertir convendría medir tres cosas:
+cuántas personas pasan y a cuánto comen en la ubicación elegida, cuánto tarda en cobrarse un pedido con Yape, y
+cuántos menús por hora despacha una línea real.
+
+"""}
 \subsection{{El largo plazo: diez años y cuatro regímenes}}
 
 Los supuestos del flujo (tasa, inflación, ajuste de precio, regímenes) están en el \anexo{{sec:anexo}}.
@@ -2384,7 +2638,11 @@ Lo que la fonda familiar muestra como utilidad es, en buena parte, el sueldo de 
 esos mismos trabajos en el mercado laboral descubre que el margen se lo llevaba la familia. El inversor no
 compite contra otro inversor: compite contra hogares que aceptan cobrar menos que el mínimo por su tiempo. Por
 eso, en una plaza como Juliaca, la inversión que no trae su propio trabajo necesita algo que el hogar no tiene:
-escala, un precio más alto sostenido por una marca o un segundo turno que reparta los costos fijos.
+escala, un precio más alto sostenido por una marca o un segundo turno que reparta los costos fijos.{"" if not aut else rf""" El
+autoservicio criollo (\seccion{{sec:autoservicio}}) es la forma más clara de esa salida: no le gana al hogar en el
+plato barato, porque a S/~9 no cubre sus costos, pero cambia la forma de servir para que cada persona contratada
+atienda más menús, y con {n(a_sup['q'])} al día deja {s(a0['utilidad'])} al mes pagando a todos. Su apuesta no es el
+costo sino el volumen, y el volumen depende de dónde se ponga."""}
 
 \subsection{{¿Está barato el menú?}}
 
@@ -2524,6 +2782,11 @@ su equipo aguanta unos {n(capac['Candela (datos del POS)']['tope']) if 'Candela 
 {s(capac['Candela (datos del POS)']['valor_holgura']) if 'Candela (datos del POS)' in capac and capac['Candela (datos del POS)']['valor_holgura'] else 'S/~2 900'}
 más al mes, porque la planilla y el local ya están pagados.
 {"" if not co else rf"\item \textbf{{{{Organizar la cocina rinde más que contratar.}}}} Con tres personas, la cocina doméstica aguanta {n(cap_('domestico', 3)['tope'])} menús; por bloques, {n(cap_('bloques', 3)['tope'])}, y con mise en place, {n(cap_('mise', 3)['tope'])}. El mise en place no ahorra horas, las cambia de momento; donde la cocina doméstica obliga a tener una persona de más, organizarse ahorra entre {s(min(ahorros_pos))} y {s(max(ahorros_pos))} al mes{'' if not org_c else ', y en Candela unos ' + s(org_c['modos'][mejor_c]['ahorro'])}. El resultado no depende de la formalidad sino de la organización."}
+{"" if not aut else rf"""\item \textbf{{{{El autoservicio criollo funciona con volumen, no con precio bajo.}}}} Con carta fija, pedidos en
+tablet y una línea de baño maría, {n(a_sup['q'])} menús a {s(a_sup['precio'])} dejan {s(a0['utilidad'])} al mes con
+{a0['personas']} personas en planilla y en regla. Pero a {s(a_sup['precio'])} necesita {aut['equilibrio'][str(a_sup['precio'])]}
+menús para no perder, a S/~9 no cubre costos con ninguna venta y solo supera al mismo local con mozos desde unos
+{a_cruce} menús: es un negocio para una ubicación de mucho paso y para competir con el menú ejecutivo."""}
 \end{{enumerate}}
 
 Para Candela, el estudio deja tres lecciones. Su clientela es sensible al precio, así que la mejora no está en la
@@ -2681,6 +2944,7 @@ dispara el volumen necesario: es la misma convexidad que se vio en los negocios,
 \item de Mel, S., McKenzie, D. y Woodruff, C. (2008). Returns to capital in microenterprises: evidence from a field experiment. \emph{{Quarterly Journal of Economics}}, 123(4), 1329--1372.
 \item De Soto, H. (1986). \emph{{El otro sendero: la revolución informal}}. Lima: El Barranco.
 \item Escoffier, A. (1903). \emph{{Le guide culinaire}}. París: Flammarion.
+\item Euromonitor International (2025). \emph{{Self-Service Cafeterias in Peru}}. \url{{https://www.euromonitor.com/self-service-cafeterias-in-peru/report}}
 \item Gamero, J. (2012). [Investigación sobre el empleo y el trabajo familiar no remunerado en la microempresa, con la ENAHO 2009]. Lima: INEI. \url{{https://www.inei.gob.pe/media/MenuRecursivo/investigaciones/investigacion-final-julio-gamero.pdf}}
 \item GRADE (2012). El impacto de la licencia municipal en el desempeño de las microempresas en el Cercado de Lima. Lima: Grupo de Análisis para el Desarrollo. \url{{https://grade.org.pe/en/publicaciones/1133-el-impacto-de-la-licencia-municipal-en-el-desempeno-de-las-microempresas-en-el-cercado-de-lima}}
 \item Greathouse, K. R. y otros (1989). Comparison of conventional, cook-chill, and cook-freeze foodservice systems. \emph{{Journal of the American Dietetic Association}}, 89(11).
@@ -2693,6 +2957,7 @@ dispara el volumen necesario: es la misma convexidad que se vio en los negocios,
 \item National Restaurant Association (2025). \emph{{Restaurant Operations Data Abstract}} (año fiscal 2024).
 \item Okrent, A. y Alston, J. (2012). \emph{{The Demand for Disaggregated Food-Away-from-Home and Food-at-Home Products in the United States}}. Economic Research Report 139, USDA.
 \item Parsa, H. G., Self, J. T., Njite, D. y King, T. (2005). Why restaurants fail. \emph{{Cornell Hotel and Restaurant Administration Quarterly}}, 46(3), 304--322.
+\item Polasik, M. y otros (2012). Time efficiency of point-of-sale payment methods: empirical results for cash, cards and mobile payments. \emph{{Proceedings of ICEIS 2012}}, SciTePress.
 \item Shapley, L. S. (1953). A value for $n$-person games. En H. W. Kuhn y A. W. Tucker (eds.), \emph{{Contributions to the Theory of Games II}}, 307--317. Princeton University Press.
 \item Shimmura, T. y otros (2017). [Rediseño de la distribución de una cocina de restaurante guiado por simulación]. \emph{{Procedia CIRP}}, 62. \url{{https://hdl.handle.net/20.500.14094/90004434}}
 \item Shimmura, T. y otros (2018). [Cambios en el proceso de cocina y productividad de un restaurante de servicio completo]. \emph{{International Journal of Automation Technology}}, 12(4). \url{{https://doi.org/10.20965/ijat.2018.p0449}}

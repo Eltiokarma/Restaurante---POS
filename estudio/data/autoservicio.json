@@ -1,0 +1,48 @@
+{
+ "notas": "Autoservicio de comida criolla: carta fija que rota (menú A un día, menú B el siguiente), todo preparado antes del almuerzo y servido desde una línea de baño maría. El cliente pide en tablets, paga en caja y recoge su bandeja o su bolsa; nadie atiende mesas. Supuestos del estudio, a contrastar con un local real.",
+ "carta": {"fondos": 6, "entradas": 3, "nota": "cada día de 5 a 6 fondos y 2 a 3 entradas; los mismos platos vuelven día por medio"},
+ "precio": 13,
+ "q": 150,
+ "insumos": 5.0,
+ "insumos_nota": "entrada y fondo con más proteína y variedad que el menú popular (S/ 4.20 en Juliaca), con la merma más baja que da una carta fija ya descontada",
+ "para_llevar": 0.4,
+ "taper": 0.6,
+ "alquiler_mes": 3000,
+ "servicios_mes": 750,
+ "otros_mes": 300,
+ "otros_nota": "mantenimiento de tablets y sistema, gas del baño maría eléctrico aparte",
+ "menus_por_balon": 18,
+ "inversion": 75000,
+ "inversion_detalle": [
+  ["Cocina industrial, campana y ollas grandes", 18000],
+  ["Línea de baño maría de 8 depósitos y vitrina fría", 12000],
+  ["Refrigeración (cámara o 2 congeladoras y conservadora)", 10000],
+  ["Tres tablets con soporte, impresora de tickets y caja", 6000],
+  ["Mesas, bancas y bandejas para 50 personas", 9000],
+  ["Acondicionamiento del local, letreros y licencias", 15000],
+  ["Capital de trabajo", 5000]
+ ],
+ "estandarizacion": {
+  "velocidad": 0.85,
+  "velocidad_nota": "repetir los mismos platos día por medio: 15 % menos minutos por kilo; ICN 2014 mide 20–25 % más comidas por hora-hombre en cocinas que preparan fuera del servicio",
+  "desorden_queda": 0.2,
+  "desorden_nota": "la línea despacha platos ya porcionados y el ticket del POS ordena la cola: menos desorden que las estaciones (0.3)"
+ },
+ "fondos_en_olla": 3,
+ "fondos_en_olla_nota": "de los 6 fondos, 3 son guisos de olla (seco, ají de gallina, estofado) y 3 se cocinan en tanda (arroz con pollo, frituras, saltado)",
+ "servicio": {
+  "armado": 0.45,
+  "armado_nota": "servir el fondo porcionado del baño maría en la bandeja; la entrada ya está servida en la vitrina fría",
+  "plancha": 0.25,
+  "plancha_nota": "reponer frituras y saltados en tandas pequeñas durante el almuerzo",
+  "lavado": 0.75,
+  "lavado_nota": "lavar bandeja, plato y cubiertos de quien come en el local (60 %); lo para llevar va en táper"
+ },
+ "caja": {"min_por_pedido": 0.6, "menus_por_pedido": 1.5,
+          "nota": "cobrar en efectivo o con QR ~35–40 s por pedido; un pedido trae 1.5 menús en promedio (supuesto)"},
+ "salon": {"menus_por_persona": 150,
+           "nota": "recoger bandejas y limpiar mesas: una persona por cada 150 menús que se comen en el local al día"},
+ "sueldos": {"jefe": 1700, "cocinero": 1300, "auxiliar": 1230, "cajero": 1230, "salon": 1230, "encargado": 2000},
+ "precios": [7, 9, 10, 11, 12, 13, 15, 18],
+ "volumenes": [40, 60, 80, 100, 120, 140, 150, 160, 200, 250, 300]
+}
