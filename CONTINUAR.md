@@ -19,7 +19,10 @@ navegador real (terminal 600×960 y caja) y en la comanda impresa.
    `PATCH /api/menu/platos/{id}/hoy`). Falta: marcar en el catálogo qué platos
    son «extra» (columna nueva vía `_migrar()`), mostrarlos agrupados y, al
    activarlos, que entren como alternativa de «Segundo» en la plantilla del
-   día (¿con recargo? preguntar al dueño). Vale para todos los días.
+   día. Vale para todos los días. **Respuesta del dueño (23/10)**: son las
+   frituras que ya nombró —bistec frito, chuleta frita, trucha frita, pollo a
+   la plancha— y, si hace falta, repetir chancho al horno o lomo saltado.
+   Precio: el mismo del menú, sin recargo (confirmado por el dueño).
 2. **Colores por grupo de plato** en toda la interfaz (terminal, caja,
    cocina): pollo amarillo, carne/res rojo, chancho, pescado, etc.; en
    entradas un color para sopas y otro para las demás. Campo `grupo_color`
