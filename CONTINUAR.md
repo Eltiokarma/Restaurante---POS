@@ -23,6 +23,13 @@ navegador real (terminal 600×960 y caja) y en la comanda impresa.
    frituras que ya nombró —bistec frito, chuleta frita, trucha frita, pollo a
    la plancha— y, si hace falta, repetir chancho al horno o lomo saltado.
    Precio: el mismo del menú, sin recargo (confirmado por el dueño).
+   **Ya funciona sin código (23/10, por API)**: en los 6 menús guardados el
+   «Segundo» trae bistec frito (38), chuleta frita (11), trucha frita con
+   papas (49), chancho al horno (17) y lomo saltado (34) como alternativas
+   apagadas, sin recargo; la caja los prende en «📋 Menú del día» y el cliente
+   solo ve los prendidos. Falta lo de la interfaz: agruparlos en una sección
+   desplegable «Platos extra» para que no se mezclen con los del día, y crear
+   «Pollo a la plancha» (no existe en el catálogo).
 2. **Colores por grupo de plato** en toda la interfaz (terminal, caja,
    cocina): pollo amarillo, carne/res rojo, chancho, pescado, etc.; en
    entradas un color para sopas y otro para las demás. Campo `grupo_color`
