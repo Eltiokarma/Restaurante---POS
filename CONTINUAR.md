@@ -6,6 +6,38 @@
 > → `npm run build` → navegador real → commit en español → PR a main →
 > merge → realinear la rama de sesión con `origin/main`.
 
+## Sesión 7 — PRIMERO: pedidos del dueño (23/10)
+
+Empezar aquí. Cinco cambios del POS en producción; uno por PR, probando en
+navegador real (terminal 600×960 y caja) y en la comanda impresa.
+
+1. **Platos extra para cuando se acaban los del día** (bistec, chuleta frita,
+   trucha frita, pollo a la plancha, o repetir chancho al horno, lomo
+   saltado…). No deben estar siempre en la lista del cliente porque
+   confunden: en **Caja → 📋 Menú del día** una sección desplegable «Platos
+   extra» con botones para activarlos/desactivarlos ese día (hoy existe
+   `PATCH /api/menu/platos/{id}/hoy`). Falta: marcar en el catálogo qué platos
+   son «extra» (columna nueva vía `_migrar()`), mostrarlos agrupados y, al
+   activarlos, que entren como alternativa de «Segundo» en la plantilla del
+   día (¿con recargo? preguntar al dueño). Vale para todos los días.
+2. **Colores por grupo de plato** en toda la interfaz (terminal, caja,
+   cocina): pollo amarillo, carne/res rojo, chancho, pescado, etc.; en
+   entradas un color para sopas y otro para las demás. Campo `grupo_color`
+   por plato (o deducido del nombre con override en Admin → Menú). Cuidar
+   contraste y que el color no sea lo único que distingue (accesibilidad).
+3. **Comanda «SIN ENTRADA»**: hoy sale un título grande que confunde cuando
+   la mesa es mixta (3 personas: 2 con sopa, 1 sin entrada). Debe marcarse
+   por persona/plato («sin entrada» junto a ese segundo) y conservar la
+   secuencia. Ver `backend/app/services/orders.py` y `escpos.py`.
+4. **Reimprimir desde la pantalla de Tickets**: NO abrir la gaveta y que el
+   papel diga «REIMPRESIÓN» (`routes/orders.py` `reimprimir`, línea ~583, y el
+   pulso de gaveta en el puente).
+5. **Papel de anulación más pequeño** (voucher «ANULADO» en `escpos.py`
+   ~385): menos renglones/alto, sin perder ticket, motivo y «DEVOLVER S/».
+
+Hecho el 23/10 por API (no hace falta repetir): viernes con Papa a la
+Huancaína (+S/ 1) en vez de salpicón, en el menú de hoy y en «Viernes».
+
 ## Dónde quedó todo (sesión 5, cerrada 2026-10-07)
 
 Entregado y en producción (PR #102 a #119):
