@@ -22,9 +22,7 @@ navegador real (terminal 600×960 y caja) y en la comanda impresa.
    día. Vale para todos los días. **Respuesta del dueño (23/10)**: son las
    frituras que ya nombró —bistec frito, chuleta frita, trucha frita, pollo a
    la plancha— y, si hace falta, repetir chancho al horno o lomo saltado.
-   Precio: «los mismos», es decir, con el recargo que ese plato ya lleva en los
-   menús guardados (trucha frita +S/ 1, como lunes y sábado) y sin recargo si
-   no lo tiene.
+   Precio: el mismo del menú, sin recargo (confirmado por el dueño).
 2. **Colores por grupo de plato** en toda la interfaz (terminal, caja,
    cocina): pollo amarillo, carne/res rojo, chancho, pescado, etc.; en
    entradas un color para sopas y otro para las demás. Campo `grupo_color`
