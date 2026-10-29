@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, clearAdminToken, NOMBRE_ROL } from '../api'
 import type { AccionEquipo, PersonaEquipo, Rol } from '../api'
 import { CabeceraVista } from './CabeceraVista'
+import { CampoPinNuevo } from './CampoPinNuevo'
 
 const ROLES: Rol[] = ['cajero', 'mozo', 'admin']
 
@@ -42,9 +43,11 @@ export function TabEquipo({ onSesionVencida }: { onSesionVencida: () => void }) 
   const [error, setError] = useState('')
   const [nombre, setNombre] = useState('')
   const [rol, setRol] = useState<Rol>('cajero')
-  const [pin, setPin] = useState('')
+  const [pin, setPin] = useState<string | null>(null)
+  // Cambiar la key vacía los campos del PIN después de guardar
+  const [formulario, setFormulario] = useState(0)
   const [cambiandoPin, setCambiandoPin] = useState<number | null>(null)
-  const [pinNuevo, setPinNuevo] = useState('')
+  const [pinNuevo, setPinNuevo] = useState<string | null>(null)
   const [fecha, setFecha] = useState(hoyIso)
   const [acciones, setAcciones] = useState<AccionEquipo[]>([])
 
@@ -78,9 +81,11 @@ export function TabEquipo({ onSesionVencida }: { onSesionVencida: () => void }) 
 
   const crear = async () => {
     try {
+      if (!pin) return
       await api.equipoCrear(nombre.trim(), rol, pin)
       setNombre('')
-      setPin('')
+      setPin(null)
+      setFormulario((n) => n + 1)
       hecho(`${nombre.trim()} ya está en el equipo ✔`)
     } catch (e) {
       fallo(e)
@@ -151,7 +156,7 @@ export function TabEquipo({ onSesionVencida }: { onSesionVencida: () => void }) 
                 </select>
               </div>
               <div className="eq-persona-acciones">
-                <button onClick={() => { setCambiandoPin(cambiandoPin === p.id ? null : p.id); setPinNuevo('') }}>
+                <button onClick={() => { setCambiandoPin(cambiandoPin === p.id ? null : p.id); setPinNuevo(null) }}>
                   Cambiar PIN
                 </button>
                 <button onClick={() => cambiar(p, { activo: !p.activo }, p.activo ? `${p.nombre} desactivado` : `${p.nombre} activo otra vez`)}>
@@ -160,14 +165,15 @@ export function TabEquipo({ onSesionVencida }: { onSesionVencida: () => void }) 
               </div>
               {cambiandoPin === p.id && (
                 <div className="eq-pin-nuevo">
-                  <input
-                    type="password" inputMode="numeric" maxLength={6} placeholder="PIN nuevo (4 a 6)"
-                    value={pinNuevo} onChange={(e) => setPinNuevo(e.target.value.replace(/\D/g, ''))}
-                  />
+                  <CampoPinNuevo rotulo="PIN nuevo" onListo={setPinNuevo} />
                   <button
                     className="boton-primario"
-                    disabled={pinNuevo.length < 4}
-                    onClick={() => { cambiar(p, { pin: pinNuevo }, `PIN de ${p.nombre} cambiado ✔`); setCambiandoPin(null) }}
+                    disabled={!pinNuevo}
+                    onClick={() => {
+                      if (!pinNuevo) return
+                      cambiar(p, { pin: pinNuevo }, `PIN de ${p.nombre} cambiado ✔`)
+                      setCambiandoPin(null)
+                    }}
                   >
                     Guardar
                   </button>
@@ -197,16 +203,10 @@ export function TabEquipo({ onSesionVencida }: { onSesionVencida: () => void }) 
             ))}
           </div>
           <p className="nota-admin">{QUE_HACE[rol]}</p>
-          <label className="eq-campo">
-            PIN (4 a 6 números)
-            <input
-              type="password" inputMode="numeric" maxLength={6}
-              value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-            />
-          </label>
+          <CampoPinNuevo key={formulario} onListo={setPin} />
           <button
             className="boton-grande boton-primario"
-            disabled={!nombre.trim() || pin.length < 4}
+            disabled={!nombre.trim() || !pin}
             onClick={crear}
           >
             Agregar

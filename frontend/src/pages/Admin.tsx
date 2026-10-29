@@ -4,6 +4,7 @@ import { IconoAjustes, IconoAspa, IconoBillete, IconoEgreso, IconoMovil, IconoTa
 import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, FinanzasFijos, FinanzasResumen, FlujoFila, Insumo, MenuGuardadoOut, MesaEstado, MovimientoCaja, MovimientoKardex, MovimientosOut, OrdenOut, Plato, PlatoVendido, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { TabTablero } from '../components/TabTablero'
 import { TabEquipo } from '../components/TabEquipo'
+import { CampoPinNuevo } from '../components/CampoPinNuevo'
 import { PorCobrar } from '../components/PorCobrar'
 import { CabeceraVista, SECCIONES } from '../components/CabeceraVista'
 import type { Tab } from '../components/CabeceraVista'
@@ -3624,22 +3625,22 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
             </select>
           </label>
           {config.gaveta !== 'no' && (
-            <label>
-              PIN para "Abrir cajón" en la caja (4 a 8 números).{' '}
-              {config.gaveta_con_pin ? 'Ya tiene PIN: escribe uno nuevo para cambiarlo.' : 'Hoy no pide PIN.'}
-              <input
-                type="password" inputMode="numeric" maxLength={8} autoComplete="new-password"
-                placeholder={config.gaveta_con_pin ? '••••' : 'Sin PIN'}
-                value={config.pin_gaveta ?? ''}
-                // Vacío = no tocar el PIN; para quitarlo está "Quitar PIN"
-                onChange={(e) => setConfig({ ...config, pin_gaveta: e.target.value.replace(/\D/g, '') || undefined })}
+            <div>
+              <p className="nota-admin">
+                PIN para "Abrir cajón" en la caja.{' '}
+                {config.gaveta_con_pin ? 'Ya tiene PIN: escribe uno nuevo para cambiarlo.' : 'Hoy no pide PIN.'}
+              </p>
+              {/* Vacío o sin coincidir = no tocar el PIN; para quitarlo está "Quitar PIN" */}
+              <CampoPinNuevo
+                rotulo="PIN del cajón" largo={8}
+                onListo={(pin) => setConfig((c) => (c ? { ...c, pin_gaveta: pin ?? undefined } : c))}
               />
               {config.gaveta_con_pin && (
                 <button type="button" onClick={() => setConfig({ ...config, pin_gaveta: '' , gaveta_con_pin: false })}>
                   Quitar PIN
                 </button>
               )}
-            </label>
+            </div>
           )}
           {config.gaveta !== 'no' && (
             <button

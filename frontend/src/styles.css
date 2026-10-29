@@ -11763,3 +11763,59 @@ p.teclado-pin-error {
   color: var(--tinta-suave);
   font-size: 0.9rem;
 }
+
+/* Poner un PIN: dos veces y con "Ver" (components/CampoPinNuevo) */
+.campo-pin-nuevo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.campo-pin-nuevo label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 700;
+}
+
+.campo-pin-fila {
+  display: flex;
+  gap: 8px;
+}
+
+.campo-pin-nuevo input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--toque);
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--linea-fuerte);
+  background: var(--papel);
+  font-size: 1.2rem;
+  letter-spacing: 0.15em;
+}
+
+.campo-pin-nuevo .campo-pin-ver {
+  min-height: var(--toque);
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--linea-fuerte);
+  background: var(--papel-alto);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.campo-pin-aviso {
+  color: var(--achiote);
+  font-weight: 800;
+}
+
+.campo-pin-ok {
+  color: var(--culantro);
+  font-weight: 800;
+}
+
+.eq-pin-nuevo {
+  flex-direction: column;
+  align-items: stretch;
+}
