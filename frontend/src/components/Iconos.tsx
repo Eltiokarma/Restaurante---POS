@@ -254,6 +254,18 @@ export function IconoMicrofono({ tam = 24, className }: Props) {
   )
 }
 
+/** Equipo: dos personas */
+export function IconoPersonas({ tam = 24, className }: Props) {
+  return (
+    <svg {...base(tam)} className={className}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3 19.5c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5" />
+      <circle cx="16.5" cy="9" r="2.6" />
+      <path d="M16.5 14c2.6 0 4.5 1.8 4.5 4.5" />
+    </svg>
+  )
+}
+
 /** Ajustes: disco con punto */
 export function IconoAjustes({ tam = 24, className }: Props) {
   return (

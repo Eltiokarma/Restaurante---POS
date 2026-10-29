@@ -1,14 +1,14 @@
 import type { JSX, ReactNode } from 'react'
 import {
   IconoAjustes, IconoCirculoAspa, IconoDisco, IconoFrasco, IconoMicrofono,
-  IconoMoneda, IconoPizarra, IconoTablero, IconoTicket,
+  IconoMoneda, IconoPersonas, IconoPizarra, IconoTablero, IconoTicket,
 } from './Iconos'
 
 export type Tab = 'tablero' | 'resumen' | 'menu' | 'ordenes' | 'insumos' | 'finanzas'
-  | 'cancelaciones' | 'voz' | 'config'
+  | 'cancelaciones' | 'voz' | 'equipo' | 'config'
 
 /**
- * Las 9 secciones del admin. Cada una tiene SU color, y ese color se
+ * Las 10 secciones del admin. Cada una tiene SU color, y ese color se
  * repite en el rail, en la versalita del título y en el borde de las
  * tarjetas de esa vista: el dueño sabe dónde está parado por el color,
  * sin tener que leer la pestaña.
@@ -28,6 +28,7 @@ export const SECCIONES: {
   { id: 'finanzas', rotulo: 'Finanzas', versalita: 'La plata', titulo: 'Finanzas', Icono: IconoMoneda },
   { id: 'cancelaciones', rotulo: 'Canceladas', versalita: 'Ventana de cancelación', titulo: 'Pedidos cancelados', Icono: IconoCirculoAspa },
   { id: 'voz', rotulo: 'Voz', versalita: 'Pedido por voz', titulo: 'Qué escuchó el sistema', Icono: IconoMicrofono },
+  { id: 'equipo', rotulo: 'Equipo', versalita: 'Quién es quién', titulo: 'El equipo', Icono: IconoPersonas },
   { id: 'config', rotulo: 'Ajustes', versalita: 'Configuración', titulo: 'El local y el salón', Icono: IconoAjustes },
 ]
 

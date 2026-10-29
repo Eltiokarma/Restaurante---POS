@@ -205,6 +205,13 @@ class Orden(Base):
     # Por qué se anuló desde la terminal: "arrepentido" (el cliente cambió
     # de idea) | "duplicado" (se marcó dos veces). None = anulada en caja
     motivo_anulacion: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Quién tomó el pedido (con el equipo activo): id y nombre de ese
+    # momento, para que el histórico no cambie si se renombra a la persona
+    tomado_por_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tomado_por: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # El mozo marcó "pagó" pero la plata la tiene él: queda "falta pagar"
+    # hasta que la caja lo levanta. Aquí, cómo dijo que pagaron
+    metodo_mozo: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
 
     items: Mapped[list["OrdenItem"]] = relationship(
@@ -585,6 +592,40 @@ class MovimientoInsumo(Base):
     orden_id: Mapped[int | None] = mapped_column(ForeignKey("ordenes.id"), nullable=True)
 
 
+class Usuario(Base):
+    """Una persona del equipo (pedido del dueño): entra con su nombre y un
+    PIN de 4 a 6 dígitos. El rol decide qué puede hacer (app/permisos.py).
+    No se borra nunca: se desactiva, para no perder quién hizo qué."""
+
+    __tablename__ = "usuarios"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(60), nullable=False)
+    rol: Mapped[str] = mapped_column(String(10), nullable=False)  # admin | cajero | mozo
+    # "sal$hash" (PBKDF2-SHA256): el PIN nunca se guarda tal cual
+    pin_hash: Mapped[str] = mapped_column(String(200), nullable=False)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    creado_en: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
+
+
+class AccionEquipo(Base):
+    """Registro de lo delicado: quién anuló, quitó, borró un egreso o
+    reabrió la caja, y quién lo autorizó con su PIN. Nombres copiados del
+    momento (como los snapshots de la orden)."""
+
+    __tablename__ = "acciones_equipo"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    creado_en: Mapped[datetime] = mapped_column(default=ahora_lima, nullable=False)
+    accion: Mapped[str] = mapped_column(String(30), nullable=False)
+    usuario_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    usuario: Mapped[str] = mapped_column(String(60), default="", nullable=False)
+    autorizo_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    autorizo: Mapped[str] = mapped_column(String(60), default="", nullable=False)
+    orden_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    detalle: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+
+
 class Config(Base):
     __tablename__ = "config"
 
@@ -644,4 +685,7 @@ CONFIG_DEFAULTS: dict[str, str] = {
     "cocina_tandas": "1",
     # Tope de tickets por tanda (0 = sin tope, manda solo la ventana)
     "cocina_tanda_max_tickets": "4",
+    # Equipo con perfiles (admin / cajero / mozo): cada uno entra con su
+    # PIN y el rol limita lo delicado. Apagado = todo como antes
+    "equipo_activo": "0",
 }

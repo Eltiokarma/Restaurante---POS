@@ -728,6 +728,24 @@ Especificación completa entregada junto al rediseño. Orden acordado:
       `backend/app/services/voice.py`. Umbral acordado: >85% integra; 70–85% con
       corrección obligatoria (ya es el diseño); <70% se queda apagada.
 
+## Equipo con perfiles (pedido del dueño, 29/10)
+
+- [x] Personas con nombre, rol (admin / cajero / mozo) y PIN cifrado, creadas en
+      **Admin → Equipo**; interruptor `equipo_activo` (apagado por defecto: todo como antes).
+- [x] Terminal y caja piden «¿Quién eres?» + PIN; se bloquean al apagarse la pantalla o
+      sin uso (terminal 60 s, caja 3 min) y ahí puede entrar otra persona. 5 PIN malos
+      bloquean 5 minutos. La caja solo deja entrar a cajeros y admins.
+- [x] Permisos en `app/permisos.py`: el mozo toma pedidos y marca «pagó» (queda «falta
+      pagar» con lo que dijo hasta que la caja lo levanta; su comanda no abre el cajón);
+      quitar platos le pide el PIN de un admin. El cajero anula sin PIN solo el primer
+      minuto; borrar egresos, reabrir la caja, corregir el fondo, deudas incobrables y
+      descartar la cola piden autorización.
+- [x] Registro de lo delicado (`acciones_equipo`): quién anuló, quitó, levantó o reabrió, y
+      quién autorizó; «Atendió: X» en la precuenta y 👤 en la caja.
+- [ ] Encenderlo en el local: crear la cuenta admin del dueño y las del equipo.
+- [ ] Más adelante: login del panel de admin con PIN (hoy sigue con la contraseña),
+      ventas por persona en el Resumen.
+
 ## Fuera de alcance por ahora
 
 Pagos integrados (Yape/tarjeta), control de stock y mermas, app nativa, multi-local.
@@ -757,3 +775,4 @@ Pagos integrados (Yape/tarjeta), control de stock y mermas, app nativa, multi-lo
 | 15 | Menú editable: quitar un tiempo descuenta lo configurado en `menu_tiempos.descuento_si_se_quita` (snapshot en `orden_menus.omitidos_json`); los agregados (+presa…) viven en `menu_agregados` y entran como `OrdenItem`s con `es_agregado=True` y `plato_id NULL` | Decisión del dueño (2026-09-04): "sin sopa" sí baja un poco el precio, y pedir una sopa aparte cuesta el precio de porción extra (S/ 3). El total sigue siendo del backend: base − descuentos + recargos + extras + agregados, nunca negativo por unidad. Al no ser platos, los agregados no descuentan kardex todavía. |
 | 16 | Los colores de las gráficas del Tablero son **azul mayólica `#0f6ea8` (entra) y achiote `#b03a22` (sale)**, no el verde/rojo del resto del sistema | El par verde/rojo que veníamos usando (`#2f6b3a`/`#b03a22`) se valida en ΔE 5.9 bajo protanopia: para una persona con daltonismo (≈8% de los hombres) son el mismo color, y en las barras el color es la ÚNICA pista. El par azul/achiote da ΔE 20.2 y pasa las cuatro pruebas. La escala ABC usa un solo tono en tres pasos (`#7d2515`/`#b03a22`/`#d98b75`), que es lo correcto para algo ordenado A>B>C. Queda pendiente migrar las barras de Finanzas al mismo par. |
 | 17 | El pedido se arma POR PERSONA (cada `OrdenMenu` = una persona) con entrega por persona, y un tiempo sin elegir NO bloquea la venta (queda en `pendientes_json`) | Boceto del dueño (2026-10-02): cada persona come distinto y desde la primera tarjeta se programa a todas; el ticket puede salir sin haber elegido el segundo y debe decirlo. Antes era 422 "Falta elegir…". La comanda impresa sigue agrupada por ENTRADAS/SEGUNDOS (decisión previa del dueño); la persona se ve en ticket HTML, caja y cocina. |
+| 18 | El equipo entra con nombre + PIN personal y el rol se lee de la base en cada pedido; lo delicado se autoriza con el PIN de un admin en el momento (428 → `X-Autoriza`), no con cambio de sesión | Pedido del dueño (2026-10-29): una sola tablet que comparte la caja y, a futuro, mozos con su propio equipo. Desactivar a alguien o cambiarle el rol vale al toque (no vive en el token). El interruptor `equipo_activo` permitió publicar todo en producción sin cambiar nada hasta que el dueño arme el equipo. Reemplaza la regla «cliente, cocina y ticketera no llevan auth»: cocina y ticketera siguen sin sesión. |

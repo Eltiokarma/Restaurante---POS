@@ -11,7 +11,7 @@ from sqlalchemy import text
 
 from .db import BACKEND_DIR, Base, engine
 from .routes import (
-    admin, bebidas, caja, cancellations, config, finanzas, impresion, insumos,
+    admin, bebidas, caja, cancellations, config, equipo, finanzas, impresion, insumos,
     mantenimiento, menu, mesas, modificar, orders, stats, voice,
 )
 from .services.backup import ciclo_backup_automatico
@@ -168,6 +168,10 @@ def _migrar(engine_) -> None:
         if columnas and "reimpresion" not in columnas:
             conn.execute(text("ALTER TABLE ordenes ADD COLUMN reimpresion BOOLEAN NOT NULL DEFAULT 0"))
             conn.commit()
+        for columna, tipo in (("tomado_por_id", "INTEGER"), ("tomado_por", "TEXT"), ("metodo_mozo", "TEXT")):
+            if columnas and columna not in columnas:
+                conn.execute(text(f"ALTER TABLE ordenes ADD COLUMN {columna} {tipo}"))
+                conn.commit()
         if columnas_menus and "nombre_persona" not in columnas_menus:
             conn.execute(text(
                 "ALTER TABLE orden_menus ADD COLUMN nombre_persona TEXT NOT NULL DEFAULT ''"
@@ -361,6 +365,7 @@ app.include_router(mesas.router)
 app.include_router(impresion.router)
 app.include_router(mantenimiento.router)
 app.include_router(finanzas.router)
+app.include_router(equipo.router)
 
 
 @app.get("/api/health")

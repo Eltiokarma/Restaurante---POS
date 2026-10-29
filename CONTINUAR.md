@@ -6,7 +6,16 @@
 > → `npm run build` → navegador real → commit en español → PR a main →
 > merge → realinear la rama de sesión con `origin/main`.
 
-## Sesión 7 — PRIMERO: pedidos del dueño (23/10)
+## Sesión 8 — Equipo con perfiles (29/10)
+
+Hecho y publicado APAGADO (ver ROADMAP «Equipo con perfiles» y decisión 18).
+Para encenderlo, el dueño: Admin → Equipo → crear SU cuenta admin con PIN,
+después cajero(s) y mozo(s) → «Encender». Enlaces: terminal `/`, caja
+`/caja` (solo cajero y admin), cocina `/cocina` (sin cambios).
+Pendiente después de que lo usen: ajustar tiempos de bloqueo (terminal 60 s,
+caja 3 min) y ver si el panel de admin pasa a PIN.
+
+## Sesión 7 — pedidos del dueño (23/10)
 
 Empezar aquí. Cinco cambios del POS en producción; uno por PR, probando en
 navegador real (terminal 600×960 y caja) y en la comanda impresa.

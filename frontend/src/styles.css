@@ -11410,7 +11410,7 @@ select:focus-visible {
   text-align: left;
 }
 
-/* Terminal bloqueada (PIN del cajón): tapa todo, incluso los modales */
+/* Terminal bloqueada / "¿Quién eres?": tapa todo, incluso los modales */
 .bloqueo-terminal {
   position: fixed;
   inset: 0;
@@ -11423,7 +11423,7 @@ select:focus-visible {
   overflow-y: auto;
 }
 
-.bloqueo-terminal-caja {
+.bloqueo-terminal-contenido {
   width: 100%;
   max-width: 380px;
   max-height: 100dvh;
@@ -11434,17 +11434,24 @@ select:focus-visible {
   text-align: center;
 }
 
-.bloqueo-terminal-caja h1 {
+.bloqueo-terminal-contenido h1 {
   margin: 0;
   font-size: 1.8rem;
 }
 
-.bloqueo-terminal-caja p {
+.bloqueo-terminal-contenido > p {
   margin: 0;
   color: var(--tinta-suave);
 }
 
-.bloqueo-terminal-pin {
+/* Teclado de PIN (components/TecladoPin) */
+.teclado-pin-caja {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.teclado-pin-visor {
   min-height: 64px;
   display: flex;
   align-items: center;
@@ -11456,24 +11463,25 @@ select:focus-visible {
   border-radius: 12px;
 }
 
-.bloqueo-terminal-vacio {
+.teclado-pin-vacio {
   color: var(--tinta-decorativa);
   font-size: 1.2rem;
   letter-spacing: normal;
 }
 
-p.bloqueo-terminal-error {
+p.teclado-pin-error {
+  margin: 0;
   color: var(--achiote);
   font-weight: 800;
 }
 
-.bloqueo-terminal-teclado {
+.teclado-pin {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
-.bloqueo-terminal-teclado button {
+.teclado-pin button {
   min-height: 80px;
   font-size: 2rem;
   font-weight: 700;
@@ -11483,12 +11491,275 @@ p.bloqueo-terminal-error {
   color: var(--tinta);
 }
 
-.bloqueo-terminal-teclado .bloqueo-terminal-ok {
+.teclado-pin .teclado-pin-ok {
+  font-size: 1.3rem;
   background: var(--culantro);
   border-color: var(--culantro-hondo);
   color: var(--papel-alto);
 }
 
-.bloqueo-terminal-teclado .bloqueo-terminal-ok:disabled {
+.teclado-pin .teclado-pin-ok:disabled {
   opacity: 0.45;
+}
+
+/* "¿Quién eres?": un botón grande por persona */
+.quien-eres-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.quien-eres-persona {
+  min-height: 80px;
+  border-radius: 12px;
+  border: 2px solid var(--linea-fuerte);
+  background: var(--papel-alto);
+  color: var(--tinta);
+  font-size: 1.25rem;
+  font-weight: 800;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.quien-eres-persona small {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--tinta-suave);
+}
+
+.quien-eres-persona.elegida {
+  border-color: var(--culantro);
+  box-shadow: inset 0 0 0 2px var(--culantro);
+}
+
+.quien-eres-volver {
+  min-height: 56px;
+  border-radius: 12px;
+  border: 2px solid var(--linea-fuerte);
+  background: transparent;
+  color: var(--tinta);
+  font-weight: 700;
+}
+
+/* La persona que está usando la tablet, siempre a la vista */
+.chip-sesion {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--papel-alto);
+  border: 1.5px solid var(--linea-fuerte);
+  box-shadow: 0 2px 6px rgba(34, 26, 20, 0.12);
+  font-size: 0.9rem;
+}
+
+.chip-sesion span {
+  padding: 0 8px;
+  font-weight: 700;
+  color: var(--tinta-suave);
+}
+
+.chip-sesion .chip-sesion-nombre {
+  border: none;
+  background: transparent;
+  font-weight: 800;
+}
+
+.chip-sesion button {
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--linea-fuerte);
+  background: var(--papel);
+  color: var(--tinta);
+  font-weight: 700;
+}
+
+/* Autorización del admin (lo delicado): encima de cualquier modal */
+.modal-autoriza-fondo {
+  z-index: 10001;
+}
+
+.modal-autoriza {
+  max-width: 400px;
+  max-height: 96dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-autoriza h2 {
+  margin: 0;
+}
+
+/* ============================================================
+   EQUIPO — personas, perfiles y lo delicado del día
+   ============================================================ */
+.fd-color-equipo { --fd-color: var(--mayolica); }
+.fd-seccion-equipo { --fd-color: var(--mayolica); }
+
+.eq-interruptor {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  border: 2px solid var(--linea-fuerte);
+  background: var(--papel-alto);
+}
+
+.eq-interruptor.eq-encendido {
+  border-color: var(--culantro);
+  background: var(--culantro-tenue);
+}
+
+.eq-interruptor .nota-admin {
+  margin: 4px 0 0;
+}
+
+.eq-columnas {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (max-width: 800px) {
+  .eq-columnas { grid-template-columns: 1fr; }
+}
+
+.eq-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  border: 1.5px solid var(--linea);
+  border-top: 4px solid var(--fd-color, var(--mayolica));
+  background: var(--papel-alto);
+  min-width: 0;
+}
+
+.eq-panel h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.eq-persona {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--linea);
+}
+
+.eq-persona.eq-inactiva {
+  opacity: 0.55;
+}
+
+.eq-persona-cabeza,
+.eq-persona-acciones,
+.eq-pin-nuevo,
+.eq-registro-cabeza {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.eq-persona-cabeza strong {
+  flex: 1;
+  font-size: 1.1rem;
+}
+
+.eq-persona select,
+.eq-persona button,
+.eq-pin-nuevo input,
+.eq-campo input,
+.eq-registro-cabeza input {
+  min-height: var(--toque);
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--linea-fuerte);
+  background: var(--papel);
+  font-size: 1rem;
+}
+
+.eq-registro-cabeza h2 {
+  flex: 1;
+}
+
+.eq-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 700;
+}
+
+.eq-roles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.eq-rol {
+  min-height: var(--toque);
+  border-radius: 10px;
+  border: 1.5px solid var(--linea-fuerte);
+  background: var(--papel);
+  font-weight: 800;
+}
+
+.eq-rol.eq-rol-activo {
+  border-color: var(--mayolica);
+  background: var(--mayolica-tenue);
+  box-shadow: inset 0 0 0 2px var(--mayolica);
+}
+
+.eq-registro {
+  display: flex;
+  flex-direction: column;
+}
+
+.eq-registro-fila {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--linea);
+}
+
+.eq-hora {
+  color: var(--tinta-suave);
+  font-variant-numeric: tabular-nums;
+}
+
+.eq-autorizo {
+  color: var(--achiote-hondo);
+  font-weight: 700;
+}
+
+/* Caja: el mozo cobró y la plata la tiene él */
+.chip-falta.chip-pago-mozo {
+  background: var(--aji-tenue);
+  color: var(--aji-hondo);
+  border-color: var(--aji);
+}
+
+.caja-tomado-por {
+  color: var(--tinta-suave);
+  font-size: 0.9rem;
 }

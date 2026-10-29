@@ -50,7 +50,13 @@ empieza por su primer bloque sin pedir contexto.**
   `tests/test_clases_css.py` falla si vuelve a colarse uno peligroso.
 - Moneda: soles con 2 decimales; el backend es la autoridad de totales.
 - Endpoints admin protegidos con `Depends(requiere_admin)` (token HMAC de 12h, header
-  `X-Admin-Token`). Cliente, cocina y ticketera no llevan auth (app de LAN).
+  `X-Admin-Token`). Cocina y ticketera no llevan auth (solo el PIN del local).
+- Equipo con perfiles (`equipo_activo`, Admin → Equipo): con el interruptor encendido,
+  terminal y caja piden «¿Quién eres?» + PIN personal (header `X-Usuario-Token`). Toda
+  acción que escribe desde terminal o caja va con `actor: Actor = Depends(actor_actual)` y
+  `exigir(actor, "<permiso>", db)`; la tabla de quién puede qué vive SOLO en
+  `app/permisos.py`. Lo delicado responde 428 y el frontend reintenta con el PIN de un
+  admin (`X-Autoriza`, components/Autorizador). Apagado = todo como antes.
 
 ## Comandos
 

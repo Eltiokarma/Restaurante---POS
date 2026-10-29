@@ -3,6 +3,7 @@ import { api, ApiError, clearAdminToken, getAdminToken, setAdminToken, soles, ur
 import { IconoAjustes, IconoAspa, IconoBillete, IconoEgreso, IconoMovil, IconoTarjeta } from '../components/Iconos'
 import type { Bebida, CajaEstado, ConfigOut, DatosLocal, Empaque, FinanzasFijos, FinanzasResumen, FlujoFila, Insumo, MenuGuardadoOut, MesaEstado, MovimientoCaja, MovimientoKardex, MovimientosOut, OrdenOut, Plato, PlatoVendido, PlantillaMenuIn, ReporteConsumo, ResumenDatos, StatsOut, VozPanel } from '../api'
 import { TabTablero } from '../components/TabTablero'
+import { TabEquipo } from '../components/TabEquipo'
 import { PorCobrar } from '../components/PorCobrar'
 import { CabeceraVista, SECCIONES } from '../components/CabeceraVista'
 import type { Tab } from '../components/CabeceraVista'
@@ -146,6 +147,7 @@ export function Admin() {
             {tab === 'finanzas' && <TabFinanzas onSesionVencida={vencida} />}
             {tab === 'cancelaciones' && <TabCancelaciones onSesionVencida={vencida} />}
             {tab === 'voz' && <TabVoz onSesionVencida={vencida} />}
+            {tab === 'equipo' && <TabEquipo onSesionVencida={vencida} />}
             {tab === 'config' && <TabConfig onSesionVencida={vencida} />}
           </div>
         </main>

@@ -22,6 +22,7 @@ from ..db import get_db
 from ..models import CierreCaja, Config, Mesa, Orden, Plato, TicketBebida, hoy_lima
 from ..routes.config import leer_config
 from ..services.escpos import INICIALIZAR, abrir_gaveta, render_bebida, render_cierre, render_orden, render_precuenta, render_prueba
+from ..permisos import Actor, actor_actual, exigir
 
 router = APIRouter(prefix="/api/print", tags=["impresion"])
 
@@ -76,11 +77,12 @@ class GavetaIn(BaseModel):
 
 @router.post("/gaveta")
 def pedir_abrir_gaveta(payload: GavetaIn | None = None, x_admin_token: str = Header(default=""),
-                       db: Session = Depends(get_db)):
+                       db: Session = Depends(get_db), actor: Actor = Depends(actor_actual)):
     """Botón "Abrir cajón" de la caja (dar vuelto, cambiar sencillo). Sin
     admin, como el resto de la caja, pero con el PIN del cajón si el admin
     lo puso (pedido del dueño). Solo en modo puente: la impresión del
     navegador no puede mandar el pulso al cajón."""
+    exigir(actor, "caja", db)
     from .config import pin_gaveta
 
     pin = pin_gaveta(db)
@@ -268,7 +270,9 @@ def _armar_cola(db: Session) -> dict:
             "datos_b64": base64.b64encode(
                 (abrir_gaveta(config["gaveta"])
                  if orden.pago_al_pedir == "pagado" and orden.metodo_pago != "yape"
-                 and not orden.reimpresion else b"")
+                 and not orden.reimpresion
+                 # Pagó al mozo: la plata no está en la caja todavía
+                 and not orden.pago_pendiente else b"")
                 + render_orden(orden, local, columnas, categorias) * max(1, orden.copias or 1)
                 # Detrás, la precuenta para el cliente: SIEMPRE (pedido del
                 # dueño); si no pagó o no se dijo, sale "NO PAGADO"

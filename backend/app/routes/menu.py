@@ -17,6 +17,7 @@ from ..models import (
     MenuAgregado, MenuAlternativa, MenuGuardado, MenuPlantilla, MenuTiempo, Plato,
     ahora_lima, hoy_lima,
 )
+from ..permisos import Actor, actor_actual, exigir
 
 router = APIRouter(prefix="/api/menu", tags=["menu"])
 
@@ -746,8 +747,10 @@ def menu_del_dia_para_caja(db: Session = Depends(get_db)):
 
 
 @router.patch("/platos/{plato_id}/hoy")
-def plato_para_hoy(plato_id: int, payload: ActivoHoyIn, db: Session = Depends(get_db)):
+def plato_para_hoy(plato_id: int, payload: ActivoHoyIn, db: Session = Depends(get_db),
+                   actor: Actor = Depends(actor_actual)):
     """La caja pone o saca un plato del menú de hoy (un toque)."""
+    exigir(actor, "caja", db)
     plato = db.get(Plato, plato_id)
     if plato is None or not plato.en_catalogo:
         raise HTTPException(status_code=404, detail="Plato no encontrado")
@@ -764,8 +767,10 @@ class StockIn(BaseModel):
 
 
 @router.patch("/platos/{plato_id}/stock")
-def stock_del_plato(plato_id: int, payload: StockIn, db: Session = Depends(get_db)):
+def stock_del_plato(plato_id: int, payload: StockIn, db: Session = Depends(get_db),
+                    actor: Actor = Depends(actor_actual)):
     """La caja pone cuántas porciones hay hoy de un plato (sin admin)."""
+    exigir(actor, "caja", db)
     plato = db.get(Plato, plato_id)
     if plato is None:
         raise HTTPException(status_code=404, detail="Plato no encontrado")
@@ -776,8 +781,10 @@ def stock_del_plato(plato_id: int, payload: StockIn, db: Session = Depends(get_d
 
 
 @router.patch("/plantillas/{plantilla_id}/hoy")
-def plantilla_para_hoy(plantilla_id: int, payload: ActivoHoyIn, db: Session = Depends(get_db)):
+def plantilla_para_hoy(plantilla_id: int, payload: ActivoHoyIn, db: Session = Depends(get_db),
+                       actor: Actor = Depends(actor_actual)):
     """La caja prende o apaga un menú para hoy."""
+    exigir(actor, "caja", db)
     plantilla = db.get(MenuPlantilla, plantilla_id)
     if plantilla is None or not plantilla.en_catalogo:
         raise HTTPException(status_code=404, detail="Menú no encontrado")
@@ -787,7 +794,9 @@ def plantilla_para_hoy(plantilla_id: int, payload: ActivoHoyIn, db: Session = De
 
 
 @router.post("/caja/guardados/{guardado_id}/cargar")
-def cargar_guardado_desde_caja(guardado_id: int, db: Session = Depends(get_db)):
+def cargar_guardado_desde_caja(guardado_id: int, db: Session = Depends(get_db),
+                               actor: Actor = Depends(actor_actual)):
     """Cargar un menú guardado como el de hoy, desde la caja."""
+    exigir(actor, "caja", db)
     cargar_menu_guardado(guardado_id, db)
     return menu_del_dia_para_caja(db)
