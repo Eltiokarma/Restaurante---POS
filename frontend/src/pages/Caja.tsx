@@ -135,7 +135,7 @@ export function Caja() {
   const cargoTaper = precioTaper * unidadesEnTaper(carrito.items, carrito.menus)
   const totalConCargos = carrito.totalSoles + cargoTaper
   const { sincronizarConMenu } = carrito
-  const tickets = useTicketsPersonas(carrito, { empaques: empaquesOfrecidos, precioTaper, conEspera: true })
+  const tickets = useTicketsPersonas(carrito, { empaques: empaquesOfrecidos, precioTaper, conEspera: false })
 
   // Pedido por personas: "platos por defecto" por menú (guardados en esta
   // caja) y, por defecto, el pedido arranca con UNA persona
@@ -717,8 +717,7 @@ export function Caja() {
         setMensaje(`Ticket #${String(orden.numero_orden_dia).padStart(3, '0')} enviado a imprimir`)
       } else {
         setTicket({
-          orden: { ...orden, copias: 1 }, // la reimpresión sale una vez
-          
+          orden: { ...orden, copias: 1, reimpresion: true }, // sale una vez
           local: { nombre: cfg.nombre_local, direccion: cfg.direccion, ruc: cfg.ruc },
         })
       }

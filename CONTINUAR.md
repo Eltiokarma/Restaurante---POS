@@ -39,9 +39,24 @@ navegador real (terminal 600×960 y caja) y en la comanda impresa.
    la mesa es mixta (3 personas: 2 con sopa, 1 sin entrada). Debe marcarse
    por persona/plato («sin entrada» junto a ese segundo) y conservar la
    secuencia. Ver `backend/app/services/orders.py` y `escpos.py`.
-4. **Reimprimir desde la pantalla de Tickets**: NO abrir la gaveta y que el
-   papel diga «REIMPRESIÓN» (`routes/orders.py` `reimprimir`, línea ~583, y el
-   pulso de gaveta en el puente).
+4. ~~**Reimprimir desde la pantalla de Tickets**~~ — HECHO (29/10): columna
+   `ordenes.reimpresion` (la pone `/reprint` y el traslado de mesa con
+   reimpresión); la cola no manda el pulso del cajón y la comanda y la
+   precuenta dicen «** REIMPRESIÓN **». Admin → Órdenes ya reencola también
+   en modo puente (antes solo en estación).
+
+**También el 29/10 (pedidos del dueño):**
+
+- **Fuera el «Que espere»** (reservado): `conEspera: false` en caja y
+  terminal y `menuAPayload` manda `espera: []` (tampoco por voz). Revisión
+  con datos del 20 al 28/10: ningún plato salió «(ESPERA)»; lo que sale entre
+  paréntesis es «(EXTRA)» (12 pedidos) y «(JUNTO)» (1). El dueño decidió
+  dejar esos dos como están.
+- **Terminal con candado** (`components/BloqueoTerminal.tsx`, solo en `/`):
+  al apagarse la pantalla o tras 60 s sin tocar pide el PIN del cajón
+  (`POST /api/config/desbloquear`); el pedido a medio armar no se pierde.
+  Sin `pin_gaveta` configurado no se bloquea. La terminal la usa solo el
+  personal: si algún día la usan clientes, esto se tiene que apagar.
 5. **Papel de anulación más pequeño** (voucher «ANULADO» en `escpos.py`
    ~385): menos renglones/alto, sin perder ticket, motivo y «DEVOLVER S/».
 

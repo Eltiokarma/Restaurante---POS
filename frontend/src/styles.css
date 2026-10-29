@@ -11409,3 +11409,86 @@ select:focus-visible {
 .resumen-cierre-plata td:first-child {
   text-align: left;
 }
+
+/* Terminal bloqueada (PIN del cajón): tapa todo, incluso los modales */
+.bloqueo-terminal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--papel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.bloqueo-terminal-caja {
+  width: 100%;
+  max-width: 380px;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  text-align: center;
+}
+
+.bloqueo-terminal-caja h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.bloqueo-terminal-caja p {
+  margin: 0;
+  color: var(--tinta-suave);
+}
+
+.bloqueo-terminal-pin {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  letter-spacing: 0.3em;
+  background: var(--papel-alto);
+  border: 2px solid var(--linea-fuerte);
+  border-radius: 12px;
+}
+
+.bloqueo-terminal-vacio {
+  color: var(--tinta-decorativa);
+  font-size: 1.2rem;
+  letter-spacing: normal;
+}
+
+p.bloqueo-terminal-error {
+  color: var(--achiote);
+  font-weight: 800;
+}
+
+.bloqueo-terminal-teclado {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.bloqueo-terminal-teclado button {
+  min-height: 80px;
+  font-size: 2rem;
+  font-weight: 700;
+  border-radius: 12px;
+  border: 2px solid var(--linea-fuerte);
+  background: var(--papel-alto);
+  color: var(--tinta);
+}
+
+.bloqueo-terminal-teclado .bloqueo-terminal-ok {
+  background: var(--culantro);
+  border-color: var(--culantro-hondo);
+  color: var(--papel-alto);
+}
+
+.bloqueo-terminal-teclado .bloqueo-terminal-ok:disabled {
+  opacity: 0.45;
+}

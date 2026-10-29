@@ -109,6 +109,7 @@ function TicketCuerpo({ orden, id }: Props & { id?: string }) {
             : orden.tipo_servicio === 'llevar' ? 'LLEVAR' : 'SIN MESA'}
         </span>
       </div>
+      {orden.reimpresion && <div className="ticket-pago">** REIMPRESIÓN **</div>}
       {orden.pago_al_pedir && (
         <div className="ticket-pago">{orden.pago_al_pedir === 'pagado' ? 'PAGADO' : '** NO PAGÓ **'}</div>
       )}

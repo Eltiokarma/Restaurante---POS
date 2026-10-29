@@ -7,6 +7,7 @@ import { Admin } from './pages/Admin'
 import { Ticketera } from './pages/Ticketera'
 import { Caja } from './pages/Caja'
 import { CandadoPin } from './components/CandadoPin'
+import { BloqueoTerminal } from './components/BloqueoTerminal'
 import './styles.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -14,7 +15,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <CandadoPin>
         <Routes>
-          <Route path="/" element={<Cliente />} />
+          <Route path="/" element={<BloqueoTerminal><Cliente /></BloqueoTerminal>} />
           <Route path="/cocina" element={<Cocina />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/ticketera" element={<Ticketera />} />

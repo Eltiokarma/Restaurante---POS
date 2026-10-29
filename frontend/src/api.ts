@@ -258,6 +258,8 @@ export interface OrdenOut {
   entrega: Entrega
   // Comandas que se imprimen (2 = una extra para la guía)
   copias?: number
+  // La caja la mandó a reimprimir: el papel dice REIMPRESIÓN
+  reimpresion?: boolean
   mesa_ids: number[]
   mesas: string[]
   mesa_liberada: boolean
@@ -1025,7 +1027,6 @@ export function lineaEntrega(orden: OrdenOut): { texto: string; separado: boolea
 export function personaVozAMenu(p: VozPersona, menu: MenuHoy): MenuCarrito {
   const elecciones: Record<number, number> = {}
   const empaques: Partial<Record<number, Empaque>> = {}
-  const espera: number[] = []
   const variantes: Partial<Record<number, VarianteMenu>> = {}
   for (const t of menu.tiempos) {
     if (p.sin.includes(t.orden)) continue
@@ -1033,7 +1034,6 @@ export function personaVozAMenu(p: VozPersona, menu: MenuHoy): MenuCarrito {
     if (dicho && t.alternativas.some((a) => a.plato_id === dicho.plato_id)) {
       elecciones[t.orden] = dicho.plato_id
       if (dicho.empaque && dicho.empaque !== p.empaque) empaques[t.orden] = dicho.empaque
-      if (dicho.espera) espera.push(t.orden)
       if (dicho.huevo) variantes[t.orden] = { huevo: true, ...(dicho.coccion ? { coccion: dicho.coccion } : {}) }
       else if (dicho.presa) variantes[t.orden] = { presa: dicho.presa }
     } else if (t.alternativas.length === 1) {
@@ -1048,7 +1048,7 @@ export function personaVozAMenu(p: VozPersona, menu: MenuHoy): MenuCarrito {
       return agregado ? [{ agregado, cantidad: a.cantidad }] : []
     }),
     empaque: p.empaque, empaques, nota: p.nota,
-    entrega: p.entrega ?? undefined, nombre_persona: p.nombre, espera, variantes,
+    entrega: p.entrega ?? undefined, nombre_persona: p.nombre, variantes,
   }
 }
 
@@ -1060,8 +1060,9 @@ export function menuAPayload(m: MenuCarrito): MenuOrdenIn {
     agregados: m.agregados.map((a) => ({ agregado_id: a.agregado.id, cantidad: a.cantidad })),
     empaque: m.empaque, nota: m.nota.trim(),
     entrega: entregaDeMenu(m),
-    // Solo lo elegido puede esperar
-    espera: (m.espera ?? []).filter((t) => m.elecciones[t] !== undefined && !m.omitidos.includes(t)),
+    // "Que espere" (reservado) se quitó a pedido del dueño: salía "(ESPERA)"
+    // en la comanda sin que nadie lo pidiera. Ningún plato espera
+    espera: [],
     nombre_persona: (m.nombre_persona ?? '').trim(),
     variantes: variantesValidas(m),
   }
@@ -1645,6 +1646,10 @@ export const api = {
   // "Abrir cajón" de la caja: el puente manda el pulso al cajón de dinero
   abrirGaveta: (pin = '', comoAdmin = false) =>
     request<{ encolada: boolean }>('/api/print/gaveta', { method: 'POST', body: JSON.stringify({ pin }) }, comoAdmin),
+
+  // Desbloquear la terminal de pedidos con el PIN del cajón (403 si no coincide)
+  desbloquearTerminal: (pin: string) =>
+    request<{ ok: boolean }>('/api/config/desbloquear', { method: 'POST', body: JSON.stringify({ pin }) }),
 
   // El número que tendrá el próximo pedido (vista previa mientras se arma)
   siguienteNumero: () => request<{ numero: number }>('/api/orders/siguiente-numero'),

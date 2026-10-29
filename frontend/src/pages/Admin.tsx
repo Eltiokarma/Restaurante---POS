@@ -1873,18 +1873,19 @@ function TabOrdenes() {
     if (!confirmando) return
     const { orden, modo, local } = confirmando
     setConfirmando(null)
-    if (modo === 'estacion') {
+    if (modo !== 'terminal') {
+      // Reencolar: lo imprime la ticketera o el puente, según el modo
       try {
         await api.reimprimirOrden(orden.id)
         setAvisoReimpresion(
-          `Ticket #${String(orden.numero_orden_dia).padStart(3, '0')} enviado a la estación de impresión.`,
+          `Ticket #${String(orden.numero_orden_dia).padStart(3, '0')} enviado a imprimir.`,
         )
       } catch {
         setError('No se pudo reenviar el ticket a la estación. Revisa que la ticketera esté abierta y prueba de nuevo.')
       }
       return
     }
-    setTicket({ orden, local })
+    setTicket({ orden: { ...orden, reimpresion: true }, local })
   }
 
   useEffect(() => {
@@ -2013,8 +2014,8 @@ function TabOrdenes() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>¿Reimprimir el ticket #{num(confirmando.orden)}?</h2>
             <p>
-              {confirmando.modo === 'estacion'
-                ? 'Se reimprime en la estación de impresión (la PC con la impresora).'
+              {confirmando.modo !== 'terminal'
+                ? 'Sale por la impresora del local, marcado REIMPRESIÓN (no abre el cajón).'
                 : 'Se imprime desde esta pantalla: se va a abrir el diálogo de impresión.'}
             </p>
             <div className="modal-botones">
