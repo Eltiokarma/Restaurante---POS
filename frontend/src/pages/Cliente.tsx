@@ -244,9 +244,9 @@ export function Cliente() {
   // Comandas a imprimir: 1, o 2 con el botón chico "×2" (una para la guía)
   const [copias, setCopias] = useState(1)
   const [editandoDefecto, setEditandoDefecto] = useState<MenuHoy | null>(null)
-  // "Va a esperar" también en la terminal (pedido del dueño): la entrada
-  // ahora y el segundo después
-  const tickets = useTicketsPersonas(carrito, { empaques: empaquesOfrecidos, precioTaper, conEspera: true })
+  // Sin "Que espere" (pedido del dueño, 29/10): salía "(ESPERA)" en la
+  // comanda y se leía como plato reservado
+  const tickets = useTicketsPersonas(carrito, { empaques: empaquesOfrecidos, precioTaper, conEspera: false })
   const tapers = unidadesEnTaper(carrito.items, carrito.menus)
   const cargoTaper = precioTaper * tapers
   const totalConCargos = carrito.totalSoles + cargoTaper

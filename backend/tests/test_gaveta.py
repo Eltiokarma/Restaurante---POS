@@ -74,3 +74,30 @@ def test_cajon_espera_a_la_prueba_de_verdad(client, db, admin_headers):
 def test_sin_modo_puente_no_hay_cajon(client):
     assert client.post("/api/print/gaveta").json() == {"encolada": False}
     assert _trabajos(client) == []
+
+
+def test_reimpresion_no_abre_el_cajon_y_lo_dice(client, db, menu_ejemplo):
+    """Pedido del dueño: reimprimir desde caja no abre el cajón (la plata
+    ya entró con el original) y el papel dice REIMPRESIÓN."""
+    activar_modo_puente(db)
+    orden = _pedido(client, menu_ejemplo, "pagado")
+    original = base64.b64decode(_trabajos(client)[0]["datos_b64"])
+    assert original.startswith(PULSO_PIN2)
+    assert "REIMPRESIÓN".encode("cp850") not in original
+    client.post(f"/api/orders/{orden}/printed")
+
+    assert client.post(f"/api/orders/{orden}/reprint").status_code == 200
+    copia = base64.b64decode(_trabajos(client)[0]["datos_b64"])
+    assert b"\x1bp" not in copia
+    # En la comanda y en la precuenta
+    assert copia.count("REIMPRESIÓN".encode("cp850")) == 2
+    assert client.get("/api/orders/today").json()["ordenes"][0]["reimpresion"] is True
+
+
+def test_desbloquear_terminal_con_el_pin_del_cajon(client, admin_headers):
+    # Sin PIN del cajón la terminal no se bloquea: cualquier cosa abre
+    assert client.post("/api/config/desbloquear", json={"pin": ""}).json() == {"ok": True}
+    client.put("/api/config", json={"pin_gaveta": "4321"}, headers=admin_headers)
+    assert client.post("/api/config/desbloquear", json={"pin": "1111"}).status_code == 403
+    assert client.post("/api/config/desbloquear", json={"pin": ""}).status_code == 403
+    assert client.post("/api/config/desbloquear", json={"pin": "4321"}).json() == {"ok": True}

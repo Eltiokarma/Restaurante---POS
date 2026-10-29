@@ -52,6 +52,9 @@ def abrir_gaveta(pin: str) -> bytes:
     return b"\x1bp" + bytes([0 if pin == "pin2" else 1, 25, 250])
 
 
+# Marca de la comanda y la precuenta que la caja mandó a reimprimir
+REIMPRESION = "** REIMPRESIÓN **"
+
 # Alimenta papel y corta (corte parcial con avance: no arranca a mitad)
 CORTAR = b"\n\n\n\n" + b"\x1dV\x42\x03"
 
@@ -141,6 +144,10 @@ def render_orden(
     else:
         partes += [_texto(izquierda), _texto(mesa[:media].rjust(media))]
     partes += [NEGRITA_OFF, TAMANO_NORMAL]
+
+    if orden.reimpresion:
+        # Pedido del dueño: que no se confunda con un pedido nuevo
+        partes += [CENTRAR, DOBLE_ALTO, NEGRITA_ON, _texto(REIMPRESION), NEGRITA_OFF, TAMANO_NORMAL]
 
     # "OK y pagó" / "OK y no pagó" de la terminal
     if orden.pago_al_pedir == "pagado":
@@ -546,7 +553,10 @@ def render_precuenta(
         donde = ""
     partes: list[bytes] = [INICIALIZAR, CODEPAGE_CP850, FUENTE_B, ESPACIADO_NORMAL, ALINEAR_IZQ,
                            NEGRITA_ON, _texto(_fila(f"PRECUENTA - Orden #{numero}", donde, ancho)),
-                           NEGRITA_OFF, _texto("-" * ancho)]
+                           NEGRITA_OFF]
+    if orden.reimpresion:
+        partes += [CENTRAR, NEGRITA_ON, _texto(REIMPRESION), NEGRITA_OFF, ALINEAR_IZQ]
+    partes.append(_texto("-" * ancho))
 
     # Columnas de un menú: "2x  " | entrada | segundo | monto
     cant_ancho, monto_ancho = 4, 8

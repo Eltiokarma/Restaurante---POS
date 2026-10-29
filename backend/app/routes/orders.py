@@ -218,6 +218,7 @@ def _orden_a_dict(
         "vuelto_pendiente": orden.vuelto_pendiente,
         "entrega": orden.entrega,
         "copias": orden.copias,
+        "reimpresion": orden.reimpresion,
         "mesa_ids": ids_mesa,
         "mesas": [mapa_mesas.get(i, f"#{i}") for i in ids_mesa],
         "mesa_liberada": orden.mesa_liberada,
@@ -588,6 +589,7 @@ def reimprimir(orden_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     orden.impreso = False
     orden.copias = 1  # la reimpresión sale una sola vez
+    orden.reimpresion = True  # dice "REIMPRESIÓN" y no abre el cajón
     db.commit()
     return {"id": orden.id, "impreso": False}
 
@@ -831,6 +833,7 @@ def trasladar_mesa(payload: TrasladoIn, db: Session = Depends(get_db)):
         if payload.reimprimir:
             orden.impreso = False
             orden.copias = 1  # la reimpresión sale una sola vez
+            orden.reimpresion = True
         movidas.append(orden)
 
     if not movidas:

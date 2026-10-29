@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+import hmac
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -82,6 +84,21 @@ def obtener(db: Session = Depends(get_db)):
     # Sin auth: la terminal de cliente necesita la duración de la ventana
     # de cancelación y el timeout de inactividad.
     return leer_config(db)
+
+
+class PinIn(BaseModel):
+    pin: str = ""
+
+
+@router.post("/desbloquear")
+def desbloquear_terminal(payload: PinIn, db: Session = Depends(get_db)):
+    """La terminal de pedidos se bloquea al apagarse la pantalla o tras un
+    minuto sin tocarla, y se desbloquea con el PIN del cajón (pedido del
+    dueño). Solo responde si coincide: el PIN nunca sale del backend."""
+    pin = pin_gaveta(db)
+    if pin and not hmac.compare_digest(payload.pin.strip().encode(), pin.encode()):
+        raise HTTPException(status_code=403, detail="PIN incorrecto")
+    return {"ok": True}
 
 
 @router.put("", dependencies=[Depends(requiere_admin)])

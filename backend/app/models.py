@@ -188,6 +188,9 @@ class Orden(Base):
     entrega: Mapped[str] = mapped_column(String(10), default="junto", nullable=False)
     # Cuántas comandas imprimir (1 normal; 2 = una para la guía/mozo)
     copias: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # True cuando la caja pidió reimprimir: el papel dice "REIMPRESIÓN" y
+    # no se manda el pulso al cajón (la plata ya entró con el original)
+    reimpresion: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Lo que se marcó al crear el pedido en la terminal: "pagado" (sale la
     # precuenta para el cliente) | "pendiente" (no pagó aún) | None (no se
     # dijo). Va escrito en la comanda.

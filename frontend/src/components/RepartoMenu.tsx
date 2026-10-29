@@ -673,8 +673,9 @@ type HojaAbierta =
   | { tipo: 'tiempo' | 'empaque'; idx: number; tiempo: number }
   | { tipo: 'mas'; idx: number }
 
-/** La grilla de tickets por persona y sus hojas. `conEspera` (caja)
- *  muestra el circulito "va a esperar". */
+/** La grilla de tickets por persona y sus hojas. `conEspera` muestra el
+ *  "Que espere: sale después"; hoy apagado en caja y terminal (el dueño
+ *  lo pidió fuera: en la comanda se leía como plato reservado). */
 export function useTicketsPersonas(carrito: Carrito, opciones: {
   empaques: Empaque[]
   precioTaper: number
