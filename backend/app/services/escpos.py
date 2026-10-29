@@ -556,6 +556,9 @@ def render_precuenta(
                            NEGRITA_OFF]
     if orden.reimpresion:
         partes += [CENTRAR, NEGRITA_ON, _texto(REIMPRESION), NEGRITA_OFF, ALINEAR_IZQ]
+    if orden.tomado_por:
+        # Con el equipo activo: quién tomó el pedido
+        partes.append(_texto(f"Atendió: {orden.tomado_por}"[:ancho]))
     partes.append(_texto("-" * ancho))
 
     # Columnas de un menú: "2x  " | entrada | segundo | monto

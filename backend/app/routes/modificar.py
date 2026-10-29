@@ -31,6 +31,7 @@ from ..services.orders import (
     EleccionInvalida, EntregaObligadaSeparado, PlatoNoDisponible, _armar_menu,
     _plato_activo, _tipo_servicio_de,
 )
+from ..permisos import Actor, actor_actual, anular_libre, exigir
 from .config import leer_config
 from .orders import (
     EMPAQUES, BebidaPedida, ItemIn, MenuIn, _mapa_categorias, _mapa_mesas, _orden_a_dict,
@@ -140,8 +141,10 @@ class AgregarIn(BaseModel):
 
 
 @router.post("/{orden_id}/agregar")
-def agregar_a_orden(orden_id: int, payload: AgregarIn, db: Session = Depends(get_db)):
+def agregar_a_orden(orden_id: int, payload: AgregarIn, db: Session = Depends(get_db),
+                    actor: Actor = Depends(actor_actual)):
     """Suma personas (menús), platos de carta o gaseosas a la orden."""
+    exigir(actor, "pedidos", db)
     orden = _orden_modificable(db, orden_id)
     if not payload.menus and not payload.items and not payload.bebidas:
         raise HTTPException(status_code=422, detail="No hay nada que agregar")
@@ -210,7 +213,8 @@ class DevolverIn(BaseModel):
 
 @router.post("/{orden_id}/menus/{orden_menu_id}/devolver")
 def devolver_tiempo(orden_id: int, orden_menu_id: int, payload: DevolverIn,
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db), actor: Actor = Depends(actor_actual)):
+    exigir(actor, "pedidos", db)
     orden = _orden_modificable(db, orden_id)
     om = db.get(OrdenMenu, orden_menu_id)
     if om is None or om.orden_id != orden.id:
@@ -263,7 +267,9 @@ class EmpaqueIn(BaseModel):
 
 
 @router.patch("/{orden_id}/items/{item_id}/empaque")
-def cambiar_empaque(orden_id: int, item_id: int, payload: EmpaqueIn, db: Session = Depends(get_db)):
+def cambiar_empaque(orden_id: int, item_id: int, payload: EmpaqueIn, db: Session = Depends(get_db),
+                    actor: Actor = Depends(actor_actual)):
+    exigir(actor, "pedidos", db)
     orden = _orden_modificable(db, orden_id)
     if payload.empaque not in EMPAQUES:
         raise HTTPException(status_code=422, detail=f"Empaque inválido: {payload.empaque}")
@@ -289,7 +295,8 @@ class AnularIn(BaseModel):
 
 
 @router.post("/{orden_id}/anular")
-def anular_orden(orden_id: int, payload: AnularIn, db: Session = Depends(get_db)):
+def anular_orden(orden_id: int, payload: AnularIn, db: Session = Depends(get_db),
+                 actor: Actor = Depends(actor_actual)):
     """Pedido del dueño: el cliente se arrepiente justo después de
     confirmar (incluso ya pagado) o el pedido salió dos veces. La orden
     queda ANULADA con su motivo (no cuenta como venta, devuelve el kardex y
@@ -298,6 +305,8 @@ def anular_orden(orden_id: int, payload: AnularIn, db: Session = Depends(get_db)
     if payload.motivo not in MOTIVOS_ANULACION:
         raise HTTPException(status_code=422, detail=f"Motivo inválido: {payload.motivo}")
     orden = _orden_modificable(db, orden_id)
+    exigir(actor, "anular", db, libre=anular_libre(actor, orden), registrar="anular", orden_id=orden.id,
+           detalle=f"#{orden.numero_orden_dia} S/ {orden.total:.2f} ({MOTIVOS_ANULACION[payload.motivo]})")
     from ..services.inventario import revertir_por_orden
 
     revertir_por_orden(db, orden)
@@ -348,8 +357,11 @@ def anular_orden(orden_id: int, payload: AnularIn, db: Session = Depends(get_db)
 # ---------- quitar una persona o un plato ----------
 
 @router.delete("/{orden_id}/menus/{orden_menu_id}")
-def quitar_persona(orden_id: int, orden_menu_id: int, db: Session = Depends(get_db)):
+def quitar_persona(orden_id: int, orden_menu_id: int, db: Session = Depends(get_db),
+                   actor: Actor = Depends(actor_actual)):
     orden = _orden_modificable(db, orden_id)
+    exigir(actor, "quitar_plato", db, registrar="quitar", orden_id=orden.id,
+           detalle=f"#{orden.numero_orden_dia}: una persona")
     om = db.get(OrdenMenu, orden_menu_id)
     if om is None or om.orden_id != orden.id:
         raise HTTPException(status_code=404, detail="Esa persona no está en la orden")
@@ -373,12 +385,16 @@ def quitar_persona(orden_id: int, orden_menu_id: int, db: Session = Depends(get_
 
 
 @router.delete("/{orden_id}/items/{item_id}")
-def quitar_item(orden_id: int, item_id: int, db: Session = Depends(get_db)):
+def quitar_item(orden_id: int, item_id: int, db: Session = Depends(get_db),
+                actor: Actor = Depends(actor_actual)):
     """Quita un plato de carta, una gaseosa, un agregado o una porción
     extra. El plato de un tiempo del menú no se quita así: eso cambia el
     menú (quitar a la persona o pedir el tiempo de nuevo)."""
     orden = _orden_modificable(db, orden_id)
     item = db.get(OrdenItem, item_id)
+    if item is not None and item.orden_id == orden.id:
+        exigir(actor, "quitar_plato", db, registrar="quitar", orden_id=orden.id,
+               detalle=f"#{orden.numero_orden_dia}: {item.cantidad} x {item.nombre_snapshot}")
     if item is None or item.orden_id != orden.id or item.nombre_snapshot == "Táper":
         raise HTTPException(status_code=404, detail="Ese plato no está en la orden")
     if item.orden_menu_id is not None and not (item.es_agregado or item.es_extra):

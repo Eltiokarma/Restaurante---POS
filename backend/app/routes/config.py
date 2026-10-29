@@ -32,6 +32,7 @@ class ConfigIn(BaseModel):
     cocina_bulk_min: int | None = None  # ventana de la tanda en cocina (0 = apagado)
     cocina_tandas: bool | None = None  # tablero de tandas en /cocina
     cocina_tanda_max_tickets: int | None = None  # tope de tickets por tanda (0 = sin tope)
+    equipo_activo: bool | None = None  # perfiles del equipo (admin / cajero / mozo)
 
 
 def pin_gaveta(db: Session) -> str:
@@ -76,6 +77,7 @@ def leer_config(db: Session) -> dict:
         "cocina_bulk_min": max(0, int(valores["cocina_bulk_min"])),
         "cocina_tandas": valores["cocina_tandas"] in ("1", "true", "True"),
         "cocina_tanda_max_tickets": max(0, int(valores["cocina_tanda_max_tickets"] or 0)),
+        "equipo_activo": valores["equipo_activo"] in ("1", "true", "True"),
     }
 
 
@@ -104,7 +106,8 @@ def desbloquear_terminal(payload: PinIn, db: Session = Depends(get_db)):
 @router.put("", dependencies=[Depends(requiere_admin)])
 def actualizar(payload: ConfigIn, db: Session = Depends(get_db)):
     for clave, valor in payload.model_dump(exclude_none=True).items():
-        if clave in ("voz_habilitada", "exigir_caja_abierta", "terminal_solo_menus", "cocina_tandas"):
+        if clave in ("voz_habilitada", "exigir_caja_abierta", "terminal_solo_menus", "cocina_tandas",
+                     "equipo_activo"):
             valor = "1" if valor else "0"
         elif clave == "empaques_ofrecidos":
             valor = ",".join(e for e in valor if e in ("mesa", "taper", "bolsa", "lonchera"))

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from ..auth import requiere_admin
 from ..db import get_db
 from ..models import Mesa, Orden, hoy_lima
+from ..permisos import Actor, actor_actual, exigir
 
 router = APIRouter(prefix="/api/mesas", tags=["mesas"])
 
@@ -81,9 +82,10 @@ def actualizar(mesa_id: int, payload: MesaUpdate, db: Session = Depends(get_db))
 
 
 @router.post("/{mesa_id}/liberar")
-def liberar(mesa_id: int, db: Session = Depends(get_db)):
+def liberar(mesa_id: int, db: Session = Depends(get_db), actor: Actor = Depends(actor_actual)):
     """Libera la mesa: marca liberados TODOS los tickets de hoy que la
     ocupan (si un ticket combinaba varias mesas, se liberan juntas)."""
+    exigir(actor, "caja", db)
     if db.get(Mesa, mesa_id) is None:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
 

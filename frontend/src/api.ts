@@ -260,6 +260,10 @@ export interface OrdenOut {
   copias?: number
   // La caja la mandó a reimprimir: el papel dice REIMPRESIÓN
   reimpresion?: boolean
+  // Con el equipo activo: quién tomó el pedido
+  tomado_por?: string | null
+  // El mozo marcó "pagó" (con este método): la caja tiene que levantarlo
+  metodo_mozo?: string | null
   mesa_ids: number[]
   mesas: string[]
   mesa_liberada: boolean
@@ -496,6 +500,8 @@ export interface ConfigOut {
   cocina_bulk_min: number
   cocina_tandas: boolean
   cocina_tanda_max_tickets: number
+  // Perfiles del equipo (admin / cajero / mozo) con PIN por persona
+  equipo_activo?: boolean
 }
 
 // --- Finanzas: lo que solo el dueño sabe (fijos y planilla) más el
@@ -872,12 +878,80 @@ export function setPinLocal(pin: string) {
   localStorage.setItem(PIN_KEY, pin)
 }
 
+// ---------- Equipo: la persona que está usando la tablet ----------
+
+export type Rol = 'admin' | 'cajero' | 'mozo'
+
+export interface PersonaEquipo {
+  id: number
+  nombre: string
+  rol: Rol
+  activo: boolean
+}
+
+export const NOMBRE_ROL: Record<Rol, string> = { admin: 'Admin', cajero: 'Cajero', mozo: 'Mozo' }
+
+const SESION_KEY = 'pos_sesion_equipo'
+
+export interface SesionEquipo {
+  token: string
+  usuario: PersonaEquipo
+}
+
+export function getSesion(): SesionEquipo | null {
+  try {
+    const guardada = localStorage.getItem(SESION_KEY)
+    return guardada ? (JSON.parse(guardada) as SesionEquipo) : null
+  } catch {
+    return null
+  }
+}
+
+export function setSesion(sesion: SesionEquipo | null) {
+  try {
+    if (sesion) localStorage.setItem(SESION_KEY, JSON.stringify(sesion))
+    else localStorage.removeItem(SESION_KEY)
+  } catch {
+    /* sin almacenamiento: la sesión dura lo que la página */
+  }
+  window.dispatchEvent(new Event('sesion-equipo'))
+}
+
+// Lo delicado (anular, quitar, borrar un egreso…) responde 428: quien
+// registró el autorizador (components/Autorizador) pide el PIN de un admin
+// y la misma acción se reintenta con X-Autoriza. Así cada pantalla sigue
+// llamando a la API como siempre.
+type Autorizador = (mensaje: string) => Promise<string | null>
+let autorizador: Autorizador | null = null
+
+export function registrarAutorizador(fn: Autorizador | null) {
+  autorizador = fn
+}
+
 async function request<T>(path: string, options: RequestInit = {}, admin = false): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (admin) headers['X-Admin-Token'] = getAdminToken()
   const pin = getPinLocal()
   if (pin) headers['X-Pin-Local'] = pin
-  const res = await fetch(path, { ...options, headers })
+  const sesion = getSesion()
+  if (sesion) headers['X-Usuario-Token'] = sesion.token
+  let res = await fetch(path, { ...options, headers })
+  // Hasta 3 intentos de PIN de admin (el autorizador muestra el error)
+  for (let intento = 0; res.status === 428 && autorizador && intento < 3; intento++) {
+    let mensaje = 'Necesita la autorización de un administrador'
+    try {
+      mensaje = (await res.clone().json()).detail ?? mensaje
+    } catch {
+      /* sin JSON */
+    }
+    const autoriza = await autorizador(mensaje)
+    if (!autoriza) throw new ApiError(428, 'Se canceló: necesitaba la autorización de un administrador')
+    res = await fetch(path, { ...options, headers: { ...headers, 'X-Autoriza': autoriza } })
+  }
+  if (res.status === 401 && sesion && !admin) {
+    // La sesión de la persona venció o la desactivaron: a "¿Quién eres?"
+    window.dispatchEvent(new Event('sesion-equipo-vencida'))
+  }
   if (!res.ok) {
     let detail = `Error ${res.status}`
     try {
@@ -889,6 +963,16 @@ async function request<T>(path: string, options: RequestInit = {}, admin = false
     throw new ApiError(res.status, detail)
   }
   return res.json() as Promise<T>
+}
+
+export interface AccionEquipo {
+  id: number
+  hora: string
+  accion: string
+  usuario: string
+  autorizo: string
+  orden_id: number | null
+  detalle: string
 }
 
 export class ApiError extends Error {
@@ -1646,6 +1730,25 @@ export const api = {
   // "Abrir cajón" de la caja: el puente manda el pulso al cajón de dinero
   abrirGaveta: (pin = '', comoAdmin = false) =>
     request<{ encolada: boolean }>('/api/print/gaveta', { method: 'POST', body: JSON.stringify({ pin }) }, comoAdmin),
+
+  // ---------- Equipo ----------
+  equipoQuienes: () => request<{ activo: boolean; personas: PersonaEquipo[] }>('/api/equipo/quienes'),
+  equipoEntrar: (usuarioId: number, pin: string) =>
+    request<SesionEquipo>('/api/equipo/entrar', {
+      method: 'POST', body: JSON.stringify({ usuario_id: usuarioId, pin }),
+    }),
+  equipoYo: () => request<PersonaEquipo>('/api/equipo/yo'),
+  equipoListar: () => request<{ activo: boolean; personas: PersonaEquipo[] }>('/api/equipo', {}, true),
+  equipoCrear: (nombre: string, rol: Rol, pin: string) =>
+    request<PersonaEquipo>('/api/equipo', {
+      method: 'POST', body: JSON.stringify({ nombre, rol, pin }),
+    }, true),
+  equipoCambiar: (id: number, cambios: { nombre?: string; rol?: Rol; pin?: string; activo?: boolean }) =>
+    request<PersonaEquipo>(`/api/equipo/${id}`, { method: 'PUT', body: JSON.stringify(cambios) }, true),
+  equipoAcciones: (fecha?: string) =>
+    request<{ fecha: string; acciones: AccionEquipo[] }>(
+      `/api/equipo/acciones${fecha ? `?fecha=${fecha}` : ''}`, {}, true,
+    ),
 
   // Desbloquear la terminal de pedidos con el PIN del cajón (403 si no coincide)
   desbloquearTerminal: (pin: string) =>

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from ..auth import requiere_admin
 from ..db import get_db
 from ..models import CierreCaja, EgresoCaja, MovimientoCaja, Orden, OrdenItem, Plato, ahora_lima, hoy_lima
+from ..permisos import Actor, actor_actual, exigir
 
 router = APIRouter(prefix="/api/caja", tags=["caja"])
 
@@ -231,7 +232,8 @@ def estado_de_hoy(db: Session = Depends(get_db)):
 
 
 @router.post("/abrir", status_code=201)
-def abrir(payload: AperturaIn, db: Session = Depends(get_db)):
+def abrir(payload: AperturaIn, db: Session = Depends(get_db), actor: Actor = Depends(actor_actual)):
+    exigir(actor, "caja", db)
     ultimo, turnos = _turno_actual(db)
     if ultimo is not None and ultimo.hora_cierre is None:
         raise HTTPException(
@@ -258,10 +260,11 @@ def abrir(payload: AperturaIn, db: Session = Depends(get_db)):
 
 
 @router.post("/cerrar")
-def cerrar(payload: CierreIn, db: Session = Depends(get_db)):
+def cerrar(payload: CierreIn, db: Session = Depends(get_db), actor: Actor = Depends(actor_actual)):
     """Cierra la caja del día. El conteo de efectivo se cuadra SOLO contra
     el efectivo esperado (fondo + ventas en efectivo del tramo); tarjeta y
     Yape se reportan aparte. Re-cerrar actualiza el conteo (corrección)."""
+    exigir(actor, "caja", db)
     registro, turno = _turno_actual(db)
     if registro is None:
         raise HTTPException(status_code=409, detail="La caja de hoy no está abierta todavía")
@@ -441,7 +444,9 @@ def egresos_del_turno(db: Session = Depends(get_db)):
 
 
 @router.post("/egresos", status_code=201)
-def registrar_egreso(payload: EgresoIn, db: Session = Depends(get_db)):
+def registrar_egreso(payload: EgresoIn, db: Session = Depends(get_db),
+                     actor: Actor = Depends(actor_actual)):
+    exigir(actor, "caja", db)
     registro, _ = _turno_actual(db)
     if registro is None or registro.hora_cierre is not None:
         raise HTTPException(
@@ -461,7 +466,9 @@ def registrar_egreso(payload: EgresoIn, db: Session = Depends(get_db)):
 
 
 @router.delete("/egresos/{egreso_id}")
-def borrar_egreso(egreso_id: int, db: Session = Depends(get_db)):
+def borrar_egreso(egreso_id: int, db: Session = Depends(get_db),
+                  actor: Actor = Depends(actor_actual)):
+    exigir(actor, "caja_delicado", db, registrar="borrar_egreso")
     egreso = db.get(EgresoCaja, egreso_id)
     if egreso is None:
         raise HTTPException(status_code=404, detail="Ese egreso ya no existe")
@@ -491,9 +498,10 @@ def ver_resumen_de_cierre(db: Session = Depends(get_db)):
 
 
 @router.post("/imprimir-cierre")
-def imprimir_cierre(db: Session = Depends(get_db)):
+def imprimir_cierre(db: Session = Depends(get_db), actor: Actor = Depends(actor_actual)):
     """Vuelve a mandar el resumen del último cierre a la ticketera (la app
     de la impresora estaba apagada al cerrar, se acabó el papel…)."""
+    exigir(actor, "caja", db)
     from .config import leer_config
 
     registro, _ = _turno_actual(db)
@@ -506,13 +514,14 @@ def imprimir_cierre(db: Session = Depends(get_db)):
 
 
 @router.post("/reabrir")
-def reabrir(db: Session = Depends(get_db)):
+def reabrir(db: Session = Depends(get_db), actor: Actor = Depends(actor_actual)):
     """Deshace el cierre del día: la caja queda abierta otra vez.
 
     Para el caso real del local: se cerró por error (o en una demo) y hay
     que seguir operando el día normal. Las ventas nunca se tocan; solo se
     borra el conteo, que se vuelve a hacer al cierre de verdad. Con varias
     cajas en el día, se reabre la última."""
+    exigir(actor, "caja_delicado", db, registrar="reabrir_caja")
     registro, turno = _turno_actual(db)
     if registro is None:
         raise HTTPException(status_code=409, detail="La caja de hoy no está abierta todavía")
@@ -534,11 +543,13 @@ def reabrir(db: Session = Depends(get_db)):
 
 
 @router.put("/apertura")
-def corregir_fondo(payload: FondoIn, db: Session = Depends(get_db)):
+def corregir_fondo(payload: FondoIn, db: Session = Depends(get_db),
+                   actor: Actor = Depends(actor_actual)):
     """Corrige el fondo inicial de la caja de hoy (abierta o cerrada).
 
     Si ya se cerró, el descuadre se recalcula con el fondo nuevo sobre el
     snapshot del cierre (el conteo hecho no se pierde)."""
+    exigir(actor, "caja_delicado", db, registrar="corregir_fondo")
     registro, turno = _turno_actual(db)
     if registro is None:
         raise HTTPException(status_code=409, detail="La caja de hoy no está abierta todavía")

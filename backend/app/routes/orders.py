@@ -18,6 +18,7 @@ from ..services.orders import (
     PlatoNoDisponible,
     crear_orden,
 )
+from ..permisos import Actor, actor_actual, anular_libre, exigir
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -219,6 +220,8 @@ def _orden_a_dict(
         "entrega": orden.entrega,
         "copias": orden.copias,
         "reimpresion": orden.reimpresion,
+        "tomado_por": orden.tomado_por,
+        "metodo_mozo": orden.metodo_mozo,
         "mesa_ids": ids_mesa,
         "mesas": [mapa_mesas.get(i, f"#{i}") for i in ids_mesa],
         "mesa_liberada": orden.mesa_liberada,
@@ -292,12 +295,13 @@ def _orden_menu_a_dict(orden: Orden, om, categorias: dict[int, str] | None = Non
 
 
 @router.post("", status_code=201)
-def crear(payload: OrdenIn, db: Session = Depends(get_db)):
+def crear(payload: OrdenIn, db: Session = Depends(get_db), actor: Actor = Depends(actor_actual)):
     """Guarda la orden YA CONFIRMADA (después de la ventana de cancelación).
 
     Devuelve el número de orden del día y los datos del local para imprimir
     el ticket.
     """
+    exigir(actor, "pedidos", db)
     if not payload.items and not payload.menus:
         raise HTTPException(status_code=422, detail="La orden no tiene items")
     for item in payload.items:
@@ -352,8 +356,16 @@ def crear(payload: OrdenIn, db: Session = Depends(get_db)):
 
     orden.copias = payload.copias
     orden.pago_al_pedir = payload.pago
+    if actor.usuario is not None:
+        orden.tomado_por_id = actor.usuario.id
+        orden.tomado_por = actor.usuario.nombre
     if payload.pago == "pendiente":
         orden.pago_pendiente = True
+    elif payload.pago == "pagado" and actor.equipo_activo and actor.rol == "mozo":
+        # El mozo no cobra (pedido del dueño): la plata la tiene él y la
+        # caja la levanta. Hasta entonces es "falta pagar" con lo que dijo
+        orden.pago_pendiente = True
+        orden.metodo_mozo = payload.metodo_pago or "efectivo"
     elif payload.pago == "pagado" and payload.metodo_pago:
         orden.metodo_pago = payload.metodo_pago
     # Gaseosas pedidas con el pedido: van en la misma comanda (en OTROS),
@@ -556,9 +568,10 @@ def pendientes_de_impresion(db: Session = Depends(get_db)):
 
 
 @router.post("/pending-print/clear")
-def descartar_pendientes(db: Session = Depends(get_db)):
+def descartar_pendientes(db: Session = Depends(get_db), actor: Actor = Depends(actor_actual)):
     """Marca todo lo pendiente como impreso sin imprimir (p. ej. si la
     ticketera estuvo apagada un rato y esos pedidos ya se atendieron)."""
+    exigir(actor, "caja_delicado", db, registrar="descartar_cola")
     resultado = db.execute(
         update(Orden)
         .where(Orden.fecha == hoy_lima(), Orden.impreso == False)  # noqa: E712
@@ -581,9 +594,10 @@ def marcar_impreso(orden_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{orden_id}/reprint")
-def reimprimir(orden_id: int, db: Session = Depends(get_db)):
+def reimprimir(orden_id: int, db: Session = Depends(get_db), actor: Actor = Depends(actor_actual)):
     """Reencola la orden para que la estación de impresión la vuelva a
     imprimir."""
+    exigir(actor, "pedidos", db)
     orden = db.get(Orden, orden_id)
     if orden is None:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
@@ -595,12 +609,20 @@ def reimprimir(orden_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{orden_id}/status")
-def cambiar_estado(orden_id: int, payload: EstadoIn, db: Session = Depends(get_db)):
+def cambiar_estado(orden_id: int, payload: EstadoIn, db: Session = Depends(get_db),
+                   actor: Actor = Depends(actor_actual)):
     if payload.estado not in ESTADOS:
         raise HTTPException(status_code=422, detail=f"Estado inválido: {payload.estado}")
     orden = db.get(Orden, orden_id)
     if orden is None:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
+    # Avanzar estados es de cocina (sin sesión); anular o des-anular, no
+    if (payload.estado == "anulada") != (orden.estado == "anulada"):
+        exigir(
+            actor, "anular", db, libre=anular_libre(actor, orden), orden_id=orden.id,
+            registrar="anular" if payload.estado == "anulada" else "desanular",
+            detalle=f"#{orden.numero_orden_dia} S/ {orden.total:.2f}",
+        )
 
     # Kardex: anular devuelve el stock consumido (y des-anular lo vuelve a consumir)
     from ..services.inventario import consumir_por_orden, revertir_por_orden
@@ -686,9 +708,11 @@ class MesasIn(BaseModel):
 
 
 @router.patch("/{orden_id}/mesas")
-def asignar_mesas(orden_id: int, payload: MesasIn, db: Session = Depends(get_db)):
+def asignar_mesas(orden_id: int, payload: MesasIn, db: Session = Depends(get_db),
+                  actor: Actor = Depends(actor_actual)):
     """Asigna (o cambia) las mesas de un ticket. Varias = combinadas.
     Lista vacía = quitar la asignación."""
+    exigir(actor, "pedidos", db)
     orden = db.get(Orden, orden_id)
     if orden is None:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
@@ -754,7 +778,8 @@ def _sumar_bebidas(db: Session, orden: Orden, pedidos: list[BebidaPedida]) -> tu
 
 
 @router.post("/{orden_id}/bebidas")
-def agregar_bebidas(orden_id: int, payload: BebidasIn, db: Session = Depends(get_db)):
+def agregar_bebidas(orden_id: int, payload: BebidasIn, db: Session = Depends(get_db),
+                    actor: Actor = Depends(actor_actual)):
     """La caja añade gaseosas de la lista fija a una orden YA creada.
 
     El item nace "entregado" y es_cargo=True (cocina no lo ve ni frena la
@@ -762,6 +787,7 @@ def agregar_bebidas(orden_id: int, payload: BebidasIn, db: Session = Depends(get
     la comanda: sale solo un ticket chico con las gaseosas (en modo
     puente/estación espera en la cola; en modo terminal lo imprime la
     propia caja con los datos que devuelve este endpoint)."""
+    exigir(actor, "pedidos", db)
     from ..models import TicketBebida
 
     orden = db.get(Orden, orden_id)
@@ -801,10 +827,12 @@ class TrasladoIn(BaseModel):
 
 
 @router.post("/trasladar-mesa")
-def trasladar_mesa(payload: TrasladoIn, db: Session = Depends(get_db)):
+def trasladar_mesa(payload: TrasladoIn, db: Session = Depends(get_db),
+                   actor: Actor = Depends(actor_actual)):
     """Mueve TODOS los pedidos de hoy de una mesa a otra de un toque
     (el grupo se cambió de sitio). Mesas combinadas: solo se reemplaza
     la mesa de origen, las demás quedan."""
+    exigir(actor, "caja", db)
     if payload.de_mesa_id == payload.a_mesa_id:
         raise HTTPException(status_code=422, detail="Elige una mesa distinta")
     _validar_mesas(db, [payload.de_mesa_id, payload.a_mesa_id])
@@ -852,8 +880,10 @@ class EntregaIn(BaseModel):
 
 
 @router.patch("/{orden_id}/entrega")
-def corregir_entrega(orden_id: int, payload: EntregaIn, db: Session = Depends(get_db)):
+def corregir_entrega(orden_id: int, payload: EntregaIn, db: Session = Depends(get_db),
+                     actor: Actor = Depends(actor_actual)):
     """La caja corrige cómo sale el pedido (igual que el método de pago)."""
+    exigir(actor, "pedidos", db)
     orden = db.get(Orden, orden_id)
     if orden is None:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
@@ -874,10 +904,12 @@ class EleccionPendienteIn(BaseModel):
 @router.post("/{orden_id}/menus/{orden_menu_id}/elegir")
 def elegir_pendiente(
     orden_id: int, orden_menu_id: int, payload: EleccionPendienteIn, db: Session = Depends(get_db),
+    actor: Actor = Depends(actor_actual),
 ):
     """La persona eligió DESPUÉS lo que quedó "sin elegir" (se decide en
     caja): entra el plato a la orden con el mismo criterio que al crearla
     (alternativa válida, plato disponible, recargo al total, kardex)."""
+    exigir(actor, "pedidos", db)
     from ..models import Config, MenuPlantilla, OrdenMenu, OrdenItem, Plato
     from ..services.cocina import recalcular_estado_orden
     from ..services.inventario import consumir_item
@@ -961,10 +993,12 @@ def soltar_espera(item_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{orden_id}/liberar-mesa")
-def liberar_mesa_del_ticket(orden_id: int, db: Session = Depends(get_db)):
+def liberar_mesa_del_ticket(orden_id: int, db: Session = Depends(get_db),
+                            actor: Actor = Depends(actor_actual)):
     """Libera SOLO la mesa de este ticket (mesas compartidas: un grupo se
     va, el otro sigue comiendo en la misma mesa). La mesa queda libre
     únicamente cuando ya no la ocupa ningún ticket."""
+    exigir(actor, "caja", db)
     orden = db.get(Orden, orden_id)
     if orden is None:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
@@ -986,8 +1020,10 @@ class PagoIn(BaseModel):
 
 
 @router.patch("/{orden_id}/pago")
-def registrar_pago(orden_id: int, payload: PagoIn, db: Session = Depends(get_db)):
+def registrar_pago(orden_id: int, payload: PagoIn, db: Session = Depends(get_db),
+                   actor: Actor = Depends(actor_actual)):
     """La caja registra cómo se pagó la orden. Re-PATCH corrige el método."""
+    exigir(actor, "caja", db)
     if payload.metodo_pago not in METODOS_PAGO_CAJA:
         raise HTTPException(status_code=422, detail=f"Método inválido: {payload.metodo_pago}")
     orden = db.get(Orden, orden_id)
@@ -1003,6 +1039,7 @@ def registrar_pago(orden_id: int, payload: PagoIn, db: Session = Depends(get_db)
                 status_code=422,
                 detail=f"En un pago mixto el Yape va entre S/ 0 y S/ {orden.total:.2f} (el total)",
             )
+    _levantar_del_mozo(actor, db, orden, payload.metodo_pago)
     orden.metodo_pago = payload.metodo_pago
     orden.pago_yape = pago_yape
     # Pagó: la marca de "falta pagar" se levanta sola
@@ -1011,20 +1048,36 @@ def registrar_pago(orden_id: int, payload: PagoIn, db: Session = Depends(get_db)
     return {"id": orden.id, "metodo_pago": orden.metodo_pago, "pago_yape": orden.pago_yape}
 
 
+def _levantar_del_mozo(actor: Actor, db: Session, orden: Orden, metodo: str) -> None:
+    """La caja recibió la plata que cobró el mozo: queda en el registro
+    quién la levantó (y si cambió el método que dijo el mozo)."""
+    if not (orden.pago_pendiente and orden.metodo_mozo):
+        return
+    detalle = f"#{orden.numero_orden_dia} S/ {orden.total:.2f} de {orden.tomado_por or 'mozo'}"
+    if metodo != orden.metodo_mozo:
+        detalle += f" (dijo {orden.metodo_mozo}, entró {metodo})"
+    exigir(actor, "caja", db, registrar="levantar_pago", orden_id=orden.id, detalle=detalle)
+    orden.metodo_mozo = None
+
+
 class PagoPendienteIn(BaseModel):
     pendiente: bool
 
 
 @router.patch("/{orden_id}/pago-pendiente")
-def marcar_pago_pendiente(orden_id: int, payload: PagoPendienteIn, db: Session = Depends(get_db)):
+def marcar_pago_pendiente(orden_id: int, payload: PagoPendienteIn, db: Session = Depends(get_db),
+                          actor: Actor = Depends(actor_actual)):
     """Marca (o levanta) el "FALTA PAGAR" de un ticket: salió a la mesa
     pero la plata aún no entró. Mientras esté marcado, el cierre de caja
     NO espera ese efectivo — antes se llevaba de memoria y descuadraba."""
+    exigir(actor, "caja", db)
     orden = db.get(Orden, orden_id)
     if orden is None:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     if orden.estado == "anulada":
         raise HTTPException(status_code=409, detail="Una orden anulada no se cobra")
+    if not payload.pendiente:
+        _levantar_del_mozo(actor, db, orden, "efectivo")
     orden.pago_pendiente = payload.pendiente
     if payload.pendiente:
         # Aún no se sabe cómo pagará: el método se registra al cobrar
@@ -1040,11 +1093,13 @@ class VueltoIn(BaseModel):
 
 
 @router.patch("/{orden_id}/vuelto")
-def registrar_vuelto(orden_id: int, payload: VueltoIn, db: Session = Depends(get_db)):
+def registrar_vuelto(orden_id: int, payload: VueltoIn, db: Session = Depends(get_db),
+                     actor: Actor = Depends(actor_actual)):
     """El cliente pagó con un billete grande y el vuelto queda debiendo:
     se registra "pagó con S/ X" y el sistema calcula el vuelto pendiente.
     Mientras esté pendiente, el cierre espera ESA plata de más en el
     cajón. `pago_con: null` = ya se entregó el vuelto."""
+    exigir(actor, "caja", db)
     orden = db.get(Orden, orden_id)
     if orden is None:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
@@ -1121,7 +1176,8 @@ def pagos_por_cobrar(db: Session = Depends(get_db)):
 
 
 @router.post("/{orden_id}/cobrar")
-def cobrar_pendiente(orden_id: int, payload: PagoIn, db: Session = Depends(get_db)):
+def cobrar_pendiente(orden_id: int, payload: PagoIn, db: Session = Depends(get_db),
+                     actor: Actor = Depends(actor_actual)):
     """Levanta un pago pendiente: la plata entró recién ahora.
 
     Si la venta es de un día anterior y se cobra en EFECTIVO, ese billete
@@ -1129,6 +1185,7 @@ def cobrar_pendiente(orden_id: int, payload: PagoIn, db: Session = Depends(get_d
     un movimiento de caja "cobranza" para que el cierre de hoy lo espere.
     En Finanzas la cobranza NO suma como ingreso nuevo (sería contar la
     misma venta dos veces)."""
+    exigir(actor, "caja", db)
     from ..models import MovimientoCaja
     from .caja import _turno_actual
 
@@ -1140,6 +1197,7 @@ def cobrar_pendiente(orden_id: int, payload: PagoIn, db: Session = Depends(get_d
     if orden.estado == "anulada":
         raise HTTPException(status_code=409, detail="Una orden anulada no se cobra")
 
+    _levantar_del_mozo(actor, db, orden, payload.metodo_pago)
     orden.metodo_pago = payload.metodo_pago
     orden.pago_yape = None
     orden.pago_pendiente = False
@@ -1174,13 +1232,15 @@ def cobrar_pendiente(orden_id: int, payload: PagoIn, db: Session = Depends(get_d
 
 
 @router.post("/{orden_id}/incobrable")
-def dar_por_perdido(orden_id: int, db: Session = Depends(get_db)):
+def dar_por_perdido(orden_id: int, db: Session = Depends(get_db),
+                    actor: Actor = Depends(actor_actual)):
     """La mesa se fue sin pagar y no se va a recuperar.
 
     La venta ya quedó contada el día que salió, así que se anota un gasto
     del mismo monto con categoría "incobrable": el neto queda en cero y
     el dueño ve cuánta plata se le fue por esa vía. No toca el cajón (esa
     plata nunca estuvo ahí)."""
+    exigir(actor, "caja_delicado", db, registrar="incobrable", orden_id=orden_id)
     from ..models import MovimientoCaja
 
     orden = db.get(Orden, orden_id)

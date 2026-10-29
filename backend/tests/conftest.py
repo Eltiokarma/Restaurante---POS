@@ -32,6 +32,9 @@ def base_limpia():
     db.add(Config(clave="exigir_caja_abierta", valor="0"))
     db.commit()
     db.close()
+    from app.auth import reiniciar_intentos_pin
+
+    reiniciar_intentos_pin()
     yield
 
 

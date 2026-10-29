@@ -275,8 +275,8 @@ export function Caja() {
       setMensaje(`${mesa.nombre} liberada`)
       cargarMesas()
       cargarOrdenes()
-    } catch {
-      setError('No se pudo liberar la mesa')
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo liberar la mesa')
     }
   }
 
@@ -311,8 +311,8 @@ export function Caja() {
       setMensaje(`Mesa del ticket #${String(orden.numero_orden_dia).padStart(3, '0')} liberada`)
       cargarOrdenes()
       cargarMesas()
-    } catch {
-      setError('No se pudo liberar la mesa del ticket')
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo liberar la mesa del ticket')
     }
   }
 
@@ -610,8 +610,8 @@ export function Caja() {
       setMensaje(`Orden #${numero} anulada`)
       cargarOrdenes()
       cargarCaja()
-    } catch {
-      setError('No se pudo anular, intenta de nuevo')
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo anular, intenta de nuevo')
     }
   }
 
@@ -721,8 +721,8 @@ export function Caja() {
           local: { nombre: cfg.nombre_local, direccion: cfg.direccion, ruc: cfg.ruc },
         })
       }
-    } catch {
-      setError('No se pudo reimprimir')
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo reimprimir')
     }
   }
 
@@ -1571,7 +1571,13 @@ export function Caja() {
                           : lineaEntrega(o).texto.toLowerCase()}
                     </span>
                   )}
-                  {o.pago_pendiente && (
+                  {o.pago_pendiente && o.metodo_mozo ? (
+                    // El mozo cobró: la plata la tiene él. Se levanta tocando
+                    // el método con el que entró a la caja
+                    <span className="chip-falta chip-pago-mozo">
+                      PAGÓ A {(o.tomado_por ?? 'MOZO').toUpperCase()} ({NOMBRE_PAGO[o.metodo_mozo as MetodoPago] ?? o.metodo_mozo}) · LEVANTAR
+                    </span>
+                  ) : o.pago_pendiente && (
                     <span className="chip-falta chip-falta-pagar">FALTA PAGAR</span>
                   )}
                   {(o.vuelto_pendiente ?? 0) > 0 && (
@@ -1579,6 +1585,7 @@ export function Caja() {
                       FALTA VUELTO {soles(o.vuelto_pendiente ?? 0)}
                     </span>
                   )}
+                  {o.tomado_por && <span className="caja-tomado-por">👤 {o.tomado_por}</span>}
                   <span className="caja-orden-hora">{o.hora.slice(0, 5)}</span>
                   <span className="caja-orden-total">{soles(o.total)}</span>
                 </div>
