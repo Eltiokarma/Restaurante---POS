@@ -1727,6 +1727,12 @@ export const api = {
   imprimirPrueba: () =>
     request<{ encolada: boolean }>('/api/print/prueba', { method: 'POST' }, true),
 
+  // Un mensaje cualquiera con pinta de ventana de aviso (Admin → Ajustes)
+  imprimirMensaje: (titulo: string, texto: string) =>
+    request<{ encolada: boolean; vista: string[] }>('/api/print/mensaje', {
+      method: 'POST', body: JSON.stringify({ titulo, texto }),
+    }, true),
+
   // "Abrir cajón" de la caja: el puente manda el pulso al cajón de dinero
   abrirGaveta: (pin = '', comoAdmin = false) =>
     request<{ encolada: boolean }>('/api/print/gaveta', { method: 'POST', body: JSON.stringify({ pin }) }, comoAdmin),

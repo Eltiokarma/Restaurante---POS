@@ -3429,6 +3429,48 @@ function TabCancelaciones({ onSesionVencida }: { onSesionVencida: () => void }) 
 
 // ---------- Configuración ----------
 
+/** Por diversión (pedido del dueño): cualquier mensaje sale en la
+ *  ticketera como ventana de aviso de tkinter, con su [ OK ]. */
+function ImprimirMensaje({ onSesionVencida }: { onSesionVencida: () => void }) {
+  const [titulo, setTitulo] = useState('Advertencia')
+  const [texto, setTexto] = useState('La tarea falló con éxito')
+  const [vista, setVista] = useState<string[]>([])
+  const [aviso, setAviso] = useState('')
+
+  const imprimir = async () => {
+    try {
+      const r = await api.imprimirMensaje(titulo, texto)
+      setVista(r.vista)
+      setAviso(r.encolada ? 'Mensaje enviado a la ticketera ✔' : 'Solo sale en modo puente: así se vería')
+    } catch (e) {
+      setAviso(manejarError(e, onSesionVencida))
+    }
+  }
+
+  return (
+    <div className="mensaje-tk">
+      <strong>⚠️ Imprimir un mensaje</strong>
+      <label>
+        Título de la ventana
+        <input value={titulo} maxLength={40} onChange={(e) => setTitulo(e.target.value)} />
+      </label>
+      <label>
+        Mensaje
+        <textarea value={texto} maxLength={300} rows={2} onChange={(e) => setTexto(e.target.value)} />
+      </label>
+      <button type="button" disabled={!texto.trim()} onClick={imprimir}>🖨 Imprimir mensaje</button>
+      {aviso && <p className="nota-admin">{aviso}</p>}
+      {vista.length > 0 && (
+        <pre className="mensaje-tk-vista" aria-label="Así sale en el papel">
+          {vista.map((linea, i) => (
+            <span key={i} className={i === 0 ? 'mensaje-tk-barra' : ''}>{linea}{'\n'}</span>
+          ))}
+        </pre>
+      )}
+    </div>
+  )
+}
+
 function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
   const [config, setConfig] = useState<ConfigOut | null>(null)
   const [mensaje, setMensaje] = useState('')
@@ -3677,6 +3719,7 @@ function TabConfig({ onSesionVencida }: { onSesionVencida: () => void }) {
           >
             🖨 Imprimir ticket de prueba
           </button>
+          <ImprimirMensaje onSesionVencida={onSesionVencida} />
           <p className="nota-admin">
             ¿Dónde veo la IP de la impresora? Casi todas imprimen su configuración al prenderlas
             manteniendo el botón FEED apretado, o revisa la lista de equipos en tu router. Es la

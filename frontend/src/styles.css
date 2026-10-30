@@ -11819,3 +11819,41 @@ p.teclado-pin-error {
   flex-direction: column;
   align-items: stretch;
 }
+
+/* Admin → Ajustes: mensaje con pinta de ventana de aviso (tkinter) */
+.mensaje-tk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--linea-fuerte);
+}
+
+.mensaje-tk textarea {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1.5px solid var(--linea-fuerte);
+  resize: vertical;
+}
+
+.mensaje-tk-vista {
+  margin: 0;
+  padding: 10px;
+  background: #fff;
+  color: #000;
+  border: 1px solid var(--linea);
+  border-radius: 4px;
+  font-family: ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
+  /* 48 columnas tienen que entrar en el panel angosto de Ajustes */
+  font-size: 0.6rem;
+  line-height: 1.25;
+  font-weight: 700;
+  overflow-x: auto;
+}
+
+.mensaje-tk-barra {
+  background: #000;
+  color: #fff;
+}

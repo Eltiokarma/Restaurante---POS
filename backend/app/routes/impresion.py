@@ -13,7 +13,7 @@ import hmac
 import json
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -21,7 +21,10 @@ from ..auth import requiere_admin
 from ..db import get_db
 from ..models import CierreCaja, Config, Mesa, Orden, Plato, TicketBebida, hoy_lima
 from ..routes.config import leer_config
-from ..services.escpos import INICIALIZAR, abrir_gaveta, render_bebida, render_cierre, render_orden, render_precuenta, render_prueba
+from ..services.escpos import (
+    INICIALIZAR, abrir_gaveta, lineas_mensaje, render_bebida, render_cierre, render_mensaje, render_orden,
+    render_precuenta, render_prueba,
+)
 from ..permisos import Actor, actor_actual, exigir
 
 router = APIRouter(prefix="/api/print", tags=["impresion"])
@@ -29,6 +32,7 @@ router = APIRouter(prefix="/api/print", tags=["impresion"])
 CLAVE_PRUEBA = "imprimir_prueba"
 CLAVE_CIERRE = "imprimir_cierre"
 CLAVE_GAVETA = "abrir_gaveta"
+CLAVE_MENSAJE = "imprimir_mensaje"  # JSON {titulo, texto}; "" = nada pendiente
 
 
 def _marcar(db: Session, clave: str, valor: str) -> None:
@@ -61,14 +65,38 @@ def confirmar_ticket_de_prueba(db: Session = Depends(get_db)):
     Igual que las órdenes, el trabajo espera en cola hasta confirmarse.
     """
     registro = db.get(Config, CLAVE_PRUEBA)
+    gaveta = db.get(Config, CLAVE_GAVETA)
     if registro is not None and registro.valor == "1":
         registro.valor = "0"
-    else:
+    elif gaveta is not None and gaveta.valor == "1" and abrir_gaveta(leer_config(db)["gaveta"]):
+        # (misma condición que la cola: sin cajón configurado no viaja)
         # El pulso del cajón viaja como trabajo "prueba" (así lo atienden
         # la app y el puente ya instalados): se confirma aquí también
-        _marcar(db, CLAVE_GAVETA, "0")
+        gaveta.valor = "0"
+    else:
+        # Igual el mensaje de Admin → Ajustes (sale después de los otros dos)
+        _marcar(db, CLAVE_MENSAJE, "")
     db.commit()
     return {"confirmada": True}
+
+
+class MensajeIn(BaseModel):
+    titulo: str = Field(default="Advertencia", max_length=40)
+    texto: str = Field(min_length=1, max_length=300)
+
+
+@router.post("/mensaje", dependencies=[Depends(requiere_admin)])
+def pedir_mensaje(payload: MensajeIn, db: Session = Depends(get_db)):
+    """Imprime un mensaje cualquiera con pinta de ventana de aviso de
+    tkinter (pedido del dueño: "La tarea falló con éxito"). Solo en modo
+    puente; devuelve también cómo va a salir."""
+    config = leer_config(db)
+    vista = [linea for linea, _ in lineas_mensaje(payload.titulo, payload.texto, config["impresora_columnas"])]
+    if config["modo_impresion"] != "puente":
+        return {"encolada": False, "vista": vista}
+    _marcar(db, CLAVE_MENSAJE, json.dumps({"titulo": payload.titulo, "texto": payload.texto}, ensure_ascii=False))
+    db.commit()
+    return {"encolada": True, "vista": vista}
 
 
 class GavetaIn(BaseModel):
@@ -189,6 +217,21 @@ def _armar_cola(db: Session) -> dict:
                 "numero": "CAJON",
                 "datos_b64": base64.b64encode(INICIALIZAR + pulso).decode(),
             })
+
+    # Mensaje de Admin → Ajustes: también como "prueba", y solo cuando no
+    # hay otra "prueba" en vuelo (la confirmación no dice cuál salió)
+    marca_mensaje = db.get(Config, CLAVE_MENSAJE)
+    hay_prueba = any(t["tipo"] == "prueba" for t in trabajos)
+    if marca_mensaje is not None and marca_mensaje.valor and not hay_prueba:
+        mensaje = json.loads(marca_mensaje.valor)
+        trabajos.append({
+            "tipo": "prueba",
+            "orden_id": None,
+            "numero": "MENSAJE",
+            "datos_b64": base64.b64encode(
+                render_mensaje(mensaje["titulo"], mensaje["texto"], columnas)
+            ).decode(),
+        })
 
     # Resumen de cierre de caja pendiente (lo encola POST /api/caja/cerrar
     # en modo puente); espera en cola hasta confirmarse, como la prueba.

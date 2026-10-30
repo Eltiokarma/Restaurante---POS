@@ -657,3 +657,53 @@ def render_prueba(local: dict, columnas: int = 42) -> bytes:
         CORTAR,
     ]
     return b"".join(partes)
+
+
+INVERTIDO_ON = b"\x1dB\x01"   # GS B 1: blanco sobre negro (la barra de título)
+INVERTIDO_OFF = b"\x1dB\x00"
+# El ⚠ no existe en CP850: el triángulo se dibuja
+ICONO_ADVERTENCIA = ["  /\\  ", " /!!\\ ", "/____\\"]
+
+
+def _solo_cp850(texto: str) -> str:
+    """Saca lo que la impresora no tiene (emoji: ⚠️, 😂…) en vez de
+    imprimir "?". Los espacios repetidos que deja se juntan."""
+    limpio = "".join(c for c in texto if c.encode("cp850", errors="ignore"))
+    return " ".join(limpio.split())
+
+
+def lineas_mensaje(titulo: str, texto: str, columnas: int = 42) -> list[tuple[str, bool]]:
+    """Un mensaje cualquiera dibujado como ventana de aviso de tkinter
+    (pedido del dueño, por diversión): barra de título invertida con
+    _ ■ X, el triángulo de advertencia, el texto y el botón [ OK ].
+    Devuelve (renglón, invertido); sirve también de vista previa."""
+    ancho = columnas - 2  # lo de adentro de los bordes │ │
+    titulo = _solo_cp850(titulo) or "Advertencia"
+    controles = "_ ■ X "
+    barra = (" " + titulo)[: columnas - len(controles) - 1].ljust(columnas - len(controles)) + controles
+    cuerpo_ancho = ancho - len(ICONO_ADVERTENCIA[0]) - 6  # sangría, aire y un espacio al borde
+    renglones_texto = _partir(_solo_cp850(texto) or "La tarea falló con éxito", cuerpo_ancho)
+    alto = max(len(ICONO_ADVERTENCIA), len(renglones_texto))
+
+    def caja(contenido: str) -> str:
+        return "│" + contenido[:ancho].ljust(ancho) + "│"
+
+    salida: list[tuple[str, bool]] = [(barra, True), (caja(""), False)]
+    for n in range(alto):
+        icono = ICONO_ADVERTENCIA[n] if n < len(ICONO_ADVERTENCIA) else " " * len(ICONO_ADVERTENCIA[0])
+        linea = renglones_texto[n] if n < len(renglones_texto) else ""
+        salida.append((caja(f"  {icono}   {linea}"), False))
+    salida.append((caja(""), False))
+    boton = ["┌────────┐", "│   OK   │", "└────────┘"]
+    margen = (ancho - len(boton[0])) // 2
+    salida += [(caja(" " * margen + b), False) for b in boton]
+    salida.append(("└" + "─" * ancho + "┘", False))
+    return salida
+
+
+def render_mensaje(titulo: str, texto: str, columnas: int = 42) -> bytes:
+    partes = [INICIALIZAR, CODEPAGE_CP850, ALINEAR_IZQ, NEGRITA_ON]
+    for linea, invertido in lineas_mensaje(titulo, texto, columnas):
+        partes += [INVERTIDO_ON, _texto(linea), INVERTIDO_OFF] if invertido else [_texto(linea)]
+    partes += [NEGRITA_OFF, CORTAR]
+    return b"".join(partes)
