@@ -155,3 +155,32 @@ def test_comanda_empaque_completo_y_otros_sin_monto(client, db, admin_headers, m
     assert "7.00" not in texto                  # sin sumatoria en OTROS
     assert "10.00" in texto                     # el plato suelto sí muestra monto
     assert "Paga en caja" not in texto
+
+
+def test_mensaje_tipo_tkinter(client, db, admin_headers):
+    """Admin → Ajustes: imprimir un mensaje cualquiera con pinta de ventana
+    de aviso (pedido del dueño). Viaja como "prueba" y espera su turno."""
+    import base64
+
+    assert client.post("/api/print/mensaje", json={"texto": "Hola"}).status_code == 401
+    # Fuera del modo puente no se encola, pero devuelve la vista previa
+    r = client.post("/api/print/mensaje", json={"texto": "Hola"}, headers=admin_headers).json()
+    assert r["encolada"] is False and any("OK" in linea for linea in r["vista"])
+
+    activar_modo_puente(db)
+    client.post("/api/print/prueba", headers=admin_headers)
+    r = client.post("/api/print/mensaje", json={"titulo": "Advertencia", "texto": "⚠️ La tarea Falló con éxito"},
+                    headers=admin_headers).json()
+    assert r["encolada"] is True
+    assert "La tarea Falló con éxito" in "".join(r["vista"])  # sin el emoji
+    # Primero la prueba de verdad; el mensaje espera
+    trabajos = client.get("/api/print/cola").json()["trabajos"]
+    assert [t["numero"] for t in trabajos if t["tipo"] == "prueba"] == ["PRUEBA"]
+    client.post("/api/print/prueba/impresa")
+    trabajos = client.get("/api/print/cola").json()["trabajos"]
+    assert [t["numero"] for t in trabajos] == ["MENSAJE"]
+    datos = base64.b64decode(trabajos[0]["datos_b64"])
+    assert b"\x1dB\x01" in datos  # barra de título invertida
+    assert "Falló con éxito".encode("cp850") in datos and b"?" not in datos
+    client.post("/api/print/prueba/impresa")
+    assert client.get("/api/print/cola").json()["trabajos"] == []
