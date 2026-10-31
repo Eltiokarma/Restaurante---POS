@@ -743,7 +743,75 @@ def menu_del_dia_para_caja(db: Session = Depends(get_db)):
         "plantillas": plantillas_out,
         "guardados": [_guardado_a_dict(g, platos) for g in guardados],
         "stock": stock_de_hoy(db),
+        "para_agregar": _platos_para_agregar(platos, guardados),
     }
+
+
+def _platos_para_agregar(platos: dict[int, Plato], guardados: list[MenuGuardado]) -> list[dict]:
+    """Entradas y segundos del catálogo que la caja puede sumar al menú de
+    hoy (pedido del dueño: "el asado del jueves, hoy sábado"), cada uno con
+    los menús guardados donde aparece y el recargo que tenía ahí."""
+    dias: dict[int, list[str]] = {}
+    recargo: dict[int, float] = {}
+    # Del más viejo al más nuevo: el recargo que queda es el último usado
+    for g in sorted(guardados, key=lambda g: g.actualizado):
+        datos = json.loads(g.datos_json)
+        for pl in datos.get("plantillas", []):
+            for t in pl.get("tiempos", []):
+                for a in t.get("alternativas", []):
+                    recargo[a["plato_id"]] = a.get("recargo", 0.0)
+        for plato_id in datos.get("platos", []):
+            dias.setdefault(plato_id, [])
+            if g.nombre not in dias[plato_id]:
+                dias[plato_id].append(g.nombre)
+    return [
+        {
+            "plato_id": p.id, "nombre": p.nombre, "categoria": p.categoria,
+            "dias": dias.get(p.id, []), "recargo": recargo.get(p.id, 0.0),
+        }
+        for p in sorted(platos.values(), key=lambda p: p.nombre)
+        if p.en_catalogo and p.categoria in ("entrada", "fondo")
+    ]
+
+
+class AgregarAlMenuIn(BaseModel):
+    plato_id: int
+    recargo: float | None = Field(default=None, ge=0, le=50)
+
+
+def _tiempo_para(plantilla: MenuPlantilla, plato: Plato, platos: dict[int, Plato]) -> MenuTiempo | None:
+    """El tiempo donde va el plato: el que ya tiene platos de su misma
+    categoría (las entradas con las entradas); si no, por el rótulo."""
+    for t in plantilla.tiempos:
+        if any(platos.get(a.plato_id) and platos[a.plato_id].categoria == plato.categoria for a in t.alternativas):
+            return t
+    claves = {"entrada": ("entrada", "sopa"), "fondo": ("segundo", "fondo")}.get(plato.categoria, ())
+    return next((t for t in plantilla.tiempos if any(c in t.rotulo.lower() for c in claves)), None)
+
+
+@router.post("/caja/plantillas/{plantilla_id}/agregar")
+def agregar_al_menu_de_hoy(plantilla_id: int, payload: AgregarAlMenuIn, db: Session = Depends(get_db),
+                           actor: Actor = Depends(actor_actual)):
+    """La caja suma al menú de hoy un plato de otro día: entra como opción
+    de su tiempo (con el recargo que tenía) y queda prendido. Se queda como
+    opción del menú: apagarlo es un toque, como los platos extra."""
+    exigir(actor, "caja", db)
+    plantilla = db.get(MenuPlantilla, plantilla_id)
+    plato = db.get(Plato, payload.plato_id)
+    if plantilla is None or not plantilla.en_catalogo:
+        raise HTTPException(status_code=404, detail="Menú no encontrado")
+    if plato is None or not plato.en_catalogo:
+        raise HTTPException(status_code=404, detail="Plato no encontrado")
+    platos = {p.id: p for p in db.scalars(select(Plato)).all()}
+    tiempo = _tiempo_para(plantilla, plato, platos)
+    if tiempo is None:
+        raise HTTPException(status_code=422, detail=f"{plantilla.nombre} no tiene dónde poner {plato.nombre}")
+    if not any(a.plato_id == plato.id for a in tiempo.alternativas):
+        tiempo.alternativas.append(MenuAlternativa(plato_id=plato.id, recargo=round(payload.recargo or 0.0, 2)))
+    plato.activo_hoy = True
+    plato.ultima_vez_activo = hoy_lima()
+    db.commit()
+    return menu_del_dia_para_caja(db)
 
 
 @router.patch("/platos/{plato_id}/hoy")
