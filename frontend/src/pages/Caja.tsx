@@ -12,6 +12,7 @@ import {
   BarraPersonas, guardarDefectos, Hoja, HojaDefecto, leerDefectos, useTicketsPersonas,
 } from '../components/RepartoMenu'
 import { AvisoImpresion } from '../components/AvisoImpresion'
+import { AgregarDeOtroDia } from '../components/AgregarDeOtroDia'
 import { PorCobrar } from '../components/PorCobrar'
 import { ResumenCierre } from '../components/ResumenCierre'
 import { SugerenciaMenu } from '../components/SugerenciaMenu'
@@ -946,6 +947,15 @@ export function Caja() {
               ))}
             </div>
           ))}
+          {menuCaja && (
+            <AgregarDeOtroDia
+              menuCaja={menuCaja}
+              onAgregar={(plantillaId, p) => cambiarMenuDelDia(
+                () => api.agregarAlMenu(plantillaId, p.plato_id, p.recargo),
+                `${p.nombre} entra al menú de hoy`,
+              )}
+            />
+          )}
           {menuCaja?.stock && menuCaja.stock.length > 0 && (
             <div className="defecto-bloque">
               <h4>¿Cuántos hay hoy?</h4>

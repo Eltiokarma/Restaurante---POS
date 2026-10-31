@@ -1017,6 +1017,16 @@ export interface MenuCaja {
   plantillas: MenuCajaPlantilla[]
   guardados: MenuGuardadoOut[]
   stock?: StockPlato[]
+  // Entradas y segundos del catálogo, con los días guardados donde salen
+  para_agregar?: PlatoParaAgregar[]
+}
+
+export interface PlatoParaAgregar {
+  plato_id: number
+  nombre: string
+  categoria: 'entrada' | 'fondo'
+  dias: string[]
+  recargo: number
 }
 
 /** Porciones de hoy de una entrada o segundo. stock/quedan null = no se
@@ -1694,6 +1704,11 @@ export const api = {
   menuParaHoy: (plantillaId: number, activoHoy: boolean) =>
     request<MenuCaja>(`/api/menu/plantillas/${plantillaId}/hoy`, {
       method: 'PATCH', body: JSON.stringify({ activo_hoy: activoHoy }),
+    }),
+  // Un plato de otro día entra al menú de hoy (como opción de su tiempo)
+  agregarAlMenu: (plantillaId: number, platoId: number, recargo: number) =>
+    request<MenuCaja>(`/api/menu/caja/plantillas/${plantillaId}/agregar`, {
+      method: 'POST', body: JSON.stringify({ plato_id: platoId, recargo }),
     }),
   cargarGuardadoCaja: (guardadoId: number) =>
     request<MenuCaja>(`/api/menu/caja/guardados/${guardadoId}/cargar`, { method: 'POST' }),
